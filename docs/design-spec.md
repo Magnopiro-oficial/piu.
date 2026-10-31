@@ -7,7 +7,7 @@ Piu é um mensageiro **offline-first** da Lunes Network: as mensagens viajam de 
 2. **Painel do provider para computador**: servido localmente pelo nó (`piu-node.local:8420`), para operar roteadores, antenas e gateways e acompanhar ganhos.
 3. **Site do projeto** em PT e EN.
 
-Requisitos de produto: `docs/Lunes_Network_Documento_de_Requisitos_v1.1.docx` (IDs FUN-xxx, INF-xxx, NFR-xxx citados abaixo vêm desse documento).
+Requisitos de produto: `docs/requisitos/Lunes_Network_Documento_de_Requisitos_v1.1.docx` (IDs FUN-xxx, INF-xxx, NFR-xxx citados abaixo vêm desse documento).
 
 ## Sobre os arquivos de design
 Os arquivos em `design/` são **referências de design feitas em HTML** — protótipos que mostram aparência e comportamento, **não código de produção**. A tarefa é **recriar estes designs no ambiente-alvo**:
@@ -155,7 +155,7 @@ Sem imagens finais: fotos de perfil e QR codes são **placeholders** (listras). 
 - `design/Piu Site.dc.html`, `design/Piu Site EN.dc.html` — site.
 - `design/Piu.dc.html` + `design/Piu 1…8 ….dc.html` — canvases por tema (claro e escuro lado a lado, botões que pulam direto para cada tela).
 - `design/support.js` — runtime para abrir os protótipos no navegador.
-- `docs/Lunes_Network_Documento_de_Requisitos_v1.1.docx` — requisitos.
+- `docs/requisitos/Lunes_Network_Documento_de_Requisitos_v1.1.docx` — requisitos.
 
 ## Pontos em aberto (do documento, seção 18.2)
 Modelo econômico (valores 10/25 LUNES, taxas de crédito e limites são ilustrativos) · tecnologias de rádio homologadas · algoritmos criptográficos · protocolo de roteamento · antifraude sem expor metadados · equipamentos de referência · recuperação de identidade.
