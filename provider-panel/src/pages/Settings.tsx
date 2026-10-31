@@ -1,0 +1,127 @@
+import type { ReactNode } from 'react';
+import { Icon, Segmented, Toggle } from '../components/ui';
+import { OPERATOR, PUB_RULES, SESSIONS } from '../data/seed';
+import { useStore } from '../state/store';
+import type { HoursPolicy, Policies } from '../types';
+
+const segProps = { gap: 4, radius: 12, btnRadius: 9 } as const;
+
+export function Settings() {
+  const { limits, setLimits, policies, togglePolicy, devices, showToast } = useStore();
+  const policyRows: [keyof Policies | 'alerts', string, string][] = [
+    ['media', 'Aceitar arquivos e mídia', 'Só por Wi-Fi e cabo; nunca por LoRa'],
+    ['alerts', 'Priorizar alertas oficiais', 'Sempre ativo para alertas assinados'],
+    ['unknown', 'Limitar remetentes desconhecidos', 'Contra spam e tráfego artificial'],
+    ['community', 'Só comunidades que sigo', 'Reduz alcance e ganhos'],
+  ];
+
+  return (
+    <div className="page-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16, alignItems: 'start' }}>
+      <section className="card-soft col" style={{ borderRadius: 22, padding: 20, gap: 16 }}>
+        <CardHead title="Limites globais" sub="Somados entre todos os seus equipamentos" />
+        <LimitRow title="Banda total para a rede" hint="somando equipamentos">
+          <Segmented {...segProps} label="Banda total" value={limits.bw} onChange={bw => setLimits({ bw })} options={[20, 50, 100].map(v => ({ value: v, label: `${v} Mbps` }))} />
+        </LimitRow>
+        <LimitRow title="Armazenamento para terceiros" hint="mensagens cifradas">
+          <Segmented {...segProps} label="Armazenamento" value={limits.sto} onChange={sto => setLimits({ sto })} options={[4, 8, 16].map(v => ({ value: v, label: `${v} GB` }))} />
+        </LimitRow>
+        <LimitRow title="Horário de operação" hint="para todos">
+          <Segmented<HoursPolicy> {...segProps} label="Horário" value={limits.hours} onChange={hours => setLimits({ hours })} options={HOURS} />
+        </LimitRow>
+      </section>
+
+      <section className="card-soft col" style={{ borderRadius: 22, padding: '20px 20px 8px' }}>
+        <div style={{ paddingBottom: 10 }}><CardHead title="Política de tráfego" sub="O que seus equipamentos aceitam retransmitir" /></div>
+        {policyRows.map(([k, n, d]) => {
+          const locked = k === 'alerts';
+          const on = locked ? true : policies[k];
+          return (
+            <div key={k} className="row" style={{ gap: 12, padding: '12px 0', borderTop: '1px solid var(--line)' }}>
+              <div className="col grow" style={{ gap: 2 }}>
+                <div style={{ fontSize: 14, fontWeight: 550 }}>{n}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink2)' }}>{d}</div>
+              </div>
+              <Toggle on={on} label={n} disabled={locked} onChange={locked ? undefined : () => togglePolicy(k)} />
+            </div>
+          );
+        })}
+      </section>
+
+      <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
+        <CardHead title="Acesso a este painel" sub="Disponível só na rede local, nunca pela internet" />
+        {SESSIONS.map(([icon, n, d, s]) => (
+          <div key={n} className="row" style={{ gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+            <Icon name={icon} size={20} wght={300} />
+            <div className="col" style={{ flex: 1, gap: 2 }}>
+              <div style={{ fontSize: 14, fontWeight: 550 }}>{n}</div>
+              <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d}</div>
+            </div>
+            <span style={{ fontSize: 12, fontWeight: 600 }}>{s}</span>
+          </div>
+        ))}
+        <button type="button" className="btn btn-outline" onClick={() => showToast({ icon: 'logout', title: 'Outras sessões encerradas', body: 'Só este computador continua com acesso.' })}
+          style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Encerrar outras sessões</button>
+      </section>
+
+      <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
+        <CardHead title="Identidade de operador" sub="Assina seus equipamentos. Separada da sua identidade de conversa." />
+        <div className="mono" aria-label="Impressão digital da chave de operador" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, fontSize: 15, fontWeight: 500, padding: '12px 14px', borderRadius: 14, background: 'var(--bg2)' }}>
+          {OPERATOR.fingerprint.map(g => <span key={g}>{g}</span>)}
+        </div>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <button type="button" className="btn btn-primary" onClick={() => showToast({ icon: 'key', title: 'Backup cifrado exportado', body: 'piu-operador.backup · protegido pela sua frase secreta' })} style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Exportar backup cifrado</button>
+          <button type="button" className="btn btn-outline" onClick={() => showToast({ icon: 'sync_lock', title: 'Rotação agendada', body: 'Equipamentos recebem a nova chave na próxima sincronização.' })} style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Rotacionar chaves</button>
+        </div>
+      </section>
+
+      <section className="card-line" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 28 }}>
+        <div className="col" style={{ gap: 10 }}>
+          <CardHead title="Nomes públicos das suas redes" sub="Qualquer pessoa por perto vê estes nomes na lista de Wi-Fi e no app" />
+          {devices.map(d => (
+            <div key={d.id} className="row" style={{ gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
+              <Icon name={d.icon} size={19} wght={300} />
+              <div className="col grow" style={{ gap: 2 }}>
+                <div className="mono" style={{ fontSize: 13.5, fontWeight: 500 }}>{d.pub}</div>
+                <div style={{ fontSize: 12, color: 'var(--ink2)' }}>{d.name} · {d.cls}</div>
+              </div>
+              <span className="row" style={{ gap: 4, fontSize: 12, fontWeight: 600 }}><Icon name="verified" size={15} fill={1} />assinado</span>
+            </div>
+          ))}
+          <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)', paddingTop: 6 }}>piu. + até 28 caracteres · a–z, 0–9 e hífen</div>
+        </div>
+        <div className="col" style={{ gap: 12 }}>
+          <div style={{ fontSize: 14, fontWeight: 650 }}>Como o Piu evita imitações</div>
+          {PUB_RULES.map(r => (
+            <div key={r.title} style={{ display: 'flex', gap: 12 }}>
+              <Icon name={r.icon} size={20} wght={300} />
+              <div className="col" style={{ flex: 1, gap: 2 }}>
+                <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.title}</div>
+                <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>{r.desc}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export const HOURS: { value: HoursPolicy; label: string }[] = [{ value: 'always', label: 'Sempre' }, { value: 'night', label: '22h–7h' }, { value: 'day', label: '8h–18h' }];
+
+function CardHead({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="col" style={{ gap: 3 }}>
+      <h2 className="h-card" style={{ margin: 0 }}>{title}</h2>
+      <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>{sub}</div>
+    </div>
+  );
+}
+
+function LimitRow({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="col" style={{ gap: 8 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}><span style={{ fontWeight: 550 }}>{title}</span><span style={{ color: 'var(--ink2)' }}>{hint}</span></div>
+      {children}
+    </div>
+  );
+}
