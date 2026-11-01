@@ -34,3 +34,10 @@ Funcionam de verdade: navegação, filtros e busca, pausar e revogar, adicionar 
 - **CSP estrita** em `<meta>` no `index.html` (vale em qualquer servidor, inclusive o `piu-node`) e por header em `public/_headers` (Cloudflare Pages / Netlify): só recursos do próprio painel (`'self'`), sem scripts inline, sem `eval`, sem `data:` para fontes (`build.assetsInlineLimit: 0`). Estilos por atributo (`style=`) são liberados com `style-src-attr`.
 - **Headers** (`public/_headers`): `X-Frame-Options: DENY` e `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy`/`Resource-Policy`, HSTS (só tem efeito sob HTTPS).
 - **piu-node** (fora deste repositório): ao servir o painel, deve enviar os mesmos headers e, antes de expor qualquer API, exigir pareamento/autenticação do operador (ver a auditoria de segurança no PR).
+
+## Com o piu-node (pareamento)
+Quando servido pelo `apps/piu-node`, o painel só aparece depois do **pareamento**: o operador digita o código de 8 dígitos mostrado na tela do equipamento. A sessão fica num cookie `HttpOnly` (o painel nunca vê o token). Toda ação (pausar, revogar, transferir) vai para a API com o token CSRF da sessão. Transferências pedem um código novo do equipamento quando a última confirmação tem mais de 15 minutos. O botão "Sair" encerra a sessão no servidor.
+
+Sem `piu-node` (hospedagem estática, prévia ou embutido no site), o painel roda como **demonstração**, com dados de exemplo e o selo "demonstração" no topo.
+
+O link do instalador no assistente usa HTTPS e mostra o SHA-256 do manifesto assinado, mais o comando `verify-package.mjs`, que o instalador roda antes de executar.

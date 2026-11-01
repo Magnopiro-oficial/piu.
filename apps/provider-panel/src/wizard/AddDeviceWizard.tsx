@@ -20,7 +20,7 @@ const SCAN_MS = 1600;
 const CHECK_MS = 700;
 
 export function AddDeviceWizard() {
-  const { devices, setWizardOpen, addDevice, navigate, showToast } = useStore();
+  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode } = useStore();
   const parents = devices.filter(d => !d.passive && d.cls !== 'Super Node');
   const [w, setW] = useState<WizState>(() => ({
     step: 0, fam: 'router', install: 'dl', scan: 'searching', paired: false, n: 0,
@@ -127,8 +127,18 @@ export function AddDeviceWizard() {
                               <div style={{ fontSize: 11.5, color: 'var(--ink2)' }}>2,1 MB · assinado Lunes · 4C9A…E1F0</div>
                             </div>
                           </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Sem internet: este Mini-PC serve o pacote na rede local. Abra a interface do equipamento e aponte para piu-node.local.</div>
-                          <button type="button" className="btn btn-outline" onClick={() => { const url = `http://${NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
+                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Sem internet: este Mini-PC serve o pacote na rede local, por HTTPS. Abra a interface do equipamento e aponte para piu-node.local.</div>
+                          {(() => {
+                            const m = packages.find(p => p.file === fam.pkg);
+                            return (
+                              <div className="col mono" style={{ gap: 6, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)', fontSize: 11.5, lineHeight: 1.5, wordBreak: 'break-all' }}>
+                                <span style={{ color: 'var(--ink2)' }}>{m ? `sha256 ${m.sha256}` : 'manifesto assinado ao lado do pacote (.manifest.json)'}</span>
+                                <span style={{ userSelect: 'all' }}>node verify-package.mjs {fam.pkg} {fam.pkg}.manifest.json</span>
+                                <span style={{ fontFamily: 'inherit', color: 'var(--ink2)' }}>O instalador só executa se a assinatura da Lunes e o hash conferirem.</span>
+                              </div>
+                            );
+                          })()}
+                          <button type="button" className="btn btn-outline" onClick={() => { const url = `https://${nodeMode === 'node' ? window.location.host : NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
                             style={{ height: 36, borderRadius: 18, fontSize: 13 }}>Copiar link local do pacote</button>
                         </div>
                       ) : (

@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
 import { Dialog } from '../components/Overlays';
+import { StepUpDialog } from '../components/Pair';
 import { Icon, Segmented } from '../components/ui';
 import { PERIOD, SIGN_CODE, WALLETS } from '../data/seed';
 import { fmt, parseAmount } from '../lib/format';
@@ -9,7 +10,8 @@ import { useStore } from '../state/store';
 type Dest = 'personal' | 'other';
 
 export function Wallet() {
-  const { balance, txs, totals, recordTransfer, showToast } = useStore();
+  const { balance, txs, totals, recordTransfer, stepUp, showToast } = useStore();
+  const [stepUpOpen, setStepUpOpen] = useState(false);
   const [to, setTo] = useState<Dest>('personal');
   const [amtStr, setAmtStr] = useState('200');
   const [signing, setSigning] = useState(false);
@@ -17,10 +19,19 @@ export function Wallet() {
   const amt = parseAmount(amtStr);
   const valid = amt > 0 && amt <= balance;
 
-  const approve = () => {
+  const approve = async () => {
     setSigning(false);
-    recordTransfer(amt, { id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${WALLETS.other.short}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true });
-    showToast({ icon: 'check_circle', title: 'Transferência assinada', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+    const r = await recordTransfer(amt, { id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${WALLETS.other.short}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true });
+    if (r === 'reauth') { setStepUpOpen(true); return; }
+    if (r === 'ok') showToast({ icon: 'check_circle', title: 'Transferência assinada', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+  };
+  /** Step-up: código novo do equipamento e, se confirmar, refaz a transferência. */
+  const confirmStepUp = async (code: string) => {
+    const problem = await stepUp(code);
+    if (problem) return problem;
+    setStepUpOpen(false);
+    await approve();
+    return null;
   };
 
   return (
@@ -89,6 +100,7 @@ export function Wallet() {
           // Sem o app pareado de verdade, a aprovação é simulada (como no protótipo).
           primaryLabel="Simular aprovação no celular" onPrimary={approve} onClose={() => setSigning(false)} />
       )}
+      {stepUpOpen && <StepUpDialog onConfirm={confirmStepUp} onClose={() => setStepUpOpen(false)} />}
     </div>
   );
 }

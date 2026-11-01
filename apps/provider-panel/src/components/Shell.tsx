@@ -7,6 +7,7 @@ import { Icon, Segmented } from './ui';
 
 /** Faixa superior: qual nó serve o painel e o estado da conexão. */
 export function TopBar() {
+  const { nodeMode, operatorName, logout } = useStore();
   return (
     <header style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: 'var(--side)', borderBottom: '1px solid var(--line)' }}>
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
@@ -19,6 +20,14 @@ export function TopBar() {
       <div className="row" style={{ gap: 6, fontSize: 12, fontWeight: 550, color: 'var(--ink2)' }}>
         <Icon name="wifi_off" size={15} />sem internet
       </div>
+      {nodeMode === 'node' ? (
+        <div className="row" style={{ gap: 8, fontSize: 12, fontWeight: 550 }}>
+          <Icon name="verified_user" size={15} />{operatorName}
+          <button type="button" className="btn btn-outline" onClick={logout} style={{ height: 26, padding: '0 10px', borderRadius: 13, fontSize: 12 }}>Sair</button>
+        </div>
+      ) : (
+        <span className="mono" title="Sem piu-node: dados de demonstração" style={{ fontSize: 11, padding: '2px 8px', borderRadius: 6, border: '1px dashed var(--line2)', color: 'var(--ink2)' }}>demonstração</span>
+      )}
     </header>
   );
 }
