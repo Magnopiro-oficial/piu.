@@ -7,6 +7,7 @@ Mensageiro **descentralizado e offline-first** da Lunes Network. As mensagens vi
 | Pasta | Conteúdo |
 |---|---|
 | [`apps/provider-panel`](apps/provider-panel) | Painel local do provider (Vite + React + TypeScript), servido pelo `piu-node` em `piu-node.local:8420` |
+| [`apps/site`](apps/site) | Site do projeto em PT e EN (Astro), com o painel embutido |
 | [`design/`](design) | Protótipos de referência em HTML (Claude Design): app mobile, painel do provider e site em PT/EN |
 | [`docs/design-spec.md`](docs/design-spec.md) | Especificação de design: tokens, tipografia, movimento, telas e regras de produto |
 | [`docs/requisitos/`](docs/requisitos) | Documento de requisitos da Lunes Network (IDs FUN, INF e NFR) |
@@ -23,6 +24,16 @@ npm run build    # gera dist/
 
 Detalhes em [`apps/provider-panel/README.md`](apps/provider-panel/README.md).
 
+## Site
+
+```bash
+cd apps/site
+npm install
+npm run dev      # http://localhost:4321
+```
+
+Detalhes em [`apps/site/README.md`](apps/site/README.md).
+
 ## Protótipos
 
 Abra qualquer `design/*.dc.html` no navegador (o `support.js` precisa estar na mesma pasta). O índice é `design/Piu.dc.html`. Eles são **referência visual**, não código de produção.
@@ -30,5 +41,5 @@ Abra qualquer `design/*.dc.html` no navegador (o `support.js` precisa estar na m
 ## Roadmap
 
 - [x] Painel do provider para computador
-- [ ] Site do projeto (PT e EN)
+- [x] Site do projeto (PT e EN)
 - [ ] App mobile (Android e iOS)

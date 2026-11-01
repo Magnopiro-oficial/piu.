@@ -1,0 +1,43 @@
+---
+import '@fontsource-variable/geist';
+import '@fontsource/geist-mono/400.css';
+import '@fontsource/geist-mono/500.css';
+import 'material-symbols/rounded.css';
+import '../styles/site.css';
+import type { Dict } from '../i18n/pt';
+
+interface Props { t: Dict; alt: Dict }
+const { t, alt } = Astro.props;
+const abs = (p: string) => (Astro.site ? new URL(p, Astro.site).href : null);
+const canonical = abs(t.path);
+const alternates = [t, alt].map(d => ({ lang: d.lang, href: abs(d.path) })).filter(a => a.href);
+---
+<!doctype html>
+<html lang={t.lang} data-piu-theme="light">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{t.title}</title>
+    <meta name="description" content={t.description} />
+    <meta name="color-scheme" content="light dark" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <meta property="og:type" content="website" />
+    <meta property="og:title" content={t.title} />
+    <meta property="og:description" content={t.description} />
+    <meta property="og:locale" content={t.lang.replace('-', '_')} />
+    {canonical && <link rel="canonical" href={canonical} />}
+    {alternates.map(a => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
+    <!-- Aplica o tema antes da primeira pintura (sem piscar). Mesma chave do painel do provider. -->
+    <script is:inline>
+      (() => {
+        let t = null;
+        try { t = localStorage.getItem('piu-theme'); } catch {}
+        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+        document.documentElement.dataset.piuTheme = t;
+      })();
+    </script>
+  </head>
+  <body>
+    <slot />
+  </body>
+</html>

@@ -29,3 +29,4 @@ Resumo de `docs/design-spec.md`; os IDs vêm de [`docs/requisitos/`](docs/requis
 | App | Pasta | Comandos |
 |---|---|---|
 | Painel do provider | `apps/provider-panel` | `npm install`, `npm run dev`, `npm run build` |
+| Site (PT e EN) | `apps/site` | `npm install`, `npm run dev`, `npm run build` |

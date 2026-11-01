@@ -76,6 +76,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [theme]);
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
+  // Embutido no site (iframe), acompanha o tema escolhido lá: por mensagem ou pela mesma chave salva.
+  useEffect(() => {
+    const apply = (t: unknown) => { if (t === 'light' || t === 'dark') setThemeState(t); };
+    const onMsg = (e: MessageEvent) => { if (e.origin === window.location.origin && e.data?.type === 'piu-theme') apply(e.data.theme); };
+    const onStorage = (e: StorageEvent) => { if (e.key === 'piu-theme') apply(e.newValue); };
+    window.addEventListener('message', onMsg);
+    window.addEventListener('storage', onStorage);
+    return () => { window.removeEventListener('message', onMsg); window.removeEventListener('storage', onStorage); };
+  }, []);
+
   const setTheme = useCallback((t: Theme) => { setThemeState(t); localStorage.setItem('piu-theme', t); }, []);
 
   const showToast = useCallback((t: ToastData) => {
