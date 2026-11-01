@@ -120,7 +120,7 @@ export default function ChatScreen() {
             </Pressable>
             <TextInput value={draft} onChangeText={setDraft} placeholder="Mensagem" placeholderTextColor={c.ink3} accessibilityLabel="Mensagem"
               onSubmitEditing={submit} returnKeyType="send" blurOnSubmit={false}
-              style={{ flex: 1, height: 42, borderRadius: 21, backgroundColor: c.bg2, paddingHorizontal: 16, fontSize: 15.5, color: c.ink, fontFamily: fontFamily(400) }} />
+              style={{ flex: 1, minWidth: 0, height: 42, borderRadius: 21, backgroundColor: c.bg2, paddingHorizontal: 16, fontSize: 15.5, color: c.ink, fontFamily: fontFamily(400) }} />
             <SendButton enabled={canSend} onPress={submit} />
           </View>
         </View>

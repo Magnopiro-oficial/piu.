@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
+import { useLayout } from '../lib/responsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { Icon, type IconName } from '../ui/Icon';
@@ -16,6 +17,9 @@ const BENEFITS: [IconName, string][] = [
 /** Boas-vindas (FUN-001): logotipo com órbitas girando (90 s), proposta e entrada. */
 export default function Welcome() {
   const { c, reduceMotion } = useTheme();
+  const { width, height, short } = useLayout();
+  // A órbita tem 300 px no design; encolhe para caber em telas estreitas ou baixas.
+  const k = Math.max(0.55, Math.min(1, (width - 24) / 300, (height - 400) / 300));
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduceMotion) return;
@@ -30,18 +34,20 @@ export default function Welcome() {
   );
 
   return (
-    <Screen style={{ paddingHorizontal: 28 }}>
+    <Screen style={{ paddingHorizontal: width < 360 ? 20 : 28 }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-        {[300, 210, 120].map(s => (
-          <View key={s} style={{ position: 'absolute', width: s, height: s, borderRadius: s / 2, borderWidth: 1, borderColor: c.line2 }} />
-        ))}
-        <Animated.View style={{ position: 'absolute', width: 300, height: 300, transform: [{ rotate }] }}>
-          {dot(12, 0, -150)}{dot(9, 82, 74)}{dot(9, -106, -26, true)}{dot(7, -56, 124)}{dot(7, 44, -60, true)}
-        </Animated.View>
-        <T size={112} w={750} ls={-0.07} style={{ lineHeight: 120 }}>piu<T size={112} w={750} color={c.ink3}>.</T></T>
+        <View style={{ position: 'absolute', width: 300, height: 300, alignItems: 'center', justifyContent: 'center', transform: [{ scale: k }] }}>
+          {[300, 210, 120].map(s => (
+            <View key={s} style={{ position: 'absolute', width: s, height: s, borderRadius: s / 2, borderWidth: 1, borderColor: c.line2 }} />
+          ))}
+          <Animated.View style={{ position: 'absolute', width: 300, height: 300, transform: [{ rotate }] }}>
+            {dot(12, 0, -150)}{dot(9, 82, 74)}{dot(9, -106, -26, true)}{dot(7, -56, 124)}{dot(7, 44, -60, true)}
+          </Animated.View>
+        </View>
+        <T size={Math.round(112 * k)} w={750} ls={-0.07} style={{ lineHeight: Math.round(120 * k) }}>piu<T size={Math.round(112 * k)} w={750} color={c.ink3}>.</T></T>
       </View>
-      <View style={{ gap: 22, paddingBottom: 16 }}>
-        <T size={30} w={600} ls={-0.03} lh={1.08} accessibilityRole="header">Mensagens que voam de aparelho em aparelho.</T>
+      <View style={{ gap: short ? 16 : 22, paddingBottom: 16 }}>
+        <T size={width < 360 ? 26 : 30} w={600} ls={-0.03} lh={1.08} accessibilityRole="header">Mensagens que voam de aparelho em aparelho.</T>
         <View style={{ gap: 12 }}>
           {BENEFITS.map(([icon, text]) => (
             <View key={icon} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

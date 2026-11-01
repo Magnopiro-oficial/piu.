@@ -98,7 +98,7 @@ function DeviceRow({ d }: { d: ProvDevice }) {
         style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderRadius: 20, borderWidth: 1, borderColor: c.line2, transform: [{ scale: pressed ? 0.99 : 1 }] })}>
         <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={d.icon} size={23} w={300} /></View>
         <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-          <T size={15} w={600} numberOfLines={1}>{d.name}</T>
+          <T size={15} w={600} numberOfLines={2}>{d.name}</T>
           <T size={11.5} mono color={c.ink2} numberOfLines={1}>{d.cls} · {d.pub}</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             <StatusDot status={d.status} />

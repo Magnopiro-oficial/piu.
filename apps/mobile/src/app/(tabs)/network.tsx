@@ -174,8 +174,11 @@ function Radar({ liveCount }: { liveCount: number }) {
       {NEIGHBORS.map(x => {
         const on = tx[x.t] && !x.spoof;
         const size = x.big ? 14 : 10;
+        // Rótulo de 80 px: centralizado no ponto, ou alinhado para dentro perto das bordas.
+        const edge = x.x < 22 ? 'flex-start' : x.x > 78 ? 'flex-end' : 'center';
+        const dx = edge === 'flex-start' ? -size / 2 : edge === 'flex-end' ? -80 + size / 2 : -40;
         return (
-          <View key={x.name} style={{ position: 'absolute', left: `${x.x}%`, top: `${x.y}%`, alignItems: 'center', gap: 4, opacity: x.spoof ? 0.35 : tx[x.t] ? 1 : 0.45, transform: [{ translateX: -40 }, { translateY: -size / 2 }], width: 80 }}>
+          <View key={x.name} style={{ position: 'absolute', left: `${x.x}%`, top: `${x.y}%`, alignItems: edge, gap: 4, opacity: x.spoof ? 0.35 : tx[x.t] ? 1 : 0.45, transform: [{ translateX: dx }, { translateY: -size / 2 }], width: 80 }}>
             <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: on ? c.ink : 'transparent', borderWidth: 1.5, borderColor: c.ink }} />
             <T size={10} w={500} mono color={c.ink2} numberOfLines={1}>{x.name.split(' · ')[0]}</T>
           </View>

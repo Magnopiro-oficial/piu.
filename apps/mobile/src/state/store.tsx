@@ -32,6 +32,8 @@ interface Store {
   /** Remove o membro e troca a chave do grupo (v → v+1). */
   removeMember: (memberId: string) => void;
   createChannel: (c: NewChannel) => string;
+  /** Acrescenta uma conversa no topo (se ainda não existir). */
+  addChat: (c: Chat) => void;
   sendFile: (chatId: string, kind: 'image' | 'doc') => void;
   toggleFilePause: (chatId: string, msgId: string) => void;
   toast: (ToastData & { seq: number }) | null;
@@ -183,6 +185,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       setIdentity(c.ident);
       return id;
     },
+    addChat: ch => setChats(cs => (cs.some(x => x.id === ch.id) ? cs : [ch, ...cs])),
     sendFile: (cid, kind) => {
       const id = 'f' + Date.now();
       push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'encaminhada', file: { ...FILES[kind], done: 0, state: 'sending' } });

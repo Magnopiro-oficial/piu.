@@ -19,7 +19,7 @@ export default function NewChat() {
     ['campaign', 'Novo canal', 'Público, privado ou secreto', () => router.push('/new-channel')],
     ['workspaces', 'Nova comunidade', 'Reúna grupos e canais', soon('Nova comunidade')],
     ['qr_code_scanner', 'Escanear código', 'Adicione alguém pessoalmente', soon('Escanear código')],
-    ['person_add', 'Convidar para o Piu', 'Envie o app sem internet, de celular para celular', soon('Convidar para o Piu')],
+    ['person_add', 'Convidar para o Piu', 'Envie o app sem internet, de celular para celular', () => router.push('/invite')],
   ];
   const talk = (id: string, name: string) => {
     if (chats.some(x => x.id === id)) router.replace({ pathname: '/chat/[id]', params: { id } });

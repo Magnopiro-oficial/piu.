@@ -3,6 +3,7 @@ import { ScrollView, View } from 'react-native';
 import { SAFETY_CODE } from '../../data/seed';
 import { handleOf } from '../../lib/text';
 import { useStore } from '../../state/store';
+import { useLayout } from '../../lib/responsive';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, QrPlaceholder, SectionLabel } from '../../ui/Controls';
@@ -14,6 +15,7 @@ import { T } from '../../ui/T';
 export default function Contact() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
+  const { compact } = useLayout();
   const { chats, verified, setVerified, showToast } = useStore();
   const chat = chats.find(x => x.id === id);
   if (!chat) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
@@ -46,10 +48,10 @@ export default function Contact() {
             </View>
           </View>
           <T size={13} lh={1.45} color={c.ink2}>Compare com a tela de {first} ou escaneie o QR dela pessoalmente. Se bater, ninguém está no meio da conversa.</T>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button label="Escanear QR" variant="outline" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }}
+          <View style={{ flexDirection: compact ? 'column' : 'row', gap: 8 }}>
+            <Button label="Escanear QR" variant="outline" height={44} fontSize={14} style={[!compact && { flex: 1 }, { paddingHorizontal: 4 }]}
               onPress={() => { setVerified(chat.id, true); showToast({ icon: 'qr_code_scanner', title: 'Código confere', body: `${chat.name} verificado pessoalmente.` }); }} />
-            <Button label={ver ? 'Remover verificação' : 'Marcar como verificado'} height={44} fontSize={13.5} style={{ flex: 1.3, paddingHorizontal: 4 }} onPress={() => setVerified(chat.id, !ver)} />
+            <Button label={ver ? 'Remover verificação' : 'Marcar como verificado'} height={44} fontSize={13.5} style={[!compact && { flex: 1.3 }, { paddingHorizontal: 4 }]} onPress={() => setVerified(chat.id, !ver)} />
           </View>
         </View>
 
