@@ -1,0 +1,32 @@
+name: CI · App mobile
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/mobile/**', '.github/workflows/ci-mobile.yml']
+  pull_request:
+    paths: ['apps/mobile/**', '.github/workflows/ci-mobile.yml']
+
+concurrency:
+  group: ci-mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: App mobile
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build web (confere o bundle)
+        run: npm run export:web
