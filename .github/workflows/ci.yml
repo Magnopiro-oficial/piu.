@@ -45,3 +45,22 @@ jobs:
       - run: npm ci
       - name: Checagem, build do painel embutido e build do site
         run: npm run build
+
+  mobile:
+    name: App mobile
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/mobile/package-lock.json
+      - run: npm ci
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Build web (confere o bundle)
+        run: npm run export:web

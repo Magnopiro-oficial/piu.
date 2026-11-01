@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, FlatList, Pressable, ScrollView, TextInput, View } from 'react-native';
-import type { Chat, Kind, Status } from '../../data/types';
+import type { Chat, Kind } from '../../data/types';
+import { STATUS_ICON } from '../../lib/status';
 import { initialsOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { fontFamily } from '../../theme/fonts';
@@ -11,10 +12,9 @@ import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
-type Filter = 'all' | Exclude<Kind, never>;
+type Filter = 'all' | Kind;
 const FILTERS: [Filter, string][] = [['all', 'Todas'], ['direct', 'Pessoas'], ['group', 'Grupos'], ['channel', 'Canais'], ['community', 'Comunidades']];
 const KIND_ICON: Partial<Record<Kind, IconName>> = { group: 'group', channel: 'campaign', community: 'workspaces' };
-export const STATUS_ICON: Record<Status, IconName> = { criada: 'radio_button_unchecked', aguardando: 'schedule', encaminhada: 'check', entregue: 'done_all', expirada: 'timer_off', falha: 'error' };
 
 /** Conversas: troca de identidade (listas separadas), pílula de rede, busca, filtros, fila offline e lista. */
 export default function Chats() {

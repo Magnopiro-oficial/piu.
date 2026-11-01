@@ -21,7 +21,7 @@ export default function TabsLayout() {
 }
 
 /** Barra inferior de 84 px (+ área segura): ícone preenchido e “bump” na aba ativa, badge de não lidas. */
-function TabBar({ state, navigation }: BottomTabBarProps) {
+function TabBar({ state, navigateToTab }: BottomTabBarProps) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { chats, identity } = useStore();
@@ -32,7 +32,7 @@ function TabBar({ state, navigation }: BottomTabBarProps) {
         const [label, icon] = TABS[r.name] ?? [r.name, 'chat_bubble'];
         return (
           <Tab key={r.key} label={label} icon={icon} active={state.index === i} badge={r.name === 'index' ? unread : 0}
-            onPress={() => { if (state.index !== i) navigation.navigate(r.name); }} />
+            onPress={() => { if (state.index !== i) navigateToTab(r.key); }} />
         );
       })}
     </View>
