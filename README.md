@@ -4,9 +4,13 @@ Mensageiro **descentralizado e offline-first** da Lunes Network. As mensagens vi
 
 ## Estrutura
 
+Cada pasta em `apps/` é um projeto independente: tem o próprio `package.json`, `package-lock.json`, README e CI (que só roda quando a pasta muda). Instale e rode cada um dentro da sua pasta. A única ligação é o site, que embute o build do painel.
+
 | Pasta | Conteúdo |
 |---|---|
 | [`apps/provider-panel`](apps/provider-panel) | Painel local do provider (Vite + React + TypeScript), servido pelo `piu-node` em `piu-node.local:8420` |
+| [`apps/site`](apps/site) | Site do projeto em PT e EN (Astro), com o painel embutido |
+| [`apps/mobile`](apps/mobile) | App Piu para Android e iOS (Expo + React Native), em construção por etapas |
 | [`design/`](design) | Protótipos de referência em HTML (Claude Design): app mobile, painel do provider e site em PT/EN |
 | [`docs/design-spec.md`](docs/design-spec.md) | Especificação de design: tokens, tipografia, movimento, telas e regras de produto |
 | [`docs/requisitos/`](docs/requisitos) | Documento de requisitos da Lunes Network (IDs FUN, INF e NFR) |
@@ -23,6 +27,26 @@ npm run build    # gera dist/
 
 Detalhes em [`apps/provider-panel/README.md`](apps/provider-panel/README.md).
 
+## Site
+
+```bash
+cd apps/site
+npm install
+npm run dev      # http://localhost:4321
+```
+
+Detalhes em [`apps/site/README.md`](apps/site/README.md).
+
+## App mobile
+
+```bash
+cd apps/mobile
+npm install
+npm start        # Android, iOS ou web
+```
+
+Detalhes em [`apps/mobile/README.md`](apps/mobile/README.md).
+
 ## Protótipos
 
 Abra qualquer `design/*.dc.html` no navegador (o `support.js` precisa estar na mesma pasta). O índice é `design/Piu.dc.html`. Eles são **referência visual**, não código de produção.
@@ -30,5 +54,5 @@ Abra qualquer `design/*.dc.html` no navegador (o `support.js` precisa estar na m
 ## Roadmap
 
 - [x] Painel do provider para computador
-- [ ] Site do projeto (PT e EN)
-- [ ] App mobile (Android e iOS)
+- [ ] Site do projeto (PT e EN): pronto, em revisão no PR #2
+- [ ] App mobile (Android e iOS): etapa 1 de 5 (onboarding e Conversas) em revisão no PR #3

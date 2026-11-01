@@ -3,8 +3,9 @@
 ## Fluxo
 
 1. Crie uma branch a partir da `main`: `feat/...`, `fix/...`, `docs/...` ou `chore/...`.
+   **Um projeto por PR**: não misture `apps/provider-panel`, `apps/site` e `apps/mobile` na mesma mudança. Alterações em arquivos da raiz (README, CI, docs) vão num PR próprio.
 2. Faça commits pequenos, com mensagens no imperativo (ex.: `Add mesh legend`).
-3. Abra um pull request para a `main` preenchendo o modelo. O CI roda typecheck e build.
+3. Abra um pull request para a `main` preenchendo o modelo. Cada projeto tem o próprio CI (`.github/workflows/ci-<projeto>.yml`), que só roda quando a pasta dele muda.
 
 ## Design
 
@@ -29,3 +30,5 @@ Resumo de `docs/design-spec.md`; os IDs vêm de [`docs/requisitos/`](docs/requis
 | App | Pasta | Comandos |
 |---|---|---|
 | Painel do provider | `apps/provider-panel` | `npm install`, `npm run dev`, `npm run build` |
+| Site (PT e EN) | `apps/site` | `npm install`, `npm run dev`, `npm run build` |
+| App mobile | `apps/mobile` | `npm install`, `npm start`, `npm run typecheck` |
