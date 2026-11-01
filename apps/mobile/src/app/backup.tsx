@@ -1,5 +1,5 @@
 import { router } from 'expo-router';
-import { usePreventScreenCapture } from 'expo-screen-capture';
+import { usePreventCapture } from '../lib/screenCapture';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SAVE_OPTS, type SaveOpt } from '../data/settings';
@@ -43,7 +43,7 @@ export default function Backup() {
   const [QUIZ] = useState(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')));
   const [step, setStep] = useState<Step>('phrase');
   // Bloqueia prints e gravação de tela enquanto a frase pode aparecer (Android: FLAG_SECURE).
-  usePreventScreenCapture('backup');
+  usePreventCapture('backup');
   const [noLock, setNoLock] = useState(false);
   const [denied, setDenied] = useState(false);
   /** Quem tem a frase tem tudo: só mostra depois de confirmar que é o dono do aparelho. */
