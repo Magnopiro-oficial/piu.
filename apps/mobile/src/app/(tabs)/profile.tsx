@@ -1,8 +1,9 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { MY_DEVICES, PROFILES } from '../../data/settings';
+import { MY_DEVICES, PROFILE_NOTES } from '../../data/settings';
 import { initialsOf } from '../../lib/text';
+import { fingerprintOf, useKeys } from '../../state/keys';
 import { useResetApp } from '../../state/reset';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
@@ -22,9 +23,13 @@ export default function Profile() {
   const reset = useResetApp();
   const [del, setDel] = useState(false);
   const pub = identity === 'public';
+  const { identities } = useKeys();
+  const me = identities?.[identity];
+  const fp = me ? fingerprintOf(me) : Array(8).fill('····');
+  const short = me ? `${me.id.slice(0, 8)}…${me.id.slice(-4)}` : 'piu:…';
   const p = pub
-    ? { ...PROFILES.public, name: profile.name, initials: initialsOf(profile.name), handle: '@' + profile.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, '') }
-    : PROFILES.anon;
+    ? { name: profile.name, initials: initialsOf(profile.name), handle: '@' + profile.name.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, ''), radius: 'circle', note: PROFILE_NOTES.public, fp }
+    : { name: `Anônimo · ${fp[0]}`, initials: fp[0].slice(0, 2), handle: short, radius: 'square', note: PROFILE_NOTES.anon, fp };
   const devices = MY_DEVICES.filter(d => !d.revoked && !dropped[d.id]).length;
 
   const rows: [IconName, string, string, () => void, boolean?][] = [

@@ -5,8 +5,6 @@ const you = { n: 'Você', k: 'Este aparelho' };
 const galpao = { n: 'Galpão · OpenWrt', k: 'Home Node' };
 const praca = { n: 'Gateway Praça · mini-PC', k: 'Gateway Local' };
 
-export const FINGERPRINT = ['7F3A', '91C2', '0B4E', 'D8A1', '55E0', '3C7F', 'A912', 'C19E'];
-export const KEY_SHORT = 'piu:7f3a…c19e';
 
 export function seedChats(): Chat[] {
   return [
@@ -88,8 +86,6 @@ export const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off'
   ['secret', 'visibility_off', 'Secreto', 'Não aparece em busca. Nem o nome sai sem convite.'],
 ];
 
-/** Código de segurança 12×5 dígitos (seção 9). Ilustrativo. */
-export const SAFETY_CODE = ['37104', '88215', '05932', '61477', '29083', '74150', '93826', '10469', '58331', '46702', '81295', '30648'];
 
 export const NEARBY_PEOPLE = [
   { id: 'marina', initials: 'MA', name: 'Marina Alves', meta: 'BLE · ~8 m' },

@@ -1,6 +1,5 @@
 import { router } from 'expo-router';
 import { Pressable, TextInput, View } from 'react-native';
-import { KEY_SHORT } from '../data/seed';
 import type { IdentityKind } from '../data/types';
 import { handleOf } from '../lib/text';
 import { useStore } from '../state/store';
@@ -59,12 +58,12 @@ export default function Identity() {
             <TextInput value={name} onChangeText={v => setProfile({ name: v })} placeholder="Seu nome" placeholderTextColor={c.ink3}
               accessibilityLabelledBy="name-label" accessibilityLabel="Nome de exibição" autoCapitalize="words" returnKeyType="done" maxLength={40}
               style={{ height: 52, borderRadius: 16, backgroundColor: c.bg2, paddingHorizontal: 16, fontSize: 16, color: c.ink, fontFamily: fontFamily(400) }} />
-            <T size={12} mono color={c.ink2}>{handleOf(name || ' ')} · {KEY_SHORT}</T>
+            <T size={12} mono color={c.ink2}>{handleOf(name || ' ')} · chave gerada no próximo passo</T>
           </View>
         ) : (
           <View style={{ padding: 16, borderRadius: 16, backgroundColor: c.bg2, gap: 6 }}>
-            <T size={13} color={c.ink2}>Seu nome será derivado da chave</T>
-            <T size={20} w={500} mono ls={-0.01}>Anônimo · 7F3A</T>
+            <T size={13} color={c.ink2}>Seu nome será derivado da chave gerada no próximo passo</T>
+            <T size={20} w={500} mono ls={-0.01}>Anônimo · ····</T>
             <T size={12.5} lh={1.4} color={c.ink2}>Nenhum vínculo público com sua identidade pública. Ainda assim, horários e padrões de sinal podem permitir correlação: o anonimato não é absoluto.</T>
           </View>
         )}

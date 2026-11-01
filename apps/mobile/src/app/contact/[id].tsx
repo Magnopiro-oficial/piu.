@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { useLocalSearchParams } from 'expo-router';
 import { ScrollView, View } from 'react-native';
-import { SAFETY_CODE } from '../../data/seed';
 import { handleOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { useLayout } from '../../lib/responsive';
+import { cachedSafetyCode, safetyCodeFor } from '../../lib/demoContacts';
+import { useKeys } from '../../state/keys';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, QrPlaceholder, SectionLabel } from '../../ui/Controls';
@@ -17,10 +19,23 @@ export default function Contact() {
   const { c } = useTheme();
   const { compact } = useLayout();
   const { chats, verified, setVerified, showToast } = useStore();
+  const { identities } = useKeys();
+  const ident = chats.find(x => x.id === id)?.ident ?? 'public';
+  // Código real: chaves da identidade usada nesta conversa × chaves do contato (hash iterado: calcula uma vez).
+  const mine = identities?.[ident];
+  const [code, setCode] = useState<string[] | null>(() => (mine && id ? cachedSafetyCode(mine, id, ident) : null));
+  // Calcula depois de desenhar a tela (não trava a navegação) e guarda em cache.
+  useEffect(() => {
+    if (!mine || !id) return;
+    const t = setTimeout(() => setCode(safetyCodeFor(mine, id, ident)), 0);
+    return () => clearTimeout(t);
+  }, [mine, id, ident]);
+  const shown = code ?? Array<string>(12).fill('·····');
   const chat = chats.find(x => x.id === id);
   if (!chat) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
 
   const ver = !!verified[chat.id];
+
   const first = chat.name.split(' ')[0];
   const handle = chat.ident === 'anon' ? 'piu:b2d9…7a10 · anônima' : `${handleOf(first)} · pública`;
   const rows: [IconName, string, string, number][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', 'Desligado', 450], ['block', `Bloquear ${first}`, '', 650]];
@@ -43,8 +58,8 @@ export default function Contact() {
         <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 14 }}>
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
             <QrPlaceholder size={100} radius={14} />
-            <View accessibilityLabel={'Código de segurança: ' + SAFETY_CODE.join(' ')} style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 }}>
-              {SAFETY_CODE.map(g => <T key={g} size={13.5} w={500} mono style={{ width: '33.3%' }}>{g}</T>)}
+            <View accessibilityLabel={code ? 'Código de segurança: ' + code.join(' ') : 'Calculando o código de segurança'} style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', rowGap: 6 }}>
+              {shown.map((g, i) => <T key={i} size={13.5} w={500} mono style={{ width: '33.3%' }}>{g}</T>)}
             </View>
           </View>
           <T size={13} lh={1.45} color={c.ink2}>Compare com a tela de {first} ou escaneie o QR dela pessoalmente. Se bater, ninguém está no meio da conversa.</T>

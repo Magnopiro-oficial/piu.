@@ -1,16 +1,12 @@
 // Perfil, segurança e ajustes, notificações (design/PiuApp.dc.html). Dados ilustrativos.
 import type { IconName } from '../ui/Icon';
 
-export const PROFILES = {
-  public: { radius: 'circle' as const, note: 'Perfil público. Pessoas podem encontrar você por nome ou código.', fp: ['7F3A', '91C2', '0B4E', 'D8A1', '55E0', '3C7F', 'A912', 'C19E'] },
-  anon: { name: 'Anônimo · 7F3A', handle: 'piu:b7e0…41dc', initials: '7F', radius: 'square' as const, note: 'Chaves e contatos separados. Sem vínculo público com seu perfil.', fp: ['B7E0', '2D19', 'F4C8', '0A63', '9E21', '7B5D', 'C0F4', '41DC'] },
+export const PROFILE_NOTES = {
+  public: 'Perfil público. Pessoas podem encontrar você por nome ou código.',
+  anon: 'Chaves e contatos separados. Sem vínculo público com seu perfil.',
 };
 
 // ── backup ───────────────────────────────────────────────
-/** Frase de recuperação (12 palavras). */
-export const PHRASE = ['farol', 'caju', 'vento', 'rio', 'pedra', 'lume', 'serra', 'barco', 'linha', 'ninho', 'trigo', 'maré'];
-/** Confirmação: [posição, opções, resposta]. */
-export const QUIZ: [number, string[], string][] = [[4, ['mar', 'rio', 'sol'], 'rio'], [7, ['vale', 'ponte', 'serra'], 'serra'], [11, ['trigo', 'milho', 'arroz'], 'trigo']];
 export type SaveOpt = 'sd' | 'device' | 'paper';
 export const SAVE_OPTS: [SaveOpt, IconName, string, string][] = [
   ['sd', 'sd_card', 'Arquivo cifrado no cartão SD ou pendrive', 'Sem nuvem · protegido pela frase'],

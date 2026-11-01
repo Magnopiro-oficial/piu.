@@ -1,5 +1,6 @@
 import { createContext, Fragment, useContext, useMemo, useState, type ReactNode } from 'react';
 import { clearPersisted } from '../lib/persist';
+import { wipeKeys } from './keys';
 
 const Ctx = createContext<() => void>(() => {});
 
@@ -10,7 +11,7 @@ const Ctx = createContext<() => void>(() => {});
 export function ResetProvider({ children }: { children: ReactNode }) {
   const [epoch, setEpoch] = useState(0);
   // clearPersisted descarta as gravações pendentes na hora (parte síncrona) e apaga o armazenamento em seguida.
-  const reset = useMemo(() => () => { void clearPersisted(); setEpoch(e => e + 1); }, []);
+  const reset = useMemo(() => () => { void clearPersisted(); void wipeKeys(); setEpoch(e => e + 1); }, []);
   return <Ctx.Provider value={reset}><Fragment key={epoch}>{children}</Fragment></Ctx.Provider>;
 }
 

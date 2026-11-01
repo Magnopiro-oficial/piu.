@@ -1,7 +1,8 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, View } from 'react-native';
-import { MIG_META, migItems, PHRASE } from '../data/settings';
+import { MIG_META, migItems } from '../data/settings';
+import { SAFETY_WORDS } from '../data/wallet';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -68,8 +69,8 @@ export default function Migrate() {
         {restoreMode === 'device' && (
           <View style={{ marginTop: 8, marginHorizontal: 20, padding: 14, borderRadius: 20, backgroundColor: c.bg2, gap: 10 }}>
             <T size={13} color={c.ink2}>Confira se as mesmas palavras aparecem no aparelho antigo:</T>
-            <View accessibilityLabel={'Código: ' + PHRASE.slice(0, 4).join(', ')} style={{ flexDirection: 'row', gap: 6 }}>
-              {PHRASE.slice(0, 4).map(w => <View key={w} style={{ flex: 1, height: 38, borderRadius: 11, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><T size={15} w={650}>{w}</T></View>)}
+            <View accessibilityLabel={'Código: ' + SAFETY_WORDS.join(', ')} style={{ flexDirection: 'row', gap: 6 }}>
+              {SAFETY_WORDS.map(w => <View key={w} style={{ flex: 1, height: 38, borderRadius: 11, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><T size={15} w={650}>{w}</T></View>)}
             </View>
           </View>
         )}

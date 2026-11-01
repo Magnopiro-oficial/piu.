@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { PHRASE, QUIZ, SAVE_OPTS, type SaveOpt } from '../data/settings';
+import { SAVE_OPTS, type SaveOpt } from '../data/settings';
+import { WORDLIST } from '../protocol';
+import { useKeys } from '../state/keys';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -15,11 +17,27 @@ import { T } from '../ui/T';
 
 type Step = 'phrase' | 'confirm' | 'save';
 
+/** Sorteia 3 posições da frase; cada uma com a palavra certa e 2 da lista oficial (embaralhadas). */
+function makeQuiz(phrase: string[]): [number, string[], string][] {
+  const pick = <X,>(xs: X[]) => xs[Math.floor(Math.random() * xs.length)];
+  const positions = new Set<number>();
+  while (positions.size < 3) positions.add(Math.floor(Math.random() * phrase.length));
+  return [...positions].sort((a, b) => a - b).map(i => {
+    const answer = phrase[i];
+    const opts = new Set([answer]);
+    while (opts.size < 3) { const w = pick(WORDLIST as string[]); if (!phrase.includes(w)) opts.add(w); }
+    return [i + 1, [...opts].sort(() => Math.random() - 0.5), answer];
+  });
+}
+
 /** Backup das chaves: frase de 12 palavras → confirmar 3 → onde guardar a cópia cifrada. */
 export default function Backup() {
   const { c } = useTheme();
   const { showToast } = useStore();
   const { setBackupDone } = useSettings();
+  const { phrase: words } = useKeys();
+  const PHRASE = words ?? [];
+  const [QUIZ] = useState(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')));
   const [step, setStep] = useState<Step>('phrase');
   const [shown, setShown] = useState(false);
   const [quiz, setQuiz] = useState<Record<number, string>>({});
@@ -42,7 +60,7 @@ export default function Backup() {
               accessibilityLabel={shown ? 'Frase: ' + PHRASE.map((w, i) => `${i + 1} ${w}`).join(', ') : 'Frase oculta. Toque para mostrar'}
               style={{ marginTop: 4, marginHorizontal: 20, padding: 14, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {PHRASE.map((w, i) => (
-                <View key={w} style={{ width: '31%', flexGrow: 1, height: 42, borderRadius: 12, backgroundColor: c.bg, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10 }}>
+                <View key={i} style={{ width: '31%', flexGrow: 1, height: 42, borderRadius: 12, backgroundColor: c.bg, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10 }}>
                   <T size={10.5} w={500} mono color={c.ink2}>{i + 1}</T>
                   {/* Oculta: o RN não tem desfoque de texto portátil; mostramos pontos no lugar da palavra. */}
                   <T size={15} w={600} color={shown ? c.ink : c.ink3}>{shown ? w : '•••••'}</T>

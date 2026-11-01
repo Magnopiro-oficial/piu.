@@ -1,3 +1,4 @@
+import '../lib/cryptoPolyfill';
 import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
@@ -5,6 +6,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { loadPersisted } from '../lib/persist';
+import { KeysProvider, preloadKeys } from '../state/keys';
 import { NetworkProvider } from '../state/network';
 import { StoreProvider } from '../state/store';
 import { ResetProvider } from '../state/reset';
@@ -21,7 +23,7 @@ export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_FILES);
   // Dados salvos no aparelho: lidos antes de esconder o splash, para abrir direto onde a pessoa parou.
   const [hydrated, setHydrated] = useState(false);
-  useEffect(() => { loadPersisted().finally(() => setHydrated(true)); }, []);
+  useEffect(() => { Promise.all([loadPersisted(), preloadKeys()]).finally(() => setHydrated(true)); }, []);
   const ready = (loaded || !!error) && hydrated;
   useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return null;
@@ -29,17 +31,19 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <ResetProvider>
-          <StoreProvider>
-            <NetworkProvider>
-              <WalletProvider>
-                <SettingsProvider>
-                  <TransportProvider>
-                    <Navigator />
-                  </TransportProvider>
-                </SettingsProvider>
-              </WalletProvider>
-            </NetworkProvider>
-          </StoreProvider>
+          <KeysProvider>
+            <StoreProvider>
+              <NetworkProvider>
+                <WalletProvider>
+                  <SettingsProvider>
+                    <TransportProvider>
+                      <Navigator />
+                    </TransportProvider>
+                  </SettingsProvider>
+                </WalletProvider>
+              </NetworkProvider>
+            </StoreProvider>
+          </KeysProvider>
         </ResetProvider>
       </ThemeProvider>
     </SafeAreaProvider>

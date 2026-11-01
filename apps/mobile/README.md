@@ -43,7 +43,8 @@ npm test           # testes do protocolo (criptografia e roteamento)
 5. **Perfil, segurança, ajustes e alertas** (feito): aba Perfil com identidade pública/anônima, impressão digital e ajustes; backup das chaves em 3 passos (frase de 12 palavras oculta até tocar, confirmar 3 palavras, onde guardar a cópia cifrada); restaurar de outro aparelho, pela frase ou por arquivo, com migração em 5 etapas; aparelhos (desconectar, revogar perdido); Privacidade, Armazenamento e Bateria e limites (com estimativa de gasto como nó); Notificações sem servidor (pré-visualização, tipos, silêncio) com prévia da tela bloqueada; alerta de emergência assinado em tela cheia; apagar dados locais segurando o botão.
 
 ## Ainda simulado
-- A geração das chaves, o backup, a restauração e a revogação de aparelhos são simulados; a criptografia real entra com o módulo nativo.
+- **Chaves reais:** no onboarding é gerada uma frase de recuperação (12 palavras BIP39 em inglês), guardada no cofre do sistema (`expo-secure-store`: Keychain/Keystore, só neste aparelho). As identidades pública e anônima, a impressão digital, o código de segurança e o backup derivam dela, e restaurar pela frase recupera as mesmas chaves. Ainda são simulados: a transferência de outro aparelho ou por arquivo (que por enquanto gera chaves novas), a revogação de aparelhos e o envio das mensagens, que ainda não passa pelo protocolo.
+- **Contatos de exemplo:** recebem chaves determinísticas de demonstração (`src/lib/demoContacts.ts`), para que o código de segurança seja calculado com o algoritmo real.
 - O envio percorre os estados por temporizador, e a Marina responde sozinha, como no protótipo.
 - O envio de arquivo é simulado (blocos por temporizador); a câmera e o seletor de arquivos entram com os módulos nativos.
 - Novo grupo, nova comunidade, escanear código e enviar localização mostram que chegam numa próxima versão.
@@ -52,5 +53,5 @@ npm test           # testes do protocolo (criptografia e roteamento)
 - Rede e provider usam dados de exemplo: a busca de equipamentos, o envio do pacote, o pareamento e o teste real são simulados por temporizador, até existir a API do `piu-node` e o transporte nativo.
 - Carteira e Por perto usam valores ilustrativos (o modelo econômico ainda está em aberto): assinaturas, liquidação na Mainnet, transferência P2P do instalador e proximidade são simulados; as fotos são placeholders listrados.
 - Notificações do sistema ainda não são disparadas: a tela bloqueada é uma prévia dentro do app, e os ajustes não chegam ao sistema operacional.
-- Os dados ficam salvos entre aberturas, mas sem cifragem própria: quando as chaves reais existirem, elas vão para o armazenamento seguro do sistema (Keychain/Keystore), nunca para o AsyncStorage.
+- Os dados do app ficam no AsyncStorage (sem cifragem própria); a frase de recuperação fica à parte, no cofre do sistema. Na versão **web** (demonstração e testes) não existe cofre seguro, e a frase vai para o localStorage.
 - Os identificadores das lojas (`bundleIdentifier` e `package`) ainda não estão definidos em `app.json`.
