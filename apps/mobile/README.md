@@ -22,6 +22,8 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 - `src/lib/persist.ts`: dados salvos no aparelho (AsyncStorage, prefixo `piu:v1:`). Tudo é lido antes do splash sumir; `usePersisted` substitui o `useState` nos provedores e grava com 250 ms de atraso. Mensagens em trânsito voltam para a fila e envios de arquivo ficam pausados ao reabrir o app.
 - `src/lib/responsive.ts`: `useLayout()` com a largura/altura da tela, `compact` (< 375 px) e `short` (< 700 px).
 - `src/data/seed.ts`, `src/data/network.ts`, `src/data/wallet.ts` e `src/data/settings.ts`: dados de exemplo do protótipo (ilustrativos).
+- `src/transport/`: transporte P2P (`getTransport()`): o nativo quando existe, senão o simulado; permissões do Android. `src/state/transport.tsx` liga o transporte depois do onboarding, enquanto Bluetooth LE ou Wi-Fi Direct estiverem ativos na aba Rede, e o Diagnóstico mostra o estado e os vizinhos.
+- `modules/piu-transport/`: módulo nativo local (Kotlin com Nearby Connections; Swift com Bluetooth LE). Protocolo, limitações e como testar em aparelhos estão no [README do módulo](modules/piu-transport/README.md).
 - `scripts/gen-icons.mjs`: gera `src/ui/icons.generated.ts` com os Material Symbols Rounded usados. Para usar um ícone novo, acrescente o nome em `scripts/icon-names.json` e rode `npm run icons`.
 
 ## Decisões técnicas
@@ -44,6 +46,7 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 - O envio de arquivo é simulado (blocos por temporizador); a câmera e o seletor de arquivos entram com os módulos nativos.
 - Novo grupo, nova comunidade, escanear código e enviar localização mostram que chegam numa próxima versão.
 - O QR é um placeholder (listras), como no design.
+- O transporte nativo foi escrito, mas ainda não foi compilado nem testado em aparelhos. No navegador e no Expo Go, o transporte é simulado (vizinhos do protótipo), e as mensagens ainda não passam por ele.
 - Rede e provider usam dados de exemplo: a busca de equipamentos, o envio do pacote, o pareamento e o teste real são simulados por temporizador, até existir a API do `piu-node` e o transporte nativo.
 - Carteira e Por perto usam valores ilustrativos (o modelo econômico ainda está em aberto): assinaturas, liquidação na Mainnet, transferência P2P do instalador e proximidade são simulados; as fotos são placeholders listrados.
 - Notificações do sistema ainda não são disparadas: a tela bloqueada é uma prévia dentro do app, e os ajustes não chegam ao sistema operacional.

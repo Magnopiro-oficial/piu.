@@ -8,7 +8,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSBluetoothAlwaysUsageDescription": "O Piu usa o Bluetooth para trocar mensagens cifradas com aparelhos por perto, sem internet."
+      }
     },
     "android": {
       "adaptiveIcon": {
