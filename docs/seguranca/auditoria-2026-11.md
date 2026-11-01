@@ -23,9 +23,11 @@ O risco real estava em outro lugar: **segredos e dados no aparelho**, **controle
 | | Crítico | Alto | Médio | Baixo |
 |---|---|---|---|---|
 | Encontrados | 0 | 4 | 8 | 7 |
-| Corrigidos nesta auditoria | 0 | 3 | 6 | 2 |
+| Corrigidos nesta auditoria | 0 | 4 | 7 | 2 |
 | Rebaixados com mitigação | 0 | 0 | 1 → Baixo (V-04) | 0 |
-| Pendentes (dependem do `piu-node`, fora do repositório, ou são limitações aceitas) | 0 | 1 | 1 | 6 (V-04, V-12, V-16 a V-19) |
+| Pendentes (limitações aceitas e documentadas) | 0 | 0 | 0 | 6 (V-04, V-12, V-16 a V-19) |
+
+V-07 e V-08 dependiam de um `piu-node` que não existia no repositório. Ele foi criado (`apps/piu-node`) com a camada de acesso segura, e o painel passou a usá-la. Os dois estão corrigidos.
 
 **Risco sistêmico (antes das correções).** Os três achados altos do app se somavam numa mesma cadeia de ataque. Alguém com o celular desbloqueado nas mãos, ou com acesso ao backup do Google Drive:
 1. lia todas as conversas e a carteira **em texto puro**;
@@ -103,16 +105,19 @@ Legenda: **P** = probabilidade de exploração, **I** = impacto.
 - **Correção:** `acceptGroupKey` aceita a chave só de admin do grupo e só com versão maior que a atual. Teste dedicado.
 
 #### V-07 · Painel do provider sem modelo de autenticação para o `piu-node`
-- **Severidade:** Alto (P alta na rede local · I alto). **Status:** **pendente**: depende do `piu-node`, que não está neste repositório.
+- **Severidade:** Alto (P alta na rede local · I alto). **Status:** **corrigido** com `apps/piu-node` (PR #17) e a tela de pareamento do painel (PR #18).
 - **Onde:** `apps/provider-panel`. A SPA é servida em `http://piu-node.local:8420` e oferece ações de operador (revogar credencial, transferir LUNES, mudar limites) sem nenhuma etapa de autenticação ou pareamento.
 - **Risco:** quando o painel estiver ligado a uma API real, qualquer aparelho na mesma rede Wi-Fi poderá executar essas ações. O tráfego HTTP também pode ser interceptado.
 - **OWASP:** A01 e A07.
-- **Requisitos para o `piu-node`** (ver seção 5):
-  - pareamento do operador por QR ou código, com passkey (WebAuthn) ou token de sessão de curta duração;
-  - TLS com certificado autoassinado fixado pelo pareamento;
-  - tokens anti-CSRF ou cookies `SameSite=Strict`;
-  - autorização por recurso (o operador só gerencia os próprios equipamentos);
-  - limite de tentativas.
+- **Correção** (`apps/piu-node`, 14 testes de ataque):
+  - pareamento por código de 8 dígitos mostrado só no equipamento (uso único, 10 min, hash e comparação em tempo constante), destruído após 5 erros de qualquer IP, e mais 5 tentativas por IP a cada 10 min;
+  - sessão em cookie `__Host-` (`HttpOnly`, `Secure`, `SameSite=Strict`), com token só como hash, expiração por inatividade e logout no servidor;
+  - CSRF por mesma origem mais `X-CSRF-Token`, conferidos em `onRequest`, antes de ler o corpo;
+  - posse conferida em cada ação (IDOR devolve 404) e ids UUID v4;
+  - step-up de 15 min para transferir LUNES;
+  - lista de `Host` contra DNS rebinding, Helmet, CORS fechado, somente HTTPS com certificado próprio, erros genéricos e logs sem segredos.
+  - O painel exige pareamento antes de exibir qualquer coisa e manda o token CSRF em toda ação (testado ponta a ponta).
+  - Próximo passo: passkeys (WebAuthn) depois do primeiro pareamento.
 
 ### 2.3 Exposição de dados sensíveis
 
@@ -125,11 +130,15 @@ Legenda: **P** = probabilidade de exploração, **I** = impacto.
   A prova de entrega revela um segredo, não a identidade de quem recebeu.
 
 #### V-08 · Link de pacote do instalador por HTTP na rede local
-- **Severidade:** Médio (P baixa · I alto). **Status:** **pendente** (`piu-node`).
-- **Onde:** `apps/provider-panel/src/wizard/AddDeviceWizard.tsx` copia `http://piu-node.local/pkg/…`.
+- **Severidade:** Médio (P baixa · I alto). **Status:** **corrigido** (PRs #17 e #18).
+- **Onde:** `apps/provider-panel/src/wizard/AddDeviceWizard.tsx` copiava `http://piu-node.local/pkg/…`.
 - **Risco:** um atacante na mesma rede pode trocar o pacote no caminho (MITM). Hoje a interface diz que o pacote é "assinado", mas a verificação acontece no equipamento, fora deste repositório.
 - **OWASP:** A08 *Software and Data Integrity Failures*.
-- **Requisitos:** o instalador do `piu-node` **deve** verificar a assinatura Lunes e o SHA-256 antes de executar, e o painel deve exibir o hash esperado ao lado do link.
+- **Correção:**
+  - os pacotes são servidos por HTTPS e só aparecem com manifesto Ed25519 assinado pela chave de release **fixada** e com o arquivo conferido (tamanho e SHA-256);
+  - `scripts/verify-package.mjs` faz o instalador conferir de novo antes de executar;
+  - o painel mostra o hash e o comando de verificação ao lado do link.
+- **Decisão pendente do usuário:** gerar e guardar a chave de release da Lunes (`npm run release:keygen`), idealmente em HSM ou cofre.
 
 ### 2.4 Identificadores e enumeração
 
@@ -150,7 +159,7 @@ Legenda: **P** = probabilidade de exploração, **I** = impacto.
   - **Painel:** CSP estrita em `<meta>` (vale também no `piu-node`) e em `_headers` (`default-src 'none'`, `script-src 'self'`); assets sem `data:`; `X-Frame-Options: DENY`/`frame-ancestors 'none'`, `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP e HSTS.
   - **Site:** CSP com **hashes** gerada pelo Astro (`security.csp`); script de tema externo; o painel embutido só pode ser exibido pelo próprio site (`frame-ancestors 'self'`).
   - Conferido no navegador: **0 violações**.
-- **Helmet:** N/A. Não há servidor Node; os dois são estáticos. Quando o `piu-node` servir HTTP, deve usar Helmet (ou equivalente) com os mesmos valores.
+- **Helmet:** o site e o painel são estáticos. O `piu-node` (Node/Fastify) usa `@fastify/helmet` com a mesma CSP do painel, mais `Permissions-Policy`.
 - **Fingerprinting:** o build não expõe `X-Powered-By`, versões nem source maps. Mantenha `sourcemap: false` em produção.
 
 ### 2.6 CORS
@@ -403,37 +412,32 @@ Fórmula pedida: −30 por crítico, −20 por alto, −10 por médio e −5 por
 
 🔢 **Security Score inicial: 0/100**, **Crítico** (risco sistêmico, ver resumo executivo).
 
-**Depois das correções** (o que resta: 1 alto e 1 médio pendentes do `piu-node`, mais 6 baixos aceitos):
-- 1 alto (−20), 1 médio (−10) e 6 baixos (−30) = −60, o que dá 40;
+**Depois das correções** (o que resta: 6 baixos aceitos e documentados):
+- 6 baixos (−30), o que dá 70;
 - +5 por boas práticas avançadas:
   - criptografia auditada (`@noble`), suíte trocável, Double Ratchet;
   - CSP com hashes;
   - Actions fixadas por SHA;
   - 32 testes de ataque no CI.
-- +5 por defesa em profundidade: cofre do sistema + cifragem em repouso + bloqueio do app + CSP + limite por vizinho.
+- +5 por defesa em profundidade: cofre do sistema + cifragem em repouso + bloqueio do app + CSP + limite por vizinho; no `piu-node`, pareamento + sessão + CSRF + posse + step-up + TLS.
 
-🔢 **Security Score final: 50/100**, **Risco moderado**.
+🔢 **Security Score final: 80/100**, **Bom (com melhorias)**.
 
-**Só o código deste repositório** (sem os 2 itens que dependem do `piu-node`): 6 baixos (−30) dão 70, mais 10 de bônus.
-
-🔢 **80/100**, **Bom (com melhorias)**.
-
-O que separa o projeto do nível *enterprise* (90+) é, primeiro, o que **não está no código daqui**: a autenticação e a integridade do `piu-node` (V-07, V-08). Depois vêm a revisão formal da criptografia (V-19) e pre-keys para as primeiras mensagens (V-17).
+Para chegar ao nível *enterprise* (90+), faltam:
+- a revisão formal e independente da criptografia (V-19);
+- pre-keys para as primeiras mensagens (V-17);
+- passkeys no `piu-node`;
+- tirar a versão web de demonstração do caminho dos segredos (V-04).
 
 ---
 
 ## 5. Recomendações estratégicas
 
-1. **`piu-node` (prioridade máxima, antes de qualquer API):**
-   - pareamento do operador por QR, com passkey (WebAuthn);
-   - TLS local com certificado fixado no pareamento;
-   - sessões curtas, `SameSite=Strict` e token anti-CSRF;
-   - autorização por recurso;
-   - limite de tentativas;
-   - Helmet (ou equivalente) com os mesmos headers do painel;
-   - CORS fechado (sem `*`, só a origem do próprio painel);
-   - logs sem dados pessoais;
-   - verificação de assinatura e hash de todo pacote antes de instalar.
+1. **`piu-node`.** Já feito em `apps/piu-node`: pareamento, sessão curta `SameSite=Strict`, CSRF, autorização por recurso, limite de tentativas, Helmet, CORS fechado, TLS, logs sem segredos e pacotes assinados. Falta para produção:
+   - passkeys (WebAuthn) depois do primeiro pareamento;
+   - pareamento também por QR, com a impressão digital do certificado embutida (fixação automática);
+   - gerar a chave de release da Lunes e guardá-la em HSM ou cofre;
+   - ligar a camada de acesso ao motor LNNP e à carteira real, já que hoje os dados são de referência.
 2. **Threat modeling formal e auditoria criptográfica independente**, como o próprio documento de requisitos exige. Prioridades: sessões com pre-keys, MLS para grupos e antifraude com auditoria real de retransmissão.
 3. **Publicação do site atrás da Cloudflare:**
    - WAF gerenciado (regras OWASP) e proteção contra DDoS;
