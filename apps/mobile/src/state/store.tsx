@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CHANNEL_TYPES, seedChats, seedMembers } from '../data/seed';
 import type { ChannelType, Chat, FileXfer, IdentityKind, Member, Msg, Status, ToastData } from '../data/types';
+import { usePersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 
 interface Profile { idType: IdentityKind; name: string }
@@ -48,16 +49,32 @@ const FILES: Record<'image' | 'doc', Omit<FileXfer, 'done' | 'state'>> = {
   doc: { name: 'mapa-da-trilha.pdf', mb: 4.2, blocks: 42, icon: 'description' },
 };
 const BLOCK_MS = 170;
+
+/**
+ * Ao reabrir o app, os temporizadores da simulação não existem mais:
+ * mensagens em trânsito voltam para a fila e envios de arquivo ficam pausados (a pessoa retoma).
+ */
+function reviveChats(saved: Chat[]): Chat[] {
+  return saved.map(c => ({
+    ...c,
+    msgs: c.msgs?.map(m => {
+      const { fresh: _fresh, ...rest } = m;
+      const status: Status | undefined = m.status === 'criada' || (m.status === 'encaminhada' && !m.file) ? 'aguardando' : m.status;
+      const file = m.file && m.file.state !== 'verified' ? { ...m.file, state: 'userPaused' as const } : m.file;
+      return { ...rest, status, file };
+    }),
+  }));
+}
 const TOAST_MS = 4500;
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [profile, setProfileState] = useState<Profile>({ idType: 'public', name: 'Cardeal' });
-  const [onboarded, setOnboarded] = useState(false);
-  const [identity, setIdentity] = useState<IdentityKind>('public');
-  const [chats, setChats] = useState<Chat[]>(seedChats);
+  const [profile, setProfileState] = usePersisted<Profile>('profile', { idType: 'public', name: 'Cardeal' });
+  const [onboarded, setOnboarded] = usePersisted('onboarded', false);
+  const [identity, setIdentity] = usePersisted<IdentityKind>('identity', 'public');
+  const [chats, setChats] = usePersisted<Chat[]>('chats', seedChats, reviveChats);
   const [typing, setTyping] = useState<string | null>(null);
-  const [verified, setVerifiedMap] = useState<Record<string, boolean>>({});
-  const [group, setGroupState] = useState<GroupSettings>({ members: seedMembers(), keyV: 4, approve: true, send: 'all', inv: 'admins' });
+  const [verified, setVerifiedMap] = usePersisted<Record<string, boolean>>('verified', {});
+  const [group, setGroupState] = usePersisted<GroupSettings>('group', () => ({ members: seedMembers(), keyV: 4, approve: true, send: 'all', inv: 'admins' }));
   const [toast, setToast] = useState<Store['toast']>(null);
   const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const fileTimers = useRef<Record<string, ReturnType<typeof setInterval>>>({});
@@ -191,7 +208,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'encaminhada', file: { ...FILES[kind], done: 0, state: 'sending' } });
       startFile(cid, id);
     },
-    toggleFilePause: (cid, mid) => patchFile(cid, mid, { state: chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file?.state === 'userPaused' ? 'resuming' : 'userPaused' }),
+    toggleFilePause: (cid, mid) => {
+      const paused = chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file?.state === 'userPaused';
+      patchFile(cid, mid, { state: paused ? 'resuming' : 'userPaused' });
+      // Depois de reabrir o app o motor do envio não existe mais: retomar o reinicia.
+      if (paused && !fileTimers.current[mid]) startFile(cid, mid);
+    },
     toast,
     showToast,
     dismissToast,

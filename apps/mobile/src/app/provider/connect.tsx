@@ -138,7 +138,7 @@ export default function ProvConnect() {
                     {parents.map(p => {
                       const on = draft.parent === p.id;
                       return (
-                        <Pressable key={p.id} onPress={() => setDraft({ parent: p.id })} accessibilityRole="radio" accessibilityState={{ checked: on }}
+                        <Pressable key={p.id} onPress={() => setDraft({ parent: p.id })} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on}
                           style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 11, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent' }}>
                           <Icon name={p.icon} size={20} w={300} />
                           <View style={{ flex: 1, minWidth: 0, gap: 1 }}>

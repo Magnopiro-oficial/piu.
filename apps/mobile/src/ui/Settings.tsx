@@ -86,7 +86,7 @@ export function LockedRow({ icon, name, desc }: { icon?: IconName; name: string;
 export function OptionCard({ icon, title, desc, on, onPress }: { icon: IconName; title: string; desc: string; on: boolean; onPress: () => void }) {
   const { c } = useTheme();
   return (
-    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`${title}. ${desc}`}
+    <Pressable onPress={onPress} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} accessibilityLabel={`${title}. ${desc}`}
       style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent' }}>
       <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={22} w={300} /></View>
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>

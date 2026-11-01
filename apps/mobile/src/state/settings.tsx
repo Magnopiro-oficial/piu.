@@ -1,4 +1,5 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { usePersisted } from '../lib/persist';
 import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 
 export interface Privacy { find: 'all' | 'contacts' | 'none'; near: 'off' | '1h'; read: boolean; typing: boolean; temp: 'off' | '7d' | '24h'; delay: boolean; pad: boolean; noRoutes: boolean; lock: boolean }
@@ -23,17 +24,17 @@ const Ctx = createContext<Settings | null>(null);
 
 /** Ajustes de segurança, privacidade, armazenamento, bateria e notificações (locais, sem servidor). */
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [priv, setPrivS] = useState<Privacy>({ find: 'contacts', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false });
-  const [sto, setStoS] = useState<StorageOpts>({ auto: 'wifi', quality: 'normal', retention: '48' });
-  const [bat, setBatS] = useState<BatteryOpts>({ bg: true, hours: 'always', traffic: 200, bw: '5', disc: 'normal' });
-  const [preview, setPreview] = useState<Preview>('always');
-  const [notifs, setNotifs] = useState<Record<NotifKey, boolean>>(() => Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>);
-  const [quiet, setQuiet] = useState(false);
-  const [discreet, setDiscreet] = useState(true);
-  const [backupDone, setBackupDone] = useState(false);
-  const [dropped, setDropped] = useState<Record<string, boolean>>({});
-  const [restoreMode, setRestoreMode] = useState<RestoreMode>('device');
-  const [mediaCleared, setMediaCleared] = useState(false);
+  const [priv, setPrivS] = usePersisted<Privacy>('set.priv', { find: 'contacts', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false });
+  const [sto, setStoS] = usePersisted<StorageOpts>('set.sto', { auto: 'wifi', quality: 'normal', retention: '48' });
+  const [bat, setBatS] = usePersisted<BatteryOpts>('set.bat', { bg: true, hours: 'always', traffic: 200, bw: '5', disc: 'normal' });
+  const [preview, setPreview] = usePersisted<Preview>('set.preview', 'always');
+  const [notifs, setNotifs] = usePersisted<Record<NotifKey, boolean>>('set.notifs', () => Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>);
+  const [quiet, setQuiet] = usePersisted('set.quiet', false);
+  const [discreet, setDiscreet] = usePersisted('set.discreet', true);
+  const [backupDone, setBackupDone] = usePersisted('set.backupDone', false);
+  const [dropped, setDropped] = usePersisted<Record<string, boolean>>('set.dropped', {});
+  const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');
+  const [mediaCleared, setMediaCleared] = usePersisted('set.mediaCleared', false);
 
   const value = useMemo<Settings>(() => ({
     priv, setPriv: p => setPrivS(s => ({ ...s, ...p })),

@@ -18,7 +18,8 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 - `src/state/network.tsx`: Modo nó, transportes, limites, equipamentos do provider e o rascunho do assistente “Adicionar equipamento”.
 - `src/state/wallet.tsx`: saldo (inicial − enviados − reservados + recebidos), envio, visibilidade em Por perto, convites pagos (valor reservado), pedidos recebidos e a taxa escolhida.
 - `src/state/settings.tsx`: privacidade, armazenamento, bateria, notificações, backup feito, aparelhos desconectados e o modo de restauração.
-- `src/state/reset.tsx`: “Apagar dados locais” remonta os provedores de estado e volta às Boas-vindas.
+- `src/state/reset.tsx`: “Apagar dados locais” apaga o que está salvo, remonta os provedores de estado e volta às Boas-vindas.
+- `src/lib/persist.ts`: dados salvos no aparelho (AsyncStorage, prefixo `piu:v1:`). Tudo é lido antes do splash sumir; `usePersisted` substitui o `useState` nos provedores e grava com 250 ms de atraso. Mensagens em trânsito voltam para a fila e envios de arquivo ficam pausados ao reabrir o app.
 - `src/lib/responsive.ts`: `useLayout()` com a largura/altura da tela, `compact` (< 375 px) e `short` (< 700 px).
 - `src/data/seed.ts`, `src/data/network.ts`, `src/data/wallet.ts` e `src/data/settings.ts`: dados de exemplo do protótipo (ilustrativos).
 - `scripts/gen-icons.mjs`: gera `src/ui/icons.generated.ts` com os Material Symbols Rounded usados. Para usar um ícone novo, acrescente o nome em `scripts/icon-names.json` e rode `npm run icons`.
@@ -26,6 +27,7 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 ## Decisões técnicas
 - **Ícones em SVG**: o React Native não suporta a fonte variável dos Material Symbols (peso e preenchimento). Os caminhos vêm dos pacotes oficiais `@material-symbols/svg-300` e `svg-400`, com versão preenchida para o estado ativo.
 - **Pesos da Geist**: o design usa a fonte variável (ex.: 550 e 650). No app, o peso é arredondado para a centena mais próxima, com meio para cima.
+- **Dados no aparelho**: AsyncStorage 2.2.0 (versão indicada pelo Expo SDK 58), que funciona em Android, iOS e web (localStorage). Sem servidor: nada sai do aparelho.
 - **Telas de vários tamanhos**: o layout é fluido (flex e porcentagens) e foi conferido de 320 × 568 (iPhone SE 1ª geração) a 430 × 932, além de 600 px (dobráveis abertos). Abaixo de 375 px, `useLayout().compact` empilha pares de botões, reduz o respiro dos botões e do segmentado e encurta rótulos; a órbita das Boas-vindas e o radar se ajustam ao espaço. Prévias de mensagem e endereços técnicos usam reticências de propósito.
 - **Barra de status**: a do protótipo (9:41, bateria) é desenho; no aparelho quem cuida é o sistema, com as áreas seguras.
 
@@ -45,5 +47,5 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 - Rede e provider usam dados de exemplo: a busca de equipamentos, o envio do pacote, o pareamento e o teste real são simulados por temporizador, até existir a API do `piu-node` e o transporte nativo.
 - Carteira e Por perto usam valores ilustrativos (o modelo econômico ainda está em aberto): assinaturas, liquidação na Mainnet, transferência P2P do instalador e proximidade são simulados; as fotos são placeholders listrados.
 - Notificações do sistema ainda não são disparadas: a tela bloqueada é uma prévia dentro do app, e os ajustes não chegam ao sistema operacional.
-- Nada é salvo entre aberturas do app ainda: o onboarding aparece de novo a cada início.
+- Os dados ficam salvos entre aberturas, mas sem cifragem própria: quando as chaves reais existirem, elas vão para o armazenamento seguro do sistema (Keychain/Keystore), nunca para o AsyncStorage.
 - Os identificadores das lojas (`bundleIdentifier` e `package`) ainda não estão definidos em `app.json`.

@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import { PROV_FAMILIES, seedProvDevices, type ProvDevice, type TxKey } from '../data/network';
+import { usePersisted } from '../lib/persist';
 
 /** Rascunho do assistente “Adicionar equipamento” (compartilhado entre as 4 etapas). */
 export interface ProvDraft {
@@ -33,12 +34,13 @@ const freshDraft = (devices: ProvDevice[]): ProvDraft => ({
 });
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
-  const [relay, setRelay] = useState(true);
-  const [tx, setTx] = useState<Record<TxKey, boolean>>({ ble: true, direct: true, mesh: true, lora: false, eth: false });
-  const [battery, setBattery] = useState<20 | 30 | 50>(30);
-  const [storage, setStorage] = useState<256 | 512 | 1024>(512);
-  const [chargingOnly, setChargingOnly] = useState(false);
-  const [devices, setDevices] = useState<ProvDevice[]>(seedProvDevices);
+  const [relay, setRelay] = usePersisted('net.relay', true);
+  const [tx, setTx] = usePersisted<Record<TxKey, boolean>>('net.tx', { ble: true, direct: true, mesh: true, lora: false, eth: false });
+  const [battery, setBattery] = usePersisted<20 | 30 | 50>('net.battery', 30);
+  const [storage, setStorage] = usePersisted<256 | 512 | 1024>('net.storage', 512);
+  const [chargingOnly, setChargingOnly] = usePersisted('net.chargingOnly', false);
+  // Equipamentos do provider; `fresh` (animação de entrada) não sobrevive a reabrir o app.
+  const [devices, setDevices] = usePersisted<ProvDevice[]>('net.devices', seedProvDevices, ds => ds.map(d => ({ ...d, fresh: false })));
   const [draft, setDraftState] = useState<ProvDraft>(() => freshDraft(seedProvDevices()));
 
   const value = useMemo<Network>(() => ({

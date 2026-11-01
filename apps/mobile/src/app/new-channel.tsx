@@ -47,7 +47,7 @@ export default function NewChannel() {
           {CHANNEL_TYPES.map(([k, icon, title, d]) => {
             const on = type === k;
             return (
-              <Pressable key={k} onPress={() => setType(k)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+              <Pressable key={k} onPress={() => setType(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on}
                 style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent' }}>
                 <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={22} w={300} /></View>
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>

@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useContext, useMemo, type ReactNode } from 'react';
 import { REQUESTS, START_BALANCE } from '../data/wallet';
+import { usePersisted } from '../lib/persist';
 import { nowHM } from '../lib/text';
 import { useStore } from './store';
 
@@ -31,14 +32,14 @@ const Ctx = createContext<Wallet | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { addChat, setIdentity } = useStore();
-  const [sent, setSent] = useState<Movement[]>([]);
-  const [reserved, setReserved] = useState<Movement[]>([]);
-  const [earned, setEarned] = useState<{ from: string; amt: number }[]>([]);
-  const [nearPay, setNearPay] = useState(true);
-  const [visible, setVisible] = useState(true);
-  const [invited, setInvited] = useState<Record<string, boolean>>({});
-  const [myFee, setMyFee] = useState(3);
-  const [reqStatus, setReqStatus] = useState<Record<string, ReqStatus>>({});
+  const [sent, setSent] = usePersisted<Movement[]>('wallet.sent', []);
+  const [reserved, setReserved] = usePersisted<Movement[]>('wallet.reserved', []);
+  const [earned, setEarned] = usePersisted<{ from: string; amt: number }[]>('wallet.earned', []);
+  const [nearPay, setNearPay] = usePersisted('wallet.nearPay', true);
+  const [visible, setVisible] = usePersisted('nearby.visible', true);
+  const [invited, setInvited] = usePersisted<Record<string, boolean>>('nearby.invited', {});
+  const [myFee, setMyFee] = usePersisted('nearby.myFee', 3);
+  const [reqStatus, setReqStatus] = usePersisted<Record<string, ReqStatus>>('nearby.reqStatus', {});
 
   const value = useMemo<Wallet>(() => {
     const total = (xs: { amt: number }[]) => xs.reduce((a, x) => a + x.amt, 0);

@@ -16,7 +16,7 @@ export function Segmented<V extends string>({ options, value, onChange, label }:
       {options.map(([k, l]) => {
         const on = k === value;
         return (
-          <Pressable key={k} onPress={() => onChange(k)} accessibilityRole="radio" accessibilityState={{ checked: on }}
+          <Pressable key={k} onPress={() => onChange(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on}
             style={{ flex: 1, minHeight: 32, paddingVertical: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: on ? c.bg : 'transparent',
               shadowColor: '#000', shadowOpacity: on ? 0.12 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
             <T size={compact ? 12 : 13} w={on ? 600 : 450} numberOfLines={2} align="center">{l}</T>
@@ -36,7 +36,7 @@ export function Toggle({ on, onChange, label, disabled }: { on: boolean; onChang
     Animated.timing(x, { toValue: on ? 1 : 0, duration: 250, easing: Easing.bezier(0.2, 0.9, 0.3, 1.3), useNativeDriver: true }).start();
   }, [on, reduceMotion, x]);
   return (
-    <Pressable onPress={onChange} disabled={disabled} accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: on, disabled }}
+    <Pressable onPress={onChange} disabled={disabled} accessibilityRole="switch" accessibilityLabel={label} accessibilityState={{ checked: on, disabled }} aria-checked={on}
       style={{ width: 46, height: 28, borderRadius: 14, backgroundColor: on ? c.ink : c.bg3, opacity: disabled ? 0.45 : 1 }}>
       <Animated.View style={{ position: 'absolute', top: 3, left: 3, width: 22, height: 22, borderRadius: 11, backgroundColor: on ? c.bg : c.knob,
         shadowColor: '#000', shadowOpacity: 0.15, shadowRadius: 2, shadowOffset: { width: 0, height: 1 }, elevation: 1,

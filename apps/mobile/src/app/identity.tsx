@@ -39,7 +39,7 @@ export default function Identity() {
           {OPTIONS.map(([k, icon, title, desc]) => {
             const on = profile.idType === k;
             return (
-              <Pressable key={k} accessibilityRole="radio" accessibilityState={{ checked: on }} onPress={() => setProfile({ idType: k })}
+              <Pressable key={k} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} onPress={() => setProfile({ idType: k })}
                 style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent' }}>
                 <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={22} w={300} /></View>
                 <View style={{ flex: 1, gap: 3 }}>

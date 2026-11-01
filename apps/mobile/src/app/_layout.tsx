@@ -2,8 +2,9 @@ import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { loadPersisted } from '../lib/persist';
 import { NetworkProvider } from '../state/network';
 import { StoreProvider } from '../state/store';
 import { ResetProvider } from '../state/reset';
@@ -17,8 +18,12 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_FILES);
-  useEffect(() => { if (loaded || error) SplashScreen.hideAsync().catch(() => {}); }, [loaded, error]);
-  if (!loaded && !error) return null;
+  // Dados salvos no aparelho: lidos antes de esconder o splash, para abrir direto onde a pessoa parou.
+  const [hydrated, setHydrated] = useState(false);
+  useEffect(() => { loadPersisted().finally(() => setHydrated(true)); }, []);
+  const ready = (loaded || !!error) && hydrated;
+  useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
+  if (!ready) return null;
   return (
     <SafeAreaProvider>
       <ThemeProvider>

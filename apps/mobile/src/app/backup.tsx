@@ -71,7 +71,7 @@ export default function Backup() {
                     {opts.map(w => {
                       const pk = quiz[n] === w, ok = w === a;
                       return (
-                        <Pressable key={w} onPress={() => setQuiz(q => ({ ...q, [n]: w }))} accessibilityRole="radio" accessibilityState={{ checked: pk }}
+                        <Pressable key={w} onPress={() => setQuiz(q => ({ ...q, [n]: w }))} accessibilityRole="radio" accessibilityState={{ checked: pk }} aria-checked={pk}
                           accessibilityLabel={pk && !ok ? `${w}, não confere` : w}
                           style={{ flex: 1, height: 42, borderRadius: 12, borderWidth: 1.5, borderStyle: pk && !ok ? 'dashed' : 'solid', borderColor: pk ? c.ink : c.line2,
                             backgroundColor: pk && ok ? c.ink : c.bg, alignItems: 'center', justifyContent: 'center' }}>

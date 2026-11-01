@@ -48,7 +48,7 @@ export default function Profile() {
             {([['public', 'Pública', 'public'], ['anon', 'Anônima', 'visibility_off']] as const).map(([k, l, ic]) => {
               const on = identity === k;
               return (
-                <Pressable key={k} onPress={() => setIdentity(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={`Identidade ${l.toLowerCase()}`}
+                <Pressable key={k} onPress={() => setIdentity(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} accessibilityLabel={`Identidade ${l.toLowerCase()}`}
                   style={{ flex: 1, height: 36, borderRadius: 11, backgroundColor: on ? c.bg : 'transparent', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                     shadowColor: '#000', shadowOpacity: on ? 0.12 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
                   <Icon name={ic} size={17} />

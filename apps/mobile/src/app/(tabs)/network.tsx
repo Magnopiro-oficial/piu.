@@ -141,7 +141,7 @@ function RelaySwitch({ on, onChange }: { on: boolean; onChange: () => void }) {
     Animated.timing(x, { toValue: on ? 1 : 0, duration: 200, useNativeDriver: true }).start();
   }, [on, reduceMotion, x]);
   return (
-    <Pressable onPress={onChange} accessibilityRole="switch" accessibilityLabel="Modo nó" accessibilityState={{ checked: on }}
+    <Pressable onPress={onChange} accessibilityRole="switch" accessibilityLabel="Modo nó" accessibilityState={{ checked: on }} aria-checked={on}
       style={{ width: 50, height: 30, borderRadius: 15, backgroundColor: on ? c.invink : c.bg3 }}>
       <Animated.View style={{ position: 'absolute', top: 3, left: 3, width: 24, height: 24, borderRadius: 12, backgroundColor: on ? c.ink : c.knob,
         transform: [{ translateX: x.interpolate({ inputRange: [0, 1], outputRange: [0, 20] }) }] }} />

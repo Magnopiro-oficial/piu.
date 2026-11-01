@@ -23,7 +23,7 @@ export default function ProvAdd() {
           {PROV_FAMILIES.map(f => {
             const on = draft.fam === f.id;
             return (
-              <Pressable key={f.id} disabled={f.disabled} accessibilityRole="radio" accessibilityState={{ checked: on, disabled: f.disabled }}
+              <Pressable key={f.id} disabled={f.disabled} accessibilityRole="radio" accessibilityState={{ checked: on, disabled: f.disabled }} aria-checked={on}
                 onPress={() => setDraft({ fam: f.id, name: f.defName ?? '', ifaces: {}, pub: f.id === 'lora' ? 'serra-sul' : 'vila-esperanca-4' })}
                 style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent', opacity: f.disabled ? 0.45 : 1 }}>
                 <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={f.icon} size={22} w={300} /></View>

@@ -32,7 +32,7 @@ export function SendSheet({ onClose }: { onClose: () => void }) {
             {SEND_PEOPLE.map(([id, ini, first]) => {
               const on = to === id;
               return (
-                <Pressable key={id} onPress={() => setTo(id)} accessibilityRole="radio" accessibilityState={{ checked: on }} accessibilityLabel={first} style={{ alignItems: 'center', gap: 6, width: 62 }}>
+                <Pressable key={id} onPress={() => setTo(id)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} accessibilityLabel={first} style={{ alignItems: 'center', gap: 6, width: 62 }}>
                   <View style={{ width: 52, height: 52, borderRadius: 26, borderWidth: 1.5, borderColor: c.ink, backgroundColor: on ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                     <T size={15} w={600} color={on ? c.invink : c.ink}>{ini}</T>
                   </View>
