@@ -10,6 +10,8 @@ import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
 import { Icon, type IconName } from '../../ui/Icon';
+import { AttachSheet } from '../../ui/AttachSheet';
+import { FileBubble } from '../../ui/FileBubble';
 import { RouteSheet } from '../../ui/RouteSheet';
 import { T } from '../../ui/T';
 
@@ -18,11 +20,12 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { chats, send, retry, typing } = useStore();
+  const { chats, send, retry, typing, verified, sendFile, toggleFilePause, showToast } = useStore();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
+  const [attachOpen, setAttachOpen] = useState(false);
   const scroller = useRef<ScrollViewInstance>(null);
   const toEnd = () => requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
 
@@ -40,6 +43,16 @@ export default function ChatScreen() {
   const canSend = draft.trim().length > 0;
   const submit = () => { if (!canSend) return; send(chat.id, draft.trim()); setDraft(''); toEnd(); };
   const selected = msgs.find(m => m.id === routeMsg);
+  // ⋯ abre o contato (conversa direta), o grupo, ou mostra os dados do canal.
+  const openInfo = () => {
+    if (chat.kind === 'direct') router.push({ pathname: '/contact/[id]', params: { id: chat.id } });
+    else if (chat.kind === 'group') router.push({ pathname: '/group/[id]', params: { id: chat.id } });
+    else showToast({ icon: 'campaign', title: chat.name, body: chat.sub ?? '' });
+  };
+  const onAttach = (k: 'image' | 'doc' | 'location') => {
+    if (k === 'location') showToast({ icon: 'location_on', title: 'Localização', body: 'Envio de localização chega numa próxima versão.' });
+    else { sendFile(chat.id, k); toEnd(); }
+  };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -50,10 +63,13 @@ export default function ChatScreen() {
         </Pressable>
         <Avatar initials={chat.initials} size={40} square={chat.kind !== 'direct'} inverted={chat.inv} />
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-          <T size={16} w={650} ls={-0.015} numberOfLines={1} accessibilityRole="header">{chat.name}</T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
+            <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, verificado` : chat.name}>{chat.name}</T>
+            {verified[chat.id] && <Icon name="verified" size={16} fill />}
+          </View>
           <T size={12.5} color={c.ink2} numberOfLines={1}>{typing === chat.id ? 'digitando…' : chat.sub}</T>
         </View>
-        <Pressable accessibilityRole="button" accessibilityLabel="Detalhes da conversa (em breve)" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? 'Ver contato e código de segurança' : chat.kind === 'group' ? 'Informações do grupo' : 'Informações do canal'} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="more_horiz" size={22} />
         </Pressable>
       </View>
@@ -69,7 +85,7 @@ export default function ChatScreen() {
           <T size={11.5} w={500} color={c.ink2} align="center" style={{ marginTop: 4, marginBottom: 6 }}>Hoje</T>
           {msgs.map((m, i) => (
             <Bubble key={m.id} msg={m} chat={chat} gap={i > 0 && msgs[i - 1].from === m.from ? 0 : 8}
-              onPress={() => setRouteMsg(m.id)} onRetry={() => retry(chat.id, m.id)} />
+              onPress={() => setRouteMsg(m.id)} onRetry={() => retry(chat.id, m.id)} onToggleFile={() => toggleFilePause(chat.id, m.id)} />
           ))}
           {typing === chat.id && <Typing />}
           {chat.offline && (
@@ -99,7 +115,7 @@ export default function ChatScreen() {
             <T size={11} mono color={c.ink2}>{chat.via}</T>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Pressable accessibilityRole="button" accessibilityLabel="Anexar (em breve)" style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
+            <Pressable onPress={() => setAttachOpen(true)} accessibilityRole="button" accessibilityLabel="Anexar" style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="add" size={24} w={300} />
             </Pressable>
             <TextInput value={draft} onChangeText={setDraft} placeholder="Mensagem" placeholderTextColor={c.ink3} accessibilityLabel="Mensagem"
@@ -111,6 +127,7 @@ export default function ChatScreen() {
       )}
 
       {selected && <RouteSheet chat={chat} msg={selected} onClose={() => setRouteMsg(null)} />}
+      {attachOpen && <AttachSheet onPick={onAttach} onClose={() => setAttachOpen(false)} />}
     </KeyboardAvoidingView>
   );
 }
@@ -157,7 +174,7 @@ function Tick({ name, color, animate }: { name: IconName; color: string; animate
   return <Animated.View style={{ transform: [{ scale: v }] }}><Icon name={name} size={15} color={color} /></Animated.View>;
 }
 
-function Bubble({ msg, chat, gap, onPress, onRetry }: { msg: Msg; chat: Chat; gap: number; onPress: () => void; onRetry: () => void }) {
+function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; chat: Chat; gap: number; onPress: () => void; onRetry: () => void; onToggleFile: () => void }) {
   const { c } = useTheme();
   if (msg.from === 'sys') {
     return (
@@ -169,7 +186,8 @@ function Bubble({ msg, chat, gap, onPress, onRetry }: { msg: Msg; chat: Chat; ga
   }
   const me = msg.from === 'me';
   const failed = me && (msg.status === 'expirada' || msg.status === 'falha');
-  const label = me && msg.status ? `Você, ${STATUS_LABEL[msg.status]}, ${msg.time}: ${msg.text}` : `${msg.sender ?? chat.name}, ${msg.time}: ${msg.text}`;
+  const content = msg.file ? `arquivo ${msg.file.name}` : msg.text;
+  const label = me && msg.status ? `Você, ${STATUS_LABEL[msg.status]}, ${msg.time}: ${content}` : `${msg.sender ?? chat.name}, ${msg.time}: ${content}`;
   return (
     <View style={{ marginTop: gap }}>
       <Enter fresh={msg.fresh} origin={me ? 'right' : 'left'}>
@@ -178,7 +196,8 @@ function Bubble({ msg, chat, gap, onPress, onRetry }: { msg: Msg; chat: Chat; ga
             ? { paddingTop: 8, paddingBottom: 6, paddingLeft: 14, paddingRight: 12, borderRadius: 20, borderBottomRightRadius: 6, backgroundColor: c.ink, gap: 2 }
             : { paddingTop: 8, paddingBottom: 6, paddingLeft: 12, paddingRight: 14, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: c.bub, borderWidth: 1, borderColor: c.line, gap: 2 }}>
           {!me && chat.kind === 'group' && msg.sender && <T size={12.5} w={650}>{msg.sender}</T>}
-          <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>
+          {msg.file && <FileBubble file={msg.file} onToggle={onToggleFile} />}
+          {!!msg.text && <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>}
           {me ? (
             <View style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.72 }}>
               <T size={11} color={c.invink}>{msg.status ? STATUS_LABEL[msg.status] : ''} · </T>

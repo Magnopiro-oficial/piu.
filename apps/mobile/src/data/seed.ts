@@ -1,5 +1,5 @@
 // Dados de exemplo do protótipo (design/PiuApp.dc.html), ilustrativos.
-import type { Chat } from './types';
+import type { Chat, ChannelType, Member } from './types';
 
 const you = { n: 'Você', k: 'Este aparelho' };
 const galpao = { n: 'Galpão · OpenWrt', k: 'Home Node' };
@@ -67,3 +67,40 @@ export function seedChats(): Chat[] {
       msgs: [{ id: 'y1', from: 'them', text: 'Relatos recebidos esta semana: 14. Nenhum dado de identidade é armazenado.', time: 'Seg' }] },
   ];
 }
+
+/** Membros do grupo Mutirão Vila Esperança (FUN-006). */
+export function seedMembers(): Member[] {
+  return [
+    { id: 'lia', name: 'Lia Ramos', initials: 'LR', role: 'Admin' },
+    { id: 'joao', name: 'João Souza', initials: 'JS', role: 'Admin' },
+    { id: 'me', name: 'Você', initials: 'C', role: 'Admin · criou o grupo' },
+    { id: 'antonio', name: 'Seu Antônio', initials: 'SA', role: 'Membro' },
+    { id: 'marina', name: 'Marina Alves', initials: 'MA', role: 'Membro' },
+    { id: 'pedro', name: 'Pedro Lima', initials: 'PL', role: 'Membro · fora de alcance' },
+  ];
+}
+export const GROUP_SIZE = 18;
+
+/** Tipos de canal (FUN-007). */
+export const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', string, string][] = [
+  ['public', 'campaign', 'Público', 'Qualquer pessoa encontra e lê. Aparece em Por perto e na busca.'],
+  ['private', 'lock', 'Privado', 'Entra só com convite. Inscritos não veem uns aos outros.'],
+  ['secret', 'visibility_off', 'Secreto', 'Não aparece em busca. Nem o nome sai sem convite.'],
+];
+
+/** Código de segurança 12×5 dígitos (seção 9). Ilustrativo. */
+export const SAFETY_CODE = ['37104', '88215', '05932', '61477', '29083', '74150', '93826', '10469', '58331', '46702', '81295', '30648'];
+
+export const NEARBY_PEOPLE = [
+  { id: 'marina', initials: 'MA', name: 'Marina Alves', meta: 'BLE · ~8 m' },
+  { id: 'joao', initials: 'JS', name: 'João Souza', meta: 'BLE · ~12 m' },
+  { id: 'lia', initials: 'LR', name: 'Lia Ramos', meta: 'Wi-Fi Direct · ~20 m' },
+];
+
+export const COMMUNITY = {
+  id: 'feira', name: 'Feira Livre do Sábado', initials: 'FL', sub: 'Comunidade · 312 membros · 4 administradores',
+  sections: [
+    { title: 'CANAIS', items: [['campaign', 'Avisos da Feira', 'Somente administradores'], ['sell', 'Preços do dia', 'Atualizado às 6h']] },
+    { title: 'GRUPOS', items: [['agriculture', 'Produtores', '48 membros'], ['local_shipping', 'Entregas', '22 membros'], ['volunteer_activism', 'Voluntários', '31 membros']] },
+  ] as { title: string; items: [string, string, string][] }[],
+};

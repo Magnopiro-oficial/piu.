@@ -6,8 +6,8 @@ import { T } from './T';
 type Variant = 'primary' | 'ghost' | 'soft' | 'outline';
 
 /** Botões do design: primário 54px (raio 27), secundários 44–48px. */
-export function Button({ label, onPress, variant = 'primary', height = 54, disabled, style, left, accessibilityLabel }: {
-  label: string; onPress?: () => void; variant?: Variant; height?: number; disabled?: boolean;
+export function Button({ label, onPress, variant = 'primary', height = 54, fontSize, disabled, style, left, accessibilityLabel }: {
+  label: string; onPress?: () => void; variant?: Variant; height?: number; fontSize?: number; disabled?: boolean;
   style?: StyleProp<ViewStyle>; left?: ReactNode; accessibilityLabel?: string;
 }) {
   const { c } = useTheme();
@@ -24,7 +24,7 @@ export function Button({ label, onPress, variant = 'primary', height = 54, disab
         style,
       ]}>
       {left}
-      <T size={height >= 54 ? 16 : 15} w={variant === 'ghost' ? 500 : 600} color={fg}>{label}</T>
+      <T size={fontSize ?? (height >= 54 ? 16 : 15)} w={variant === 'ghost' ? 500 : 600} color={fg} numberOfLines={1}>{label}</T>
     </Pressable>
   );
 }

@@ -7,6 +7,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StoreProvider } from '../state/store';
 import { FONT_FILES } from '../theme/fonts';
 import { ThemeProvider, useTheme } from '../theme/ThemeProvider';
+import { Toast } from '../ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -31,6 +32,7 @@ function Navigator() {
     <>
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }} />
+      <Toast />
     </>
   );
 }

@@ -27,7 +27,9 @@ export default function Chats() {
   const queued = mine.reduce((n, x) => n + (x.msgs ?? []).filter(m => m.from === 'me' && m.status === 'aguardando').length, 0);
   const queueChat = mine.find(x => (x.msgs ?? []).some(m => m.from === 'me' && m.status === 'aguardando'));
   const pub = identity === 'public';
-  const open = (x: Chat) => { if (x.kind !== 'community') router.push({ pathname: '/chat/[id]', params: { id: x.id } }); };
+  const open = (x: Chat) => x.kind === 'community'
+    ? router.push({ pathname: '/community/[id]', params: { id: x.id } })
+    : router.push({ pathname: '/chat/[id]', params: { id: x.id } });
 
   const header = (
     <View style={{ paddingHorizontal: 20, paddingTop: 6, gap: 12 }}>
@@ -41,7 +43,7 @@ export default function Chats() {
           <T size={13} w={550}>{pub ? 'Pública' : 'Anônima'}</T>
           <Icon name="swap_horiz" size={16} />
         </Pressable>
-        <Pressable accessibilityRole="button" accessibilityLabel="Nova conversa (em breve)" style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable onPress={() => router.push('/new')} accessibilityRole="button" accessibilityLabel="Nova conversa" style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="edit_square" size={21} />
         </Pressable>
       </View>
@@ -105,7 +107,7 @@ function ChatRow({ chat, onPress }: { chat: Chat; onPress: () => void }) {
   const preview = chat.preview ?? (last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + last.text : '');
   const kindIcon = KIND_ICON[chat.kind];
   return (
-    <Pressable onPress={onPress} accessibilityRole="button" disabled={chat.kind === 'community'}
+    <Pressable onPress={onPress} accessibilityRole="button"
       accessibilityLabel={`${chat.name}. ${preview}${chat.unread ? `. ${chat.unread} não lidas` : ''}`}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 9, paddingHorizontal: 20, backgroundColor: pressed || hovered ? c.bg2 : 'transparent' })}>
       <Avatar initials={chat.initials} square={chat.kind !== 'direct'} inverted={chat.inv} />
