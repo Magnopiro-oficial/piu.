@@ -4,6 +4,7 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NetworkProvider } from '../state/network';
 import { StoreProvider } from '../state/store';
 import { FONT_FILES } from '../theme/fonts';
 import { ThemeProvider, useTheme } from '../theme/ThemeProvider';
@@ -19,7 +20,9 @@ export default function RootLayout() {
     <SafeAreaProvider>
       <ThemeProvider>
         <StoreProvider>
-          <Navigator />
+          <NetworkProvider>
+            <Navigator />
+          </NetworkProvider>
         </StoreProvider>
       </ThemeProvider>
     </SafeAreaProvider>

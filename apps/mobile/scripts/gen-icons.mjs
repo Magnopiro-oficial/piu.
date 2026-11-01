@@ -16,7 +16,7 @@ const pathOf = (weight, file) => {
   return ds.join(' ');
 };
 // Nomes antigos (ainda aceitos como ligadura na fonte) que viraram outro arquivo nos SVGs.
-const ALIASES = { smartphone: 'mobile' };
+const ALIASES = { smartphone: 'mobile', install_mobile: 'mobile_arrow_down' };
 const lines = names.map(n => {
   const f = ALIASES[n] ?? n;
   const v = [pathOf(300, `${f}.svg`), pathOf(300, `${f}-fill.svg`), pathOf(400, `${f}.svg`), pathOf(400, `${f}-fill.svg`)];
