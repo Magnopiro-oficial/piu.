@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  provider-panel:
+    name: Painel do provider
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/provider-panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/provider-panel/package-lock.json
+      - run: npm ci
+      - name: Typecheck e build
+        run: npm run build
