@@ -14,18 +14,23 @@ const NOW = 1_800_000_000;
 const A = deriveIdentity(newSeed(), 'public');
 const B = deriveIdentity(newSeed(), 'public');
 
-test('frase: 12 palavras em português, checksum detecta erro, a mesma frase recupera as mesmas chaves', () => {
+test('frase: 12 palavras em inglês (BIP39), checksum detecta erro, a mesma frase recupera as mesmas chaves', () => {
   const words = newPhrase();
   assert.equal(words.length, 12);
   assert.ok(words.every(w => WORDLIST.includes(w)));
   assert.ok(isValidPhrase(words));
   const seed = seedFromPhrase(words);
   assert.equal(deriveIdentity(seedFromPhrase([...words]), 'public').id, deriveIdentity(seed, 'public').id);
-  const wrong = [...words]; wrong[5] = WORDLIST[(WORDLIST.indexOf(words[5]) + 1) % WORDLIST.length];
+  // Vetor oficial do BIP39: "abandon" × 11 + "about" é válida; trocar a última palavra quebra o checksum.
+  const vector = [...Array(11).fill('abandon'), 'about'];
+  assert.ok(isValidPhrase(vector));
+  const wrong = [...Array(11).fill('abandon'), 'abandon'];
   assert.equal(isValidPhrase(wrong), false);
   assert.throws(() => seedFromPhrase(wrong));
+  assert.equal(isValidPhrase(['abandon', 'piu']), false, 'quantidade errada');
+  assert.equal(isValidPhrase([...Array(11).fill('abandon'), 'xyz']), false, 'palavra fora da lista');
   assert.ok(isValidPhrase(words.map(w => ` ${w.toUpperCase()} `)), 'tolera maiúsculas e espaços');
-  assert.ok(suggestWords('aba').includes('abacate'));
+  assert.ok(suggestWords('aba').includes('abandon'));
 });
 
 test('ratchet: conversa nos dois sentidos, cada mensagem com chave própria', () => {

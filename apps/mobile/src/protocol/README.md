@@ -39,7 +39,7 @@ Nenhuma primitiva criptográfica foi escrita à mão.
 | Código de segurança 12 × 5 | `safety.ts` (hash iterado, como o Signal) | "código de segurança…" |
 | Sigilo futuro e recuperação pós-comprometimento | `ratchet.ts`: Double Ratchet por contato, dentro do envelope selado | "sigilo futuro…", "ratchet: …" |
 | Minimização de metadados (endereços persistentes) | `sessions.ts`: após a resposta, o destino deriva do segredo da sessão | "sessão pela malha…" |
-| Recuperação de identidade | `phrase.ts`: 12 palavras BIP39 em português, com checksum | "frase…" |
+| Recuperação de identidade | `phrase.ts`: 12 palavras BIP39 em inglês (lista padrão), com checksum | "frase…" |
 | Atraso aleatório no envio (Privacidade) | `Router.send(…, { delaySec })` + `randomDelaySec()` | "atraso aleatório…" |
 | Antifraude: Sybil, colusão, tráfego artificial, auditoria | `ContributionLedger`: tetos por envelope e nó/dia, horário, auditoria por amostragem com bloqueio | "antifraude…" |
 | Igualar tamanho das mensagens (ajuste de Privacidade) | preenchimento em blocos de 256 B / 1 / 4 / 16 KB | "preenchimento…" |

@@ -1,11 +1,11 @@
 /**
- * Frase de recuperação: 12 palavras da lista BIP39 em português (128 bits de entropia + checksum).
+ * Frase de recuperação: 12 palavras da lista BIP39 em inglês, a lista padrão (128 bits de entropia + checksum).
  * A semente do Piu é derivada da entropia com um rótulo próprio. A lista e o checksum são
  * padrão, mas a semente NÃO é compatível com carteiras BIP39: aqui ela gera identidades,
  * chave do nó e carteira separadas (keys.ts).
  */
 import { generateMnemonic, mnemonicToEntropy, validateMnemonic } from '@scure/bip39';
-import { wordlist } from '@scure/bip39/wordlists/portuguese.js';
+import { wordlist } from '@scure/bip39/wordlists/english.js';
 import { utf8 } from './bytes';
 import { kdf } from './suite';
 
@@ -16,7 +16,11 @@ const normalize = (words: string[]) => words.map(w => w.trim().toLowerCase()).fi
 
 export const newPhrase = (): string[] => generateMnemonic(wordlist, 128).split(' ');
 
-/** Confere palavras da lista e o checksum (uma palavra trocada é detectada). */
+/**
+ * Confere se as palavras são da lista e o checksum. Com 12 palavras o checksum tem 4 bits:
+ * uma palavra trocada é detectada em ~15 de 16 casos. A confirmação de 3 palavras no backup
+ * existe para reduzir esse risco na hora de anotar.
+ */
 export const isValidPhrase = (words: string[]) => words.length === PHRASE_WORDS && validateMnemonic(normalize(words), wordlist);
 
 export function seedFromPhrase(words: string[]): Uint8Array {
