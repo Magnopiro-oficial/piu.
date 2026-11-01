@@ -1,13 +1,16 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, View } from 'react-native';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { T } from './T';
 
-/** Diálogo de confirmação: entra em 320 ms (scale .9 → 1), ícone com “pop”. */
-export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary = 'Cancelar', onClose }: {
-  icon: IconName; title: string; body: string; primary: string; primaryIcon?: IconName; onPrimary: () => void; secondary?: string; onClose: () => void;
+/**
+ * Diálogo de confirmação: entra em 320 ms (scale .9 → 1), ícone com “pop”.
+ * Com `hold`, a ação principal só acontece segurando o botão (~1 s), para ações irreversíveis.
+ */
+export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary = 'Cancelar', onClose, hold }: {
+  icon: IconName; title: string; body: string; primary: string; primaryIcon?: IconName; onPrimary: () => void; secondary?: string; onClose: () => void; hold?: boolean;
 }) {
   const { c, reduceMotion } = useTheme();
   const v = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
@@ -27,11 +30,41 @@ export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, sec
           <T size={20} w={700} ls={-0.025} lh={1.15} align="center">{title}</T>
           <T size={14} lh={1.45} color={c.ink2} align="center" style={{ paddingHorizontal: 4 }}>{body}</T>
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 8 }}>
-            <Button label={primary} height={52} onPress={onPrimary} left={primaryIcon ? <Icon name={primaryIcon} size={19} color={c.invink} /> : undefined} />
+            {hold
+              ? <HoldButton label={primary} icon={primaryIcon} onDone={onPrimary} />
+              : <Button label={primary} height={52} onPress={onPrimary} left={primaryIcon ? <Icon name={primaryIcon} size={19} color={c.invink} /> : undefined} />}
             <Button label={secondary} variant="soft" height={48} onPress={onClose} />
           </View>
         </Animated.View>
       </View>
     </Modal>
+  );
+}
+
+/** Botão "segure para confirmar": enche da esquerda para a direita; soltar antes cancela. */
+function HoldButton({ label, icon, onDone }: { label: string; icon?: IconName; onDone: () => void }) {
+  const { c } = useTheme();
+  const [pct, setPct] = useState(0);
+  const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
+  const stop = () => { clearInterval(timer.current); setPct(0); };
+  const start = () => {
+    clearInterval(timer.current);
+    timer.current = setInterval(() => setPct(p => {
+      const n = Math.min(100, p + 3);
+      if (n >= 100) { clearInterval(timer.current); setTimeout(onDone, 0); }
+      return n;
+    }), 30);
+  };
+  useEffect(() => () => clearInterval(timer.current), []);
+  return (
+    <Pressable onPressIn={start} onPressOut={() => { if (pct < 100) stop(); }} accessibilityRole="button" accessibilityLabel={label}
+      accessibilityHint="Segure por um segundo para confirmar" accessibilityActions={[{ name: 'activate' }]} onAccessibilityAction={onDone}
+      style={{ height: 52, borderRadius: 26, backgroundColor: c.ink, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: c.invink, opacity: 0.25 }} />
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        {icon && <Icon name={icon} size={19} color={c.invink} />}
+        <T size={15.5} w={600} color={c.invink}>{pct > 0 ? 'Continue segurando…' : label}</T>
+      </View>
+    </Pressable>
   );
 }

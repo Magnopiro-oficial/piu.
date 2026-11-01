@@ -6,6 +6,8 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NetworkProvider } from '../state/network';
 import { StoreProvider } from '../state/store';
+import { ResetProvider } from '../state/reset';
+import { SettingsProvider } from '../state/settings';
 import { WalletProvider } from '../state/wallet';
 import { FONT_FILES } from '../theme/fonts';
 import { ThemeProvider, useTheme } from '../theme/ThemeProvider';
@@ -20,13 +22,17 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <StoreProvider>
-          <NetworkProvider>
-            <WalletProvider>
-              <Navigator />
-            </WalletProvider>
-          </NetworkProvider>
-        </StoreProvider>
+        <ResetProvider>
+          <StoreProvider>
+            <NetworkProvider>
+              <WalletProvider>
+                <SettingsProvider>
+                  <Navigator />
+                </SettingsProvider>
+              </WalletProvider>
+            </NetworkProvider>
+          </StoreProvider>
+        </ResetProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

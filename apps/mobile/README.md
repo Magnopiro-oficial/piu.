@@ -11,14 +11,16 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 ```
 
 ## Estrutura
-- `src/app/`: rotas (Expo Router). Onboarding em `welcome`, `identity` e `keys`; as 5 abas em `(tabs)/`; a conversa em `chat/[id]`; `contact/[id]`, `group/[id]`, `community/[id]`, `new` e `new-channel`; `diagnostics`; o provider em `provider/` (`intro`, `add`, `connect`, `test`, `config`, o painel em `index`, `device/[id]` e `earnings`); `wallet/referrals`; o convite P2P em `invite/` (`index`, `share`, `page`, `verify`, `accept`); Por perto em `nearby/` (`[id]`, `requests`, `match`).
+- `src/app/`: rotas (Expo Router). Onboarding em `welcome`, `identity`, `keys`, `restore` e `migrate`; as 5 abas em `(tabs)/`; a conversa em `chat/[id]`; `contact/[id]`, `group/[id]`, `community/[id]`, `new` e `new-channel`; `diagnostics`; o provider em `provider/` (`intro`, `add`, `connect`, `test`, `config`, o painel em `index`, `device/[id]` e `earnings`); `wallet/referrals`; o convite P2P em `invite/` (`index`, `share`, `page`, `verify`, `accept`); Por perto em `nearby/` (`[id]`, `requests`, `match`); `backup`, `devices`, `notifications`, `settings/[page]` (privacy, storage, battery), a prévia da tela bloqueada em `lock` e o alerta de emergência em `alert`.
 - `src/theme/`: tokens claro/escuro (segue o tema do aparelho), fontes e a opção "reduzir movimento".
-- `src/ui/`: `T` (texto Geist/Geist Mono com os pesos do design), `Icon`, `Button`, `Avatar`, `Screen`, `Sheet` (folha inferior), `Dialog`, `Toast` (banner in-app), `Controls` (segmentado, toggle, rótulos), `RouteSheet`, `AttachSheet`, `FileBubble`, `WalletSheets` (enviar e receber LUNES), `Stripes` (placeholder listrado das fotos).
+- `src/ui/`: `T` (texto Geist/Geist Mono com os pesos do design), `Icon`, `Button`, `Avatar`, `Screen`, `Sheet` (folha inferior), `Dialog`, `Toast` (banner in-app), `Controls` (segmentado, toggle, rótulos), `RouteSheet`, `AttachSheet`, `FileBubble`, `WalletSheets` (enviar e receber LUNES), `Stripes` (placeholder listrado das fotos), `Settings` (grupos e linhas de ajustes, cartão de opção). O `Dialog` aceita `hold` (segurar para confirmar ações irreversíveis).
 - `src/state/store.tsx`: identidades, conversas, envio com os estados criada → na fila → encaminhada → entregue, verificação de contatos, grupo (membros, permissões, versão da chave), canais, arquivos em blocos e banners.
 - `src/state/network.tsx`: Modo nó, transportes, limites, equipamentos do provider e o rascunho do assistente “Adicionar equipamento”.
 - `src/state/wallet.tsx`: saldo (inicial − enviados − reservados + recebidos), envio, visibilidade em Por perto, convites pagos (valor reservado), pedidos recebidos e a taxa escolhida.
+- `src/state/settings.tsx`: privacidade, armazenamento, bateria, notificações, backup feito, aparelhos desconectados e o modo de restauração.
+- `src/state/reset.tsx`: “Apagar dados locais” remonta os provedores de estado e volta às Boas-vindas.
 - `src/lib/responsive.ts`: `useLayout()` com a largura/altura da tela, `compact` (< 375 px) e `short` (< 700 px).
-- `src/data/seed.ts`, `src/data/network.ts` e `src/data/wallet.ts`: dados de exemplo do protótipo (ilustrativos).
+- `src/data/seed.ts`, `src/data/network.ts`, `src/data/wallet.ts` e `src/data/settings.ts`: dados de exemplo do protótipo (ilustrativos).
 - `scripts/gen-icons.mjs`: gera `src/ui/icons.generated.ts` com os Material Symbols Rounded usados. Para usar um ícone novo, acrescente o nome em `scripts/icon-names.json` e rode `npm run icons`.
 
 ## Decisões técnicas
@@ -32,15 +34,16 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 2. **Grupos, canais, comunidades, contato e arquivos** (feito): verificar contato com código 12×5 e QR; administração do grupo com convite, permissões e troca de chave (v4 → v5) ao remover alguém; criar canal público, privado ou secreto, com identidade pública ou anônima; comunidade; nova conversa; anexar e enviar arquivo em blocos, que pausa sozinho quando a rota vira LoRa e confere a integridade no fim.
 3. **Rede, modo nó, diagnóstico e provider** (feito): aba Rede com radar de nós (imitações `piu.*` sem assinatura aparecem como ignoradas), Modo nó com o aviso do iPhone, transportes, limites e nós alcançáveis; Diagnóstico local sem telemetria; provider no celular com assistente de 4 etapas (equipamento, conexão e pareamento por código ou vínculo do Ponto de Acesso, teste real, regras com nome `piu.*`), painel, equipamento (pausar, atualizar, reiniciar, revogar) e ganhos.
 4. **Carteira, convite P2P e Por perto** (feito): carteira com saldo, enviar (assinado, entra na fila da malha) e receber (QR, pagamento por perto), bônus de boas-vindas em 4 etapas, distribuição (25 LUNES por pessoa ativa 7 dias), convidados e créditos de rede; convite P2P por Wi-Fi Direct ou Bluetooth com código de segurança de 4 palavras, página local (confere / não confere), verificação da cópia em 5 checagens e aceite; Por perto recíproco (desliga sozinho), grade de perfis públicos sem localização exata, perfil com convite pago (até 140 caracteres, valor reservado e devolvido em 24 h se recusado), pedidos (aceitar, recusar em silêncio, bloquear e denunciar, taxa 1/3/5/10) e a tela de conversa aberta.
-5. Alertas e notificações, segurança e ajustes.
+5. **Perfil, segurança, ajustes e alertas** (feito): aba Perfil com identidade pública/anônima, impressão digital e ajustes; backup das chaves em 3 passos (frase de 12 palavras oculta até tocar, confirmar 3 palavras, onde guardar a cópia cifrada); restaurar de outro aparelho, pela frase ou por arquivo, com migração em 5 etapas; aparelhos (desconectar, revogar perdido); Privacidade, Armazenamento e Bateria e limites (com estimativa de gasto como nó); Notificações sem servidor (pré-visualização, tipos, silêncio) com prévia da tela bloqueada; alerta de emergência assinado em tela cheia; apagar dados locais segurando o botão.
 
 ## Ainda simulado
-- A geração das chaves é uma animação; a criptografia real entra com o módulo nativo.
+- A geração das chaves, o backup, a restauração e a revogação de aparelhos são simulados; a criptografia real entra com o módulo nativo.
 - O envio percorre os estados por temporizador, e a Marina responde sozinha, como no protótipo.
 - O envio de arquivo é simulado (blocos por temporizador); a câmera e o seletor de arquivos entram com os módulos nativos.
 - Novo grupo, nova comunidade, escanear código e enviar localização mostram que chegam numa próxima versão.
 - O QR é um placeholder (listras), como no design.
 - Rede e provider usam dados de exemplo: a busca de equipamentos, o envio do pacote, o pareamento e o teste real são simulados por temporizador, até existir a API do `piu-node` e o transporte nativo.
 - Carteira e Por perto usam valores ilustrativos (o modelo econômico ainda está em aberto): assinaturas, liquidação na Mainnet, transferência P2P do instalador e proximidade são simulados; as fotos são placeholders listrados.
+- Notificações do sistema ainda não são disparadas: a tela bloqueada é uma prévia dentro do app, e os ajustes não chegam ao sistema operacional.
 - Nada é salvo entre aberturas do app ainda: o onboarding aparece de novo a cada início.
 - Os identificadores das lojas (`bundleIdentifier` e `package`) ainda não estão definidos em `app.json`.
