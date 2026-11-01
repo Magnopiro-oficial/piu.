@@ -252,6 +252,21 @@ export function openGroup(bytes: Uint8Array, keys: GroupKey[], now: number, isMe
   return { ...inner, id: envelopeId(bytes), kind: h.kind, fromId, group: { id: groupId, version: g.version } };
 }
 
+/**
+ * Aceita uma chave de grupo recebida só se: veio num envelope autêntico do tipo GroupKey, quem
+ * assinou é admin do grupo e a versão é mais nova que a atual (impede injeção de chave por
+ * qualquer membro ou terceiro e o retorno a uma chave antiga, que reabriria o grupo a removidos).
+ */
+export function acceptGroupKey(m: Opened, isAdmin: (fromId: string, groupId: string) => boolean, currentVersion: (groupId: string) => number): GroupKey | null {
+  if (m.type !== MsgType.GroupKey) return null;
+  const k = decodeGroupKey(m.body);
+  if (!k) return null;
+  const gid = toHex(k.groupId);
+  if (!isAdmin(m.fromId, gid)) return null;
+  if (k.version <= currentVersion(gid)) return null;
+  return k;
+}
+
 /** Corpo da mensagem que distribui uma chave de grupo (sempre dentro de um envelope direto). */
 export const encodeGroupKey = (g: GroupKey) => new Writer().vbytes(g.groupId).u16(g.version).bytes(g.key).done();
 export function decodeGroupKey(body: Uint8Array): GroupKey | null {

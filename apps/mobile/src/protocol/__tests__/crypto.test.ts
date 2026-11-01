@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { fromUtf8, toHex, utf8 } from '../bytes';
 import {
-  decodeGroupKey, encodeGroupKey, envelopeId, HEADER_BYTES, HOP_OFFSET, MsgType, newGroupKey, openDirect, openGroup, parseHeader, sealDirect, sealGroup, withHops,
+  acceptGroupKey, decodeGroupKey, encodeGroupKey, envelopeId, HEADER_BYTES, HOP_OFFSET, MsgType, newGroupKey, openDirect, openGroup, parseHeader, sealDirect, sealGroup, withHops,
 } from '../envelope';
 import { deriveIdentity, deriveNodeKey, deriveWalletSeed, newSeed, toPublic, verifyBinding } from '../keys';
 import { safetyNumber } from '../safety';
@@ -101,6 +101,17 @@ test('grupo: quem sai não lê nada depois da troca de chave (v4 → v5)', () =>
   const sneaky = sealGroup({ from: eve, group: v4, type: MsgType.Text, body: utf8('ainda estou aqui'), now: NOW + 5 });
   assert.equal(openGroup(sneaky.bytes, [v4, got], NOW + 5, isMember), null);
   assert.ok(openGroup(after.bytes, [v4, got], NOW, isMember));
+});
+
+test('chave de grupo: só admin distribui, e só versão mais nova', () => {
+  const gid = utf8('mutirao');
+  const admins = new Set([alice.id]);
+  const isAdmin = (fromId: string) => admins.has(fromId);
+  const current = () => 5;
+  const give = (from: typeof alice, v: number) => openDirect(sealDirect({ from, to: toPublic(bob), type: MsgType.GroupKey, body: encodeGroupKey(newGroupKey(gid, v)), now: NOW }).bytes, bob, NOW)!;
+  assert.equal(acceptGroupKey(give(alice, 6), isAdmin, current)?.version, 6);
+  assert.equal(acceptGroupKey(give(eve, 6), isAdmin, current), null, 'não-admin não injeta chave');
+  assert.equal(acceptGroupKey(give(alice, 5), isAdmin, current), null, 'sem voltar para versão antiga');
 });
 
 test('chave efêmera maliciosa (ponto de ordem baixa) é recusada sem quebrar', () => {
