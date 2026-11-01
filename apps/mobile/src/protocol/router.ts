@@ -24,9 +24,15 @@ export interface RouterLimits {
   maxCopies: number;
   /** Quantos ids lembrar para deduplicar (protege a memória contra enxurrada de envelopes). */
   maxSeen: number;
+  /**
+   * Limite por vizinho (balde de fichas): envelopes por minuto e rajada máxima.
+   * Um vizinho que inunda o nó é recusado sem custo de criptografia nem de armazenamento.
+   */
+  peerPerMinute: number;
+  peerBurst: number;
 }
 
-export const DEFAULT_LIMITS: RouterLimits = { maxBytes: 512 * 1024 * 1024, maxCount: 20000, maxRetentionSec: 48 * 3600, maxEnvelopeBytes: 32 * 1024, maxCopies: 6, maxSeen: 100_000 };
+export const DEFAULT_LIMITS: RouterLimits = { maxBytes: 512 * 1024 * 1024, maxCount: 20000, maxRetentionSec: 48 * 3600, maxEnvelopeBytes: 32 * 1024, maxCopies: 6, maxSeen: 100_000, peerPerMinute: 600, peerBurst: 120 };
 
 export type IngestResult =
   | { status: 'delivered'; message: Opened; stored: boolean }
@@ -52,6 +58,7 @@ export class Router {
   /** Ids já vistos até vencerem: duplicata chegando por outro caminho é descartada. */
   private seen = new Map<string, number>();
   private bytesUsed = 0;
+  private buckets = new Map<string, { tokens: number; at: number }>();
   readonly limits: RouterLimits;
   readonly receipts: RelayReceipt[] = [];
   readonly inbox: Opened[] = [];
@@ -82,6 +89,7 @@ export class Router {
 
   /** Envelope que chegou de um vizinho (`from`), ou criado aqui (`from = null`). */
   ingest(bytes: Uint8Array, from: string | null, now: number): IngestResult {
+    if (from !== null && !this.take(from, now)) return { status: 'rejected', reason: 'limite do vizinho' };
     if (bytes.length > this.limits.maxEnvelopeBytes) return { status: 'rejected', reason: 'grande demais' };
     let h: Header;
     try { h = parseHeader(bytes); } catch (e) { return { status: 'rejected', reason: e instanceof ProtocolError ? e.code : 'inválido' }; }
@@ -105,6 +113,18 @@ export class Router {
     if (!own && !this.relay) return { status: 'relay-off', id };
     const r = this.keep(id, bytes, h, from, own, now);
     return { status: r, id };
+  }
+
+  /** Balde de fichas por vizinho: repõe `peerPerMinute` por minuto, até `peerBurst`. */
+  private take(peer: string, now: number): boolean {
+    const b = this.buckets.get(peer) ?? { tokens: this.limits.peerBurst, at: now };
+    b.tokens = Math.min(this.limits.peerBurst, b.tokens + ((now - b.at) * this.limits.peerPerMinute) / 60);
+    b.at = now;
+    const ok = b.tokens >= 1;
+    if (ok) b.tokens -= 1;
+    this.buckets.set(peer, b);
+    if (this.buckets.size > 10_000) this.buckets.delete(this.buckets.keys().next().value!);
+    return ok;
   }
 
   private tryOpen(bytes: Uint8Array, now: number): Opened | null {

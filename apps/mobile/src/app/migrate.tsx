@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, View } from 'react-native';
 import { MIG_META, migItems } from '../data/settings';
 import { SAFETY_WORDS } from '../data/wallet';
+import { useKeys } from '../state/keys';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -20,6 +21,7 @@ export default function Migrate() {
   const { c, reduceMotion } = useTheme();
   const { restoreMode } = useSettings();
   const { finishOnboarding, onboarded } = useStore();
+  const { identities } = useKeys();
   const [n, setN] = useState(0);
   const meta = MIG_META[restoreMode];
   const items = migItems(restoreMode);
@@ -40,6 +42,8 @@ export default function Migrate() {
   }, [reduceMotion, done, dot]);
 
   const open = () => {
+    // Sem chaves não há identidade: volta para escolher como recuperar (ex.: aberto por link direto).
+    if (!identities) { router.replace('/restore'); return; }
     if (!onboarded) finishOnboarding();
     if (router.canDismiss()) router.dismissAll();
     router.replace('/(tabs)');

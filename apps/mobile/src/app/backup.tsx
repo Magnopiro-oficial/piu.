@@ -1,7 +1,10 @@
 import { router } from 'expo-router';
+import { usePreventScreenCapture } from 'expo-screen-capture';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SAVE_OPTS, type SaveOpt } from '../data/settings';
+import { confirmDevice } from '../lib/deviceAuth';
+import { vaultIsSecure } from '../lib/vault';
 import { WORDLIST } from '../protocol';
 import { useKeys } from '../state/keys';
 import { useSettings } from '../state/settings';
@@ -39,6 +42,18 @@ export default function Backup() {
   const PHRASE = words ?? [];
   const [QUIZ] = useState(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')));
   const [step, setStep] = useState<Step>('phrase');
+  // Bloqueia prints e gravação de tela enquanto a frase pode aparecer (Android: FLAG_SECURE).
+  usePreventScreenCapture('backup');
+  const [noLock, setNoLock] = useState(false);
+  const [denied, setDenied] = useState(false);
+  /** Quem tem a frase tem tudo: só mostra depois de confirmar que é o dono do aparelho. */
+  const reveal = async () => {
+    setDenied(false);
+    const r = await confirmDevice('Mostrar a frase de recuperação');
+    if (r === 'denied') { setDenied(true); return; }
+    setNoLock(r === 'unavailable');
+    setShown(true);
+  };
   const [shown, setShown] = useState(false);
   const [quiz, setQuiz] = useState<Record<number, string>>({});
   const [save, setSave] = useState<SaveOpt>('sd');
@@ -56,7 +71,7 @@ export default function Backup() {
         {step === 'phrase' && (
           <>
             <StepHeader step="PASSO 1 DE 3" title="Sua frase de recuperação" sub="Estas 12 palavras recuperam suas identidades, contatos e carteira em outro aparelho. Quem tiver a frase tem tudo." />
-            <Pressable onPress={() => setShown(true)} accessibilityRole={shown ? undefined : 'button'}
+            <Pressable onPress={() => { if (!shown) void reveal(); }} accessibilityRole={shown ? undefined : 'button'}
               accessibilityLabel={shown ? 'Frase: ' + PHRASE.map((w, i) => `${i + 1} ${w}`).join(', ') : 'Frase oculta. Toque para mostrar'}
               style={{ marginTop: 4, marginHorizontal: 20, padding: 14, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
               {PHRASE.map((w, i) => (
@@ -73,7 +88,16 @@ export default function Backup() {
               ))}
             </View>
             <View style={{ paddingTop: 22, paddingHorizontal: 20 }}>
-              <Button label={shown ? 'Já anotei' : 'Mostrar a frase'} onPress={() => (shown ? setStep('confirm') : setShown(true))} />
+              {denied && <T size={13} style={{ paddingBottom: 10 }} accessibilityLiveRegion="polite">Não foi possível confirmar que é você. A frase continua oculta.</T>}
+              {shown && (noLock || !vaultIsSecure) && (
+                <View style={{ flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2 }}>
+                  <Icon name="warning" size={18} />
+                  <T size={12.5} lh={1.4} style={{ flex: 1 }}>{vaultIsSecure
+                    ? 'Este aparelho não tem bloqueio de tela: qualquer pessoa com ele em mãos consegue ver esta frase. Ative um PIN ou a biometria.'
+                    : 'Versão web de demonstração: a frase fica no navegador, sem cofre seguro. Não use com chaves reais.'}</T>
+                </View>
+              )}
+              <Button label={shown ? 'Já anotei' : 'Mostrar a frase'} onPress={() => (shown ? setStep('confirm') : void reveal())} />
             </View>
           </>
         )}

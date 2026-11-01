@@ -136,6 +136,18 @@ test('limites do nó: cheio, sai primeiro o de terceiros de menor prioridade', (
   assert.equal(R.router.ingest(low2.bytes, 'A', NOW).status, 'full');
 });
 
+test('limite por vizinho: enxurrada é recusada; o vizinho volta a ser aceito depois', () => {
+  const R = node('R', { limits: { peerBurst: 5, peerPerMinute: 60 } });
+  const A = node('A'), B = node('B');
+  const ms = Array.from({ length: 8 }, (_, i) => msg(A.id, B.id, 'spam ' + i));
+  const res = ms.map(m => R.router.ingest(m.bytes, 'A', NOW));
+  assert.equal(res.filter(r => r.status === 'stored').length, 5);
+  assert.ok(res.slice(5).every(r => r.status === 'rejected' && r.reason === 'limite do vizinho'));
+  // Outro vizinho não é afetado; e A volta depois de repor fichas (1 por segundo).
+  assert.equal(R.router.ingest(msg(B.id, A.id, 'normal').bytes, 'B', NOW).status, 'stored');
+  assert.equal(R.router.ingest(ms[5].bytes, 'A', NOW + 2).status, 'stored');
+});
+
 test('TTL acima do máximo e envelope adulterado são recusados pelo relay', () => {
   const A = node('A'), B = node('B'), R = node('R');
   const m = msg(A.id, B.id, 'x');

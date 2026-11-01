@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
+import { vaultIsSecure } from '../lib/vault';
 import { fingerprintOf, useKeys } from '../state/keys';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -49,7 +50,7 @@ export default function Keys() {
           <View style={{ height: 1, backgroundColor: c.line }} />
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
             <Icon name="smartphone" size={18} />
-            <T size={13} color={c.ink2}>Guardada somente neste aparelho</T>
+            <T size={13} color={c.ink2}>{vaultIsSecure ? 'Guardada somente neste aparelho, no cofre do sistema' : 'Versão web de demonstração: sem cofre seguro'}</T>
           </View>
         </View>
         <View style={{ flex: 1 }} />

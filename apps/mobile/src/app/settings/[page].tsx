@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, ScrollView, View } from 'react-native';
+import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
 import { STORAGE_USE } from '../../data/settings';
+import { confirmDevice } from '../../lib/deviceAuth';
 import { useResetApp } from '../../state/reset';
 import { useNetwork } from '../../state/network';
 import { useSettings } from '../../state/settings';
@@ -52,7 +53,14 @@ function Privacy() {
         <ToggleRow name="Não guardar rotas no aparelho" desc="Some depois da entrega" on={priv.noRoutes} onChange={t('noRoutes')} />
       </SetGroup>
       <SetGroup title="BLOQUEIO">
-        <ToggleRow name="Abrir o Piu com biometria" on={priv.lock} onChange={t('lock')} />
+        <ToggleRow name="Abrir o Piu com biometria" disabled={Platform.OS === 'web'}
+          desc={Platform.OS === 'web' ? 'Indisponível na versão web' : 'Ou com o PIN/senha do aparelho, ao abrir e ao voltar ao app'}
+          on={priv.lock} onChange={async () => {
+            // Ligar ou desligar exige provar que é o dono do aparelho.
+            const r = await confirmDevice(priv.lock ? 'Desligar o bloqueio do Piu' : 'Ligar o bloqueio do Piu');
+            if (r === 'ok') setPriv({ lock: !priv.lock });
+            else if (r === 'unavailable') showToast({ icon: 'lock', title: 'Sem bloqueio no aparelho', body: 'Ative a biometria ou um PIN/senha nos ajustes do aparelho para usar esta opção.' });
+          }} />
         <ActionRow name="Contatos bloqueados" value="2" onPress={() => showToast({ icon: 'block', title: '2 contatos bloqueados', body: 'Eles não conseguem iniciar conversa nem ver seu status.' })} />
       </SetGroup>
       <FootNote icon="info">Relays nunca veem conteúdo. Estas opções reduzem o que dá para inferir pelo tráfego, sem prometer anonimato absoluto.</FootNote>

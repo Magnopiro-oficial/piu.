@@ -64,6 +64,10 @@ private let inboxUUID = CBUUID(string: "7B41CD1F-85C3-400F-A6F9-5B89DD6B0915")
 private let outboxUUID = CBUUID(string: "E7D5F504-1483-497F-B64E-9DB52C4D3240")
 /** Cabeçalho de cada bloco: id da mensagem (UInt32), índice (UInt16), total (UInt16), big-endian. */
 private let headerSize = 8
+/** Limites da remontagem (proteção de memória contra vizinho malicioso). */
+private let maxEnvelopeBytes = 32 * 1024
+private let maxPartialMessages = 64
+private let partialTimeout: TimeInterval = 60
 
 private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralManagerDelegate, CBPeripheralDelegate {
   typealias Emit = (String, [String: Any?]) -> Void
@@ -83,7 +87,7 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var pendingNotify: [(Data, CBCentral)] = []
 
   private var nextMessageId: UInt32 = 1
-  private var partial: [String: [Int: Data]] = [:]
+  private var partial: [String: (parts: [Int: Data], bytes: Int, started: Date)] = [:]
 
   init(name: String, emit: @escaping Emit) {
     self.name = name
@@ -144,16 +148,25 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     let id = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
     let index = Int(UInt16(bytes[4]) << 8 | UInt16(bytes[5]))
     let count = Int(UInt16(bytes[6]) << 8 | UInt16(bytes[7]))
-    guard count > 0, index < count else { return }
+    // Um envelope tem no máximo 32 KB: total de blocos acima disso é inválido.
+    guard count > 0, index < count, count <= maxEnvelopeBytes else { return }
+    let now = Date()
+    partial = partial.filter { now.timeIntervalSince($0.value.started) < partialTimeout }
     let key = "\(peer.uuidString)-\(id)"
-    var parts = partial[key] ?? [:]
-    parts[index] = chunk.subdata(in: headerSize..<chunk.count)
-    if parts.count == count {
+    var entry = partial[key] ?? (parts: [:], bytes: 0, started: now)
+    if entry.parts.isEmpty && partial.count >= maxPartialMessages {
+      // Muitas remontagens abertas: descarta a mais antiga.
+      if let oldest = partial.min(by: { $0.value.started < $1.value.started })?.key { partial[oldest] = nil }
+    }
+    let data = chunk.subdata(in: headerSize..<chunk.count)
+    if entry.parts[index] == nil { entry.parts[index] = data; entry.bytes += data.count }
+    guard entry.bytes <= maxEnvelopeBytes else { partial[key] = nil; return }
+    if entry.parts.count == count {
       partial[key] = nil
-      let whole = (0..<count).reduce(into: Data()) { acc, i in acc.append(parts[i] ?? Data()) }
+      let whole = (0..<count).reduce(into: Data()) { acc, i in acc.append(entry.parts[i] ?? Data()) }
       emit("onEnvelope", ["from": peer.uuidString, "data": whole.base64EncodedString()])
     } else {
-      partial[key] = parts
+      partial[key] = entry
     }
   }
 
