@@ -11,7 +11,8 @@
  * O nó não precisa de chave nenhuma para rotear: lê só o cabeçalho.
  */
 import { ProtocolError, toHex } from './bytes';
-import { envelopeId, type GroupKey, type Header, MAX_TTL_SEC, CLOCK_SKEW_SEC, openDirect, openGroup, type Opened, parseHeader, withHops } from './envelope';
+import { random } from './suite';
+import { type AcceptDest, envelopeId, type GroupKey, type Header, MAX_TTL_SEC, CLOCK_SKEW_SEC, openDirect, openGroup, type Opened, parseHeader, withHops } from './envelope';
 import type { Identity, KeyPair } from './keys';
 import { makeRelayReceipt, type RelayReceipt } from './receipts';
 
@@ -32,7 +33,7 @@ export type IngestResult =
   | { status: 'stored' | 'duplicate' | 'expired' | 'relay-off' | 'full'; id: string }
   | { status: 'rejected'; reason: string };
 
-interface Entry { id: string; bytes: Uint8Array; header: Header; from: string | null; own: boolean; storedAt: number; dropAt: number; sentTo: Set<string>; copies: number }
+interface Entry { id: string; bytes: Uint8Array; header: Header; from: string | null; own: boolean; storedAt: number; dropAt: number; sentTo: Set<string>; copies: number; releaseAt: number }
 
 export interface RouterOptions {
   node: KeyPair;
@@ -40,6 +41,8 @@ export interface RouterOptions {
   groupKeys?: GroupKey[];
   /** Membros atuais de cada grupo (ver `openGroup`). */
   isMember?: (fromId: string, groupId: string) => boolean;
+  /** Destinos de sessões estabelecidas (SessionManager.acceptsDest). */
+  acceptDest?: AcceptDest;
   relay: boolean;
   limits?: Partial<RouterLimits>;
 }
@@ -66,8 +69,16 @@ export class Router {
   get size() { return this.store.size; }
   has(id: string) { return this.store.has(id); }
 
-  /** Mensagem criada aqui: entra na fila mesmo com o Modo nó desligado. */
-  send(bytes: Uint8Array, now: number): IngestResult { return this.ingest(bytes, null, now); }
+  /**
+   * Mensagem criada aqui: entra na fila mesmo com o Modo nó desligado.
+   * `delaySec` (ajuste "Atraso aleatório no envio"): só sai depois desse tempo, dificultando
+   * correlacionar o envio com o momento em que a pessoa digitou. Use `randomDelaySec()`.
+   */
+  send(bytes: Uint8Array, now: number, opts: { delaySec?: number } = {}): IngestResult {
+    const r = this.ingest(bytes, null, now);
+    if (r.status === 'stored' && opts.delaySec) this.store.get(r.id)!.releaseAt = now + opts.delaySec;
+    return r;
+  }
 
   /** Envelope que chegou de um vizinho (`from`), ou criado aqui (`from = null`). */
   ingest(bytes: Uint8Array, from: string | null, now: number): IngestResult {
@@ -97,12 +108,12 @@ export class Router {
   }
 
   private tryOpen(bytes: Uint8Array, now: number): Opened | null {
-    for (const me of this.identities) { const m = openDirect(bytes, me, now); if (m) return m; }
+    for (const me of this.identities) { const m = openDirect(bytes, me, now, this.o.acceptDest); if (m) return m; }
     return this.groupKeys.length ? openGroup(bytes, this.groupKeys, now, this.o.isMember) : null;
   }
 
   private keep(id: string, bytes: Uint8Array, h: Header, from: string | null, own: boolean, now: number): 'stored' | 'full' {
-    const e: Entry = { id, bytes, header: h, from, own, storedAt: now, dropAt: Math.min(h.expiresAt, now + this.limits.maxRetentionSec), sentTo: new Set(), copies: 0 };
+    const e: Entry = { id, bytes, header: h, from, own, storedAt: now, dropAt: Math.min(h.expiresAt, now + this.limits.maxRetentionSec), sentTo: new Set(), copies: 0, releaseAt: now };
     if (!this.makeRoom(e)) return 'full';
     this.store.set(id, e);
     this.bytesUsed += bytes.length;
@@ -148,6 +159,7 @@ export class Router {
     this.purge(now);
     const out: Entry[] = [];
     for (const e of this.store.values()) {
+      if (e.releaseAt > now) continue;                         // atraso aleatório ainda correndo
       if (e.header.hops === 0) continue;                       // limite de saltos (anti-loop)
       if (e.from === peer || e.sentTo.has(peer)) continue;     // não devolve, não repete
       if (e.copies >= this.limits.maxCopies) continue;         // spray limitado
@@ -169,4 +181,10 @@ export class Router {
   forget(id: string) { this.drop(id); }
 
   stats() { return { stored: this.store.size, bytes: this.bytesUsed, seen: this.seen.size, nodePk: toHex(this.o.node.pk).slice(0, 8) }; }
+}
+
+/** Atraso uniforme de 0 a `maxSec` segundos, com aleatoriedade criptográfica. */
+export function randomDelaySec(maxSec = 30): number {
+  const r = random(4);
+  return ((r[0] << 24 | r[1] << 16 | r[2] << 8 | r[3]) >>> 0) % (maxSec + 1);
 }

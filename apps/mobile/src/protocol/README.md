@@ -1,6 +1,6 @@
 # Protocolo de comunicação do Piu (protótipo v0)
 
-Criptografia e regras de comunicação descentralizada, em TypeScript puro, sem dependência de React Native: roda no app (Hermes), no navegador e no Node. `npm test` executa os testes (21 cenários, inclusive de ataque).
+Criptografia e regras de comunicação descentralizada, em TypeScript puro, sem dependência de React Native: roda no app (Hermes), no navegador e no Node. `npm test` executa os testes (30 cenários, inclusive de ataque).
 
 > ⚠️ **Protótipo, não decisão final.** O documento de requisitos (seção 9) exige que os algoritmos sejam escolhidos numa etapa formal de *threat modeling* e revisão especializada, e que haja **auditoria de segurança independente antes de produção**. Esta versão usa candidatos listados no próprio documento, por meio de bibliotecas auditadas, e cada envelope declara a suíte usada. Assim, ela pode ser trocada sem quebrar a rede.
 
@@ -37,6 +37,11 @@ Nenhuma primitiva criptográfica foi escrita à mão.
 | Fragmentação para MTU pequena | `fragment.ts`, integridade pelo id | "fragmentação…" |
 | Confirmação de entrega (FUN-015) e evidências com privacidade (seção 11) | `ackSecret` cifrado no conteúdo, revelado pelo destino; recibos assinados pela chave do nó | "créditos…" |
 | Código de segurança 12 × 5 | `safety.ts` (hash iterado, como o Signal) | "código de segurança…" |
+| Sigilo futuro e recuperação pós-comprometimento | `ratchet.ts`: Double Ratchet por contato, dentro do envelope selado | "sigilo futuro…", "ratchet: …" |
+| Minimização de metadados (endereços persistentes) | `sessions.ts`: após a resposta, o destino deriva do segredo da sessão | "sessão pela malha…" |
+| Recuperação de identidade | `phrase.ts`: 12 palavras BIP39 em português, com checksum | "frase…" |
+| Atraso aleatório no envio (Privacidade) | `Router.send(…, { delaySec })` + `randomDelaySec()` | "atraso aleatório…" |
+| Antifraude: Sybil, colusão, tráfego artificial, auditoria | `ContributionLedger`: tetos por envelope e nó/dia, horário, auditoria por amostragem com bloqueio | "antifraude…" |
 | Igualar tamanho das mensagens (ajuste de Privacidade) | preenchimento em blocos de 256 B / 1 / 4 / 16 KB | "preenchimento…" |
 
 ## Formato do envelope
@@ -49,13 +54,19 @@ Nenhuma primitiva criptográfica foi escrita à mão.
 
 O corpo cifrado contém: tipo, horário de envio, segredo de entrega, chaves públicas do remetente com o vínculo entre elas, conteúdo preenchido e a assinatura sobre o cabeçalho e o conteúdo. Como a assinatura cobre o cabeçalho, quem recebe não consegue reembrulhar a mensagem e repassá-la a outra pessoa como se viesse do remetente.
 
+## Sessões (Double Ratchet)
+
+- Início simplificado: o segredo da sessão vem de DH(identidade A, identidade B). A primeira mensagem já faz um passo de DH com chave efêmera, e cada resposta gira a catraca.
+- Cada mensagem usa uma chave própria, apagada depois do uso. As chaves puladas (mensagens fora de ordem) ficam guardadas, até 1.000 por cadeia e 2.000 no total.
+- O conteúdo da sessão vai dentro do envelope selado (`MsgType.Session`). Os relays não veem nem a chave da catraca.
+- Antes da primeira resposta, o destino do envelope é o da chave pública (o outro lado ainda não tem a sessão). Depois, é derivado do segredo da sessão e muda por dia.
+- Se os dois começarem ao mesmo tempo, os dois leem tudo e convergem para uma sessão só.
+
 ## O que ainda NÃO está resolvido (para a revisão formal)
 
-1. **Sigilo futuro e pós-comprometimento:** a chave efêmera é só do lado de quem envia. Se a chave de acordo do destinatário vazar, mensagens antigas guardadas por terceiros podem ser lidas. Avaliar Double Ratchet (conversas) e MLS (grupos), ambos candidatos do documento.
-2. **Destino lógico ligável no mesmo dia:** quem conhece a chave pública de alguém consegue reconhecer os envelopes para essa pessoa durante aquele dia. Esse é o custo de entregar sem servidor e sem tentar decifrar tudo. Alternativas: tags por contato derivadas de segredo compartilhado, ou tentativa de decifrar com limite.
-3. **Grupos grandes:** a troca de chave manda um envelope por membro (O(n)). O MLS resolve em O(log n).
-4. **Antifraude:** o validador credita só com entrega comprovada e sem duplicar, mas o documento reconhece que isso não prova a transmissão física. Ainda faltam amostragem, auditoria probabilística, detecção de colusão e Sybil.
-5. **Atraso aleatório no envio** (ajuste de Privacidade): é responsabilidade da fila do app, ainda não implementada.
-6. **Recuperação pela frase:** a semente ainda é aleatória. A conversão frase ↔ semente (lista de palavras, checksum) está em aberto no documento.
-7. **Guarda da semente no aparelho:** precisa ir para o armazenamento seguro do sistema (Keychain/Keystore, via `expo-secure-store`), nunca para o AsyncStorage. Isso entra junto com o development build.
-8. **Integração no app:** o app ainda não usa este protocolo. No aparelho, o Hermes não tem `crypto.getRandomValues`: instalar o polyfill (`expo-crypto`) antes do primeiro uso.
+1. **Primeiras mensagens de uma sessão:** até a primeira resposta, o sigilo depende da chave de identidade do destinatário, como no Signal sem *one-time pre-keys*. Pre-keys exigiriam publicá-las com antecedência, o que é difícil numa malha offline.
+2. **Primeiro contato ainda é ligável:** enquanto não há resposta, o destino deriva da chave pública e muda por dia.
+3. **Grupos grandes:** a troca de chave manda um envelope por membro (O(n)), e as mensagens de grupo não têm sigilo futuro. O MLS resolve as duas coisas em O(log n), mas é grande e precisa da revisão formal.
+4. **Antifraude:** ainda falta o desafio de auditoria em si (como um nó prova, na prática, que retransmite). Hoje o validador recebe o resultado pronto. A detecção de colusão é por tetos, não por análise de grafo.
+5. **Semente compatível com BIP39:** a frase usa a lista e o checksum do BIP39, mas a derivação é própria do Piu. Não importe a frase em carteiras de terceiros.
+6. **Integração no app:** a semente vai para o cofre do sistema (`expo-secure-store`), e o Hermes precisa de `crypto.getRandomValues` (`expo-crypto`). Isso está no PR seguinte, de integração.

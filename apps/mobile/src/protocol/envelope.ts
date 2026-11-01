@@ -27,7 +27,7 @@ export const MAX_ENVELOPE_BYTES = 32 * 1024;
 
 export enum EnvelopeKind { Direct = 1, Group = 2 }
 export enum Priority { Low = 0, Normal = 1, High = 2, Critical = 3 }
-export enum MsgType { Text = 1, DeliveryReceipt = 2, GroupKey = 3 }
+export enum MsgType { Text = 1, DeliveryReceipt = 2, GroupKey = 3, /** Conteúdo de sessão Double Ratchet (ratchet.ts). */ Session = 4 }
 
 export interface Header {
   version: number; suite: number; kind: EnvelopeKind; bulk: boolean; priority: Priority; hops: number;
@@ -48,6 +48,9 @@ export interface SealOptions {
   /** Preencher até o próximo tamanho padrão (padrão: sim). */
   pad?: boolean;
 }
+
+/** Aceita destinos lógicos além do da própria chave (sessões estabelecidas). */
+export type AcceptDest = (dest: Uint8Array, expiresAt: number) => boolean;
 
 export interface GroupKey { groupId: Uint8Array; version: number; key: Uint8Array }
 
@@ -144,7 +147,7 @@ function readInner(plain: Uint8Array, auth: Uint8Array, h: Header, now: number):
     if (!equal(hash(ackSecret).slice(0, 16), h.ackHash)) return null;
     // Anti-replay temporal: não aceitar envio "do futuro" nem mais antigo que o TTL máximo.
     if (sentAt > now + CLOCK_SKEW_SEC || sentAt + MAX_TTL_SEC < h.expiresAt - CLOCK_SKEW_SEC) return null;
-    if (type !== MsgType.Text && type !== MsgType.DeliveryReceipt && type !== MsgType.GroupKey) return null;
+    if (type < MsgType.Text || type > MsgType.Session) return null;
     return { type, body: unpadBody(block), sentAt, from, fromId: '', ackSecret };
   } catch {
     return null;
@@ -180,13 +183,13 @@ function assemble(h: Header, block: Uint8Array, seal: (auth: Uint8Array) => Uint
 const directKey = (shared: Uint8Array, eph: Uint8Array, to: Uint8Array) => kdf(shared, concat(eph, to), 'piu/v0/direct/key');
 
 /** Cifra para uma pessoa. Gera uma chave efêmera por mensagem (o relay não vê o remetente). */
-export function sealDirect(o: SealOptions & { to: PublicIdentity }): { bytes: Uint8Array; id: string; ackSecret: Uint8Array } {
+export function sealDirect(o: SealOptions & { to: PublicIdentity; destFor?: (expiresAt: number) => Uint8Array }): { bytes: Uint8Array; id: string; ackSecret: Uint8Array } {
   if (!verifyBinding(o.to)) throw new ProtocolError('BINDING', 'Chaves do destinatário não conferem.');
   const ackSecret = random(16);
   const h = baseHeader(o, EnvelopeKind.Direct, ackSecret);
   const ephSk = random(KEY_BYTES);
   h.eph = agree.publicKey(ephSk);
-  h.dest = directDest(o.to.agreePk, h.expiresAt);
+  h.dest = o.destFor ? o.destFor(h.expiresAt) : directDest(o.to.agreePk, h.expiresAt);
   const key = directKey(agree.shared(ephSk, o.to.agreePk), h.eph, o.to.agreePk);
   const block = padBody(o.body, o.pad ?? true);
   const bytes = assemble(h, block, auth => aead.seal(key, h.nonce, innerBytes(o, block, ackSecret, auth), auth));
@@ -194,11 +197,11 @@ export function sealDirect(o: SealOptions & { to: PublicIdentity }): { bytes: Ui
 }
 
 /** Abre uma mensagem direta para `me`. `null` se não for para mim, estiver adulterada ou vencida. */
-export function openDirect(bytes: Uint8Array, me: Identity, now: number): Opened | null {
+export function openDirect(bytes: Uint8Array, me: Identity, now: number, acceptDest?: AcceptDest): Opened | null {
   let h: Header;
   try { h = parseHeader(bytes); } catch { return null; }
   if (h.kind !== EnvelopeKind.Direct || h.expiresAt <= now) return null;
-  if (!equal(h.dest, directDest(me.agreePk, h.expiresAt))) return null;
+  if (!equal(h.dest, directDest(me.agreePk, h.expiresAt)) && !acceptDest?.(h.dest, h.expiresAt)) return null;
   let shared: Uint8Array;
   try { shared = agree.shared(me.agree.sk, h.eph); } catch { return null; }
   const auth = authHeader(bytes);
