@@ -1,0 +1,81 @@
+import { randomUUID } from 'node:crypto';
+import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
+
+export interface Operator { id: string; name: string; createdAt: number }
+export interface Session { tokenHash: string; operatorId: string; csrf: string; createdAt: number; lastSeen: number; authAt: number }
+export type DeviceStatus = 'active' | 'paused';
+export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today: number }
+export interface WalletTx { id: string; amount: number; at: number; to: 'personal' }
+export interface Wallet { balance: number; txs: WalletTx[] }
+
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet> }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {} });
+
+/**
+ * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
+ * Gravação atômica (arquivo temporário + rename). Tokens de sessão ficam só como hash SHA-256.
+ * Ids são UUIDs aleatórios: nada de id incremental exposto na API.
+ */
+export class Store {
+  private s: State;
+  private file: string | null;
+
+  constructor(dataDir: string | null) {
+    this.file = dataDir ? join(dataDir, 'state.json') : null;
+    if (this.file && dataDir) {
+      mkdirSync(dataDir, { recursive: true, mode: 0o700 });
+      chmodSync(dataDir, 0o700);
+      try { this.s = { ...empty(), ...JSON.parse(readFileSync(this.file, 'utf8')) }; } catch { this.s = empty(); }
+    } else {
+      this.s = empty();
+    }
+  }
+
+  private save() {
+    if (!this.file) return;
+    const tmp = this.file + '.tmp';
+    writeFileSync(tmp, JSON.stringify(this.s), { mode: 0o600 });
+    renameSync(tmp, this.file);
+  }
+
+  addOperator(name: string, now: number): Operator {
+    const op: Operator = { id: randomUUID(), name, createdAt: now };
+    this.s.operators.push(op);
+    this.s.wallets[op.id] = { balance: 1284.6, txs: [] };
+    // Referência: o primeiro operador recebe os equipamentos de demonstração do painel.
+    if (this.s.operators.length === 1) {
+      for (const [name, cls] of [['Mini-PC da garagem', 'Gateway Local'], ['Antena do telhado', 'Super Node'], ['Roteador da sala', 'Home Node']] as const) {
+        this.s.devices.push({ id: randomUUID(), ownerId: op.id, name, cls, status: 'active', today: 4.12 });
+      }
+    }
+    this.save();
+    return op;
+  }
+
+  operator(id: string) { return this.s.operators.find(o => o.id === id) ?? null; }
+
+  addSession(sess: Session) { this.s.sessions.push(sess); this.save(); }
+  sessionByHash(hash: string) { return this.s.sessions.find(x => x.tokenHash === hash) ?? null; }
+  touchSession(hash: string, now: number) { const x = this.sessionByHash(hash); if (x) { x.lastSeen = now; this.save(); } }
+  removeSession(hash: string) { this.s.sessions = this.s.sessions.filter(x => x.tokenHash !== hash); this.save(); }
+  pruneSessions(isAlive: (x: Session) => boolean) { const before = this.s.sessions.length; this.s.sessions = this.s.sessions.filter(isAlive); if (this.s.sessions.length !== before) this.save(); }
+
+  /** Só os equipamentos do operador (a posse é checada em cada ação: anti-IDOR). */
+  devicesOf(operatorId: string) { return this.s.devices.filter(d => d.ownerId === operatorId); }
+  ownedDevice(operatorId: string, id: string) { return this.s.devices.find(d => d.id === id && d.ownerId === operatorId) ?? null; }
+  setDeviceStatus(id: string, status: DeviceStatus) { const d = this.s.devices.find(x => x.id === id); if (d) { d.status = status; this.save(); } return d; }
+  removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+
+  wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
+  transfer(operatorId: string, amount: number, now: number): WalletTx {
+    const w = this.s.wallets[operatorId];
+    if (!w) throw new Error('sem carteira');
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to: 'personal' };
+    w.balance = Math.round((w.balance - amount) * 100) / 100;
+    w.txs.unshift(tx);
+    this.save();
+    return tx;
+  }
+}

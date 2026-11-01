@@ -1,0 +1,31 @@
+{
+  "name": "piu-node",
+  "version": "0.1.0",
+  "private": true,
+  "description": "piu-node (referência): API local do provider com pareamento, sessão, CSRF, posse de recursos e pacotes assinados",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "tsx src/main.ts",
+    "build": "tsc -p tsconfig.json",
+    "start": "node dist/main.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "node --import tsx --test test/*.test.ts",
+    "release:keygen": "tsx scripts/release.ts keygen",
+    "release:sign": "tsx scripts/release.ts sign"
+  },
+  "dependencies": {
+    "@fastify/cookie": "^11.1.5",
+    "@fastify/helmet": "^13.2.0",
+    "@fastify/rate-limit": "^11.2.1",
+    "fastify": "^5.12.7",
+    "selfsigned": "^5.5.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}
