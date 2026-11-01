@@ -1,0 +1,21 @@
+# Atualizações de segurança e de versões, um PR por app (como no CONTRIBUTING).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /apps/mobile
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    groups:
+      expo: { patterns: ['expo', 'expo-*', '@expo/*', 'react-native', 'react-native-*'] }
+  - package-ecosystem: npm
+    directory: /apps/provider-panel
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  - package-ecosystem: npm
+    directory: /apps/site
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+  # As Actions estão fixadas por SHA; o Dependabot propõe as novas versões.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule: { interval: weekly }
