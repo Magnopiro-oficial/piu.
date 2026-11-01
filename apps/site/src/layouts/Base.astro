@@ -27,15 +27,9 @@ const alternates = [t, alt].map(d => ({ lang: d.lang, href: abs(d.path) })).filt
     <meta property="og:locale" content={t.lang.replace('-', '_')} />
     {canonical && <link rel="canonical" href={canonical} />}
     {alternates.map(a => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
-    <!-- Aplica o tema antes da primeira pintura (sem piscar). Mesma chave do painel do provider. -->
-    <script is:inline>
-      (() => {
-        let t = null;
-        try { t = localStorage.getItem('piu-theme'); } catch {}
-        if (t !== 'light' && t !== 'dark') t = matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-        document.documentElement.dataset.piuTheme = t;
-      })();
-    </script>
+    <!-- Tema antes da primeira pintura: script externo e bloqueante (compatível com CSP sem 'unsafe-inline'). -->
+    <script is:inline src="/theme-init.js"></script>
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
   </head>
   <body>
     <slot />

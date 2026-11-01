@@ -24,3 +24,10 @@ Defina `SITE_URL` (ex.: `SITE_URL=https://exemplo.org npm run build`) para gerar
 - Os botões de download só mostram orientações; ainda não há APK nem pacotes publicados.
 - "Especificação LNNP" ainda aponta para as Dúvidas.
 - A assinatura e o SHA-256 exibidos são de exemplo.
+
+## Segurança
+- **CSP com hashes** gerada pelo Astro (`security.csp` em `astro.config.mjs`) numa `<meta>` em cada página: scripts e folhas de estilo só do próprio site, mais os hashes do que o Astro injeta para hidratar a ilha React. Sem `'unsafe-inline'` para scripts. O tema é aplicado por `public/theme-init.js`, e não por script inline.
+- **Nada embutido como `data:`** (`inlineStylesheets: 'never'`, `assetsInlineLimit: 0`), para valer `font-src 'self'`.
+- **Headers** em `public/_headers` (Cloudflare Pages): `frame-ancestors 'none'`/`X-Frame-Options: DENY` no site; o painel em `/painel/` só pode ser exibido pelo próprio site (`frame-ancestors 'self'`, `SAMEORIGIN`); `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS.
+- **Publicação recomendada:** atrás da Cloudflare (WAF gerenciado, proteção contra DDoS, TLS 1.3, HTTPS obrigatório). Em outra hospedagem, aplique os mesmos headers.
+- O painel embutido usa a CSP estrita do PR de segurança do painel (fontes como arquivos). Junte aquele PR antes deste.
