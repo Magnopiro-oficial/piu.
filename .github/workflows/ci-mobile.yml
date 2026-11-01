@@ -28,5 +28,7 @@ jobs:
       - run: npm ci
       - name: Typecheck
         run: npm run typecheck
+      - name: Testes do protocolo (criptografia e roteamento)
+        run: npm test
       - name: Build web (confere o bundle)
         run: npm run export:web

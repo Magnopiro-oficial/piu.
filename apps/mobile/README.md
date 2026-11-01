@@ -8,6 +8,7 @@ npm start          # Expo Dev Server (Android, iOS ou web)
 npm run web        # abre no navegador
 npm run typecheck
 npm run export:web # gera dist/ da versão web (usada nos testes)
+npm test           # testes do protocolo (criptografia e roteamento)
 ```
 
 ## Estrutura
@@ -24,6 +25,7 @@ npm run export:web # gera dist/ da versão web (usada nos testes)
 - `src/data/seed.ts`, `src/data/network.ts`, `src/data/wallet.ts` e `src/data/settings.ts`: dados de exemplo do protótipo (ilustrativos).
 - `src/transport/`: transporte P2P (`getTransport()`): o nativo quando existe, senão o simulado; permissões do Android. `src/state/transport.tsx` liga o transporte depois do onboarding, enquanto Bluetooth LE ou Wi-Fi Direct estiverem ativos na aba Rede, e o Diagnóstico mostra o estado e os vizinhos.
 - `modules/piu-transport/`: módulo nativo local (Kotlin com Nearby Connections; Swift com Bluetooth LE). Protocolo, limitações e como testar em aparelhos estão no [README do módulo](modules/piu-transport/README.md).
+- `src/protocol/`: protocolo de comunicação (protótipo v0): chaves, envelope cifrado, grupos com troca de chave, roteamento store-and-forward, fragmentação, recibos e código de segurança. TypeScript puro, testado com `npm test`. Detalhes, requisitos atendidos e pontos em aberto no [README do protocolo](src/protocol/README.md).
 - `scripts/gen-icons.mjs`: gera `src/ui/icons.generated.ts` com os Material Symbols Rounded usados. Para usar um ícone novo, acrescente o nome em `scripts/icon-names.json` e rode `npm run icons`.
 
 ## Decisões técnicas

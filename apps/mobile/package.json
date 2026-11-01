@@ -6,6 +6,9 @@
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",
     "@expo/metro-runtime": "~58.0.16",
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "@react-native-async-storage/async-storage": "^2.2.0",
     "expo": "~58.0.22",
     "expo-constants": "~58.0.14",
@@ -25,7 +28,9 @@
   "devDependencies": {
     "@material-symbols/svg-300": "^0.48.2",
     "@material-symbols/svg-400": "^0.48.2",
+    "@types/node": "^22.20.5",
     "@types/react": "~19.3.0",
+    "tsx": "^4.23.15",
     "typescript": "~6.0.3"
   },
   "scripts": {
@@ -35,7 +40,8 @@
     "web": "expo start --web",
     "icons": "node scripts/gen-icons.mjs",
     "typecheck": "tsc --noEmit",
-    "export:web": "expo export --platform web"
+    "export:web": "expo export --platform web",
+    "test": "node --import tsx --test src/protocol/__tests__/*.test.ts"
   },
   "private": true,
   "description": "App Piu (Android e iOS) — Expo + React Native"
