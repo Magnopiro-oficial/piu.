@@ -1,14 +1,60 @@
-# Liquidação em LUNES (Lunes Mainnet)
+# Validação de contribuições e liquidação em LUNES (Lunes Mainnet)
+
+Dois passos do lado da Lunes, nesta ordem:
+1. **Validador** (`src/validator.ts`): transforma os recibos de retransmissão e as provas de entrega em um lote semanal.
+2. **Liquidação** (`src/settler.ts`): paga o lote na Lunes Mainnet e devolve o resultado ao validador.
 
 Paga os **lotes semanais de créditos de rede** (FUN-018, seção 11 do documento de requisitos) em LUNES na Lunes Mainnet. É o componente "LUNES Reward Settlement" da arquitetura: liquidação periódica quando há conexão com a blockchain. A comunicação local nunca depende dele.
 
 ```bash
 npm ci
-npm test                 # regras do lote e liquidação contra uma chain simulada
+npm test                 # validador (inclui ataques simulados), regras do lote e liquidação contra uma chain simulada
+npm run validator:demo -- dados                  # gera dados de exemplo (4 nós, 400 entregas)
+npm run validator:close -- --epoch 2026-S40 --budget 1000 --now 2026-10-13T00:00:00Z
+npm run validator:close -- --epoch 2026-S41 --budget 1000 --now 2026-10-20T00:00:00Z   # gera dados/lotes/piu-lote-2026-S41.json
+npm run validator:paid -- --lot piu-lote-2026-S41 --journal diario               # depois do lot:pay
 npm run mainnet:check    # só leitura: confere a Mainnet contra o esperado (precisa de rede até a Lunes)
 npm run lot:plan -- examples/lote-exemplo.json [--ws wss://…] [--from 5…]
 npm run lot:pay  -- lote.json --confirm <id do lote> [--ws wss://…] [--journal diario]
 ```
+
+## Validador de contribuições
+Segue a proposta econômica. Os valores marcados como [decidir] lá são parâmetros aqui:
+
+- **Evidências** (`dados/evidencias/*.json`): recibos de retransmissão, assinados pela chave do nó, e provas de entrega (o `ackSecret` revelado pelo destino).
+  - As regras do livro são as do protocolo (`ContributionLedger`): assinatura, uma vez por envelope e nó, `hash(ackSecret) = ackHash`, teto de 8 relays por envelope e de recibos por nó por dia.
+  - Recibo sem prova quando a época fecha não rende nada.
+- **Valor:** cada entrega comprovada vale 1 unidade, **dividida entre os relays**. Assim, nó falso no caminho não aumenta o total.
+  - Valor da unidade = orçamento da época ÷ unidades da época.
+  - Teto por nó: 2% do orçamento (`--cap`).
+  - O total pago nunca passa do orçamento.
+- **Épocas e prazos:**
+  - a época é uma semana ISO, em UTC;
+  - ela fecha uma semana depois de terminar, para dar tempo às provas;
+  - o que rende só entra no lote seguinte (carência de 1 época);
+  - mínimo de 5 LUNES por carteira (`--min`): abaixo disso, o valor fica para depois;
+  - validade de 180 dias.
+- **Carteira por lote** (`dados/carteiras/*.json`): o nó assina, com a chave dele, a carteira que recebe naquele lote (`PayoutClaim` no protocolo). Assim não se cria um vínculo público fixo entre nó e carteira.
+  - Carteira forjada não vale.
+  - Duas carteiras diferentes para o mesmo nó também não valem: o valor fica para depois.
+  - Nós do mesmo operador podem usar a mesma carteira.
+- **Auditoria** (`dados/auditorias/*.json`): um nó reprovado perde o que ainda não foi pago.
+- **Reprodutível:** o livro é refeito a partir de todas as evidências a cada fechamento, em ordem estável. Só o estado do que cada nó tem a receber fica em `validador.json`.
+- **Ciclo:** `validator:close` gera o lote, `lot:pay` paga, e `validator:paid` marca como pago. Se a liquidação falhar, os créditos voltam a aguardar e entram no próximo lote.
+
+**Testes de ataque** (proposta, seção 9):
+- **Sybil** com 7 nós falsos no caminho: o total por entrega não muda. O atacante fica com 7/8 da entrega, tirando dos honestos, por isso a auditoria por amostragem é necessária.
+- **Recibos de entregas que não aconteceram:** zero.
+- **Duplicatas:** zero.
+- **Nó reprovado:** perde o que não foi pago.
+
+**Limitações e decisões pendentes:**
+- **Peso por tamanho e por meio (LoRa 1,5×):** não é aplicado. O recibo não traz tamanho nem meio, e a declaração do próprio nó não pode valer dinheiro. Precisa de uma forma verificável.
+- **Teto de 2% com poucos nós:** com, por exemplo, 4 nós, o teto segura quase todo o orçamento (no exemplo, 80 de 1000 LUNES). O resto fica no fundo. Isso é intencional na proposta, mas vale decidir junto com o orçamento.
+- **Caminho das evidências até o validador:**
+  - o piu-node guarda recibos (`receiptLog`) e os passa a vizinhos (`RELAY_RECEIPT`);
+  - as provas de entrega circulam no app;
+  - ainda falta o gateway que junta isso e entrega aqui, e a tela do app e do painel onde o nó declara a carteira do lote.
 
 ## O que a Lunes Mainnet é (levantado no código da própria Lunes)
 Fontes: `lunes-platform/lunes-nightly` (nó e runtime) e `lunes-platform/blockexplorer-ui` (explorador), versões de dez/2025.

@@ -14,9 +14,16 @@
     "test": "node --import tsx --test test/*.test.ts",
     "mainnet:check": "tsx src/cli.ts check",
     "lot:plan": "tsx src/cli.ts plan",
-    "lot:pay": "tsx src/cli.ts pay"
+    "lot:pay": "tsx src/cli.ts pay",
+    "protocol:sync": "node scripts/sync-protocol.mjs",
+    "validator:close": "tsx src/validator-cli.ts close",
+    "validator:paid": "tsx src/validator-cli.ts paid",
+    "validator:demo": "tsx scripts/demo-dados.ts"
   },
   "dependencies": {
+    "@noble/ciphers": "^2.4.0",
+    "@noble/curves": "^2.4.0",
+    "@noble/hashes": "^2.4.0",
     "@polkadot/api": "^16.5.6",
     "@polkadot/api-augment": "^16.5.6",
     "@polkadot/keyring": "^14.0.3",

@@ -24,6 +24,22 @@ export function makeRelayReceipt(node: KeyPair, envelopeId: string, ackHash: Uin
 
 export const verifyRelayReceipt = (r: RelayReceipt) => sign.verify(r.sig, receiptMessage(r.envelopeId, r.ackHash, r.nodePk, r.at), r.nodePk);
 
+/**
+ * Carteira que recebe os créditos de um nó numa época (proposta econômica, seção 7): o vínculo
+ * nó → carteira vale por lote de liquidação, para não criar um histórico público fixo. Assinado com a
+ * chave técnica do nó; a carteira é um endereço LUNES (SS58), separado da identidade social.
+ */
+export interface PayoutClaim { epoch: string; address: string; nodePk: Uint8Array; sig: Uint8Array }
+
+const claimMessage = (epoch: string, address: string, nodePk: Uint8Array) =>
+  hash(concat(utf8('piu/v0/payout-claim'), utf8(epoch), Uint8Array.of(0), utf8(address), Uint8Array.of(0), nodePk));
+
+export function makePayoutClaim(node: KeyPair, epoch: string, address: string): PayoutClaim {
+  return { epoch, address, nodePk: node.pk, sig: sign.sign(claimMessage(epoch, address, node.pk), node.sk) };
+}
+
+export const verifyPayoutClaim = (c: PayoutClaim) => sign.verify(c.sig, claimMessage(c.epoch, c.address, c.nodePk), c.nodePk);
+
 export type CreditState = 'pendente' | 'validado' | 'rejeitado';
 
 export interface LedgerPolicy {
@@ -109,6 +125,13 @@ export class ContributionLedger {
       if (toHex(v.r.nodePk) === node && v.state !== 'rejeitado') { v.state = 'rejeitado'; v.reason = 'reprovado em auditoria'; }
     }
   }
+
+  /** Recibos e o estado de cada um (o validador fecha a época a partir daqui). */
+  *entries(): Generator<{ receipt: RelayReceipt; state: CreditState; reason?: string }> {
+    for (const v of this.receipts.values()) yield { receipt: v.r, state: v.state, reason: v.reason };
+  }
+
+  isBlocked(nodePk: Uint8Array) { return this.blocked.has(toHex(nodePk)); }
 
   /** Créditos por nó e estado (uma retransmissão útil = 1 crédito, ilustrativo). */
   summary(nodePk: Uint8Array): Record<CreditState, number> {

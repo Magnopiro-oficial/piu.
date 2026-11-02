@@ -3,9 +3,9 @@ name: CI · liquidação
 on:
   push:
     branches: [main]
-    paths: ['apps/settlement/**', '.github/workflows/ci-settlement.yml']
+    paths: ['apps/settlement/**', 'apps/mobile/src/protocol/**', '.github/workflows/ci-settlement.yml']
   pull_request:
-    paths: ['apps/settlement/**', '.github/workflows/ci-settlement.yml']
+    paths: ['apps/settlement/**', 'apps/mobile/src/protocol/**', '.github/workflows/ci-settlement.yml']
 
 # Menor privilégio: o token do GitHub só lê o código.
 permissions:
@@ -40,3 +40,9 @@ jobs:
         run: npm test
       - name: Plano do lote de exemplo (sem rede)
         run: npm run lot:plan -- examples/lote-exemplo.json
+      - name: Ciclo do validador com dados de exemplo (sem rede)
+        run: |
+          npm run validator:demo -- /tmp/dados
+          npm run validator:close -- --dir /tmp/dados --epoch 2026-S40 --budget 1000 --now 2026-10-13T00:00:00Z
+          npm run validator:close -- --dir /tmp/dados --epoch 2026-S41 --budget 1000 --now 2026-10-20T00:00:00Z
+          npm run lot:plan -- /tmp/dados/lotes/piu-lote-2026-S41.json
