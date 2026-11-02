@@ -1,0 +1,21 @@
+{
+  "name": "piu-node-openwrt",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pacote .ipk do piu-node para OpenWrt (opkg): bundle único em JS, painel, init procd e config UCI",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "deps": "npm --prefix ../../apps/piu-node ci && npm --prefix ../../apps/provider-panel ci",
+    "build:panel": "npm --prefix ../../apps/provider-panel run build",
+    "build": "node build-ipk.mjs",
+    "stage": "node build-ipk.mjs --stage-only",
+    "test": "node --test test/*.test.mjs"
+  },
+  "devDependencies": {
+    "esbuild": "0.28.2"
+  }
+}

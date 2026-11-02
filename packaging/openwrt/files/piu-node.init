@@ -1,0 +1,159 @@
+#!/bin/sh /etc/rc.common
+# piu-node: painel do provider (HTTPS) e retransmissão LNNP v1, supervisionado pelo procd.
+# Configuração: /etc/config/piu-node (UCI). Cada opção vira uma variável de ambiente do piu-node
+# (tabela em piu_env_map, logo abaixo). Logs e código de pareamento: logread -e piu-node
+
+USE_PROCD=1
+START=95
+STOP=10
+
+NAME=piu-node
+PROG=/usr/lib/piu-node/piu-node.mjs
+PANEL=/usr/share/piu-node/panel
+NODE_BIN=/usr/bin/node
+# O piu-node exige Node.js 22 ou mais novo (apps/piu-node/package.json, "engines").
+MIN_NODE_MAJOR=22
+
+# UCI -> ambiente: tipo, seção, opção, variável. Para suportar uma variável nova, acrescente
+# uma linha aqui e a opção (comentada, com o padrão) em /etc/config/piu-node.
+#   opt  valor como está
+#   bool 0/1 (aceita também on/off, yes/no, true/false)
+#   list `list` do UCI (ou uma `option` com valores separados por vírgula ou espaço) -> "a,b,c"
+# Opção ausente ou vazia: a variável não é definida e vale o padrão do piu-node.
+# PIU_NODE_DATA, PIU_NODE_PANEL e PIU_NODE_HOSTS são montadas em start_service.
+piu_env_map() {
+	piu_env opt  main   port            PIU_NODE_PORT
+	piu_env opt  main   listen          PIU_NODE_LISTEN
+	piu_env opt  main   release_pubkey  PIU_RELEASE_PUBKEY
+	piu_env bool lnnp   enabled         PIU_LNNP
+	piu_env bool lnnp   relay           PIU_LNNP_RELAY
+	piu_env opt  lnnp   listen          PIU_LNNP_LISTEN
+	piu_env opt  lnnp   port            PIU_LNNP_PORT
+	piu_env opt  lnnp   discovery_port  PIU_LNNP_DISCOVERY_PORT
+	piu_env list lnnp   broadcast       PIU_LNNP_BROADCAST
+	piu_env list lnnp   peer            PIU_LNNP_PEERS
+	piu_env list lnnp   allow           PIU_LNNP_ALLOW
+	piu_env opt  lnnp   memory_mb       PIU_LNNP_MEMORY_MB
+	piu_env opt  lnnp   beacon_ms       PIU_LNNP_BEACON_MS
+	# Adaptador serial/LoRa (seção `serial`, comentada em /etc/config/piu-node).
+	piu_env opt  serial device          PIU_SERIAL
+	piu_env opt  serial lora_sf         PIU_LORA_SF
+	piu_env opt  serial lora_bw_khz     PIU_LORA_BW_KHZ
+	piu_env opt  serial lora_cr         PIU_LORA_CR
+	piu_env opt  serial lora_duty       PIU_LORA_DUTY
+	piu_env opt  serial max_envelope    PIU_LORA_MAX_ENVELOPE
+}
+
+piu_log() {
+	logger -t "$NAME" -p daemon.err "$*"
+	echo "$NAME: $*" >&2
+}
+
+piu_join() {
+	PIU_JOINED="${PIU_JOINED:+$PIU_JOINED,}$1"
+}
+
+# piu_list <variável> <seção> <opção>: valores separados por vírgula.
+piu_list() {
+	PIU_JOINED=
+	config_list_foreach "$2" "$3" piu_join
+	if [ -z "$PIU_JOINED" ]; then
+		config_get PIU_JOINED "$2" "$3"
+		PIU_JOINED="$(echo $PIU_JOINED | tr -s ' ,' ',')"
+		PIU_JOINED="${PIU_JOINED#,}"
+		PIU_JOINED="${PIU_JOINED%,}"
+	fi
+	eval "$1=\$PIU_JOINED"
+}
+
+piu_env() {
+	local kind="$1" sec="$2" opt="$3" var="$4" val=
+	case "$kind" in
+		bool) config_get_bool val "$sec" "$opt" ;;
+		list) piu_list val "$sec" "$opt" ;;
+		*) config_get val "$sec" "$opt" ;;
+	esac
+	[ -n "$val" ] && procd_append_param env "$var=$val"
+	return 0
+}
+
+piu_check_node() {
+	local v major
+	[ -x "$NODE_BIN" ] || {
+		piu_log "Node.js não encontrado em $NODE_BIN (opkg install node)"
+		return 1
+	}
+	v="$("$NODE_BIN" -v 2>/dev/null)"
+	major="${v#v}"
+	major="${major%%.*}"
+	case "$major" in
+		''|*[!0-9]*)
+			piu_log "versão do Node.js ilegível: '$v'"
+			return 1
+			;;
+	esac
+	[ "$major" -ge "$MIN_NODE_MAJOR" ] || {
+		piu_log "precisa do Node.js $MIN_NODE_MAJOR ou mais novo; instalado: $v"
+		return 1
+	}
+}
+
+start_service() {
+	config_load "$NAME"
+
+	local enabled user data heap node_args log_stdout lan_host hosts ip
+	config_get_bool enabled main enabled 1
+	[ "$enabled" = 1 ] || return 0
+	config_get user main user "$NAME"
+	config_get data main data /etc/piu-node
+	config_get heap main heap_mb 48
+	config_get node_args main node_args
+	config_get_bool log_stdout main log_stdout 1
+	config_get_bool lan_host main lan_host 1
+
+	piu_check_node || return 1
+
+	if [ "$user" != root ] && ! user_exists "$user"; then
+		piu_log "usuário '$user' não existe: reinstale o pacote (o postinst cria) ou ajuste piu-node.main.user"
+		return 1
+	fi
+
+	# Estado, certificado TLS e identidade do nó LNNP: só o usuário do serviço lê (0700).
+	# O chown roda a cada início porque o uid pode mudar ao reinstalar (uid dinâmico).
+	mkdir -p "$data" || return 1
+	chown -R "$user" "$data"
+	chmod 0700 "$data"
+
+	# Nomes aceitos no Host (anti DNS rebinding). Com lan_host, o IP da interface lan entra
+	# no fim da lista (e no certificado TLS, se ele ainda não foi gerado).
+	piu_list hosts main host
+	if [ "$lan_host" = 1 ]; then
+		[ -f /lib/functions/network.sh ] && . /lib/functions/network.sh
+		if type network_get_ipaddr >/dev/null 2>&1 && network_get_ipaddr ip lan && [ -n "$ip" ]; then
+			case ",$hosts," in
+				*",$ip,"*) ;;
+				*) hosts="${hosts:+$hosts,}$ip" ;;
+			esac
+		fi
+	fi
+
+	procd_open_instance
+	# node_args sem aspas de propósito: cada palavra é um argumento do node.
+	procd_set_param command "$NODE_BIN" "--max-old-space-size=$heap" $node_args "$PROG"
+	procd_set_param env PIU_NODE_DATA="$data" PIU_NODE_PANEL="$PANEL"
+	[ -n "$hosts" ] && procd_append_param env PIU_NODE_HOSTS="$hosts"
+	piu_env_map
+	procd_set_param user "$user"
+	procd_set_param no_new_privs 1
+	procd_set_param respawn
+	procd_set_param term_timeout 10
+	# O código de pareamento sai no stdout: com log_stdout=1 ele vai para o logread.
+	procd_set_param stdout "$log_stdout"
+	procd_set_param stderr 1
+	procd_set_param file /etc/config/piu-node
+	procd_close_instance
+}
+
+service_triggers() {
+	procd_add_reload_trigger "$NAME"
+}
