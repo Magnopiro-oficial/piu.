@@ -18,6 +18,9 @@ import { identityId, type Identity, type IdentityKind, type KeyPair, type Public
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
 import { b64url, unb64url } from './card';
+import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
+import { EnvelopeKind, MsgType, type Opened, sealGroup } from '../protocol/envelope';
+import { toPublic } from '../protocol/keys';
 
 export interface Contact {
   /** `piu:…` da identidade do contato. */
@@ -53,6 +56,12 @@ export interface MessengerEvents {
   fileDelivered(msgId: string): void;
   /** Alguém começou a enviar um arquivo (para mostrar o balão em andamento). */
   fileOffered(contactId: string, f: Omit<IncomingFile, 'data'>): void;
+  /** Estado de um grupo mudou (criado, entrei, membros, regras, chave) ou fui removido (`removed`). */
+  groupUpdated(g: GroupState, change: 'joined' | 'updated' | 'removed'): void;
+  /** Mensagem nova num grupo, canal ou comunidade. */
+  groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
+  /** Pedido para entrar num grupo meu que exige aprovação. */
+  joinRequest(groupId: string, who: { id: string; name: string }): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
   inviteUsed(): void;
   /** Estado mudou: salvar `export()`. */
@@ -97,7 +106,16 @@ type Payload =
   | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string }
   /** Blocos recebidos (confirmação parcial) e arquivo montado e conferido. */
   | { t: 'fa'; i: string; k: number[] }
-  | { t: 'fd'; i: string };
+  | { t: 'fd'; i: string }
+  /** Estado do grupo, enviado por um admin. */
+  | { t: 'g'; s: string }
+  /** Pedido para entrar (código do convite do grupo) e aviso de saída/remoção. */
+  | { t: 'gj'; g: string; c: string; n?: string }
+  | { t: 'gl'; g: string }
+  | { t: 'gr'; g: string };
+
+/** Pedido para entrar aguardando um admin (só no aparelho do admin). */
+interface PendingJoin { id: string; name: string; via: IdentityKind; pub: PublicIdentity; at: number }
 
 /** Envio de arquivo em andamento (só na memória: o conteúdo não vai para o armazenamento do app). */
 interface FileJob { msgId: string; to: string; data: Uint8Array; total: number; next: number; acked: Set<number>; inFlight: Set<number>; paused: boolean }
@@ -130,6 +148,12 @@ export class Messenger {
   private peers = new Map<string, TransportClass>();
   private invites = new Map<string, Invite>();
   private fileJobs = new Map<string, FileJob>();
+  private groups = new Map<string, GroupState>();
+  /** Chave anterior de cada grupo (mensagens que já estavam na malha quando a chave trocou). */
+  private prevKeys = new Map<string, { keyV: number; key: string }>();
+  private pendingJoins = new Map<string, PendingJoin[]>();
+  /** Envelopes de grupo meus → id da mensagem (para mostrar "encaminhada"). */
+  private groupOut = new Map<string, string>();
   private fileRx = new Map<string, FileRx>();
   private wantRelay: boolean;
   private policy: NodePolicy | null = null;
@@ -155,8 +179,19 @@ export class Messenger {
       identities: [o.identities.public, o.identities.anon],
       relay: o.relay,
       acceptDest: (d, e) => this.managers.public.acceptsDest(d, e) || this.managers.anon.acceptsDest(d, e),
+      // Grupo: só abre mensagem de quem ainda é membro e pode publicar (canal e comunidade: só admins).
+      isMember: (fromId, gid) => { const g = this.groups.get(gid); return !!g && canPost(g, fromId); },
     });
     if (!st) return;
+    for (const t of (st.g ?? []) as string[]) {
+      const via = (JSON.parse(t) as { via?: IdentityKind }).via === 'anon' ? 'anon' : 'public';
+      const g = decodeState(t, via);
+      if (g) this.groups.set(g.id, g);
+    }
+    for (const [gid, k] of (st.gp ?? []) as [string, { keyV: number; key: string }][]) this.prevKeys.set(gid, k);
+    for (const [gid, list] of (st.gq ?? []) as [string, { id: string; name: string; via: IdentityKind; s: string; a: string; b: string; at: number }[]][])
+      this.pendingJoins.set(gid, list.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, pub: { signPk: unb64url(p.s), agreePk: unb64url(p.a), binding: unb64url(p.b) } })));
+    this.refreshGroupKeys();
     for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
     for (const i of (st.inv ?? []) as Invite[]) if (i.expiresAt > o.now()) this.invites.set(i.code, i);
     // A fila própria volta antes dos ids vistos (senão os próprios envelopes contariam como repetidos).
@@ -343,6 +378,7 @@ export class Messenger {
       this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c });
       return;
     }
+    if (p.t !== 'fa' && p.t !== 'fd') return;
     const job = typeof p.i === 'string' ? this.fileJobs.get(p.i) : undefined;
     if (!job || job.to !== from) return;
     if (p.t === 'fa' && Array.isArray(p.k)) {
@@ -353,6 +389,261 @@ export class Messenger {
       this.fileJobs.delete(job.msgId);
       this.o.events.fileDelivered?.(job.msgId);
     }
+  }
+
+  // ── grupos, canais e comunidades (FUN-006/007/008) ─────────────────────
+
+  private myId(via: IdentityKind) { return this.o.identities[via].id; }
+  getGroup(id: string) { return this.groups.get(id); }
+  listGroups() { return [...this.groups.values()]; }
+  pendingJoinsOf(gid: string) { return (this.pendingJoins.get(gid) ?? []).map(p => ({ id: p.id, name: p.name })); }
+
+  private refreshGroupKeys() {
+    const keys = [];
+    for (const g of this.groups.values()) {
+      keys.push(groupKeyOf(g));
+      const prev = this.prevKeys.get(g.id);
+      if (prev) keys.push(groupKeyOf({ id: g.id, keyV: prev.keyV, key: prev.key }));
+    }
+    this.router.groupKeys = keys;
+  }
+
+  /** Cria um grupo, canal ou comunidade comigo como admin e envia o estado a cada membro. */
+  createGroup(o: { kind: GroupKind; name: string; desc?: string; via: IdentityKind; memberIds: string[]; send?: 'all' | 'admins'; inv?: 'all' | 'admins'; approve?: boolean; visibility?: ChannelVisibility; parent?: string }): GroupState {
+    const me = this.o.identities[o.via];
+    const members: GroupMember[] = [{ id: me.id, name: o.via === 'public' ? this.displayName || 'Você' : '', role: 'admin', pub: toPublic(me) }];
+    for (const id of o.memberIds) {
+      const c = this.contacts.get(id);
+      if (!c || c.via !== o.via || c.request) throw new Error('Só contatos aceitos da mesma identidade entram no grupo.');
+      if (!members.some(m => m.id === id)) members.push({ id, name: c.name, role: 'member', pub: c.pub });
+    }
+    if (members.length > MAX_GROUP_MEMBERS) throw new Error(`Até ${MAX_GROUP_MEMBERS} membros.`);
+    const g: GroupState = {
+      id: newGroupId(), kind: o.kind, name: o.name.trim().slice(0, 60), desc: (o.desc ?? '').slice(0, 200), via: o.via, rev: 1, keyV: 1, key: newKey(), members,
+      send: o.kind === 'group' ? o.send ?? 'all' : 'admins', inv: o.inv ?? 'admins', approve: o.approve ?? true,
+      visibility: o.kind === 'channel' ? o.visibility ?? 'private' : undefined, children: o.kind === 'community' ? [] : undefined, parent: o.parent,
+    };
+    this.groups.set(g.id, g);
+    this.refreshGroupKeys();
+    this.distribute(g);
+    // Dentro de uma comunidade minha: entra na lista dela.
+    const parent = o.parent ? this.groups.get(o.parent) : undefined;
+    if (parent && isAdmin(parent, me.id)) this.updateGroup(parent.id, { children: [...(parent.children ?? []), { id: g.id, name: g.name, kind: o.kind === 'channel' ? 'channel' : 'group' }] });
+    this.o.events.changed?.();
+    return g;
+  }
+
+  /** Envia o estado atual a cada membro (menos eu), pela sessão 1:1 de cada um. */
+  private distribute(g: GroupState) {
+    const me = this.myId(g.via);
+    for (const m of g.members) {
+      if (m.id === me) continue;
+      let c = this.contacts.get(m.id);
+      if (!c) { c = { id: m.id, via: g.via, pub: m.pub, name: m.name }; this.contacts.set(c.id, c); }
+      this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin') }, null, Priority.High);
+    }
+  }
+
+  private assertAdmin(gid: string) {
+    const g = this.groups.get(gid);
+    if (!g) throw new Error('Grupo desconhecido.');
+    if (!isAdmin(g, this.myId(g.via))) throw new Error('Só admins mudam o grupo.');
+    return g;
+  }
+
+  /** Muda nome, regras ou a lista de uma comunidade (admin). */
+  updateGroup(gid: string, patch: Partial<Pick<GroupState, 'name' | 'desc' | 'send' | 'inv' | 'approve' | 'visibility' | 'children'>>) {
+    const g = this.assertAdmin(gid);
+    const next: GroupState = { ...g, ...patch, rev: g.rev + 1 };
+    if (next.kind !== 'group') next.send = 'admins';
+    this.groups.set(gid, next);
+    this.distribute(next);
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /** Acrescenta contatos ao grupo (admin, ou qualquer membro se `inv` = todos). A chave não muda. */
+  addMembers(gid: string, ids: string[]) {
+    const g = this.groups.get(gid);
+    if (!g) throw new Error('Grupo desconhecido.');
+    const me = this.myId(g.via);
+    if (!isAdmin(g, me) && !(g.inv === 'all' && isMemberOf(g, me))) throw new Error('Sem permissão para convidar.');
+    if (!isAdmin(g, me)) throw new Error('Peça a um admin para adicionar.');
+    const members = [...g.members];
+    for (const id of ids) {
+      const c = this.contacts.get(id);
+      if (!c || c.via !== g.via) continue;
+      if (!members.some(m => m.id === id)) members.push({ id, name: c.name, role: 'member', pub: c.pub });
+    }
+    if (members.length > MAX_GROUP_MEMBERS) throw new Error(`Até ${MAX_GROUP_MEMBERS} membros.`);
+    const next = { ...g, members, rev: g.rev + 1 };
+    this.groups.set(gid, next);
+    this.distribute(next);
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /** Remove alguém e troca a chave do grupo (v → v+1): quem saiu não lê nada novo. */
+  removeMember(gid: string, id: string) {
+    const g = this.assertAdmin(gid);
+    if (!isMemberOf(g, id)) return g;
+    this.prevKeys.set(gid, { keyV: g.keyV, key: g.key });
+    const next: GroupState = { ...g, members: g.members.filter(m => m.id !== id), rev: g.rev + 1, keyV: g.keyV + 1, key: newKey() };
+    if (!next.members.some(m => m.role === 'admin')) throw new Error('O grupo precisa de pelo menos um admin.');
+    this.groups.set(gid, next);
+    this.refreshGroupKeys();
+    this.distribute(next);
+    const c = this.contacts.get(id);
+    if (c) this.enqueue(c, { t: 'gr', g: gid }, null, Priority.High);
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /** Torna alguém admin (ou membro de novo). */
+  setRole(gid: string, id: string, role: 'admin' | 'member') {
+    const g = this.assertAdmin(gid);
+    const next = { ...g, members: g.members.map(m => (m.id === id ? { ...m, role } : m)), rev: g.rev + 1 };
+    if (!next.members.some(m => m.role === 'admin')) throw new Error('O grupo precisa de pelo menos um admin.');
+    this.groups.set(gid, next);
+    this.distribute(next);
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /** Sair: avisa os admins (que trocam a chave) e apaga o grupo deste aparelho. */
+  leaveGroup(gid: string) {
+    const g = this.groups.get(gid);
+    if (!g) return;
+    const me = this.myId(g.via);
+    for (const m of g.members) {
+      if (m.role !== 'admin' || m.id === me) continue;
+      const c = this.contacts.get(m.id) ?? { id: m.id, via: g.via, pub: m.pub, name: m.name };
+      this.enqueue(c, { t: 'gl', g: gid }, null, Priority.High);
+    }
+    this.groups.delete(gid); this.prevKeys.delete(gid);
+    this.refreshGroupKeys();
+    this.o.events.changed?.();
+  }
+
+  /** Envia texto ao grupo (envelope de grupo, cifrado com a chave atual). */
+  sendGroupText(gid: string, msgId: string, text: string) {
+    const g = this.groups.get(gid);
+    if (!g) throw new Error('Grupo desconhecido.');
+    const me = this.o.identities[g.via];
+    if (!canPost(g, me.id)) throw new Error(g.kind === 'group' ? 'Só admins publicam neste grupo.' : 'Só admins publicam aqui.');
+    const now = this.o.now();
+    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body: encodeGroupText(msgId, text.slice(0, MAX_TEXT)), now, ttlSec: TTL_SEC, pad: this.o.pad?.() ?? true });
+    const delaySec = this.o.randomDelay?.() ? randomDelaySec() : 0;
+    const r = this.router.send(sealed.bytes, now, { delaySec });
+    if (r.status === 'stored') this.groupOut.set(sealed.id, msgId);
+    this.o.events.changed?.();
+    this.flushAll();
+  }
+
+  /** Convite do grupo (link/QR): vale 7 dias e até 50 usos. `fresh` revoga o anterior. */
+  groupInvite(gid: string, fresh = false) {
+    const g = this.assertAdmin(gid);
+    const now = this.o.now();
+    if (!fresh && g.invite && g.invite.expiresAt > now && g.invite.uses < GROUP_INVITE_MAX_USES) return g.invite;
+    const invite = { code: toHex(random(8)), expiresAt: now + GROUP_INVITE_TTL_SEC, uses: 0 };
+    this.groups.set(gid, { ...g, invite });
+    this.o.events.changed?.();
+    return invite;
+  }
+
+  /** Quem escaneou o convite do grupo pede para entrar (vai para o admin que gerou o convite). */
+  requestJoin(admin: Contact, gid: string, code: string) {
+    const c = this.contacts.get(admin.id) ?? admin;
+    if (!this.contacts.has(c.id)) { this.addContact({ ...c, invite: undefined }); }
+    const p: Payload = { t: 'gj', g: gid, c: code };
+    if (c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
+    this.enqueue(this.contacts.get(c.id)!, p, null, Priority.High);
+  }
+
+  /** Admin aprova ou recusa um pedido pendente. */
+  answerJoin(gid: string, id: string, accept: boolean) {
+    const list = this.pendingJoins.get(gid) ?? [];
+    const p = list.find(x => x.id === id);
+    this.pendingJoins.set(gid, list.filter(x => x.id !== id));
+    if (!p) return;
+    if (accept) {
+      if (!this.contacts.has(p.id)) this.contacts.set(p.id, { id: p.id, via: p.via, pub: p.pub, name: p.name });
+      this.addMembers(gid, [p.id]);
+    }
+    this.o.events.changed?.();
+  }
+
+  private onJoinRequest(from: string, via: IdentityKind, pub: PublicIdentity, p: Extract<Payload, { t: 'gj' }>) {
+    const g = typeof p.g === 'string' ? this.groups.get(p.g) : undefined;
+    if (!g || g.via !== via || !isAdmin(g, this.myId(via))) return;
+    const inv = g.invite;
+    if (!inv || inv.code !== p.c || inv.expiresAt <= this.o.now() || inv.uses >= GROUP_INVITE_MAX_USES) return;
+    if (isMemberOf(g, from)) { this.distribute(g); return; }
+    const name = typeof p.n === 'string' && via === 'public' ? p.n.slice(0, 40) : '';
+    this.groups.set(g.id, { ...g, invite: { ...inv, uses: inv.uses + 1 } });
+    if (g.approve) {
+      const list = (this.pendingJoins.get(g.id) ?? []).filter(x => x.id !== from);
+      if (list.length >= 100) return;
+      this.pendingJoins.set(g.id, [...list, { id: from, name, via, pub, at: this.o.now() }]);
+      this.o.events.joinRequest?.(g.id, { id: from, name });
+      this.o.events.changed?.();
+      return;
+    }
+    if (!this.contacts.has(from)) this.contacts.set(from, { id: from, via, pub, name });
+    this.addMembers(g.id, [from]);
+  }
+
+  private onGroupControl(from: string, p: Payload) {
+    if (p.t === 'g') {
+      const cur0 = (() => { try { return this.groups.get((JSON.parse(p.s) as { id?: string }).id ?? ''); } catch { return undefined; } })();
+      const contact = this.contacts.get(from);
+      const via = cur0?.via ?? contact?.via;
+      if (!via) return;
+      const g = decodeState(p.s, via);
+      if (!g) return;
+      const cur = this.groups.get(g.id);
+      // Só aceita de quem é admin (no estado que eu já tenho; num grupo novo, no próprio estado e sendo contato aceito).
+      if (cur ? !isAdmin(cur, from) : !isAdmin(g, from) || !contact || contact.request) return;
+      if (!isAdmin(g, from)) return;
+      if (cur && (g.rev <= cur.rev || g.keyV < cur.keyV)) return; // sem voltar atrás
+      const me = this.myId(via);
+      if (!isMemberOf(g, me)) { this.dropGroup(g.id, cur); return; }
+      if (cur && g.keyV > cur.keyV) this.prevKeys.set(g.id, { keyV: cur.keyV, key: cur.key });
+      // Código de convite só fica com admins.
+      if (!isAdmin(g, me)) delete g.invite; else if (cur?.invite && !g.invite) g.invite = cur.invite;
+      this.groups.set(g.id, g);
+      this.refreshGroupKeys();
+      this.o.events.groupUpdated?.(g, cur ? 'updated' : 'joined');
+      this.o.events.changed?.();
+      return;
+    }
+    if (p.t !== 'gr' && p.t !== 'gl') return;
+    const g = typeof p.g === 'string' ? this.groups.get(p.g) : undefined;
+    if (!g) return;
+    if (p.t === 'gr' && isAdmin(g, from)) this.dropGroup(g.id, g);
+    if (p.t === 'gl' && isMemberOf(g, from) && isAdmin(g, this.myId(g.via))) this.removeMember(g.id, from);
+  }
+
+  private dropGroup(gid: string, cur: GroupState | undefined) {
+    this.groups.delete(gid); this.prevKeys.delete(gid);
+    this.refreshGroupKeys();
+    if (cur) this.o.events.groupUpdated?.(cur, 'removed');
+    this.o.events.changed?.();
+  }
+
+  private onGroupEnvelope(m: Opened) {
+    const gid = m.group?.id;
+    const g = gid ? this.groups.get(gid) : undefined;
+    if (!g || m.type !== MsgType.Text) return;
+    const t = decodeGroupText(m.body);
+    if (!t) return;
+    const key = `${gid}|${m.fromId}|${t.i}`;
+    if (this.deliveredSet.has(key)) return;
+    this.markDelivered(key);
+    if (m.fromId === this.myId(g.via)) return; // minha própria, voltando pela malha
+    const who = g.members.find(x => x.id === m.fromId);
+    this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt });
+    this.o.events.changed?.();
   }
 
   peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); }
@@ -401,6 +692,8 @@ export class Messenger {
         this.relayDay.bytes += bytes.length;
         if (Number.isFinite(this.bw.tokens)) this.bw.tokens = Math.max(0, this.bw.tokens - bytes.length);
       }
+      const gm = this.groupOut.get(id);
+      if (gm) { this.groupOut.delete(id); changed = true; this.o.events.status?.(gm, 'encaminhada'); }
       const q = this.outbox.get(id);
       if (q && !q.forwarded) { q.forwarded = true; changed = true; this.o.events.status?.(q.msgId, 'encaminhada'); }
       this.o.transmit(peerId, bytes).catch(() => { /* o vizinho saiu; fica na fila para o próximo */ });
@@ -415,6 +708,7 @@ export class Messenger {
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
     const m = r.message;
+    if (m.kind === EnvelopeKind.Group) { this.onGroupEnvelope(m); return r; }
     const via: IdentityKind = this.contacts.get(m.fromId)?.via ?? (this.managers.anon.get(m.fromId) ? 'anon' : 'public');
     // Abre na sessão da identidade que recebeu; tenta a outra se não abrir (primeira mensagem).
     let pt = this.managers[via].open(m), used: IdentityKind = via;
@@ -425,6 +719,8 @@ export class Messenger {
     let p: Payload;
     try { p = JSON.parse(fromUtf8(pt)); } catch { return r; }
     if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p); return r; }
+    if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return r; }
+    if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
         for (const [k, q] of this.outbox) {
@@ -472,6 +768,9 @@ export class Messenger {
       v: 1,
       s: { public: this.managers.public.export(), anon: this.managers.anon.export() },
       inv: [...this.invites.values()],
+      g: [...this.groups.values()].map(g => encodeState(g, true)),
+      gp: [...this.prevKeys],
+      gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],
       seen: this.router.exportSeen(),

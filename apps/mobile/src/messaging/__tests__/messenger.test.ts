@@ -297,3 +297,118 @@ test('arquivo: bloco adulterado ou de desconhecido não monta nada', () => {
   assert.equal(got, 0);
   assert.throws(() => a.m.sendFile(b.ids.public.id, 'f2', { name: 'grande', mime: '', data: new Uint8Array(51 * 1024 * 1024) }), /50 MB/);
 });
+
+/** Três pessoas que se conhecem (todos escanearam todos), ligadas em malha. */
+function trio() {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio');
+  for (const [x, y, n] of [[a, b, 'Beto'], [a, c, 'Caio'], [b, a, 'Ana'], [b, c, 'Caio'], [c, a, 'Ana'], [c, b, 'Beto']] as const) x.m.addContact({ ...contactOf(y, n), invite: undefined });
+  const glog = new Map<string, [string, string][]>();
+  for (const [d, n] of [[a, 'Ana'], [b, 'Beto'], [c, 'Caio']] as const) {
+    glog.set(n, []);
+    (d.m as unknown as { o: { events: Record<string, unknown> } }).o.events.groupMessage = (_g: string, _f: string, who: string, m: { text: string }) => glog.get(n)!.push([who, m.text]);
+  }
+  const all = () => { net.link('Ana', 'Beto'); net.link('Beto', 'Caio'); net.link('Ana', 'Caio'); };
+  return { net, a, b, c, glog, all };
+}
+
+test('grupo: só membros leem; remover troca a chave e quem saiu não lê nem publica', () => {
+  const { net, a, b, c, glog, all } = trio();
+  const g = a.m.createGroup({ kind: 'group', name: 'Mutirão', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id] });
+  all();
+  assert.equal(b.m.getGroup(g.id)?.name, 'Mutirão');
+  a.m.sendGroupText(g.id, 'g1', 'Gerador ligado');
+  net.run();
+  assert.deepEqual(glog.get('Beto'), [['Ana', 'Gerador ligado']]);
+  assert.deepEqual(glog.get('Caio'), [['Ana', 'Gerador ligado']]);
+  for (const w of net.wire) assert.ok(!Buffer.from(w).includes(Buffer.from('Gerador')), 'relays não leem');
+  // Remove Caio: chave v2. Caio não lê mais e não consegue publicar.
+  a.m.removeMember(g.id, c.ids.public.id);
+  net.run();
+  assert.equal(b.m.getGroup(g.id)?.keyV, 2);
+  assert.equal(c.m.getGroup(g.id), undefined, 'Caio foi avisado e apagou o grupo');
+  a.m.sendGroupText(g.id, 'g2', 'Depois da troca');
+  net.run();
+  assert.ok(glog.get('Beto')!.some(([, t]) => t === 'Depois da troca'));
+  assert.ok(!glog.get('Caio')!.some(([, t]) => t === 'Depois da troca'));
+  assert.throws(() => c.m.sendGroupText(g.id, 'x', 'oi'), /desconhecido/);
+});
+
+test('grupo: estado só de admin, sem voltar atrás; membro comum não muda nada', () => {
+  const { net, a, b, c, all } = trio();
+  const g = a.m.createGroup({ kind: 'group', name: 'Feira', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id] });
+  all();
+  assert.throws(() => b.m.updateGroup(g.id, { name: 'Golpe' }), /Só admins/);
+  // Beto forja um estado novo (se dizendo admin) e manda para Caio: recusado.
+  const forged = { ...b.m.getGroup(g.id)!, rev: 99, name: 'Golpe', members: b.m.getGroup(g.id)!.members.map(m => ({ ...m, role: 'admin' as const })) };
+  (b.m as unknown as { distribute: (x: unknown) => void }).distribute(forged);
+  net.run();
+  assert.equal(c.m.getGroup(g.id)?.name, 'Feira');
+  // Admin muda o nome: chega a todos.
+  a.m.updateGroup(g.id, { name: 'Feira Livre' });
+  net.run();
+  assert.equal(c.m.getGroup(g.id)?.name, 'Feira Livre');
+});
+
+test('canal: só admins publicam; inscritos leem', () => {
+  const { net, a, b, c, glog, all } = trio();
+  const ch = a.m.createGroup({ kind: 'channel', name: 'Defesa Civil', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id], visibility: 'public' });
+  all();
+  assert.throws(() => b.m.sendGroupText(ch.id, 'x', 'Posso?'), /Só admins/);
+  a.m.sendGroupText(ch.id, 'p1', 'Alerta: estrada interditada');
+  net.run();
+  assert.deepEqual(glog.get('Caio'), [['Ana', 'Alerta: estrada interditada']]);
+  assert.equal(c.m.getGroup(ch.id)?.visibility, 'public');
+});
+
+test('comunidade: reúne grupos e canais criados dentro dela', () => {
+  const { a, b, c, all } = trio();
+  const com = a.m.createGroup({ kind: 'community', name: 'Vila Esperança', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id] });
+  const g = a.m.createGroup({ kind: 'group', name: 'Mutirão', via: 'public', memberIds: [b.ids.public.id], parent: com.id });
+  all();
+  assert.deepEqual(c.m.getGroup(com.id)?.children?.map(x => x.name), ['Mutirão']);
+  assert.equal(b.m.getGroup(g.id)?.parent, com.id);
+});
+
+test('convite do grupo: 7 dias e até 50 usos, com aprovação do admin', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), d = device(net, 'Davi'), e = device(net, 'Eva');
+  const g = a.m.createGroup({ kind: 'group', name: 'Rádio', via: 'public', memberIds: [], approve: true });
+  const inv = a.m.groupInvite(g.id);
+  const asContact = { id: a.ids.public.id, via: 'public' as const, pub: toPublic(a.ids.public), name: 'Ana' };
+  const asked: string[] = [];
+  (a.m as unknown as { o: { events: Record<string, unknown> } }).o.events.joinRequest = (_g: string, w: { name: string }) => asked.push(w.name);
+  d.m.requestJoin(asContact, g.id, inv.code);
+  net.link('Davi', 'Ana');
+  assert.deepEqual(asked, ['Davi']);
+  assert.equal(d.m.getGroup(g.id), undefined, 'ainda aguardando aprovação');
+  a.m.answerJoin(g.id, d.ids.public.id, true);
+  net.run();
+  assert.equal(d.m.getGroup(g.id)?.name, 'Rádio');
+  // Código errado ou revogado: nada acontece.
+  a.m.groupInvite(g.id, true);
+  e.m.requestJoin(asContact, g.id, inv.code);
+  net.link('Eva', 'Ana');
+  assert.deepEqual(asked, ['Davi']);
+  // 7 dias depois, vencido.
+  const fresh = a.m.groupInvite(g.id);
+  net.clock += 8 * 24 * 3600;
+  e.m.requestJoin(asContact, g.id, fresh.code);
+  net.run();
+  assert.deepEqual(asked, ['Davi']);
+});
+
+test('grupo: estado salvo e restaurado continua lendo e publicando', () => {
+  const { net, a, b, c, glog, all } = trio();
+  const g = a.m.createGroup({ kind: 'group', name: 'Mutirão', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id] });
+  all();
+  const b2 = device(net, 'Beto', { seed: b.seed, state: b.m.export() });
+  (b2.m as unknown as { o: { events: Record<string, unknown> } }).o.events.groupMessage = (_g: string, _f: string, who: string, m: { text: string }) => glog.get('Beto')!.push([who, m.text]);
+  net.unlink('Ana', 'Beto'); net.unlink('Beto', 'Caio'); net.link('Ana', 'Beto'); net.link('Beto', 'Caio');
+  a.m.sendGroupText(g.id, 'g1', 'Depois de reabrir');
+  net.run();
+  assert.ok(glog.get('Beto')!.some(([, t]) => t === 'Depois de reabrir'));
+  b2.m.sendGroupText(g.id, 'b1', 'Beto também publica');
+  net.run();
+  assert.ok(glog.get('Caio')!.some(([w, t]) => w === 'Beto' && t === 'Beto também publica'));
+});
