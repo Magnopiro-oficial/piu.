@@ -52,6 +52,31 @@ Cada meio tem a sua descoberta (BLE, Wi‑Fi Direct, LoRa…). No adapter LAN (E
 - Anúncio com faixa de versões sem interseção com a sua é ignorado (nem conecta).
 - **Vizinhos fixos** (`host:porta`) PODEM ser configurados para redes que bloqueiam broadcast ou enlaces ponto a ponto. Se houver duas conexões com o mesmo nó, fica a aberta pelo nó de chave menor e a outra é fechada; os dois lados chegam à mesma decisão.
 
+### 3.1 Descoberta e enlace pela porta serial (LoRa e USB)
+
+Rádio LoRa e cabo USB entre nós (INF-005, INF-007) usam o mesmo adapter (`apps/piu-node/src/relay/serial.ts`). Pela porta serial vai **KISS** (`FEND` 0xC0 · comando 0x00 · dados com escape · `FEND`), o enquadramento padrão dos modems de rádio. Para o LoRa, a placa precisa de um firmware de modem KISS que guarde frequência, SF e banda. Cada quadro KISS é um pacote:
+
+```
+tipo u8 · destino u32 · origem u32 · seq u8 · dados
+```
+
+- **Endereço curto**: os 4 primeiros bytes da etiqueta do nó; `0xFFFFFFFF` é o anúncio. Ele só separa quem fala no meio compartilhado: a identidade continua sendo provada no handshake.
+- **Tipos**:
+  - `1` ANÚNCIO: o mesmo de 18 bytes da seção 3, com o campo "porta" levando o maior pacote do meio;
+  - `2` HELLO e `3` HANDSHAKE: quadros em claro do handshake, AUTH ou ERRO;
+  - `4` DADOS: registro cifrado da seção 8;
+  - `5` ACK.
+- **Confirmação**: HELLO, HANDSHAKE e DADOS são confirmados um a um, para e espera por vizinho, com até 4 repetições. A repetição idêntica (mesmo `seq` e mesmo conteúdo) é confirmada de novo, mas não é entregue duas vezes. Perda que sobrar vira lacuna no contador dos registros, e o envelope volta a poder ir ao vizinho.
+- **Handshake em sequência**: só o nó de **endereço curto menor** começa (manda HELLO ao ouvir o anúncio). O outro, a cada HELLO, começa do zero e responde HELLO e AUTH. O primeiro manda AUTH. AUTH de tentativa antiga é descartado.
+- **Sessão perdida**: quem recebe DADOS sem sessão (reiniciou) não confirma e responde ERRO em claro. O vizinho derruba o enlace e refaz o handshake no próximo anúncio.
+- **LoRa**:
+  - pacote de até 255 bytes; MTU anunciada 245;
+  - meio LoRa (8);
+  - mídia (`bulk`) nunca vai, e envelope acima de `PIU_LORA_MAX_ENVELOPE` (1536 bytes) fica para outro meio;
+  - anúncio a cada 30 s e espera aleatória antes de cada envio;
+  - o tempo no ar de cada pacote é calculado pela fórmula da Semtech, e o nó não passa de `PIU_LORA_DUTY` % do canal por hora (padrão 10). Os ACKs sempre passam.
+- **USB**: pacote de até 4096 bytes, meio USB (32), mídia permitida, sem limite de tempo no ar.
+
 ## 4. Enquadramento
 
 - **Em fluxo (TCP)**: cada quadro vai com um prefixo de tamanho `u32` big-endian. Antes do handshake terminar, um quadro DEVE ter no máximo 4096 bytes; depois, no máximo `64 KiB + 20`. Tamanho 0 ou acima do limite fecha a conexão.
@@ -224,11 +249,13 @@ Antes do handshake terminar, o erro vai **em claro**: `0x7f · código u8 · tam
 2. **O anúncio UDP não é autenticado**: serve só para achar o endereço. Um atacante pode gastar conexões (há limite de handshakes simultâneos), mas não consegue se passar por outro nó.
 3. **Listas de revogação**: o nó aceita uma lista de permitidos local; a distribuição autenticada de revogações (INF-012) ainda não foi especificada.
 4. **Recibos não provam a transmissão física** (como diz a seção 11 do documento): precisam ser combinados com auditoria por amostragem.
-5. **Registros com contador estritamente crescente** pressupõem um meio ordenado (TCP). Para meios sem ordem (datagramas), a v2 deve definir uma janela de anti-replay.
-6. Nenhum algoritmo aqui é decisão final: a suíte segue a do envelope (`suite.ts`) e depende da revisão formal e da auditoria independente.
+5. **Registros com contador estritamente crescente** pressupõem um meio ordenado. No TCP isso é dado; no adapter serial, a confirmação para e espera por vizinho mantém a ordem, e lacunas são aceitas. Para meios sem ordem nenhuma, a v2 deve definir uma janela de anti-replay.
+6. **O adapter serial não é autenticado antes do handshake**: um ERRO "sem sessão" forjado no rádio derruba um enlace, que é refeito no anúncio seguinte. Quem consegue transmitir na faixa também consegue simplesmente interferir no canal.
+7. Nenhum algoritmo aqui é decisão final: a suíte segue a do envelope (`suite.ts`) e depende da revisão formal e da auditoria independente.
 
 ## 13. Histórico
 
 | Versão | Mudança |
 |---|---|
 | 1 | Primeira versão: HELLO/AUTH simétricos, capacidades TLV, registros XChaCha20-Poly1305, `ENVELOPE`, `FRAGMENT`, `RELAY_RECEIPT`, `PING`/`PONG`, `CAPS_UPDATE`, `CLOSE`, `ERROR`; descoberta LAN por UDP |
+| 1 (adapter) | Adapter serial (LoRa e USB): KISS, pacote com endereço curto e confirmação, handshake em sequência (seção 3.1). Não muda o protocolo LNNP. |

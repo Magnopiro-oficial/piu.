@@ -184,7 +184,7 @@ export class Router {
    * Envelopes para entregar a um vizinho que acabou de aparecer, por um transporte.
    * Ordem: prioridade, depois o que vence antes. Cada envelope vai no máximo uma vez a cada vizinho.
    */
-  outgoing(peer: string, via: TransportClass, now: number, opts: { thirdPartyBudget?: number } = {}): Uint8Array[] {
+  outgoing(peer: string, via: TransportClass, now: number, opts: { thirdPartyBudget?: number; maxBytes?: number } = {}): Uint8Array[] {
     this.purge(now);
     const out: Entry[] = [];
     // Limite de banda para terceiros (bytes nesta rodada); as próprias mensagens não entram na conta.
@@ -195,6 +195,7 @@ export class Router {
       if (e.from === peer || e.sentTo.has(peer)) continue;     // não devolve, não repete
       if (e.copies >= this.limits.maxCopies) continue;         // spray limitado
       if (e.header.bulk && via === 'lora') continue;           // mídia nunca por LoRa
+      if (opts.maxBytes !== undefined && e.bytes.length > opts.maxBytes) continue; // grande demais para este meio (fica para outro)
       if (!e.own && !this.relay) continue;                     // Modo nó desligado: só as próprias
       out.push(e);
     }
@@ -216,6 +217,12 @@ export class Router {
 
   /** Para uma mensagem direta entregue, o destino pode parar de guardar cópias dela (confirmação). */
   forget(id: string) { this.drop(id); }
+
+  /**
+   * O envio a este vizinho não se completou (o enlace caiu ou o rádio desistiu): o envelope volta a
+   * poder ir para ele. Não mexe nas cópias nem nos recibos (a primeira cópia já gerou o recibo).
+   */
+  unsent(peer: string, id: string) { this.store.get(id)?.sentTo.delete(peer); }
 
   /**
    * Ids já vistos, para salvar no aparelho. Sem isto, depois de reabrir o app um envelope antigo

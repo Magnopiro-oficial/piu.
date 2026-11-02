@@ -7,7 +7,7 @@ Nó de referência do provider para Linux (INF-006): um Home Node ou Gateway Loc
 
 ```bash
 npm ci
-npm test            # 19 testes de segurança (ataques simulados) + 8 de retransmissão + 1 de sincronia do protocolo
+npm test            # segurança (ataques simulados), retransmissão LAN, rádio LoRa simulado, cabo USB e sincronia do protocolo
 npm run typecheck
 npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist); LNNP em TCP 8422 e UDP 8423
 ```
@@ -21,6 +21,29 @@ O que acontece quando o nó sobe:
 3. **Handshake LNNP**: HELLO/AUTH assinados, negociação da maior versão comum e das capacidades (MTU, meios, relay, armazenamento, suítes, formatos de envelope). Depois, todo quadro vai cifrado. Conexão que não fala LNNP, nó fora de `PIU_LNNP_ALLOW` ou assinatura errada: recusados e contados.
 4. **Encaminhamento**: cada envelope recebido entra no `Router` do protocolo, que guarda o que é de terceiros, descarta duplicatas pelo id, respeita TTL, saltos e cópias, e repassa a todos os outros vizinhos (e aos que aparecerem depois, até vencer). Envelope maior que a MTU do vizinho vai em fragmentos. O nó **nunca decifra** nada (INF-011): não tem chave social.
 5. **Recibos**: na primeira cópia de cada envelope de terceiro, o nó assina um recibo de retransmissão (guardados os 1.000 mais recentes, para o validador).
+
+### Rádio LoRa e cabo USB (porta serial)
+`PIU_SERIAL` liga portas seriais ao mesmo motor, além do LAN. Exemplo: `PIU_SERIAL=lora:/dev/ttyUSB0@115200,usb:/dev/ttyACM0@115200`. O protocolo no meio está descrito na seção 3.1 da especificação.
+
+- **`lora`**: um rádio LoRa no USB, com firmware de **modem KISS** que guarda frequência, SF e banda.
+  - O nó manda só mensagens pequenas: mídia nunca vai, e envelope acima de 1536 bytes fica para outro meio.
+  - Cada pacote tem até 255 bytes, com confirmação e repetição.
+  - O tempo no ar é calculado com `PIU_LORA_SF`, `PIU_LORA_BW_KHZ` e `PIU_LORA_CR`, que devem ser iguais aos do firmware.
+  - O canal não é ocupado acima de `PIU_LORA_DUTY` % por hora.
+  - Faixa (no Brasil, 915 MHz) e potência ficam no firmware e precisam seguir a regulamentação.
+  - Firmwares que esperam a configuração do rádio vinda do computador (como o RNode) ainda não são suportados: essa configuração depende da placa escolhida.
+- **`usb`**: outro nó ligado por cabo serial/USB, ponto a ponto. Pacotes maiores e mídia permitida.
+- **Sem dependência nativa**: a porta é configurada com `stty` (no OpenWrt, o do busybox) e lida pelo laço de eventos do Node. O usuário do serviço precisa de acesso ao dispositivo (grupo `dialout`).
+- **Porta ausente** (rádio desconectado) não derruba o nó: o LAN continua, e o log diz o que não abriu.
+- `GET /api/relay` passa a trazer `serial`, com, por porta:
+  - pacotes enviados e recebidos, repetições e perdidos;
+  - tempo no ar e ocupação do canal na última hora;
+  - envios adiados pelo limite.
+
+  Cada vizinho mostra o meio (`lora`, `usb`).
+- **Testes sem placa**:
+  - `RadioSim` (`src/relay/radio-sim.ts`) imita o ar: alcance por par de rádios, tempo no ar, perda, colisão, half-duplex e limite de 255 bytes. Os testes cobrem multihop em linha, 25% de perda, mídia e envelope grande retidos, limite de ocupação e vizinho que reinicia.
+  - O cabo USB é testado com dois pseudo-terminais reais ligados entre si.
 
 ### Limites do operador ligados ao roteador
 Os ajustes do **dono do equipamento** (o primeiro operador pareado) em `PUT /api/settings` valem na hora:
@@ -121,6 +144,13 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LNNP_ALLOW` | — | só aceita estes nós (chave do nó em hex, 64 caracteres); vazio aceita qualquer nó LNNP |
 | `PIU_LNNP_MEMORY_MB` | `256` | teto de memória para envelopes guardados |
 | `PIU_LNNP_BEACON_MS` | `5000` | intervalo do anúncio e das reconexões |
+| `PIU_SERIAL` | — | portas seriais `tipo:caminho@velocidade`, separadas por vírgula; tipo `lora` ou `usb` (ex.: `lora:/dev/ttyUSB0@115200`) |
+| `PIU_LORA_SF` | `9` | spreading factor do rádio (7–12), igual ao do firmware |
+| `PIU_LORA_BW_KHZ` | `125` | largura de banda (62.5, 125, 250, 500) |
+| `PIU_LORA_CR` | `5` | taxa de código 4/5 a 4/8 (5–8) |
+| `PIU_LORA_DUTY` | `10` | ocupação máxima do canal, % por hora |
+| `PIU_LORA_MAX_ENVELOPE` | `1536` | maior envelope enviado pelo rádio (bytes) |
+| `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 

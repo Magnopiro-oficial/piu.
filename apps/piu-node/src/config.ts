@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { parseSerialSpec } from './relay/serial.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
 export interface Config {
@@ -36,6 +37,10 @@ export interface LnnpConfig {
   /** Só aceita estes nós (chave do nó em hex, 64 caracteres). `null`: qualquer nó LNNP. */
   allow: string[] | null;
   beaconMs: number;
+  /** Portas seriais (rádio LoRa ou cabo USB): `PIU_SERIAL`. */
+  serial?: { kind: 'lora' | 'usb'; path: string; baud: number }[];
+  /** Rádio LoRa: parâmetros (para o tempo no ar), ocupação do canal, maior envelope e anúncio. */
+  lora?: { sf: number; bwKHz: number; cr: number; dutyPercent: number; maxEnvelope: number; beaconMs: number };
 }
 
 const list = (v: string | undefined) => (v ?? '').split(',').map(x => x.trim()).filter(Boolean);
@@ -45,7 +50,21 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
   const discovery = env.PIU_LNNP_DISCOVERY_PORT ?? '8423';
   const allow = list(env.PIU_LNNP_ALLOW).map(x => x.toLowerCase());
   if (allow.some(x => !/^[0-9a-f]{64}$/.test(x))) throw new Error('PIU_LNNP_ALLOW: use chaves de nó em hex (64 caracteres), separadas por vírgula.');
+  const serial = list(env.PIU_SERIAL).map(parseSerialSpec);
+  const num = (name: string, def: number, ok: (n: number) => boolean) => {
+    const v = env[name]; if (v === undefined || v === '') return def;
+    const n = Number(v); if (!ok(n)) throw new Error(`${name}: valor inválido (${v}).`); return n;
+  };
+  const lora = {
+    sf: num('PIU_LORA_SF', 9, n => Number.isInteger(n) && n >= 7 && n <= 12),
+    bwKHz: num('PIU_LORA_BW_KHZ', 125, n => [62.5, 125, 250, 500].includes(n)),
+    cr: num('PIU_LORA_CR', 5, n => Number.isInteger(n) && n >= 5 && n <= 8),
+    dutyPercent: num('PIU_LORA_DUTY', 10, n => n > 0 && n <= 100),
+    maxEnvelope: num('PIU_LORA_MAX_ENVELOPE', 1536, n => Number.isInteger(n) && n >= 256 && n <= 16384),
+    beaconMs: num('PIU_LORA_BEACON_MS', 30_000, n => n >= 1000),
+  };
   return {
+    serial, lora,
     enabled: flag(env.PIU_LNNP, true),
     relay: flag(env.PIU_LNNP_RELAY, true),
     listen: env.PIU_LNNP_LISTEN ?? '0.0.0.0',

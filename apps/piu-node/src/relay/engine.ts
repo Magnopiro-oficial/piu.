@@ -30,8 +30,15 @@ export interface LinkPort {
   /** Endereço no meio (ex.: `192.168.0.12:8422`), só para o operador. */
   address: string;
   since: number;
-  send(record: Uint8Array): void;
+  /** `envelope`: id do envelope que o registro leva (o adapter avisa `undelivered` se não chegar). */
+  send(record: Uint8Array, envelope?: string): void;
   close(): void;
+  /** Capacidades anunciadas neste enlace (o LoRa anuncia MTU pequena e o meio LoRa). */
+  caps?: Partial<Capabilities>;
+  /** Bytes que o enlace aceita agora (fila do rádio). Ausente: sem limite (TCP). */
+  capacity?(): number;
+  /** Maior envelope que este meio leva (LoRa: só mensagens pequenas). */
+  maxEnvelope?: number;
 }
 
 export interface EngineOptions {
@@ -132,14 +139,15 @@ export class RelayEngine {
 
   private updateRelay() { this.router.relay = this.o.relay && inWindow(this.settings.hours, this.now()); }
 
-  caps(): Capabilities {
+  caps(over: Partial<Capabilities> = {}): Capabilities {
     const free = Math.max(0, this.router.limits.maxBytes - this.router.stats().bytes);
-    return defaultCapabilities({ media: Medium.Eth, relay: this.relaying, storageMiB: this.relaying ? Math.floor(free / 1024 ** 2) : 0 });
+    return defaultCapabilities({ media: Medium.Eth, relay: this.relaying, storageMiB: this.relaying ? Math.floor(free / 1024 ** 2) : 0, ...over });
   }
 
-  handshakeOptions(): HandshakeOptions {
+  /** Opções do handshake; `caps` troca o que o meio anuncia (ex.: MTU e meio do LoRa). */
+  handshakeOptions(caps: Partial<Capabilities> = {}): HandshakeOptions {
     return {
-      node: this.node, caps: this.caps(), now: this.sec(), replay: this.replay,
+      node: this.node, caps: this.caps(caps), now: this.sec(), replay: this.replay,
       versions: { min: LNNP_MIN_VERSION, max: LNNP_VERSION },
       authorize: this.allow ? pk => this.allow!.has(toHex(pk)) : undefined,
     };
@@ -256,14 +264,18 @@ export class RelayEngine {
   /** Entrega ao vizinho o que o roteador tem para ele, respeitando banda, MTU e recursos negociados. */
   flush(link: LinkPort) {
     if (!this.links.has(link.id)) return;
-    const out = this.router.outgoing(link.session.peerId, link.medium, this.sec(), { thirdPartyBudget: this.budget() });
+    // Meio lento (rádio): só entrega o que cabe na fila dele; o resto fica guardado para a próxima rodada.
+    const room = link.capacity ? link.capacity() : Infinity;
+    if (room <= 0) return;
+    const out = this.router.outgoing(link.session.peerId, link.medium, this.sec(), { thirdPartyBudget: Math.min(this.budget(), room), maxBytes: link.maxEnvelope });
     const max = link.session.maxFrame - 1;
     const canFragment = (link.session.negotiated.features & Feature.Fragments) !== 0;
     for (const env of out) {
-      const own = this.router.isOwn(envelopeId(env));
+      const id = envelopeId(env);
+      const own = this.router.isOwn(id);
       if (!own) this.bucket.tokens -= env.length;
-      if (env.length <= max) link.send(link.session.seal(FrameType.Envelope, env));
-      else if (canFragment) for (const part of fragment(env, max)) link.send(link.session.seal(FrameType.Fragment, part));
+      if (env.length <= max) link.send(link.session.seal(FrameType.Envelope, env), id);
+      else if (canFragment) for (const part of fragment(env, max)) link.send(link.session.seal(FrameType.Fragment, part), id);
       else { this.counters.rejected++; continue; }
       if (!own) this.counters.forwarded++;
     }
@@ -271,6 +283,12 @@ export class RelayEngine {
     // Tirados do roteador para o array dele não crescer sem limite num nó que fica ligado meses.
     for (const r of this.router.receipts.splice(0)) { this.counters.receipts++; this.keepReceipt(r); }
   }
+
+  /**
+   * O envelope não chegou ao vizinho (enlace caiu, rádio desistiu): volta a poder ir para ele, por
+   * este ou outro enlace. Sem isto, ele ficaria marcado como entregue a quem nunca recebeu.
+   */
+  undelivered(peerId: string, envelope: string) { this.router.unsent(peerId, envelope); }
 
   /** Manda os recibos guardados a um vizinho (ex.: um gateway com rota até o validador). */
   sendReceipts(linkId: string) {
@@ -287,7 +305,7 @@ export class RelayEngine {
 
   private announceCaps() {
     for (const l of this.links.values()) {
-      if (l.session.negotiated.features & Feature.CapsUpdate) l.send(l.session.seal(FrameType.CapsUpdate, encodeCaps(this.caps())));
+      if (l.session.negotiated.features & Feature.CapsUpdate) l.send(l.session.seal(FrameType.CapsUpdate, encodeCaps(this.caps(l.caps))));
     }
   }
 
@@ -312,7 +330,7 @@ export class RelayEngine {
       lnnp: { version: LNNP_VERSION, minVersion: LNNP_MIN_VERSION },
       node: toHex(this.node.pk).slice(0, 16),
       neighbors: [...this.links.values()].map(l => ({
-        id: l.session.peerId, address: l.address, inbound: l.inbound, since: l.since, version: l.session.version,
+        id: l.session.peerId, address: l.address, link: l.medium, inbound: l.inbound, since: l.since, version: l.session.version,
         relay: l.session.peerCaps.relay, mtu: l.session.negotiated.mtu,
         media: mediaNames.filter(([m]) => l.session.peerCaps.media & m).map(([, n]) => n),
       })),
