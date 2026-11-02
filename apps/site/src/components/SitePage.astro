@@ -1,0 +1,279 @@
+---
+import Base from '../layouts/Base.astro';
+import type { Dict } from '../i18n/pt';
+import PhoneDemo from './PhoneDemo';
+
+interface Props { t: Dict; alt: Dict }
+const { t, alt } = Astro.props;
+const isPt = t.lang.startsWith('pt');
+const panelSrc = '/painel/';
+---
+<Base t={t} alt={alt}>
+  <header class="nav">
+    <div class="wrap nav-in">
+      <a href="#topo" class="logo" style="font-size:30px" aria-label="Piu">piu<span>.</span></a>
+      <nav class="nav-links" aria-label="Seções">
+        <a href="#como">{t.nav.how}</a><a href="#privacidade">{t.nav.privacy}</a><a href="#provider">{t.nav.provider}</a><a href="#lunes">{t.nav.lunes}</a><a href="#faq">{t.nav.faq}</a>
+      </nav>
+      <div class="lang" role="group" aria-label={t.nav.langLabel}>
+        {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href="/" lang="pt-BR" hreflang="pt-BR">PT</a>}
+        {isPt ? <a href="/en/" lang="en" hreflang="en">EN</a> : <span aria-current="true" lang="en">EN</span>}
+      </div>
+      <button type="button" class="icon-btn" data-theme-toggle>
+        <span class="ic only-light" style="font-size:19px" aria-hidden="true">dark_mode</span>
+        <span class="ic only-dark" style="font-size:19px" aria-hidden="true">light_mode</span>
+        <span class="sr-only only-light">{t.nav.themeDark}</span>
+        <span class="sr-only only-dark">{t.nav.themeLight}</span>
+      </button>
+      <a href="#baixar" class="pill pill-ink" style="height:40px;padding:0 18px;font-size:14px;flex:none">{t.nav.download}</a>
+    </div>
+  </header>
+
+  <main>
+    <section id="topo" class="wrap hero">
+      <div class="hero-copy">
+        <div class="kicker" style="display:flex;align-items:center;gap:8px"><div class="dot8"></div>{t.hero.kicker}</div>
+        <h1>{t.hero.title}</h1>
+        <p class="hero-lead">{t.hero.lead}</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <a href="#baixar" class="pill pill-ink" style="height:54px;padding:0 24px;font-size:16px"><span class="ic" style="font-size:21px" aria-hidden="true">android</span>{t.hero.primary}</a>
+          <a href="#como" class="pill pill-line" style="height:54px;padding:0 24px;font-size:16px">{t.hero.secondary}</a>
+        </div>
+        <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px">
+          {t.hero.facts.map(f => (
+            <div class="col" style="gap:2px"><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em">{f.v}</div><div style="font-size:13px;color:var(--ink2)">{f.l}</div></div>
+          ))}
+        </div>
+      </div>
+      <div class="phone-stage">
+        <div class="orbit" style="width:520px;height:520px;margin:-260px 0 0 -260px"></div>
+        <div class="orbit" style="width:380px;height:380px;margin:-190px 0 0 -190px"></div>
+        <div aria-hidden="true" style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;animation:siteSpin 70s linear infinite">
+          <div style="position:absolute;top:-6px;left:254px;width:12px;height:12px;border-radius:50%;background:var(--ink)"></div>
+          <div style="position:absolute;bottom:60px;left:40px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg)"></div>
+          <div style="position:absolute;top:120px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--ink)"></div>
+        </div>
+        <div class="phone" role="region" aria-label={t.hero.phoneLabel}>
+          <div class="phone-screen"><div class="phone-scale"><PhoneDemo client:load /></div></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="band">
+      <div class="wrap band-in">
+        <span class="kicker">{t.transports.label}</span>
+        {t.transports.items.map(([icon, n]) => (
+          <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:550"><span class="ic w300" style="font-size:20px" aria-hidden="true">{icon}</span>{n}</span>
+        ))}
+      </div>
+    </div>
+
+    <section id="como" class="wrap col" style="padding-top:96px;padding-bottom:40px;gap:48px">
+      <div class="col" style="gap:14px;max-width:720px">
+        <div class="kicker">{t.how.kicker}</div>
+        <h2 class="h2">{t.how.title}</h2>
+        <p class="lead">{t.how.lead}</p>
+      </div>
+      <div class="hops">
+        <div class="hops-line" aria-hidden="true"></div>
+        <div class="hops-dots" aria-hidden="true"><div></div><div style="animation-delay:2.1s"></div></div>
+        <ol class="hops-grid" style="list-style:none;margin:0;padding:0">
+          {t.how.hops.map(([icon, n, via], i) => {
+            const k = i === 0 ? 1 : i === t.how.hops.length - 1 ? 2 : 0;
+            return (
+              <li class="col" style="align-items:center;gap:12px;text-align:center">
+                <div class="hop-ic">
+                  {k === 2 && <div style="animation:siteRing 2.4s ease-out infinite" aria-hidden="true"></div>}
+                  <div class:list={['hop-face', { inv: k > 0 }]}><span class="ic w300" style="font-size:26px" aria-hidden="true">{icon}</span></div>
+                </div>
+                <div style="font-size:15px;font-weight:600">{n}</div>
+                <div class="mono" style="font-size:12px;color:var(--ink2)">{via}</div>
+              </li>
+            );
+          })}
+        </ol>
+      </div>
+      <div class="cards3">
+        {t.how.steps.map(s => (
+          <div class="step">
+            <div class="mono" style="font-size:13px;font-weight:500;color:var(--ink2)">{s.n}</div>
+            <h3 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.025em">{s.title}</h3>
+            <div class="t-body">{s.desc}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
+    <div class="wrap" style="padding-top:56px;padding-bottom:96px">
+      <div class="features">
+        {t.features.map(f => (
+          <div class="feature">
+            <span class="ic w250" style="font-size:30px" aria-hidden="true">{f.icon}</span>
+            <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{f.title}</h3>
+            <div class="t-body">{f.desc}</div>
+          </div>
+        ))}
+      </div>
+    </div>
+
+    <section id="privacidade" class="inverted">
+      <div class="wrap privacy">
+        <div class="col" style="gap:18px">
+          <div class="kicker" style="color:inherit;opacity:.7">{t.privacy.kicker}</div>
+          <h2 class="h2">{t.privacy.title}</h2>
+          <p class="lead soft" style="color:inherit">{t.privacy.lead}</p>
+          <div class="col" style="margin-top:10px;padding:20px;border-radius:22px;border:1px solid rgba(127,127,127,.45);gap:10px">
+            <div style="font-size:15px;font-weight:650">{t.privacy.noPromiseTitle}</div>
+            <div class="soft" style="font-size:14.5px;line-height:1.55;text-wrap:pretty">{t.privacy.noPromise}</div>
+          </div>
+        </div>
+        <ul class="col" style="list-style:none;margin:0;padding:0">
+          {t.privacy.items.map(p => (
+            <li style="display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35)">
+              <span class="ic w300" style="font-size:24px" aria-hidden="true">{p.icon}</span>
+              <div class="col" style="flex:1;gap:5px"><div style="font-size:17px;font-weight:600">{p.title}</div><div style="font-size:14.5px;line-height:1.5;opacity:.75;text-wrap:pretty">{p.desc}</div></div>
+            </li>
+          ))}
+        </ul>
+      </div>
+    </section>
+
+    <section id="provider" class="wrap col" style="padding-top:104px;padding-bottom:64px;gap:44px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end">
+        <div class="col" style="gap:14px"><div class="kicker">{t.provider.kicker}</div><h2 class="h2">{t.provider.title}</h2></div>
+        <p class="lead">{t.provider.lead}</p>
+      </div>
+      <div class="grid-cls">
+        {t.provider.classes.map(c => (
+          <div class="cls">
+            <div style="display:flex;align-items:center;justify-content:space-between"><span class="ic w250" style="font-size:28px" aria-hidden="true">{c.icon}</span><span class="tag">{c.tag}</span></div>
+            <h3 style="margin:0;font-size:18px;font-weight:650">{c.title}</h3>
+            <div style="font-size:14px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{c.desc}</div>
+            <div class="mono" style="font-size:12px;color:var(--ink2);margin-top:auto">{c.ex}</div>
+          </div>
+        ))}
+      </div>
+      <div class="desk-card">
+        <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap">
+          <div class="col" style="gap:6px"><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em">{t.provider.panelTitle}</div><div style="font-size:14.5px;color:var(--ink2)">{t.provider.panelSub}</div></div>
+          <a href={panelSrc} class="pill pill-ink" style="height:44px;padding:0 18px;font-size:14px;gap:8px">{t.provider.panelCta}<span class="ic" style="font-size:18px" aria-hidden="true">arrow_forward</span></a>
+        </div>
+        <div data-desk style="width:100%">
+          <div class="desk-box" style="width:1280px;height:820px">
+            <iframe src={panelSrc} title={t.provider.panelFrame} loading="lazy"></iframe>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="lunes" class="wrap" style="padding-top:40px;padding-bottom:104px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
+      <div class="inverted col" style="padding:32px;border-radius:28px;gap:14px">
+        <div class="kicker" style="color:inherit;opacity:.7">{t.lunes.kicker}</div>
+        <h2 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1.05;text-wrap:balance">{t.lunes.title}</h2>
+        <div class="soft" style="font-size:15px;line-height:1.55;text-wrap:pretty">{t.lunes.lead}</div>
+      </div>
+      {t.lunes.rewards.map(r => (
+        <div class="col" style="padding:32px;border-radius:28px;border:1px solid var(--line2);gap:12px">
+          <div class="kicker">{r.k}</div>
+          <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:56px;font-weight:650;letter-spacing:-0.05em;line-height:1">{r.v}</span><span style="font-size:15px;font-weight:600;color:var(--ink2)">LUNES</span></div>
+          <h3 style="margin:0;font-size:17px;font-weight:600">{r.title}</h3>
+          <div style="font-size:14.5px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{r.desc}</div>
+        </div>
+      ))}
+      <div class="mono" style="grid-column:1/-1;font-size:12px;color:var(--ink2)">{t.lunes.note}</div>
+    </section>
+
+    <section id="baixar" style="background:var(--bg2)">
+      <div class="wrap col" style="padding-top:96px;padding-bottom:96px;gap:40px">
+        <div class="col" style="gap:14px;max-width:720px">
+          <div class="kicker">{t.download.kicker}</div>
+          <h2 class="h2">{t.download.title}</h2>
+          <p class="lead">{t.download.lead}</p>
+        </div>
+        <div class="cards3" style="gap:12px">
+          {t.download.options.map(d => (
+            <div class="dl">
+              <span class="ic w250" style="font-size:30px" aria-hidden="true">{d.icon}</span>
+              <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{d.title}</h3>
+              <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1">{d.desc}</div>
+              <button type="button" data-note={d.note} class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</button>
+            </div>
+          ))}
+        </div>
+        <div class="mono" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;border:1px dashed var(--line2);font-size:13px;color:var(--ink2)">
+          <span class="ic" style="font-size:18px;color:var(--ink)" aria-hidden="true">verified</span>
+          <span>{t.download.signature[0]}</span><span style="opacity:.6">·</span><span>{t.download.signature[1]}</span>
+        </div>
+        <div data-dl-note role="status" aria-live="polite" hidden style="padding:16px 20px;border-radius:18px;background:var(--ink);color:var(--invink);font-size:14.5px;line-height:1.5;animation:siteUp .35s both"></div>
+      </div>
+    </section>
+
+    <section id="faq" class="faq col" style="max-width:880px;margin:0 auto;padding:96px 24px;gap:28px">
+      <h2 style="margin:0;font-size:clamp(32px,4.5vw,48px);font-weight:700;letter-spacing:-0.045em;line-height:1">{t.faq.title}</h2>
+      <div class="col">
+        {t.faq.items.map(([q, a], i) => (
+          <details name="faq" open={i === 0}>
+            <summary><span style="flex:1">{q}</span><span class="ic" aria-hidden="true">add</span></summary>
+            <div>{a}</div>
+          </details>
+        ))}
+      </div>
+    </section>
+  </main>
+
+  <footer style="border-top:1px solid var(--line)">
+    <div class="wrap" style="padding-top:48px;padding-bottom:56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px">
+      <div class="col" style="gap:10px">
+        <div class="logo" style="font-size:40px">piu<span>.</span></div>
+        <div style="font-size:13.5px;color:var(--ink2);line-height:1.5;max-width:260px">{t.footer.tagline}</div>
+      </div>
+      {t.footer.cols.map(col => (
+        <nav class="col" style="gap:10px" aria-label={col.t}>
+          <div class="kicker">{col.t}</div>
+          {col.links.map(([l, href]) => <a href={href} style="font-size:14.5px">{l}</a>)}
+        </nav>
+      ))}
+    </div>
+    <div class="wrap mono" style="padding-bottom:40px;font-size:12px;color:var(--ink2)">{t.footer.legal}</div>
+  </footer>
+</Base>
+
+<script>
+  // Tema: alterna e salva (o painel embutido escuta a mesma chave e acompanha).
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.dataset.piuTheme === 'dark' ? 'light' : 'dark';
+    root.dataset.piuTheme = next;
+    try { localStorage.setItem('piu-theme', next); } catch { /* modo privado */ }
+    const frame = document.querySelector<HTMLIFrameElement>('[data-desk] iframe');
+    frame?.contentWindow?.postMessage({ type: 'piu-theme', theme: next }, location.origin);
+  });
+
+  // Painel embutido: escala 1280×820 para caber na largura do cartão.
+  const desk = document.querySelector<HTMLElement>('[data-desk]');
+  const box = desk?.querySelector<HTMLElement>('.desk-box');
+  const frame = desk?.querySelector<HTMLIFrameElement>('iframe');
+  if (desk && box && frame) {
+    const fit = () => {
+      const sc = Math.min(1, desk.clientWidth / 1280);
+      box.style.width = Math.floor(1280 * sc) + 'px';
+      box.style.height = Math.floor(820 * sc) + 'px';
+      frame.style.transform = `scale(${sc.toFixed(4)})`;
+    };
+    new ResizeObserver(fit).observe(desk);
+    fit();
+  }
+
+  // Downloads: ainda não há arquivos publicados; mostra a orientação de cada opção.
+  const note = document.querySelector<HTMLElement>('[data-dl-note]');
+  document.querySelectorAll<HTMLButtonElement>('button[data-note]').forEach(b =>
+    b.addEventListener('click', () => {
+      if (!note) return;
+      note.hidden = false;
+      note.textContent = b.dataset.note ?? '';
+      note.style.animation = 'none';
+      void note.offsetWidth;
+      note.style.animation = '';
+    }),
+  );
+</script>
