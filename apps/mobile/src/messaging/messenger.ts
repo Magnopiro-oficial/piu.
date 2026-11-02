@@ -49,6 +49,20 @@ export interface MessengerEvents {
   changed(): void;
 }
 
+/**
+ * Limites do nó escolhidos pela pessoa (FUN-017). Valem para mensagens de TERCEIROS: as próprias
+ * sempre saem. `hours`: 'night' = só das 22h às 7h (hora local).
+ */
+export interface NodePolicy {
+  maxBytes: number;
+  retentionSec: number;
+  /** Tráfego de terceiros por dia (bytes); acima disso, para de retransmitir até o dia seguinte. */
+  dailyBytes: number;
+  /** Banda para terceiros (bytes por segundo); `Infinity` = sem limite. */
+  bytesPerSec: number;
+  hours: 'always' | 'night';
+}
+
 export interface MessengerOptions {
   identities: Record<IdentityKind, Identity>;
   node: KeyPair;
@@ -89,6 +103,13 @@ export class Messenger {
   private deliveredSet = new Set<string>();
   private peers = new Map<string, TransportClass>();
   private invites = new Map<string, Invite>();
+  private wantRelay: boolean;
+  private policy: NodePolicy | null = null;
+  /** Bytes de terceiros enviados hoje (dia local) e o balde de banda. */
+  private relayDay = { day: '', bytes: 0 };
+  private bw = { tokens: 0, at: 0 };
+  /** Hora local (0–23) e dia; injetáveis nos testes. */
+  clock = { hour: () => new Date().getHours(), day: () => new Date().toDateString() };
   private o: MessengerOptions;
   /** Nome enviado na primeira mensagem para quem ainda não nos conhece. */
   displayName = '';
@@ -100,6 +121,7 @@ export class Messenger {
       public: st?.s?.public ? SessionManager.import(o.identities.public, st.s.public) : new SessionManager(o.identities.public),
       anon: st?.s?.anon ? SessionManager.import(o.identities.anon, st.s.anon) : new SessionManager(o.identities.anon),
     };
+    this.wantRelay = o.relay;
     this.router = new Router({
       node: o.node,
       identities: [o.identities.public, o.identities.anon],
@@ -117,7 +139,32 @@ export class Messenger {
     for (const d of st.d ?? []) this.markDelivered(d);
   }
 
-  set relay(v: boolean) { this.router.relay = v; }
+  set relay(v: boolean) { this.wantRelay = v; this.applyRelay(); }
+
+  /** Aplica os limites do nó: espaço e prazo no roteador; banda, tráfego diário e horário aqui. */
+  setPolicy(p: NodePolicy) {
+    this.policy = p;
+    this.router.limits.maxBytes = p.maxBytes;
+    this.router.limits.maxRetentionSec = p.retentionSec;
+    this.applyRelay();
+  }
+
+  /** Estado dos limites, para a tela de diagnóstico. */
+  relayStatus() {
+    this.rollDay();
+    const p = this.policy;
+    const reason = !this.wantRelay ? 'off' : p && p.hours === 'night' && !this.isNight() ? 'hours' : p && this.relayDay.bytes >= p.dailyBytes ? 'daily' : null;
+    return { relaying: this.router.relay, reason: reason as null | 'off' | 'hours' | 'daily', bytesToday: this.relayDay.bytes };
+  }
+
+  private isNight() { const h = this.clock.hour(); return h >= 22 || h < 7; }
+  private rollDay() { const d = this.clock.day(); if (d !== this.relayDay.day) this.relayDay = { day: d, bytes: 0 }; }
+  private applyRelay() {
+    this.rollDay();
+    const p = this.policy;
+    const allowed = this.wantRelay && (!p || ((p.hours === 'always' || this.isNight()) && this.relayDay.bytes < p.dailyBytes));
+    this.router.relay = allowed;
+  }
 
   addContact(c: Contact) {
     if (!verifyBinding(c.pub) || identityId(c.pub.signPk, c.pub.agreePk) !== c.id) throw new Error('Chaves do contato inválidas.');
@@ -187,6 +234,7 @@ export class Messenger {
 
   /** Chamar de tempos em tempos: libera envios com atraso aleatório e apaga o que venceu. */
   tick() {
+    this.applyRelay();
     this.router.purge(this.o.now());
     // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
     let changed = false;
@@ -204,13 +252,33 @@ export class Messenger {
   private flush(peerId: string) {
     const via = this.peers.get(peerId);
     if (!via) return;
-    const out = this.router.outgoing(peerId, via, this.o.now());
+    const now = this.o.now();
+    // Banda e tráfego diário só limitam mensagens de terceiros.
+    let budget = Infinity;
+    const p = this.policy;
+    if (p) {
+      this.rollDay();
+      if (Number.isFinite(p.bytesPerSec)) {
+        const burst = p.bytesPerSec * 2;
+        this.bw.tokens = this.bw.at ? Math.min(burst, this.bw.tokens + (now - this.bw.at) * p.bytesPerSec) : burst;
+        this.bw.at = now;
+        budget = this.bw.tokens;
+      }
+      budget = Math.min(budget, Math.max(0, p.dailyBytes - this.relayDay.bytes));
+    }
+    const out = this.router.outgoing(peerId, via, now, { thirdPartyBudget: budget });
     let changed = false;
     for (const bytes of out) {
-      const q = this.outbox.get(envelopeId(bytes));
+      const id = envelopeId(bytes);
+      if (!this.router.isOwn(id)) {
+        this.relayDay.bytes += bytes.length;
+        if (Number.isFinite(this.bw.tokens)) this.bw.tokens = Math.max(0, this.bw.tokens - bytes.length);
+      }
+      const q = this.outbox.get(id);
       if (q && !q.forwarded) { q.forwarded = true; changed = true; this.o.events.status?.(q.msgId, 'encaminhada'); }
       this.o.transmit(peerId, bytes).catch(() => { /* o vizinho saiu; fica na fila para o próximo */ });
     }
+    if (p && this.relayDay.bytes >= p.dailyBytes) this.applyRelay(); // chegou ao limite do dia
     if (changed) this.o.events.changed?.();
   }
 

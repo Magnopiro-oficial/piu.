@@ -48,9 +48,9 @@ const Ctx = createContext<Messaging | null>(null);
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
   const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast } = useStore();
-  const { relay: relayOn, relayPaused } = useNetwork();
+  const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
-  const { priv } = useSettings();
+  const { priv, sto, bat } = useSettings();
   const transport = useMemo(getTransport, []);
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
@@ -114,6 +114,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   }, [identities, node, onboarded]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { if (messenger) { messenger.relay = relay; } }, [messenger, relay]);
+  // Limites do nó (Rede e Ajustes → Armazenamento / Bateria e limites) aplicados no roteador.
+  useEffect(() => {
+    if (!messenger) return;
+    messenger.setPolicy({
+      maxBytes: storage * 1024 * 1024,
+      retentionSec: Number(sto.retention) * 3600,
+      dailyBytes: bat.traffic * 1024 * 1024,
+      bytesPerSec: bat.bw === 'max' ? Infinity : (Number(bat.bw) * 1_000_000) / 8,
+      // "Personalizado" ainda não tem horário definido no design: vale como "Sempre".
+      hours: bat.hours === 'night' ? 'night' : 'always',
+    });
+  }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours]);
   useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
 
   // Transporte → mensageiro.

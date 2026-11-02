@@ -74,6 +74,8 @@ export class Router {
   }
 
   get size() { return this.store.size; }
+  /** Envelope criado neste aparelho (não é de terceiros)? */
+  isOwn(id: string) { return this.store.get(id)?.own ?? false; }
   has(id: string) { return this.store.has(id); }
 
   /**
@@ -175,9 +177,11 @@ export class Router {
    * Envelopes para entregar a um vizinho que acabou de aparecer, por um transporte.
    * Ordem: prioridade, depois o que vence antes. Cada envelope vai no máximo uma vez a cada vizinho.
    */
-  outgoing(peer: string, via: TransportClass, now: number): Uint8Array[] {
+  outgoing(peer: string, via: TransportClass, now: number, opts: { thirdPartyBudget?: number } = {}): Uint8Array[] {
     this.purge(now);
     const out: Entry[] = [];
+    // Limite de banda para terceiros (bytes nesta rodada); as próprias mensagens não entram na conta.
+    let budget = opts.thirdPartyBudget ?? Infinity;
     for (const e of this.store.values()) {
       if (e.releaseAt > now) continue;                         // atraso aleatório ainda correndo
       if (e.header.hops === 0) continue;                       // limite de saltos (anti-loop)
@@ -188,7 +192,13 @@ export class Router {
       out.push(e);
     }
     out.sort((a, b) => b.header.priority - a.header.priority || a.header.expiresAt - b.header.expiresAt);
-    return out.map(e => {
+    const chosen = out.filter(e => {
+      if (e.own) return true;
+      if (e.bytes.length > budget) return false; // fica para a próxima rodada, sem marcar como enviado
+      budget -= e.bytes.length;
+      return true;
+    });
+    return chosen.map(e => {
       e.sentTo.add(peer);
       e.copies += 1;
       // Evidência de contribuição: só para mensagens de terceiros, uma por envelope por nó.
