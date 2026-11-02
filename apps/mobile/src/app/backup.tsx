@@ -1,9 +1,14 @@
 import { router } from 'expo-router';
 import { usePreventCapture } from '../lib/screenCapture';
 import { useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SAVE_OPTS, type SaveOpt } from '../data/settings';
+import { backupFileName, MIN_PASSWORD, passwordProblem, sealBackup } from '../lib/backupFile';
 import { confirmDevice } from '../lib/deviceAuth';
+import { PLATFORM_LABEL, thisPlatform } from '../lib/devices';
+import { saveBackupFile } from '../lib/migrationIO';
+import { collectBackupData } from '../lib/migrationState';
+import { fontFamily } from '../theme/fonts';
 import { vaultIsSecure } from '../lib/vault';
 import { WORDLIST } from '../protocol';
 import { useKeys } from '../state/keys';
@@ -57,6 +62,32 @@ export default function Backup() {
   const [shown, setShown] = useState(false);
   const [quiz, setQuiz] = useState<Record<number, string>>({});
   const [save, setSave] = useState<SaveOpt>('sd');
+  const [pw, setPw] = useState('');
+  const [pw2, setPw2] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [saveErr, setSaveErr] = useState<string | null>(null);
+  const done = (body: string) => {
+    setBackupDone(true);
+    router.back();
+    showToast({ icon: 'key', title: 'Backup concluído', body });
+  };
+  /** Passo 3: arquivo cifrado com senha, outro aparelho (pareamento) ou só a frase no papel. */
+  const finish = async () => {
+    if (save === 'paper') { done('Guarde a frase longe do celular. Você pode refazer quando quiser.'); return; }
+    if (save === 'device') { router.replace({ pathname: '/devices', params: { add: '1' } }); return; }
+    if (!words) return;
+    setBusy(true); setSaveErr(null); setProgress(0);
+    try {
+      const text = await sealBackup({ phrase: words, createdAt: Math.floor(Date.now() / 1000), from: PLATFORM_LABEL[thisPlatform], data: collectBackupData() }, pw, { onProgress: setProgress });
+      const r = await saveBackupFile(backupFileName(), text);
+      if (r === 'cancelled') { setSaveErr('Nenhuma pasta escolhida. O arquivo não foi salvo.'); return; }
+      setPw(''); setPw2('');
+      done('Arquivo cifrado salvo. Guarde a senha e a frase longe dele.');
+    } catch (e) {
+      setSaveErr((e as Error).message || 'Não foi possível salvar o arquivo.');
+    } finally { setBusy(false); }
+  };
   const idx = { phrase: 0, confirm: 1, save: 2 }[step];
   const quizOk = QUIZ.every(([n, , a]) => quiz[n] === a);
   const wrong = QUIZ.find(([n, , a]) => quiz[n] && quiz[n] !== a);
@@ -138,14 +169,25 @@ export default function Backup() {
           <>
             <StepHeader step="PASSO 3 DE 3" title="Onde guardar a cópia cifrada?" sub="A frase recupera as chaves. A cópia cifrada também traz o histórico de conversas." />
             <View accessibilityRole="radiogroup" accessibilityLabel="Onde guardar" style={{ paddingHorizontal: 20, gap: 10 }}>
-              {SAVE_OPTS.map(([k, icon, title, desc]) => <OptionCard key={k} icon={icon} title={title} desc={desc} on={save === k} onPress={() => setSave(k)} />)}
+              {SAVE_OPTS.map(([k, icon, title, desc]) => <OptionCard key={k} icon={icon} title={title} desc={k === 'sd' ? 'Sem nuvem · protegido por uma senha sua' : desc} on={save === k} onPress={() => { setSave(k); setSaveErr(null); }} />)}
             </View>
+            {save === 'sd' && (
+              <View style={{ marginTop: 14, marginHorizontal: 20, padding: 14, borderRadius: 20, backgroundColor: c.bg2, gap: 10 }}>
+                <T size={13} lh={1.45} color={c.ink2}>Escolha uma senha para o arquivo. Ela não é a frase: sem ela ninguém abre a cópia, nem você.</T>
+                {([[pw, setPw, 'Senha do arquivo'], [pw2, setPw2, 'Repita a senha']] as const).map(([v, set, label]) => (
+                  <TextInput key={label} value={v} onChangeText={t => { set(t); setSaveErr(null); }} placeholder={label} placeholderTextColor={c.ink3} accessibilityLabel={label}
+                    secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="newPassword" editable={!busy}
+                    style={{ height: 48, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.bg, color: c.ink, fontSize: 15, fontFamily: fontFamily(500) }} />
+                ))}
+                <T size={12.5} color={c.ink2} accessibilityLiveRegion="polite" style={{ paddingHorizontal: 2 }}>
+                  {busy ? `Cifrando… ${Math.round(progress * 100)}%` : pw && passwordProblem(pw) ? passwordProblem(pw)! : pw2 && pw !== pw2 ? 'As senhas não são iguais.' : `Pelo menos ${MIN_PASSWORD} caracteres. Uma frase curta e fácil de lembrar funciona bem.`}
+                </T>
+              </View>
+            )}
+            {saveErr && <T size={13} accessibilityRole="alert" style={{ paddingTop: 12, paddingHorizontal: 24 }}>{saveErr}</T>}
             <View style={{ paddingTop: 22, paddingHorizontal: 20 }}>
-              <Button label="Concluir backup" onPress={() => {
-                setBackupDone(true);
-                router.back();
-                showToast({ icon: 'key', title: 'Backup concluído', body: 'Guarde a frase longe do celular. Você pode refazer quando quiser.' });
-              }} />
+              <Button label={busy ? 'Cifrando…' : save === 'device' ? 'Parear o outro aparelho' : save === 'sd' ? 'Salvar arquivo cifrado' : 'Concluir backup'}
+                disabled={busy || (save === 'sd' && (!!passwordProblem(pw) || pw !== pw2))} onPress={() => { void finish(); }} />
             </View>
           </>
         )}
