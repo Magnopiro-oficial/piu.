@@ -34,7 +34,7 @@ endef
 define Package/piu-node/description
  Nó de referência do Piu: painel do provider por HTTPS (porta 8420) e
  retransmissão de envelopes LNNP v1 na rede local (TCP 8422, UDP 8423).
- Requer Node.js 22 ou mais novo. Configuração em /etc/config/piu-node.
+ Requer Node.js 20.19 ou mais novo. Configuração em /etc/config/piu-node.
 endef
 
 define Package/piu-node/conffiles
