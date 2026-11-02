@@ -1,0 +1,52 @@
+name: CI · pacote OpenWrt
+
+on:
+  push:
+    branches: [main]
+    paths: ['packaging/openwrt/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
+  pull_request:
+    paths: ['packaging/openwrt/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
+
+# Menor privilégio: o token do GitHub só lê o código.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-openwrt-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ipk:
+    name: piu-node .ipk
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packaging/openwrt
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            packaging/openwrt/package-lock.json
+            apps/piu-node/package-lock.json
+            apps/provider-panel/package-lock.json
+      - name: Dependências (piu-node, painel e empacotador)
+        run: npm run deps && npm ci
+      - name: Auditoria do piu-node empacotado (falha em alto/crítico)
+        run: npm --prefix ../../apps/piu-node audit --omit=dev --audit-level=high
+      - name: Painel
+        run: npm run build:panel
+      - name: Gerar o .ipk
+        run: npm run build
+      - name: Testes do pacote (estrutura, init/UCI e o bundle servindo o painel)
+        run: npm test
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: piu-node-openwrt-ipk
+          path: packaging/openwrt/dist/*.ipk
+          if-no-files-found: error
+          retention-days: 30
