@@ -347,3 +347,16 @@ test('transferência para outro endereço: formato LUNES validado', async () => 
   assert.equal((await send('personal')).statusCode, 200);
   t.cleanup();
 });
+
+test('parear de novo com o mesmo nome volta à mesma conta (equipamentos continuam)', async () => {
+  const t = await setup();
+  const a = await t.pair('Cardeal');
+  const devs = (await t.req('GET', '/api/devices', { cookie: a.cookie })).json() as { id: string }[];
+  assert.ok(devs.length > 0);
+  const again = await t.pair('cardeal', '10.0.6.2');
+  assert.equal((again.body as { operator: { id: string } }).operator.id, (a.body as { operator: { id: string } }).operator.id);
+  assert.deepEqual(((await t.req('GET', '/api/devices', { cookie: again.cookie })).json() as { id: string }[]).map(d => d.id), devs.map(d => d.id));
+  const other = await t.pair('Outra pessoa', '10.0.6.3');
+  assert.notEqual((other.body as { operator: { id: string } }).operator.id, (a.body as { operator: { id: string } }).operator.id);
+  t.cleanup();
+});
