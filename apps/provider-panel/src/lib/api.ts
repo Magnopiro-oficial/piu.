@@ -11,6 +11,8 @@ export interface ApiDevice { id: string; name: string; cls: string; status: 'act
 export interface ApiWallet { balance: number; txs: { id: string; amount: number; at: number; to: 'personal' }[] }
 export interface ApiSession { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }
 export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
+export interface ApiPending { id: string; request: string; code: string; phone: string; expiresAt: number }
+export interface ApiPhone { id: string; name: string; addedAt: number; confirmed: boolean }
 export interface ApiPackage { name: string; version: string; file: string; size: number; sha256: string }
 
 export class AuthLost extends Error {}
@@ -76,7 +78,13 @@ export class NodeApi {
   revoke = (id: string) => this.call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`);
   wallet = () => this.call<ApiWallet>('GET', '/api/wallet');
   /** `to`: 'personal' ou um endereço `lunes:…`. */
-  transfer = (amount: number, to = 'personal') => this.call<{ id: string }>('POST', '/api/wallet/transfer', { amount, to });
+  /** Com celular pareado, devolve `pending` (aprovar no celular); sem celular, executa na hora. */
+  transfer = (amount: number, to = 'personal') => this.call<{ id: string } | { pending: ApiPending }>('POST', '/api/wallet/transfer', { amount, to });
+  approveTransfer = (id: string, approval: string) => this.call<{ id: string }>('POST', `/api/wallet/transfer/${encodeURIComponent(id)}/approve`, { approval });
+  phones = () => this.call<ApiPhone[]>('GET', '/api/phones');
+  startPhonePairing = (name: string) => this.call<{ id: string; qr: string; expiresAt: number }>('POST', '/api/phones', { name });
+  confirmPhone = (id: string, code: string) => this.call<ApiPhone>('POST', `/api/phones/${encodeURIComponent(id)}/confirm`, { code });
+  removePhone = (id: string) => this.call<void>('DELETE', `/api/phones/${encodeURIComponent(id)}`);
   createDevice = (d: { name: string; cls: string; family: string; pub?: string }) => this.call<ApiDevice>('POST', '/api/devices', d);
   settings = () => this.call<ApiSettings>('GET', '/api/settings');
   saveSettings = (s: ApiSettings) => this.call<ApiSettings>('PUT', '/api/settings', s);

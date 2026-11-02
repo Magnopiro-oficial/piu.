@@ -23,11 +23,12 @@ Servido pelo `piu-node` (com sessão), estes dados e ações são **reais**:
 - **limites globais e política de tráfego**: carregados e salvos no nó, por operador;
 - **acessos a este painel**: a lista real de sessões ("Chrome · Linux", "App Piu Provider · macOS") e **Encerrar outras sessões** (pede um código novo do equipamento se a última confirmação passou de 15 min);
 - carteira: saldo e **transferência para a carteira pessoal ou para um endereço `lunes:…` colado** (com step-up);
+- **aprovação no celular**: em Configurações → Parear celular, o app Piu lê o QR e devolve 6 dígitos. Depois disso, "Assinar no celular" mostra o QR do pedido e o código de conferência, e a transferência só sai com o código de aprovação que o celular mostra depois da biometria (ver `apps/piu-node/README.md`);
 - pacotes assinados do instalador.
 
-Ainda **simulados** (dados de `src/data/`, também com o `piu-node`), até existir o motor de retransmissão (LNNP) e o app pareado:
-- Visão geral, Malha e Ganhos (métricas, topologia, créditos e lotes);
-- movimentações da carteira (só o saldo é real) e a aprovação no celular ("Simular aprovação no celular");
+Ainda **simulados** (dados de `src/data/`, também com o `piu-node`):
+- Visão geral, Malha e Ganhos (métricas, topologia, créditos e lotes), que ainda não leem `GET /api/relay`;
+- movimentações da carteira (só o saldo é real). Na demonstração, sem nó, a aprovação no celular continua simulada;
 - busca, pareamento e teste real no assistente (temporizadores);
 - atualizar e reiniciar equipamento, backup e rotação da chave de operador (só aviso).
 

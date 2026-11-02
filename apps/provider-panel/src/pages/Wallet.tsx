@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react';
 import { Dialog } from '../components/Overlays';
 import { StepUpDialog } from '../components/Pair';
+import { ApproveOnPhone } from '../components/Phone';
+import type { ApiPending } from '../lib/api';
 import { Icon, Segmented } from '../components/ui';
 import { PERIOD, SIGN_CODE, WALLETS } from '../data/seed';
 import { fmt, parseAmount } from '../lib/format';
@@ -12,7 +14,8 @@ type Dest = 'personal' | 'other';
 const LUNES_ADDR = /^lunes:[1-9A-HJ-NP-Za-km-z]{26,44}$/;
 
 export function Wallet() {
-  const { balance, txs, totals, recordTransfer, stepUp, showToast, nodeMode } = useStore();
+  const { balance, txs, totals, recordTransfer, approveTransfer, stepUp, showToast, nodeMode, phones } = useStore();
+  const [pending, setPending] = useState<ApiPending | null>(null);
   const [addr, setAddr] = useState('');
   const addrOk = LUNES_ADDR.test(addr.trim());
   const [stepUpOpen, setStepUpOpen] = useState(false);
@@ -26,11 +29,22 @@ export function Wallet() {
   const valid = amt > 0 && amt <= balance && (to === 'personal' || !real || addrOk);
   const destShort = to === 'personal' ? WALLETS.personal.short : real ? `${addr.trim().slice(0, 10)}…${addr.trim().slice(-4)}` : WALLETS.other.short;
 
+  const txRow = () => ({ id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${destShort}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true });
   const approve = async () => {
     setSigning(false);
-    const r = await recordTransfer(amt, { id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${destShort}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true }, to === 'personal' || !real ? 'personal' : addr.trim());
+    const r = await recordTransfer(amt, txRow(), to === 'personal' || !real ? 'personal' : addr.trim());
     if (r === 'reauth') { setStepUpOpen(true); return; }
-    if (r === 'ok') showToast({ icon: 'check_circle', title: 'Transferência assinada', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+    if (typeof r === 'object') { setPending(r.pending); return; } // aprovar no celular pareado
+    if (r === 'ok') showToast({ icon: 'check_circle', title: 'Transferência assinada', body: real ? 'Pareie um celular em Configurações para aprovar as próximas nele.' : 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+  };
+  /** Código de aprovação digitado: o nó confere e executa. */
+  const finishOnPhone = async (approval: string) => {
+    if (!pending) return null;
+    const problem = await approveTransfer(pending, approval, amt, txRow());
+    if (problem) return problem;
+    setPending(null);
+    showToast({ icon: 'check_circle', title: 'Transferência aprovada no celular', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+    return null;
   };
   /** Step-up: código novo do equipamento e, se confirmar, refaz a transferência. */
   const confirmStepUp = async (code: string) => {
@@ -92,10 +106,10 @@ export function Wallet() {
             <button key={l} type="button" className="btn" onClick={() => setAmtStr(fmt(Math.floor(balance * f * 100) / 100))} style={{ height: 30, padding: '0 12px', borderRadius: 15, background: 'var(--bg3)', fontSize: 12.5, fontWeight: 550 }}>{l}</button>
           ))}
         </div>
-        <button type="button" className="btn btn-primary" disabled={!valid} onClick={() => valid && setSigning(true)} style={{ height: 46, borderRadius: 23, fontSize: 14.5, opacity: valid ? 1 : 0.35 }}>
+        <button type="button" className="btn btn-primary" disabled={!valid} onClick={() => { if (!valid) return; if (real) void approve(); else setSigning(true); }} style={{ height: 46, borderRadius: 23, fontSize: 14.5, opacity: valid ? 1 : 0.35 }}>
           <Icon name="smartphone" size={19} />Assinar no celular
         </button>
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>A chave de assinatura fica no seu celular. Este painel só prepara a transação.</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{real && phones && !phones.some(p => p.confirmed) ? 'Nenhum celular pareado: a transferência pede um código novo do equipamento. Pareie um celular em Configurações.' : 'A chave de assinatura fica no seu celular. Este painel só prepara a transação.'}</div>
       </section>
 
       <section className="span12 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>
@@ -111,6 +125,11 @@ export function Wallet() {
         ))}
       </section>
 
+      {pending && (
+        <ApproveOnPhone request={pending.request} code={pending.code} phone={pending.phone}
+          body={`${fmt(amt)} LUNES para a ${to === 'personal' ? 'carteira pessoal' : 'conta indicada'}.`}
+          onApprove={finishOnPhone} onClose={() => setPending(null)} />
+      )}
       {signing && (
         <Dialog icon="smartphone" title="Confirme no seu celular" waiting code={SIGN_CODE}
           body={`Abra o Piu no celular pareado e confira o código para assinar ${fmt(amt)} LUNES para a ${to === 'personal' ? 'carteira pessoal' : 'conta indicada'}.`}

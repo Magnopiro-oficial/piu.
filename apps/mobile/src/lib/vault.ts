@@ -45,3 +45,10 @@ export async function loadOrCreateDataKey(): Promise<Uint8Array> {
 
 /** Apagar a chave torna ilegível qualquer resto cifrado (crypto-shredding). */
 export const clearDataKey = () => del(DATA_KEY);
+
+/** Nós do provider que este celular aprova (lib/approvals.ts): o segredo de cada um fica só aqui. */
+const APPROVALS_KEY = 'piu.approvals.v1';
+export async function loadApprovalNodes<T>(): Promise<T[]> {
+  try { const v = await get(APPROVALS_KEY); return v ? JSON.parse(v) as T[] : []; } catch { return []; }
+}
+export const saveApprovalNodes = <T>(list: T[]) => set(APPROVALS_KEY, JSON.stringify(list));

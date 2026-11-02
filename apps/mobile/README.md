@@ -50,6 +50,7 @@ npm test           # testes do protocolo (criptografia e roteamento)
 - **Bloqueio do app** (Privacidade → "Abrir o Piu com biometria"): biometria ou PIN/senha ao abrir e ao voltar do segundo plano; ligar ou desligar exige autenticar; app desfocado na troca de apps (iPhone).
 - **Frase de recuperação**: só aparece depois de autenticar no aparelho; prints e gravação de tela bloqueados no backup.
 - **Rotas protegidas**: antes do onboarding, links `piu://` para telas internas voltam às Boas-vindas; a migração não conclui sem chaves.
+- **Aprovar transferências do provider** (`src/lib/approvals.ts`): o QR `piup:` do painel do `piu-node` traz um segredo, que fica no cofre (`piu.approvals.v1`), e o app mostra 6 dígitos para confirmar no painel. O QR `piut:` traz o pedido: o app mostra valor, destino e o código de conferência, pede a biometria (sem bloqueio no aparelho, recusa) e mostra o código de aprovação HMAC de 16 caracteres. Pedido vencido ou de um nó não pareado é recusado. Entrada: Nova conversa → Escanear código.
 - **Malha**: limite de envelopes por vizinho no roteador; remontagem BLE do iPhone com teto de memória.
 - Na **web** (demonstração e testes) não há cofre nem bloqueio do aparelho: a frase e a chave de dados ficam no navegador, com aviso na tela.
 

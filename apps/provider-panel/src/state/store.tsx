@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
-import { ApiError, NeedsReauth, type ApiDevice, type ApiPackage, type ApiSession, type ApiSettings } from '../lib/api';
+import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
 import type { DeviceFilter, HoursPolicy, NodeClass, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
 import { useNode } from './node';
 
@@ -50,7 +50,14 @@ interface Store {
   devQuery: string; setDevQuery: (q: string) => void;
   balance: number; txs: WalletTx[];
   /** No piu-node: `reauth` quando o servidor pede confirmação recente (step-up). */
-  recordTransfer: (amount: number, tx: WalletTx, to?: string) => Promise<'ok' | 'reauth' | 'error'>;
+  recordTransfer: (amount: number, tx: WalletTx, to?: string) => Promise<'ok' | 'reauth' | 'error' | { pending: ApiPending }>;
+  /** Conclui uma transferência pendente com o código de aprovação do celular. Devolve o erro, ou null. */
+  approveTransfer: (pending: ApiPending, approval: string, amount: number, tx: WalletTx) => Promise<string | null>;
+  /** Celulares que aprovam (só com piu-node). */
+  phones: ApiPhone[] | null;
+  refreshPhones: () => void;
+  /** Cliente da API do nó (null na demonstração). */
+  api: NodeApi | null;
   /** Acessos abertos (só com piu-node). */
   sessions: ApiSession[] | null;
   revokeOtherSessions: () => Promise<'ok' | 'reauth' | 'error'>;
@@ -94,6 +101,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [toast, setToast] = useState<Store['toast']>(null);
   const [packages, setPackages] = useState<ApiPackage[]>([]);
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const [phones, setPhones] = useState<ApiPhone[] | null>(null);
   const settingsLoaded = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const toastSeq = useRef(0);
@@ -111,6 +119,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     node.guard(api.wallet()).then(w => setBalance(w.balance)).catch(() => {});
     node.guard(api.packages()).then(setPackages).catch(() => {});
     node.guard(api.sessions()).then(setSessions).catch(() => {});
+    node.guard(api.phones()).then(setPhones).catch(() => {});
     node.guard(api.settings()).then(s => { setLimitsState(s.limits); setPolicies(s.policies); settingsLoaded.current = true; }).catch(() => {});
   }, [api]);
 
@@ -183,7 +192,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       balance, txs,
       recordTransfer: async (amount, tx, to) => {
         if (api) {
-          try { await node.guard(api.transfer(amount, to)); } catch (e) {
+          try {
+            const r = await node.guard(api.transfer(amount, to));
+            if ('pending' in r) return { pending: r.pending };
+          } catch (e) {
             if (e instanceof NeedsReauth) return 'reauth';
             showToast({ icon: 'error', title: 'Transferência não feita', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return 'error';
@@ -192,6 +204,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         setBalance(b => Math.round((b - amount) * 100) / 100); setTxs(t => [tx, ...t]);
         return 'ok';
       },
+      approveTransfer: async (pending, approval, amount, tx) => {
+        if (!api) return 'Sem nó.';
+        try { await node.guard(api.approveTransfer(pending.id, approval)); }
+        catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível concluir.'; }
+        setBalance(b => Math.round((b - amount) * 100) / 100); setTxs(t => [tx, ...t]);
+        return null;
+      },
+      phones,
+      api,
+      refreshPhones: () => { if (api) node.guard(api.phones()).then(setPhones).catch(() => {}); },
       stepUp: async code => {
         if (!api) return null;
         try { await node.guard(api.reauth(code)); return null; } catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível confirmar.'; }
@@ -217,7 +239,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toast, showToast,
       totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: month - PENDING },
     };
-  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions]);
+  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions, phones]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -54,11 +54,20 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `GET /api/sessions`, `POST /api/sessions/revoke-others` | acessos abertos do operador (rótulo "Firefox · Linux", sem token) e encerrar os outros (exige step-up) |
 | `GET`/`PUT /api/settings` | limites globais (banda, armazenamento, horário) e política de tráfego, por operador |
 | `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`) |
-| `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up) |
+| `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up). Com celular pareado, devolve `202` com o pedido a aprovar |
+| `POST /api/wallet/transfer/:id/approve` | conclui o pedido com o código de aprovação que o celular mostrou (uso único, 5 tentativas a cada 10 min) |
+| `GET /api/phones`, `POST /api/phones`, `POST /api/phones/:id/confirm`, `DELETE /api/phones/:id` | celulares que aprovam transferências: listar (sem o segredo), parear (exige step-up; devolve o QR), confirmar com os 6 dígitos e remover |
 | `GET /api/relay` | estatísticas da retransmissão LNNP (vizinhos, guardados, encaminhados, duplicatas, recibos) |
 | `GET /api/packages`, `GET /pkg/:file` | pacotes assinados do instalador |
 
 `src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, motor de retransmissão, API e painel; se o motor não subir, por exemplo com a porta ocupada, o painel sobe mesmo assim e o motivo vai para o log) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
+
+## Aprovação no celular
+Sem rede entre o celular e o nó, tudo passa por QR e códigos digitados:
+1. **Parear (uma vez):** em Configurações → Parear celular, o painel mostra um QR `piup:` com um segredo de 32 bytes. O app Piu (Nova conversa → Escanear código) guarda o segredo no cofre do aparelho e mostra 6 dígitos, que o operador digita no painel.
+2. **Transferir:** o painel mostra o QR do pedido (`piut:` com valor, destino e validade) e um código de conferência de 6 dígitos. O celular mostra o valor, o destino e o mesmo código. Depois da biometria, mostra o código de aprovação (16 caracteres), que o operador digita no painel.
+
+Sem celular pareado, a transferência continua pedindo só o código novo do equipamento.
 
 ## Proteções (cada uma com teste em `test/security.test.ts`)
 
@@ -71,6 +80,7 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | IDOR | cada ação confere a posse do equipamento; o de outro operador devolve 404, sem revelar que existe |
 | Enumeração | ids são UUID v4; nada incremental |
 | Transferência de LUNES | exige autenticação recente (15 min; senão pede um código novo do equipamento), valor com até 2 casas, saldo e limite de 10/min |
+| Painel comprometido aprovando sozinho | com celular pareado, a transferência só sai com o código de aprovação = HMAC(segredo do celular, pedido), conferido em tempo constante; o segredo nunca volta pela API, e o pedido vence em 5 min e vale uma vez (`src/security/approval.ts`) |
 | Dados sensíveis | respostas só com os campos necessários; o token da sessão nunca vai no corpo; logs com cookie, CSRF e `Set-Cookie` mascarados |
 | Erros | mensagens genéricas, sem stack trace nem caminho interno; validação estrita (sem conversão de tipo, campo extra é erro) |
 | Headers (A05) | Helmet: CSP estrita, HSTS, `X-Frame-Options: DENY`, `nosniff`, `Referrer-Policy`, COOP/CORP, mais `Permissions-Policy`; sem `X-Powered-By` |

@@ -2,11 +2,13 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from './config.js';
 import { type Manifest, SAFE_FILE } from './packages.js';
 import type { Pairing } from './security/pairing.js';
+import { APPROVAL_TTL_MS, approvalMatches, checkCode, newSecret, PAIR_TTL_MS, pairCode, pairPayload, requestPayload } from './security/approval.js';
 import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, sessionLabel, STEP_UP_MS } from './security/session.js';
 import { readPanelFile } from './static.js';
 import type { Session, Settings, Store } from './store.js';
@@ -236,7 +238,70 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     const amount = req.body.amount;
     if (Math.round(amount * 100) !== amount * 100) return fail(reply, 400, 'Valor com mais de 2 casas decimais.');
     if (amount > store.wallet(s.operatorId).balance) return fail(reply, 400, 'Saldo insuficiente.');
-    return store.transfer(s.operatorId, amount, now(), req.body.to ?? 'personal');
+    const to = req.body.to ?? 'personal';
+    // Com celular pareado, a transferência só sai depois da aprovação nele (design: "Assinar no celular").
+    const phone = store.activePhone(s.operatorId);
+    if (phone) {
+      const txId = randomUUID();
+      const expiresAt = now() + APPROVAL_TTL_MS;
+      const request = requestPayload({ txId, amount, to, phoneId: phone.id, expiresAt, node: o.config.allowedHosts[0] ?? 'piu-node' });
+      store.addPendingTx({ id: txId, operatorId: s.operatorId, phoneId: phone.id, amount, to, request, expiresAt }, now());
+      return reply.code(202).send({ pending: { id: txId, request, code: checkCode(request), phone: phone.name, expiresAt } });
+    }
+    return store.transfer(s.operatorId, amount, now(), to);
+  });
+
+  /** Aprovação digitada (código que o celular mostrou). Uso único; 5 tentativas a cada 10 min. */
+  app.post<{ Params: { id: string }; Body: { approval: string } }>('/api/wallet/transfer/:id/approve', {
+    ...mutate(), config: strictLimit(5, '10 minutes'),
+    schema: { params: idParams, body: { type: 'object', required: ['approval'], additionalProperties: false, properties: { approval: { type: 'string', minLength: 16, maxLength: 24 } } } },
+  }, async (req, reply) => {
+    const s = req.piuSession!;
+    const t = store.pendingTx(req.params.id, now());
+    if (!t || t.operatorId !== s.operatorId) return fail(reply, 404, 'Pedido não encontrado ou vencido. Faça a transferência de novo.');
+    const phone = store.phonesOf(s.operatorId).find(p => p.id === t.phoneId && p.confirmed);
+    if (!phone) return fail(reply, 404, 'Celular não está mais pareado.');
+    if (!approvalMatches(Buffer.from(phone.secret, 'base64url'), t.request, req.body.approval)) return fail(reply, 403, 'Código de aprovação não confere.');
+    store.removePendingTx(t.id);
+    if (t.amount > store.wallet(s.operatorId).balance) return fail(reply, 400, 'Saldo insuficiente.');
+    return store.transfer(s.operatorId, t.amount, now(), t.to);
+  });
+
+  // ── celulares que aprovam transferências ───────────────
+  app.get('/api/phones', authed(), async req =>
+    store.phonesOf(req.piuSession!.operatorId).map(({ id, name, addedAt, confirmed }) => ({ id, name, addedAt, confirmed })));
+
+  /** Começa o pareamento (exige confirmação recente): devolve o QR com o segredo, mostrado só nesta tela. */
+  app.post<{ Body: { name: string } }>('/api/phones', {
+    ...mutate(), config: strictLimit(5, '10 minutes'),
+    schema: { body: { type: 'object', required: ['name'], additionalProperties: false, properties: { name: { type: 'string', minLength: 1, maxLength: 40 } } } },
+  }, async (req, reply) => {
+    const s = req.piuSession!;
+    if (now() - s.authAt > STEP_UP_MS) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const secret = newSecret();
+    const p = store.addPhone({ id: randomUUID(), operatorId: s.operatorId, name: req.body.name.trim(), secret: secret.toString('base64url'), addedAt: now(), confirmed: false });
+    const op = store.operator(s.operatorId);
+    return reply.code(201).send({ id: p.id, qr: pairPayload({ phoneId: p.id, secret, node: o.config.allowedHosts[0] ?? 'piu-node', operator: op?.name ?? '' }), expiresAt: now() + PAIR_TTL_MS });
+  });
+
+  /** O operador digita o código de 6 dígitos que o celular mostrou ao ler o QR. */
+  app.post<{ Params: { id: string }; Body: { code: string } }>('/api/phones/:id/confirm', {
+    ...mutate(), config: strictLimit(5, '10 minutes'),
+    schema: { params: idParams, body: { type: 'object', required: ['code'], additionalProperties: false, properties: { code: { type: 'string', pattern: '^[0-9]{6}$' } } } },
+  }, async (req, reply) => {
+    const p = store.phonesOf(req.piuSession!.operatorId).find(x => x.id === req.params.id);
+    if (!p || p.confirmed || now() - p.addedAt > PAIR_TTL_MS) return fail(reply, 404, 'Pareamento não encontrado ou vencido.');
+    const a = Buffer.from(req.body.code), b = Buffer.from(pairCode(Buffer.from(p.secret, 'base64url')));
+    if (!timingSafeEqual(a, b)) return fail(reply, 403, 'Código não confere. Confira o número no celular.');
+    store.confirmPhone(p.id);
+    return { id: p.id, name: p.name, confirmed: true };
+  });
+
+  app.delete<{ Params: { id: string } }>('/api/phones/:id', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
+    const p = store.phonesOf(req.piuSession!.operatorId).find(x => x.id === req.params.id);
+    if (!p) return fail(reply, 404, 'Não encontrado.');
+    store.removePhone(p.id);
+    return reply.code(204).send();
   });
 
   // ── pacotes assinados do instalador ────────────────────

@@ -24,9 +24,14 @@ export interface Settings {
 }
 export const DEFAULT_SETTINGS: Settings = { limits: { bw: 50, sto: 8, hours: 'always' }, policies: { media: true, unknown: true, community: false } };
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings> }
+/** Celular pareado que aprova transferências. `secret` só aqui e no celular (nunca na API). */
+export interface Phone { id: string; operatorId: string; name: string; secret: string; addedAt: number; confirmed: boolean }
+/** Transferência esperando a aprovação no celular (5 min, uso único). */
+export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {} });
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[] }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [] });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -108,6 +113,16 @@ export class Store {
   nodeSettings(): Settings { const owner = this.s.operators[0]; return owner ? this.settings(owner.id) : DEFAULT_SETTINGS; }
   isOwner(operatorId: string) { return this.s.operators[0]?.id === operatorId; }
   setSettings(operatorId: string, v: Settings) { this.s.settings[operatorId] = v; this.save(); return v; }
+
+  phonesOf(operatorId: string) { return this.s.phones.filter(p => p.operatorId === operatorId); }
+  /** Celular confirmado do operador (o mais recente), se houver. */
+  activePhone(operatorId: string) { return this.phonesOf(operatorId).filter(p => p.confirmed).sort((a, b) => b.addedAt - a.addedAt)[0] ?? null; }
+  addPhone(p: Phone) { this.s.phones = this.s.phones.filter(x => !(x.operatorId === p.operatorId && !x.confirmed)); this.s.phones.push(p); this.save(); return p; }
+  confirmPhone(id: string) { const p = this.s.phones.find(x => x.id === id); if (p) { p.confirmed = true; this.save(); } return p; }
+  removePhone(id: string) { this.s.phones = this.s.phones.filter(x => x.id !== id); this.s.pendingTx = this.s.pendingTx.filter(t => t.phoneId !== id); this.save(); }
+  addPendingTx(t: PendingTx, now: number) { this.s.pendingTx = this.s.pendingTx.filter(x => x.expiresAt > now && x.operatorId !== t.operatorId); this.s.pendingTx.push(t); this.save(); return t; }
+  pendingTx(id: string, now: number) { return this.s.pendingTx.find(t => t.id === id && t.expiresAt > now) ?? null; }
+  removePendingTx(id: string) { this.s.pendingTx = this.s.pendingTx.filter(t => t.id !== id); this.save(); }
 
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {

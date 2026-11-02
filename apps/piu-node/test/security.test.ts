@@ -360,3 +360,40 @@ test('parear de novo com o mesmo nome volta à mesma conta (equipamentos continu
   assert.notEqual((other.body as { operator: { id: string } }).operator.id, (a.body as { operator: { id: string } }).operator.id);
   t.cleanup();
 });
+
+test('celular que aprova: pareamento com código, transferência só com a aprovação certa, uso único e validade', async () => {
+  const { approvalCode, pairCode } = await import('../src/security/approval.js');
+  const t = await setup();
+  const a = await t.pair('Ana');
+  const b = await t.pair('Beto', '10.0.7.2');
+  // Pareamento: QR com segredo; o celular devolve um código de 6 dígitos.
+  const start = await t.req('POST', '/api/phones', { cookie: a.cookie, csrf: a.csrf, body: { name: 'Celular da Ana' } });
+  assert.equal(start.statusCode, 201);
+  const { id: phoneId, qr } = start.json() as { id: string; qr: string };
+  assert.ok(qr.startsWith('piup:'));
+  const secret = Buffer.from(JSON.parse(Buffer.from(qr.slice(5), 'base64url').toString()).s, 'base64url');
+  assert.ok(!JSON.stringify((await t.req('GET', '/api/phones', { cookie: a.cookie })).json()).includes(secret.toString('base64url')), 'segredo não volta pela API');
+  const wrong = pairCode(secret) === '000000' ? '111111' : '000000';
+  assert.equal((await t.req('POST', `/api/phones/${phoneId}/confirm`, { cookie: a.cookie, csrf: a.csrf, body: { code: wrong } })).statusCode, 403);
+  assert.equal((await t.req('POST', `/api/phones/${phoneId}/confirm`, { cookie: b.cookie, csrf: b.csrf, body: { code: pairCode(secret) } })).statusCode, 404, 'outro operador não confirma');
+  assert.equal((await t.req('POST', `/api/phones/${phoneId}/confirm`, { cookie: a.cookie, csrf: a.csrf, body: { code: pairCode(secret) } })).statusCode, 200);
+  // Transferência: agora fica pendente (202) até a aprovação.
+  const before = (await t.req('GET', '/api/wallet', { cookie: a.cookie })).json() as { balance: number };
+  const tx = await t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 10 } });
+  assert.equal(tx.statusCode, 202);
+  const { pending } = tx.json() as { pending: { id: string; request: string; code: string } };
+  assert.match(pending.code, /^\d{6}$/);
+  assert.equal(((await t.req('GET', '/api/wallet', { cookie: a.cookie })).json() as { balance: number }).balance, before.balance, 'nada saiu ainda');
+  const ok = approvalCode(secret, pending.request);
+  assert.equal((await t.req('POST', `/api/wallet/transfer/${pending.id}/approve`, { cookie: a.cookie, csrf: a.csrf, body: { approval: 'AAAAAAAAAAAAAAAA' } })).statusCode, 403);
+  assert.equal((await t.req('POST', `/api/wallet/transfer/${pending.id}/approve`, { cookie: b.cookie, csrf: b.csrf, body: { approval: ok } })).statusCode, 404, 'IDOR');
+  const done = await t.req('POST', `/api/wallet/transfer/${pending.id}/approve`, { cookie: a.cookie, csrf: a.csrf, body: { approval: ok.toLowerCase().replace(/(.{4})/g, '$1 ').trim() } });
+  assert.equal(done.statusCode, 200, done.body);
+  assert.equal(((await t.req('GET', '/api/wallet', { cookie: a.cookie })).json() as { balance: number }).balance, Math.round((before.balance - 10) * 100) / 100);
+  assert.equal((await t.req('POST', `/api/wallet/transfer/${pending.id}/approve`, { cookie: a.cookie, csrf: a.csrf, body: { approval: ok } })).statusCode, 404, 'uso único');
+  // Vencida depois de 5 min.
+  const tx2 = (await t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1 } })).json() as { pending: { id: string; request: string } };
+  t.advance(6 * MIN);
+  assert.equal((await t.req('POST', `/api/wallet/transfer/${tx2.pending.id}/approve`, { cookie: a.cookie, csrf: a.csrf, body: { approval: approvalCode(secret, tx2.pending.request) } })).statusCode, 404);
+  t.cleanup();
+});

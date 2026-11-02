@@ -1,7 +1,11 @@
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ScrollView, TextInput, View } from 'react-native';
+import { Platform, ScrollView, TextInput, View } from 'react-native';
+import { fmtLunes } from '../data/wallet';
+import { approvalCode, checkCode, PAIR_PREFIX, type PairedNode, pairCode, parsePair, parseRequest, REQUEST_PREFIX, type TransferRequest } from '../lib/approvals';
+import { confirmDevice } from '../lib/deviceAuth';
+import { loadApprovalNodes, saveApprovalNodes } from '../lib/vault';
 import type { ContactCard } from '../messaging/card';
 import { GROUP_LINK, useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
@@ -31,8 +35,44 @@ export default function Scan() {
   const [error, setError] = useState<string | null>(null);
   const [card, setCard] = useState<ContactCard | null>(null);
   const handled = useRef(false);
+  // Painel do provider: parear este celular (`piup:`) ou aprovar uma transferência (`piut:`).
+  const [paired, setPaired] = useState<{ node: PairedNode; code: string } | null>(null);
+  const [approval, setApproval] = useState<{ node: PairedNode; req: TransferRequest; code?: string } | null>(null);
+  const [authing, setAuthing] = useState(false);
+
+  const fromPanel = async (text: string) => {
+    setCamera(false); setCard(null); setPaired(null); setApproval(null);
+    try {
+      if (text.startsWith(PAIR_PREFIX)) {
+        const node = parsePair(text);
+        const list = (await loadApprovalNodes<PairedNode>()).filter(n => n.phoneId !== node.phoneId);
+        await saveApprovalNodes([...list, node]);
+        setPaired({ node, code: pairCode(node) }); setError(null);
+        return;
+      }
+      const req = parseRequest(text);
+      if (req.expiresAt < Date.now()) throw new Error('Este pedido já venceu. Peça a transferência de novo no painel.');
+      const node = (await loadApprovalNodes<PairedNode>()).find(n => n.phoneId === req.phoneId);
+      if (!node) throw new Error('Este celular não está pareado com esse nó. No painel, abra Configurações → Parear celular.');
+      setApproval({ node, req }); setError(null);
+    } catch (e) { setError((e as Error).message); }
+  };
+  const approve = async () => {
+    if (!approval || authing) return;
+    if (approval.req.expiresAt < Date.now()) { setApproval(null); setError('O pedido venceu antes da aprovação. Peça de novo no painel.'); return; }
+    setAuthing(true);
+    const r = await confirmDevice(`Aprovar ${fmtLunes(approval.req.amount)} LUNES`);
+    setAuthing(false);
+    if (r === 'denied') { setError('Aprovação cancelada. Nada foi enviado.'); return; }
+    // Aprovar dinheiro exige o bloqueio do aparelho (a web é só demonstração).
+    if (r === 'unavailable' && Platform.OS !== 'web') { setError('Configure um bloqueio no aparelho (biometria ou PIN) para aprovar transferências.'); return; }
+    setError(null);
+    setApproval({ ...approval, code: approvalCode(approval.node, approval.req) });
+  };
 
   const parse = (text: string) => {
+    const t = text.trim();
+    if (!target && (t.startsWith(PAIR_PREFIX) || t.startsWith(REQUEST_PREFIX))) { void fromPanel(t); return; }
     try {
       // Convite de grupo, canal ou comunidade: pede para entrar (o admin aprova, se o grupo exigir).
       if (text.trim().startsWith(GROUP_LINK) && !target) {
@@ -104,6 +144,45 @@ export default function Scan() {
           <View accessibilityRole="alert" style={{ flexDirection: 'row', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.ink }}>
             <Icon name="gpp_bad" size={20} />
             <T size={13.5} lh={1.4} style={{ flex: 1 }}>{error}</T>
+          </View>
+        )}
+
+        {paired && (
+          <View style={{ padding: 16, borderRadius: 22, backgroundColor: c.ink, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon name="shield_lock" size={22} color={c.invink} />
+              <T size={17} w={650} color={c.invink} style={{ flex: 1 }}>{`Parear com ${paired.node.node}`}</T>
+            </View>
+            <T size={13} lh={1.45} color={c.invink} style={{ opacity: 0.85 }}>Digite este número no painel. Depois, as transferências desse nó só saem com a sua aprovação aqui.</T>
+            <T size={34} w={600} mono ls={0.1} color={c.invink} align="center" accessibilityLabel={`Código ${paired.code.split('').join(' ')}`}>{`${paired.code.slice(0, 3)} ${paired.code.slice(3)}`}</T>
+            <Button label="Pronto" variant="inverse" height={46} onPress={() => router.back()} />
+          </View>
+        )}
+
+        {approval && (
+          <View style={{ padding: 16, borderRadius: 22, backgroundColor: c.ink, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <Icon name="account_balance_wallet" size={22} color={c.invink} />
+              <T size={17} w={650} color={c.invink} style={{ flex: 1 }}>{`Transferir ${fmtLunes(approval.req.amount)} LUNES`}</T>
+            </View>
+            <T size={12.5} mono lh={1.6} color={c.invink} style={{ opacity: 0.8 }}>
+              {`para ${approval.req.to === 'personal' ? 'a sua carteira pessoal' : approval.req.to}
+nó ${approval.req.node}`}
+            </T>
+            {approval.code ? (
+              <>
+                <T size={13} lh={1.45} color={c.invink} style={{ opacity: 0.85 }}>Digite este código de aprovação no painel:</T>
+                <T size={22} w={600} mono ls={0.08} color={c.invink} align="center" selectable>{approval.code.match(/.{4}/g)!.join(' ')}</T>
+                <Button label="Pronto" variant="inverse" height={46} onPress={() => router.back()} />
+              </>
+            ) : (
+              <>
+                <T size={13} lh={1.45} color={c.invink} style={{ opacity: 0.85 }}>Confira se o painel mostra o mesmo código. Se for diferente, não aprove.</T>
+                <T size={30} w={600} mono ls={0.1} color={c.invink} align="center">{(() => { const k = checkCode(approval.req); return `${k.slice(0, 3)} ${k.slice(3)}`; })()}</T>
+                <Button label={authing ? 'Confirmando…' : 'Aprovar'} variant="inverse" height={46} disabled={authing} onPress={approve} />
+                <Button label="Recusar" variant="ghost" height={42} fontSize={13.5} onPress={() => router.back()} />
+              </>
+            )}
           </View>
         )}
 

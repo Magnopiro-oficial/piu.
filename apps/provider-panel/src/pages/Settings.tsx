@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { StepUpDialog } from '../components/Pair';
+import { PairPhone } from '../components/Phone';
+import { ApiError, NeedsReauth } from '../lib/api';
 import { Icon, Segmented, Toggle } from '../components/ui';
 import { OPERATOR, PUB_RULES, SESSIONS } from '../data/seed';
 import { useStore } from '../state/store';
@@ -8,7 +10,26 @@ import type { HoursPolicy, Policies } from '../types';
 const segProps = { gap: 4, radius: 12, btnRadius: 9 } as const;
 
 export function Settings() {
-  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp } = useStore();
+  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api } = useStore();
+  const [pairing, setPairing] = useState<{ id: string; qr: string } | null>(null);
+  const [pairStepUp, setPairStepUp] = useState(false);
+  const startPair = async () => {
+    if (!api) return;
+    try { const r = await api.startPhonePairing('Celular'); setPairing({ id: r.id, qr: r.qr }); }
+    catch (e) { if (e instanceof NeedsReauth) setPairStepUp(true); else showToast({ icon: 'error', title: 'Não foi possível parear', body: e instanceof ApiError ? e.message : 'Tente de novo.' }); }
+  };
+  const confirmPair = async (code: string) => {
+    if (!api || !pairing) return null;
+    try { await api.confirmPhone(pairing.id, code); } catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível confirmar.'; }
+    setPairing(null); refreshPhones();
+    showToast({ icon: 'smartphone', title: 'Celular pareado', body: 'As próximas transferências são aprovadas nele.' });
+    return null;
+  };
+  const removePhone = async (id: string) => {
+    if (!api) return;
+    try { await api.removePhone(id); refreshPhones(); showToast({ icon: 'phonelink_erase', title: 'Celular removido', body: 'Ele não aprova mais transferências deste nó.' }); }
+    catch (e) { showToast({ icon: 'error', title: 'Não foi possível remover', body: e instanceof ApiError ? e.message : 'Tente de novo.' }); }
+  };
   const [stepUpOpen, setStepUpOpen] = useState(false);
   // Com o piu-node: acessos reais; na demonstração, os do exemplo.
   const rows: [string, string, string, string][] = sessions
@@ -81,6 +102,25 @@ export function Settings() {
         <button type="button" className="btn btn-outline" disabled={others === 0} onClick={() => void endOthers()}
           style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, opacity: others === 0 ? 0.4 : 1 }}>{others === 0 ? 'Nenhuma outra sessão' : 'Encerrar outras sessões'}</button>
         {stepUpOpen && <StepUpDialog onConfirm={confirmStepUp} onClose={() => setStepUpOpen(false)} />}
+        {phones && (
+          <div className="col" style={{ gap: 4, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+            <div style={{ fontSize: 13.5, fontWeight: 600 }}>Celulares que aprovam transferências</div>
+            {phones.filter(p => p.confirmed).length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Nenhum. Sem celular, transferências pedem um código novo do equipamento.</div>}
+            {phones.filter(p => p.confirmed).map(p => (
+              <div key={p.id} className="row" style={{ gap: 10, padding: '6px 0' }}>
+                <Icon name="smartphone" size={20} wght={300} />
+                <div className="col grow" style={{ gap: 1 }}>
+                  <div style={{ fontSize: 14, fontWeight: 550 }}>{p.name}</div>
+                  <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>app Piu · aprova transferências · desde {when(p.addedAt)}</div>
+                </div>
+                <button type="button" className="btn btn-outline" onClick={() => void removePhone(p.id)} style={{ height: 30, padding: '0 12px', borderRadius: 15, fontSize: 12.5 }}>Remover</button>
+              </div>
+            ))}
+            <button type="button" className="btn btn-outline" onClick={() => void startPair()} style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, marginTop: 4 }}>Parear celular</button>
+          </div>
+        )}
+        {pairing && <PairPhone qr={pairing.qr} onConfirm={confirmPair} onClose={() => setPairing(null)} />}
+        {pairStepUp && <StepUpDialog onConfirm={async code => { const p = await stepUp(code); if (p) return p; setPairStepUp(false); await startPair(); return null; }} onClose={() => setPairStepUp(false)} />}
       </section>
 
       <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
