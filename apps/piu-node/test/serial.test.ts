@@ -161,7 +161,9 @@ test('LoRa simulado: o limite de ocupação do canal segura os envios', async t 
   const sim = new RadioSim();
   // 0,002% de 1 h = 72 ms no ar: poucos anúncios e mais nada.
   const A = await radioNode(sim, 'A', undefined, { lora: { ...LORA, dutyPercent: 0.002, beaconMs: 50 } });
-  await new Promise(r => setTimeout(r, 1200));
+  // O primeiro anúncio sai com atraso aleatório de até 1 s: espera o limite agir, sem tempo fixo.
+  await until(() => A.stats().serial[0]!.dutyWaits! > 0, 'o limite segurar um envio', 10_000);
+  await new Promise(r => setTimeout(r, 300));
   const s = A.stats().serial[0]!;
   assert.ok(s.airtimeMs! <= 72, `tempo no ar ${s.airtimeMs} ms`);
   assert.ok(s.dutyWaits! > 0);
