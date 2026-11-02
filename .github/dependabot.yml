@@ -1,24 +1,85 @@
 # Atualizações de segurança e de versões, um PR por app (como no CONTRIBUTING).
+#
+# Regras:
+# - App mobile: as versões de expo, react, react-native e das bibliotecas nativas são as do Expo SDK
+#   (expo/bundledNativeModules.json) e mudam junto com o SDK, por `npx expo install --fix`. O
+#   Dependabot não propõe versões para elas (uma versão fora do SDK compila, mas pode falhar no aparelho).
+# - @types/node acompanha o Node em que o código roda (20 e 22): sem saltos de versão maior.
+# - TypeScript: versão maior só por migração planejada.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /apps/mobile
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
-    groups:
-      expo: { patterns: ['expo', 'expo-*', '@expo/*', 'react-native', 'react-native-*'] }
+    ignore:
+      - dependency-name: 'expo'
+      - dependency-name: 'expo-*'
+      - dependency-name: '@expo/*'
+      - dependency-name: 'react'
+      - dependency-name: 'react-dom'
+      - dependency-name: 'react-native'
+      - dependency-name: 'react-native-*'
+      - dependency-name: '@react-native/*'
+      - dependency-name: '@react-native-async-storage/*'
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: npm
     directory: /apps/provider-panel
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: npm
     directory: /apps/piu-node
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /apps/settlement
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /apps/provider-desktop
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
+  - package-ecosystem: npm
+    directory: /packaging/openwrt
+    schedule: { interval: weekly }
+    open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: npm
     directory: /apps/site
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
+      - dependency-name: 'typescript'
+        update-types: ['version-update:semver-major']
   # As Actions estão fixadas por SHA; o Dependabot propõe as novas versões.
   - package-ecosystem: github-actions
     directory: /
