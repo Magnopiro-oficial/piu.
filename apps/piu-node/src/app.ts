@@ -7,9 +7,9 @@ import { join } from 'node:path';
 import type { Config } from './config.js';
 import { type Manifest, SAFE_FILE } from './packages.js';
 import type { Pairing } from './security/pairing.js';
-import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, STEP_UP_MS } from './security/session.js';
+import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, sessionLabel, STEP_UP_MS } from './security/session.js';
 import { readPanelFile } from './static.js';
-import type { Session, Store } from './store.js';
+import type { Session, Settings, Store } from './store.js';
 
 declare module 'fastify' {
   interface FastifyRequest { piuSession: Session | null }
@@ -113,7 +113,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (r !== 'ok') return fail(reply, 401, 'Código inválido ou expirado.');
     o.onCodeSpent?.('used');
     const op = store.addOperator(req.body.name.trim(), now());
-    const { token, session } = createSession(store, op.id, now());
+    const { token, session } = createSession(store, op.id, now(), sessionLabel(req.headers['user-agent']));
     reply.setCookie(SESSION_COOKIE, token, cookieOptions);
     return { operator: { id: op.id, name: op.name }, csrf: session.csrf };
   });
@@ -143,9 +143,55 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     return { ok: true };
   });
 
+  /** Sessões abertas do operador (para reconhecer acessos e encerrar os outros). */
+  app.get('/api/sessions', authed(), async req => {
+    const me = req.piuSession!;
+    return store.sessionsOf(me.operatorId)
+      .map(x => ({ id: x.id ?? '', label: x.label ?? 'Navegador', createdAt: x.createdAt, lastSeen: x.lastSeen, current: x.tokenHash === me.tokenHash }))
+      .sort((a, b) => Number(b.current) - Number(a.current) || b.lastSeen - a.lastSeen);
+  });
+
+  /** Encerra os outros acessos. Sensível: exige autenticação recente (step-up). */
+  app.post('/api/sessions/revoke-others', mutate(), async (req, reply) => {
+    const s = req.piuSession!;
+    if (now() - s.authAt > STEP_UP_MS) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    return { revoked: store.removeOtherSessions(s.operatorId, s.tokenHash) };
+  });
+
+  // ── ajustes do operador ───────────────────────────────
+  const settingsSchema = {
+    type: 'object', required: ['limits', 'policies'], additionalProperties: false,
+    properties: {
+      limits: { type: 'object', required: ['bw', 'sto', 'hours'], additionalProperties: false, properties: {
+        bw: { type: 'integer', enum: [20, 50, 100] }, sto: { type: 'integer', enum: [4, 8, 16] }, hours: { type: 'string', enum: ['always', 'night', 'day'] } } },
+      policies: { type: 'object', required: ['media', 'unknown', 'community'], additionalProperties: false, properties: {
+        media: { type: 'boolean' }, unknown: { type: 'boolean' }, community: { type: 'boolean' } } },
+    },
+  } as const;
+  app.get('/api/settings', authed(), async req => store.settings(req.piuSession!.operatorId));
+  app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async req =>
+    store.setSettings(req.piuSession!.operatorId, req.body));
+
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   app.get('/api/devices', authed(), async req =>
     store.devicesOf(req.piuSession!.operatorId).map(({ id, name, cls, status, today }) => ({ id, name, cls, status, today })));
+
+  /** Equipamento ativado pelo assistente "Adicionar equipamento". */
+  app.post<{ Body: { name: string; cls: string; family: string; pub?: string } }>('/api/devices', {
+    ...mutate(), config: strictLimit(20, '1 minute'),
+    schema: { body: { type: 'object', required: ['name', 'cls', 'family'], additionalProperties: false, properties: {
+      name: { type: 'string', minLength: 1, maxLength: 40 },
+      cls: { type: 'string', enum: ['Home Node', 'Super Node', 'Gateway Local', 'Ponto de Acesso'] },
+      family: { type: 'string', enum: ['router', 'linux', 'minipc', 'lora', 'ap', 'p2p'] },
+      pub: { type: 'string', pattern: '^piu\\.[a-z0-9](?:[a-z0-9-]{0,26}[a-z0-9])?$' },
+    } } },
+  }, async (req, reply) => {
+    const s = req.piuSession!;
+    if (store.devicesOf(s.operatorId).length >= 100) return fail(reply, 400, 'Limite de equipamentos atingido.');
+    const { name, cls, family, pub } = req.body;
+    const d = store.addDevice({ ownerId: s.operatorId, name: name.trim(), cls, family, pub, createdAt: now() });
+    return reply.code(201).send({ id: d.id, name: d.name, cls: d.cls, status: d.status, today: d.today });
+  });
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/pause', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
     const d = store.ownedDevice(req.piuSession!.operatorId, req.params.id);
@@ -165,16 +211,20 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   // ── carteira ───────────────────────────────────────────
   app.get('/api/wallet', authed(), async req => store.wallet(req.piuSession!.operatorId));
 
-  app.post<{ Body: { amount: number } }>('/api/wallet/transfer', {
+  app.post<{ Body: { amount: number; to?: string } }>('/api/wallet/transfer', {
     ...mutate(), config: strictLimit(10, '1 minute'),
-    schema: { body: { type: 'object', required: ['amount'], additionalProperties: false, properties: { amount: { type: 'number', exclusiveMinimum: 0, maximum: 1_000_000 } } } },
+    schema: { body: { type: 'object', required: ['amount'], additionalProperties: false, properties: {
+      amount: { type: 'number', exclusiveMinimum: 0, maximum: 1_000_000 },
+      // Carteira pessoal do operador ou um endereço LUNES (base58, sem 0, O, I, l).
+      to: { type: 'string', pattern: '^(personal|lunes:[1-9A-HJ-NP-Za-km-z]{26,44})$' },
+    } } },
   }, async (req, reply) => {
     const s = req.piuSession!;
     if (now() - s.authAt > STEP_UP_MS) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
     const amount = req.body.amount;
     if (Math.round(amount * 100) !== amount * 100) return fail(reply, 400, 'Valor com mais de 2 casas decimais.');
     if (amount > store.wallet(s.operatorId).balance) return fail(reply, 400, 'Saldo insuficiente.');
-    return store.transfer(s.operatorId, amount, now());
+    return store.transfer(s.operatorId, amount, now(), req.body.to ?? 'personal');
   });
 
   // ── pacotes assinados do instalador ────────────────────

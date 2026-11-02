@@ -4,7 +4,7 @@ API local do equipamento do provider, com o painel (`apps/provider-panel`) servi
 
 ```bash
 npm ci
-npm test            # 14 testes de segurança (ataques simulados)
+npm test            # 18 testes de segurança (ataques simulados)
 npm run typecheck
 npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist)
 ```
@@ -15,6 +15,18 @@ npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/d
 3. O nó cria uma sessão: cookie `__Host-piu_session` (`HttpOnly`, `Secure`, `SameSite=Strict`), 30 min de inatividade, 12 h no máximo. O token fica só como hash no servidor.
 
 Provar o código é provar acesso físico ao equipamento. Quem está só na mesma rede Wi‑Fi não vê o código.
+
+## API
+| Rota | O que faz |
+|---|---|
+| `POST /api/pair`, `POST /api/reauth`, `GET /api/session`, `POST /api/logout` | pareamento, step-up e sessão |
+| `GET /api/sessions`, `POST /api/sessions/revoke-others` | acessos abertos do operador (rótulo "Firefox · Linux", sem token) e encerrar os outros (exige step-up) |
+| `GET`/`PUT /api/settings` | limites globais (banda, armazenamento, horário) e política de tráfego, por operador |
+| `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`) |
+| `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up) |
+| `GET /api/packages`, `GET /pkg/:file` | pacotes assinados do instalador |
+
+`src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, API e painel) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
 
 ## Proteções (cada uma com teste em `test/security.test.ts`)
 

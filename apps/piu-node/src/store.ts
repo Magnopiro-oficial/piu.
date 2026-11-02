@@ -3,15 +3,30 @@ import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'n
 import { join } from 'node:path';
 
 export interface Operator { id: string; name: string; createdAt: number }
-export interface Session { tokenHash: string; operatorId: string; csrf: string; createdAt: number; lastSeen: number; authAt: number }
+export interface Session {
+  tokenHash: string; operatorId: string; csrf: string; createdAt: number; lastSeen: number; authAt: number;
+  /** Id público (para listar e encerrar sessões sem expor o hash do token). */
+  id: string;
+  /** Navegador e sistema, para o operador reconhecer a sessão (ex.: "Firefox · Linux"). */
+  label: string;
+}
 export type DeviceStatus = 'active' | 'paused';
-export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today: number }
-export interface WalletTx { id: string; amount: number; at: number; to: 'personal' }
+export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today: number; family?: string; pub?: string; createdAt?: number }
+/** Destino: a carteira pessoal do operador ou outro endereço `lunes:…`. */
+export interface WalletTx { id: string; amount: number; at: number; to: string }
 export interface Wallet { balance: number; txs: WalletTx[] }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet> }
+export type HoursPolicy = 'always' | 'night' | 'day';
+/** Ajustes do operador: limites globais e política de tráfego (valores do painel). */
+export interface Settings {
+  limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: HoursPolicy };
+  policies: { media: boolean; unknown: boolean; community: boolean };
+}
+export const DEFAULT_SETTINGS: Settings = { limits: { bw: 50, sto: 8, hours: 'always' }, policies: { media: true, unknown: true, community: false } };
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {} });
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings> }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {} });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -60,19 +75,36 @@ export class Store {
   sessionByHash(hash: string) { return this.s.sessions.find(x => x.tokenHash === hash) ?? null; }
   touchSession(hash: string, now: number) { const x = this.sessionByHash(hash); if (x) { x.lastSeen = now; this.save(); } }
   removeSession(hash: string) { this.s.sessions = this.s.sessions.filter(x => x.tokenHash !== hash); this.save(); }
+  sessionsOf(operatorId: string) { return this.s.sessions.filter(x => x.operatorId === operatorId); }
+  /** Encerra todas as sessões do operador menos `keepHash`. Devolve quantas encerrou. */
+  removeOtherSessions(operatorId: string, keepHash: string) {
+    const before = this.s.sessions.length;
+    this.s.sessions = this.s.sessions.filter(x => x.operatorId !== operatorId || x.tokenHash === keepHash);
+    this.save();
+    return before - this.s.sessions.length;
+  }
   pruneSessions(isAlive: (x: Session) => boolean) { const before = this.s.sessions.length; this.s.sessions = this.s.sessions.filter(isAlive); if (this.s.sessions.length !== before) this.save(); }
 
   /** Só os equipamentos do operador (a posse é checada em cada ação: anti-IDOR). */
   devicesOf(operatorId: string) { return this.s.devices.filter(d => d.ownerId === operatorId); }
   ownedDevice(operatorId: string, id: string) { return this.s.devices.find(d => d.id === id && d.ownerId === operatorId) ?? null; }
   setDeviceStatus(id: string, status: DeviceStatus) { const d = this.s.devices.find(x => x.id === id); if (d) { d.status = status; this.save(); } return d; }
+  addDevice(d: Omit<Device, 'id' | 'status' | 'today'>): Device {
+    const dev: Device = { ...d, id: randomUUID(), status: 'active', today: 0 };
+    this.s.devices.push(dev);
+    this.save();
+    return dev;
+  }
   removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
 
+  settings(operatorId: string): Settings { return this.s.settings[operatorId] ?? DEFAULT_SETTINGS; }
+  setSettings(operatorId: string, v: Settings) { this.s.settings[operatorId] = v; this.save(); return v; }
+
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
-  transfer(operatorId: string, amount: number, now: number): WalletTx {
+  transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {
     const w = this.s.wallets[operatorId];
     if (!w) throw new Error('sem carteira');
-    const tx: WalletTx = { id: randomUUID(), amount, at: now, to: 'personal' };
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to };
     w.balance = Math.round((w.balance - amount) * 100) / 100;
     w.txs.unshift(tx);
     this.save();

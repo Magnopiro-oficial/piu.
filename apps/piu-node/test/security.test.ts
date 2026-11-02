@@ -280,3 +280,70 @@ test('pacotes: só os assinados pela chave fixada e com o arquivo íntegro; o in
   assert.match(verify('trocado.ipk'), /SHA-256 diferente|tamanho diferente/);
   t.cleanup();
 });
+
+test('sessões: lista só as do operador, sem token; encerrar as outras exige step-up', async () => {
+  const t = await setup();
+  const a1 = await t.pair('Ana', '10.0.3.1');
+  await t.pair('Beto', '10.0.3.2'); // outro operador: suas sessões não aparecem para Ana
+  const list = await t.req('GET', '/api/sessions', { cookie: a1.cookie });
+  assert.equal(list.statusCode, 200);
+  const items = list.json() as { id: string; label: string; current: boolean }[];
+  assert.equal(items.length, 1, 'não vê sessões de outro operador');
+  assert.equal(items[0]!.current, true);
+  assert.ok(!list.body.includes(a1.cookie.split('=')[1]!), 'token não aparece');
+  assert.ok(!/tokenHash|csrf/.test(list.body), 'nem hash nem CSRF');
+  // Sem CSRF: recusado antes de tudo.
+  assert.equal((await t.req('POST', '/api/sessions/revoke-others', { cookie: a1.cookie })).statusCode, 403);
+  t.advance(16 * MIN);
+  const late = await t.req('POST', '/api/sessions/revoke-others', { cookie: a1.cookie, csrf: a1.csrf });
+  assert.equal(late.statusCode, 403);
+  assert.equal((late.json() as { reauth?: boolean }).reauth, true);
+  t.cleanup();
+});
+
+test('ajustes: validação estrita, persistem por operador', async () => {
+  const t = await setup();
+  const a = await t.pair('Ana');
+  const b = await t.pair('Beto', '10.0.4.2');
+  const good = { limits: { bw: 100, sto: 4, hours: 'night' }, policies: { media: false, unknown: true, community: true } };
+  assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, body: good })).statusCode, 403, 'sem CSRF');
+  for (const bad of [
+    { ...good, limits: { ...good.limits, bw: 1000 } },
+    { ...good, limits: { ...good.limits, bw: '100' } },
+    { ...good, extra: 1 },
+    { ...good, policies: { ...good.policies, alerts: false } },
+  ]) assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: bad })).statusCode, 400, JSON.stringify(bad));
+  assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: good })).statusCode, 200);
+  assert.deepEqual((await t.req('GET', '/api/settings', { cookie: a.cookie })).json(), good);
+  assert.notDeepEqual((await t.req('GET', '/api/settings', { cookie: b.cookie })).json(), good, 'outro operador não é afetado');
+  t.cleanup();
+});
+
+test('novo equipamento: campos validados, fica com o operador que criou', async () => {
+  const t = await setup();
+  const a = await t.pair('Ana');
+  const b = await t.pair('Beto', '10.0.5.2');
+  const body = { name: 'Roteador da varanda', cls: 'Home Node', family: 'router', pub: 'piu.varanda-4' };
+  for (const bad of [{ ...body, cls: 'Admin' }, { ...body, pub: 'piu.Ab' }, { ...body, pub: 'piu.-x' }, { ...body, name: '' }, { ...body, ownerId: 'x' }])
+    assert.equal((await t.req('POST', '/api/devices', { cookie: a.cookie, csrf: a.csrf, body: bad })).statusCode, 400, JSON.stringify(bad));
+  const r = await t.req('POST', '/api/devices', { cookie: a.cookie, csrf: a.csrf, body });
+  assert.equal(r.statusCode, 201);
+  const id = (r.json() as { id: string }).id;
+  assert.ok((await t.req('GET', '/api/devices', { cookie: a.cookie })).json().some((d: { id: string }) => d.id === id));
+  assert.ok(!(await t.req('GET', '/api/devices', { cookie: b.cookie })).json().some((d: { id: string }) => d.id === id));
+  assert.equal((await t.req('DELETE', `/api/devices/${id}`, { cookie: b.cookie, csrf: b.csrf })).statusCode, 404, 'IDOR');
+  t.cleanup();
+});
+
+test('transferência para outro endereço: formato LUNES validado', async () => {
+  const t = await setup();
+  const a = await t.pair('Ana');
+  const send = (to: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1, to } });
+  for (const bad of ['lunes:0OIl', 'lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 'lunes:3P8xK2mVt9abcdefghijkmnopqr<script>', 42])
+    assert.equal((await send(bad)).statusCode, 400, String(bad));
+  const ok = await send('lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
+  assert.equal(ok.statusCode, 200);
+  assert.equal((ok.json() as { to: string }).to, 'lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
+  assert.equal((await send('personal')).statusCode, 200);
+  t.cleanup();
+});

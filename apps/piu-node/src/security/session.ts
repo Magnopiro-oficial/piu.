@@ -1,4 +1,4 @@
-import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import type { Session, Store } from '../store.js';
 
 /** `__Host-`: o navegador só aceita com Secure, Path=/ e sem Domain (cookie preso a esta origem). */
@@ -12,9 +12,9 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 export const cookieOptions = { httpOnly: true, secure: true, sameSite: 'strict' as const, path: '/', maxAge: ABSOLUTE_MS / 1000 };
 
-export function createSession(store: Store, operatorId: string, now: number): { token: string; session: Session } {
+export function createSession(store: Store, operatorId: string, now: number, label = 'Navegador'): { token: string; session: Session } {
   const token = randomBytes(32).toString('base64url');
-  const session: Session = { tokenHash: sha(token), operatorId, csrf: randomBytes(32).toString('base64url'), createdAt: now, lastSeen: now, authAt: now };
+  const session: Session = { tokenHash: sha(token), operatorId, csrf: randomBytes(32).toString('base64url'), createdAt: now, lastSeen: now, authAt: now, id: randomUUID(), label };
   store.pruneSessions(s => alive(s, now));
   store.addSession(session);
   return { token, session };
@@ -30,6 +30,15 @@ export function findSession(store: Store, token: string | undefined, now: number
   if (!alive(s, now)) { store.removeSession(s.tokenHash); return null; }
   store.touchSession(s.tokenHash, now);
   return s;
+}
+
+/** Rótulo curto da sessão a partir do User-Agent (nunca o UA inteiro: menos dado guardado). */
+export function sessionLabel(ua: string | undefined): string {
+  const u = ua ?? '';
+  if (/PiuProvider\//.test(u)) return `App Piu Provider · ${/Mac OS X/.test(u) ? 'macOS' : /Linux/.test(u) ? 'Linux' : 'computador'}`;
+  const browser = /Edg\//.test(u) ? 'Edge' : /Firefox\//.test(u) ? 'Firefox' : /Chrome\//.test(u) ? 'Chrome' : /Safari\//.test(u) ? 'Safari' : 'Navegador';
+  const os = /Android/.test(u) ? 'Android' : /iPhone|iPad/.test(u) ? 'iOS' : /Mac OS X/.test(u) ? 'macOS' : /Windows/.test(u) ? 'Windows' : /Linux/.test(u) ? 'Linux' : '';
+  return os ? `${browser} · ${os}` : browser;
 }
 
 export const endSession = (store: Store, token: string | undefined) => { if (token) store.removeSession(sha(token)); };
