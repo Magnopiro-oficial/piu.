@@ -233,5 +233,5 @@ export class Router {
 /** Atraso uniforme de 0 a `maxSec` segundos, com aleatoriedade criptográfica. */
 export function randomDelaySec(maxSec = 30): number {
   const r = random(4);
-  return ((r[0] << 24 | r[1] << 16 | r[2] << 8 | r[3]) >>> 0) % (maxSec + 1);
+  return ((r[0]! << 24 | r[1]! << 16 | r[2]! << 8 | r[3]!) >>> 0) % (maxSec + 1);
 }
