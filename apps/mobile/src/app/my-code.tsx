@@ -24,7 +24,7 @@ export default function MyCode() {
   const size = Math.min(280, width - 80);
   const copy = async () => {
     await Clipboard.setStringAsync(card);
-    showToast({ icon: 'content_copy', title: 'Código copiado', body: 'Envie só para quem você conhece. Vale por 24 h.' });
+    showToast({ icon: 'content_copy', title: 'Código copiado', body: 'Envie só para uma pessoa que você conhece. Vale uma vez, por 24 h.' });
   };
   return (
     <Screen>
@@ -42,7 +42,7 @@ export default function MyCode() {
           <T size={13} lh={1.45} color={c.ink2} style={{ flex: 1 }}>
             {identity === 'anon'
               ? 'O código anônimo não leva seu nome nem se liga à identidade pública.'
-              : 'O código leva seu nome e as chaves públicas, assinados. Vale por 24 h.'}
+              : 'O código leva seu nome e as chaves públicas, assinados. Uso único: vale para uma pessoa, por 24 h.'}
             {' '}Depois, confiram o código de segurança na tela do contato.
           </T>
         </View>

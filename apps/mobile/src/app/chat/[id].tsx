@@ -171,13 +171,16 @@ function Enter({ fresh, origin, children }: { fresh?: boolean; origin: 'left' | 
 /** Ícone de estado: “pop” de 420 ms a cada troca. */
 function Tick({ name, color, animate }: { name: IconName; color: string; animate?: boolean }) {
   const { reduceMotion } = useTheme();
-  const v = useRef(new Animated.Value(1)).current;
+  // Pop de 420 ms (design: scale .3 → 1,3 aos 60% → 1, opacidade 0 → 1, `cubic-bezier(.2,.9,.3,1.4)`).
+  const t = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     if (!animate || reduceMotion) return;
-    v.setValue(0.3);
-    Animated.spring(v, { toValue: 1, friction: 4, tension: 200, useNativeDriver: true }).start();
-  }, [name, animate, reduceMotion, v]);
-  return <Animated.View style={{ transform: [{ scale: v }] }}><Icon name={name} size={15} color={color} /></Animated.View>;
+    t.setValue(0);
+    Animated.timing(t, { toValue: 1, duration: 420, easing: Easing.bezier(0.2, 0.9, 0.3, 1.4), useNativeDriver: true }).start();
+  }, [name, animate, reduceMotion, t]);
+  const scale = t.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0.3, 1.3, 1] });
+  const opacity = t.interpolate({ inputRange: [0, 0.6, 1], outputRange: [0, 1, 1] });
+  return <Animated.View style={{ opacity, transform: [{ scale }] }}><Icon name={name} size={15} color={color} /></Animated.View>;
 }
 
 function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; chat: Chat; gap: number; onPress: () => void; onRetry: () => void; onToggleFile: () => void }) {

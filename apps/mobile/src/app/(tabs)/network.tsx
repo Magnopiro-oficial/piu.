@@ -138,7 +138,7 @@ function RelaySwitch({ on, onChange }: { on: boolean; onChange: () => void }) {
   const x = useRef(new Animated.Value(on ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) { x.setValue(on ? 1 : 0); return; }
-    Animated.timing(x, { toValue: on ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+    Animated.timing(x, { toValue: on ? 1 : 0, duration: 250, easing: Easing.bezier(0.2, 0.9, 0.3, 1.3), useNativeDriver: true }).start();
   }, [on, reduceMotion, x]);
   return (
     <Pressable onPress={onChange} accessibilityRole="switch" accessibilityLabel="Modo nó" accessibilityState={{ checked: on }} aria-checked={on}

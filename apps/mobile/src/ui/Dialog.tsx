@@ -50,7 +50,7 @@ function HoldButton({ label, icon, onDone }: { label: string; icon?: IconName; o
   const start = () => {
     clearInterval(timer.current);
     timer.current = setInterval(() => setPct(p => {
-      const n = Math.min(100, p + 3);
+      const n = Math.min(100, p + 2.5); // 2,5% a cada 30 ms = 1,2 s, como no design
       if (n >= 100) { clearInterval(timer.current); setTimeout(onDone, 0); }
       return n;
     }), 30);

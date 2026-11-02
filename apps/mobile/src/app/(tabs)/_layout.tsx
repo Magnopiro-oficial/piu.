@@ -1,6 +1,6 @@
 import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, View } from 'react-native';
+import { Animated, Easing, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -41,20 +41,18 @@ function TabBar({ state, navigateToTab }: BottomTabBarProps) {
 
 function Tab({ label, icon, active, badge, onPress }: { label: string; icon: IconName; active: boolean; badge: number; onPress: () => void }) {
   const { c, reduceMotion } = useTheme();
-  const bump = useRef(new Animated.Value(1)).current;
+  const bump = useRef(new Animated.Value(1)).current; // progresso 0 → 1
   useEffect(() => {
     if (!active || reduceMotion) return;
-    bump.setValue(1);
-    Animated.sequence([
-      Animated.timing(bump, { toValue: 0.8, duration: 140, useNativeDriver: true }),
-      Animated.spring(bump, { toValue: 1, friction: 4, tension: 160, useNativeDriver: true }),
-    ]).start();
+    // Bump de 400 ms (design: 1 → .8 aos 35% → 1,14 aos 70% → 1).
+    bump.setValue(0);
+    Animated.timing(bump, { toValue: 1, duration: 400, easing: Easing.linear, useNativeDriver: true }).start();
   }, [active, reduceMotion, bump]);
   const color = active ? c.ink : c.ink2;
   return (
     <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={badge ? `${label}, ${badge} não lidas` : label}
       onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
-      <Animated.View style={{ transform: [{ scale: bump }] }}><Icon name={icon} size={26} fill={active} color={color} /></Animated.View>
+      <Animated.View style={{ transform: [{ scale: bump.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 0.8, 1.14, 1] }) }] }}><Icon name={icon} size={26} fill={active} color={color} /></Animated.View>
       <T size={11} w={active ? 650 : 500} color={color}>{label}</T>
       {badge > 0 && (
         <View style={{ position: 'absolute', top: -3, left: '50%', marginLeft: 6, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.ink, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>

@@ -4,7 +4,7 @@ Liga o [protocolo](../protocol/README.md) ao app: contatos pelo QR, sessões cif
 
 ## Como uma mensagem anda
 
-1. **Contato.** A pessoa mostra **Meu código** e você escaneia (ou cola o código). O cartão (`card.ts`) traz as chaves públicas, o nome (só na identidade pública) e a validade de 24 h, tudo assinado. Assinatura errada, cartão vencido ou dados a mais são recusados.
+1. **Contato.** A pessoa mostra **Meu código** e você escaneia (ou cola o código). O cartão (`card.ts`, versão 2) traz as chaves públicas, o nome (só na identidade pública), a validade de 24 h e um **código de convite de uso único**, tudo assinado. Assinatura errada, cartão vencido ou dados a mais são recusados. As primeiras mensagens levam o código; quem gerou o QR aceita cada convite uma vez e recusa quem chega sem convite válido (`Messenger.issueInvite`).
 2. **Envio.** O texto é cifrado na sessão Double Ratchet daquele contato, dentro de um envelope selado. O envelope entra na fila do roteador, já com o atraso aleatório e o preenchimento, se você ligou esses ajustes de Privacidade.
 3. **Antes de sair do aparelho**, o estado das sessões é gravado (cifrado). Assim, mesmo depois de um travamento, uma chave de mensagem nunca é usada duas vezes.
 4. **Caminho.** O envelope vai para cada vizinho conectado. Quem não é o destino só guarda e repassa, se estiver com o Modo nó ligado, e não consegue ler nada.
@@ -18,7 +18,7 @@ Liga o [protocolo](../protocol/README.md) ao app: contatos pelo QR, sessões cif
 
 ## Pedidos de conversa
 
-Se alguém que tem o seu código escreve primeiro, a conversa aparece marcada como **pedido** ("confira o código"). Ela só deixa de ser pedido quando você responde. Há um limite de 50 pedidos pendentes, contra enxurradas.
+Se alguém que escaneou o seu QR escreve primeiro, a conversa aparece marcada como **pedido** ("confira o código"). Ela só deixa de ser pedido quando você responde. Há um limite de 50 pedidos pendentes, contra enxurradas.
 
 ## O que fica salvo no aparelho
 
@@ -33,4 +33,3 @@ No navegador e no Expo Go não há Bluetooth. Por isso, o transporte simulado tr
 - **Celulares de verdade:** o caminho foi testado no Node (`__tests__/messenger.test.ts`: entrega, relay, Modo nó, reabrir o app, replay, identidade anônima, chaves trocadas) e no navegador. Falta o teste em celulares com o módulo nativo.
 - **Envelopes grandes no Bluetooth:** o transporte nativo já fatia em blocos; a fragmentação do protocolo (`fragment.ts`) será necessária para LoRa.
 - Arquivos, grupos e canais reais.
-- Cartões de uso único (hoje um código vale para quem o tiver, por 24 h).

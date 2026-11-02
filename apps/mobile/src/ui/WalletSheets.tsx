@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { SEND_PEOPLE, WALLET_ADDR, fmtLunes, parseLunes } from '../data/wallet';
+import { confirmDevice } from '../lib/deviceAuth';
 import { useStore } from '../state/store';
 import { useWallet } from '../state/wallet';
 import { fontFamily } from '../theme/fonts';
@@ -19,6 +20,9 @@ export function SendSheet({ onClose }: { onClose: () => void }) {
   const [to, setTo] = useState('marina');
   const [amt, setAmt] = useState('5');
   const [done, setDone] = useState<string | null>(null);
+  const [signing, setSigning] = useState(false);
+  const [authErr, setAuthErr] = useState<string | null>(null);
+  const [noLock, setNoLock] = useState(false);
   const n = parseLunes(amt);
   const ok = n > 0 && n <= balance;
   const name = (id: string) => ({ marina: 'Marina', ana: 'Ana', pedro: 'Pedro', joao: 'João' } as Record<string, string>)[id] ?? id;
@@ -61,8 +65,19 @@ export function SendSheet({ onClose }: { onClose: () => void }) {
               </View>
             ))}
           </View>
-          <Button label="Assinar e enviar" disabled={!ok} left={<Icon name="fingerprint" size={20} color={c.invink} />}
-            onPress={() => { if (!ok) return; send(name(to), n); setDone(`${fmtLunes(n)} LUNES para ${name(to)}`); }} />
+          {authErr && <T size={12.5} color={c.ink2} align="center" accessibilityRole="alert">{authErr}</T>}
+          <Button label={signing ? 'Confirmando…' : 'Assinar e enviar'} disabled={!ok || signing} left={<Icon name="fingerprint" size={20} color={c.invink} />}
+            onPress={async () => {
+              if (!ok || signing) return;
+              // Design: assinar com biometria (ou o bloqueio do aparelho). Sem bloqueio configurado (e na web), segue com aviso.
+              setSigning(true); setAuthErr(null);
+              const r = await confirmDevice(`Assinar ${fmtLunes(n)} LUNES para ${name(to)}`);
+              setSigning(false);
+              if (r === 'denied') { setAuthErr('Assinatura cancelada. Nada foi enviado.'); return; }
+              send(name(to), n);
+              setDone(`${fmtLunes(n)} LUNES para ${name(to)}`);
+              setNoLock(r === 'unavailable');
+            }} />
         </>
       ) : (
         <>
@@ -71,6 +86,7 @@ export function SendSheet({ onClose }: { onClose: () => void }) {
             <T size={24} w={700} ls={-0.03} align="center">{done}</T>
             <T size={14} lh={1.45} color={c.ink2} align="center" style={{ maxWidth: 300 }}>Transação assinada neste aparelho. Ela viaja cifrada pela malha e é liquidada quando um gateway alcançar a Mainnet.</T>
             <T size={12} mono color={c.ink2}>tx 9f2c…a01b · na fila</T>
+            {noLock && <T size={12.5} lh={1.4} color={c.ink2} align="center" style={{ maxWidth: 300 }}>Este aparelho não tem bloqueio de tela. Configure biometria ou PIN para proteger suas assinaturas.</T>}
           </View>
           <Button label="Concluir" variant="soft" height={52} onPress={() => sheet.current?.close()} />
         </>

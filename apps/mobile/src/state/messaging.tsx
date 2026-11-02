@@ -23,7 +23,10 @@ export const chatIdFor = (contactId: string) => 'p' + contactId.replace(/^piu:/,
 interface Messaging {
   ready: boolean;
   /** Código do meu cartão (QR) para a identidade em uso; renovado ao gerar um novo. */
-  myCard: (kind: IdentityKind) => string;
+  /** `fresh`: revoga o convite anterior dessa identidade e gera outro. */
+  myCard: (kind: IdentityKind, fresh?: boolean) => string;
+  /** Muda quando um convite meu é usado (o QR precisa ser trocado). */
+  inviteEpoch: number;
   /** Lê um código colado ou escaneado. Lança erro com mensagem em português. */
   readCard: (text: string) => ContactCard;
   /** Adiciona o contato e devolve o id da conversa. */
@@ -51,6 +54,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const transport = useMemo(getTransport, []);
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
+  const [inviteEpoch, setInviteEpoch] = useState(0);
 
   // Referências para os eventos do mensageiro (que vivem fora do React).
   const chatsRef = useRef(chats); chatsRef.current = chats;
@@ -87,6 +91,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
       events: {
         changed: saveSoon,
+        inviteUsed: () => setInviteEpoch(e => e + 1),
         status: (msgId, st) => {
           const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => c.peer && c.msgs?.some(x => x.id === msgId))?.id;
           if (cid) handlers.current.setMsgStatus(cid, msgId, st);
@@ -153,12 +158,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Messaging>(() => ({
     ready: !!messenger,
-    myCard: kind => (identities ? encodeCard(identities[kind], kind === 'public' ? profile.name : '', now()) : ''),
+    myCard: (kind, fresh) => (identities && messenger ? encodeCard(identities[kind], kind === 'public' ? profile.name : '', messenger.issueInvite(kind, fresh)) : ''),
+    inviteEpoch,
     readCard: text => decodeCard(text, now()),
     addFromCard: card => {
       if (!messenger) throw new Error('As chaves ainda estão carregando.');
       const via: IdentityKind = card.kind; // anônima conversa com anônima, pública com pública
-      const contact: Contact = { id: card.id, via, pub: card.pub, name: card.name };
+      const contact: Contact = { id: card.id, via, pub: card.pub, name: card.name, invite: card.invite };
       messenger.addContact(contact);
       const cid = chatIdFor(card.id);
       addChat(chatFor(contact, false));
@@ -169,7 +175,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return (peer && messenger?.getContact(peer)?.pub) || null;
     },
     testDeviceCard: testDevice ? testDevice.card : null,
-  }), [messenger, identities, profile.name, chats, addChat, testDevice]);
+  }), [messenger, identities, profile.name, chats, addChat, testDevice, inviteEpoch]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -191,12 +197,19 @@ export function useMessaging(): Messaging {
   return m;
 }
 
-/** Meu cartão (QR) para a identidade `kind`, renovado a cada hora (cada um vale 24 h). `bump` gera outro já. */
+/**
+ * Meu cartão (QR) para a identidade `kind`. Uso único: troca sozinho depois que alguém o usa.
+ * Conferido a cada minuto (vale 24 h; troca quando faltar menos de 1 h). `bump` revoga e gera outro.
+ */
 export function useMyCard(kind: IdentityKind): [string, () => void] {
-  const { myCard, ready } = useMessaging();
-  const [seq, setSeq] = useState(0);
-  const [hour, setHour] = useState(() => Math.floor(Date.now() / 3_600_000));
-  useEffect(() => { const t = setInterval(() => setHour(Math.floor(Date.now() / 3_600_000)), 60_000); return () => clearInterval(t); }, []);
-  const card = useMemo(() => (ready ? myCard(kind) : ''), [ready, myCard, kind, hour, seq]); // eslint-disable-line react-hooks/exhaustive-deps
-  return [card, () => setSeq(s => s + 1)];
+  const { myCard, ready, inviteEpoch } = useMessaging();
+  const [tick, setTick] = useState(0);
+  const fresh = useRef(false);
+  useEffect(() => { const t = setInterval(() => setTick(x => x + 1), 60_000); return () => clearInterval(t); }, []);
+  const card = useMemo(() => {
+    if (!ready) return '';
+    const f = fresh.current; fresh.current = false;
+    return myCard(kind, f);
+  }, [ready, myCard, kind, tick, inviteEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
+  return [card, () => { fresh.current = true; setTick(x => x + 1); }];
 }

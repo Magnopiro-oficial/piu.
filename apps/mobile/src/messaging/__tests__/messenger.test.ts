@@ -42,15 +42,18 @@ function device(net: Net, name: string, opts: { relay?: boolean; seed?: Uint8Arr
   return { m, ids, seed, log };
 }
 
+/** Como escanear o QR de `d`: chaves públicas + convite de uso único emitido por `d`. */
 const contactOf = (d: ReturnType<typeof device>, name: string, via: 'public' | 'anon' = 'public'): Contact =>
-  ({ id: d.ids[via].id, via, pub: toPublic(d.ids[via]), name });
+  ({ id: d.ids[via].id, via, pub: toPublic(d.ids[via]), name, invite: d.m.issueInvite(via).code });
+const INV = { code: '0011223344556677', expiresAt: T0 + 24 * 3600 };
 
 test('cartão de contato: ida e volta, assinatura, validade e adulteração', () => {
   const me = deriveIdentity(newSeed(), 'public');
-  const code = encodeCard(me, 'Cardeal', T0);
+  const code = encodeCard(me, 'Cardeal', INV);
   const c = decodeCard(code, T0 + 10);
   assert.equal(c.id, me.id);
   assert.equal(c.name, 'Cardeal');
+  assert.equal(c.invite, INV.code);
   assert.throws(() => decodeCard(code, T0 + 25 * 3600), /venceu/);
   const raw = unb64url(code.slice(5)); raw[40] ^= 1;
   assert.throws(() => decodeCard('piu1:' + b64url(raw), T0), /não confere|corrompido/);
@@ -58,9 +61,9 @@ test('cartão de contato: ida e volta, assinatura, validade e adulteração', ()
   assert.throws(() => decodeCard('https://exemplo.com', T0), /não é um código/);
   // Anônima: o cartão não leva nome.
   const anon = deriveIdentity(newSeed(), 'anon');
-  assert.equal(decodeCard(encodeCard(anon, 'Não vaza', T0), T0).name, '');
+  assert.equal(decodeCard(encodeCard(anon, 'Não vaza', INV), T0).name, '');
   // Nome longo é cortado sem quebrar caracteres.
-  assert.ok(decodeCard(encodeCard(me, 'á'.repeat(60), T0), T0).name.length <= 24);
+  assert.ok(decodeCard(encodeCard(me, 'á'.repeat(60), INV), T0).name.length <= 24);
 });
 
 test('direto: entrega, recibo de entrega cifrado e pedido de conversa', () => {
@@ -172,4 +175,43 @@ test('expiração: sem rota até o fim do TTL, a mensagem sai da fila como "expi
   a.m.tick();
   assert.deepEqual(a.m.pendingFor(b.ids.public.id), []);
   assert.deepEqual(a.log.status.at(-1), ['m1', 'expirada']);
+});
+
+test('QR de uso único: o segundo uso e quem não tem convite são recusados; novo código revoga o anterior', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), e = device(net, 'Eva');
+  const inv = b.m.issueInvite('public');
+  assert.equal(b.m.issueInvite('public').code, inv.code, 'o mesmo QR enquanto não for usado');
+  const card = { id: b.ids.public.id, via: 'public' as const, pub: toPublic(b.ids.public), name: 'Beto', invite: inv.code };
+  a.m.addContact(card);
+  e.m.addContact(card); // Eva fotografou o mesmo QR
+  a.m.sendText(b.ids.public.id, 'a1', 'Sou a Ana');
+  net.link('Ana', 'Beto');
+  assert.equal(b.log.requests.length, 1);
+  assert.notEqual(b.m.issueInvite('public').code, inv.code, 'usado: o QR troca de código');
+  e.m.sendText(b.ids.public.id, 'e1', 'Sou a Eva');
+  net.link('Eva', 'Beto');
+  assert.equal(b.log.requests.length, 1, 'convite já usado: Eva não entra');
+  assert.ok(!b.log.msgs.some(([, t]) => t === 'Sou a Eva'));
+  // Sem convite nenhum (só a chave pública): também não.
+  const f = device(net, 'Fred');
+  f.m.addContact({ id: b.ids.public.id, via: 'public', pub: toPublic(b.ids.public), name: 'Beto' });
+  f.m.sendText(b.ids.public.id, 'f1', 'Sem convite');
+  net.link('Fred', 'Beto');
+  assert.equal(b.log.requests.length, 1);
+  // "Gerar novo código" revoga o anterior ainda não usado.
+  const old = b.m.issueInvite('public');
+  const fresh = b.m.issueInvite('public', true);
+  assert.notEqual(fresh.code, old.code);
+  const g = device(net, 'Gil');
+  g.m.addContact({ ...card, invite: old.code });
+  g.m.sendText(b.ids.public.id, 'g1', 'Com o código revogado');
+  net.link('Gil', 'Beto');
+  assert.equal(b.log.requests.length, 1);
+  // Convite da identidade pública não abre conversa na anônima.
+  const h = device(net, 'Hugo');
+  h.m.addContact({ id: b.ids.anon.id, via: 'anon', pub: toPublic(b.ids.anon), name: '', invite: fresh.code });
+  h.m.sendText(b.ids.anon.id, 'h1', 'Convite trocado de identidade');
+  net.link('Hugo', 'Beto');
+  assert.equal(b.log.requests.length, 1);
 });

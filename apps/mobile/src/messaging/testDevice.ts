@@ -33,7 +33,7 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
   let n = 0;
   const answer = (cid: string, text: string) => setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi cifrado: “${text.slice(0, 200)}”`), 600);
   return {
-    card: () => encodeCard(ids.public, TEST_DEVICE_NAME, now()),
+    card: () => encodeCard(ids.public, TEST_DEVICE_NAME, m.issueInvite('public')),
     messenger: m,
     setReply: fn => { reply = fn; },
   };

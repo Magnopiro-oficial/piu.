@@ -6,6 +6,7 @@ import { fmtLunes, NEAR_PROFILES, type NearProfile } from '../../data/wallet';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
 import { fontFamily } from '../../theme/fonts';
+import { confirmDevice } from '../../lib/deviceAuth';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { Icon, type IconName } from '../../ui/Icon';
@@ -22,10 +23,11 @@ export default function NearProfileScreen() {
   const insets = useSafeAreaInsets();
   const { id } = useLocalSearchParams<{ id: string }>();
   const p = NEAR_PROFILES.find(x => x.id === id) ?? NEAR_PROFILES[0];
-  const { invited } = useWallet();
+  const { inviteState } = useWallet();
   const { showToast } = useStore();
   const [sheet, setSheet] = useState(false);
-  const sent = invited[p.id];
+  const st = inviteState(p.id);
+  const sent = st.kind !== 'none';
 
   const round = { width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' } as const;
 
@@ -72,8 +74,8 @@ export default function NearProfileScreen() {
         </Pressable>
         {sent ? (
           <View accessibilityLiveRegion="polite" style={{ flex: 1, height: 54, borderRadius: 27, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
-            <Icon name="schedule_send" size={19} />
-            <T size={14.5} w={600}>Convite enviado · expira em 24 h</T>
+            <Icon name={st.kind === 'pending' ? 'schedule_send' : 'block'} size={19} />
+            <T size={14.5} w={600}>{st.kind === 'pending' ? `Convite enviado · expira em ${st.hoursLeft} h` : st.kind === 'cooldown' ? `Novo convite em ${st.daysLeft} ${st.daysLeft === 1 ? 'dia' : 'dias'}` : ''}</T>
           </View>
         ) : (
           <Button label={`Convidar · ${fmtLunes(p.fee)} LUNES`} accessibilityLabel={`Convidar ${p.name} para conversar · ${fmtLunes(p.fee)} LUNES`} fontSize={15} onPress={() => setSheet(true)} style={{ flex: 1, paddingHorizontal: 12, gap: 6 }}
@@ -92,6 +94,8 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
   const ref = useRef<SheetHandle>(null);
   const [msg, setMsg] = useState('');
   const [done, setDone] = useState(false);
+  const [signing, setSigning] = useState(false);
+  const [authErr, setAuthErr] = useState<string | null>(null);
   const fee = fmtLunes(p.fee);
   const short = balance < p.fee;
 
@@ -135,9 +139,17 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
         ))}
       </View>
       {short && <T size={12.5} color={c.ink2} align="center">Saldo insuficiente para este convite.</T>}
-      <Button label={`Assinar e enviar · ${fee} LUNES`} disabled={!msg.trim() || short}
+      {authErr && <T size={12.5} color={c.ink2} align="center" accessibilityRole="alert">{authErr}</T>}
+      <Button label={signing ? 'Confirmando…' : `Assinar e enviar · ${fee} LUNES`} disabled={!msg.trim() || short || signing}
         left={<Icon name="fingerprint" size={20} color={c.invink} />}
-        onPress={() => { invite(p.id, p.name, p.fee); setDone(true); }} />
+        onPress={async () => {
+          // A reserva é uma assinatura de LUNES: pede a biometria (ou o bloqueio do aparelho), como no envio.
+          setSigning(true); setAuthErr(null);
+          const r = await confirmDevice(`Reservar ${fee} LUNES para convidar ${p.name}`);
+          setSigning(false);
+          if (r === 'denied') { setAuthErr('Assinatura cancelada. Nada foi reservado.'); return; }
+          invite(p.id, p.name, p.fee); setDone(true);
+        }} />
     </Sheet>
   );
 }

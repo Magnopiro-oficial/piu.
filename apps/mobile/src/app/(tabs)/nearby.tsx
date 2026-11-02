@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
 import { NEAR_PROFILES, REQUESTS } from '../../data/wallet';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -12,7 +12,7 @@ import { T } from '../../ui/T';
 /** Por perto: visibilidade recíproca (desliga sozinha em 1 h), perfis públicos com proximidade aproximada. */
 export default function Nearby() {
   const { c } = useTheme();
-  const { visible, setVisible, invited, reqStatus } = useWallet();
+  const { visible, setVisible, visibleMinutesLeft, inviteState, reqStatus } = useWallet();
   const pending = REQUESTS.filter(r => !reqStatus[r.id]).length;
   const fg = visible ? c.invink : c.ink;
 
@@ -32,7 +32,7 @@ export default function Nearby() {
           <Icon name={visible ? 'visibility' : 'visibility_off'} size={24} w={300} color={fg} />
           <View style={{ flex: 1, gap: 2 }}>
             <T size={15} w={600} color={fg}>{visible ? 'Você está visível' : 'Você está invisível'}</T>
-            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? 'Perfil público · desliga sozinho em 52 min' : 'Identidade anônima nunca aparece aqui'}</T>
+            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? `Perfil público · desliga sozinho em ${visibleMinutesLeft} min` : 'Identidade anônima nunca aparece aqui'}</T>
           </View>
           <VisSwitch on={visible} onChange={() => setVisible(!visible)} />
         </View>
@@ -43,7 +43,7 @@ export default function Nearby() {
             <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               {NEAR_PROFILES.map(p => (
                 <Pressable key={p.id} onPress={() => router.push({ pathname: '/nearby/[id]', params: { id: p.id } })} accessibilityRole="button"
-                  accessibilityLabel={`${p.name}, ${p.age} anos, ${p.prox}. ${p.bio}${invited[p.id] ? '. Convite enviado' : ''}`}
+                  accessibilityLabel={`${p.name}, ${p.age} anos, ${p.prox}. ${p.bio}${inviteState(p.id).kind === 'pending' ? '. Convite enviado' : ''}`}
                   style={({ pressed }) => ({ width: '47.5%', flexGrow: 1, gap: 8, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
                   <Stripes period={16} style={{ height: 180, borderRadius: 22 }}>
                     <T size={10} w={500} mono color={c.ink2}>foto de perfil</T>
@@ -51,7 +51,7 @@ export default function Nearby() {
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.ink, opacity: p.prox === 'muito perto' ? 1 : p.prox === 'perto' ? 0.6 : 0.3 }} />
                       <T size={11} w={550}>{p.prox}</T>
                     </View>
-                    {invited[p.id] && (
+                    {inviteState(p.id).kind === 'pending' && (
                       <View style={{ position: 'absolute', left: 10, right: 10, bottom: 10, height: 30, borderRadius: 15, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5 }}>
                         <Icon name="schedule_send" size={15} color={c.invink} />
                         <T size={12} w={600} color={c.invink}>Convite enviado</T>
@@ -84,7 +84,7 @@ function VisSwitch({ on, onChange }: { on: boolean; onChange: () => void }) {
   const x = useRef(new Animated.Value(on ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) { x.setValue(on ? 1 : 0); return; }
-    Animated.timing(x, { toValue: on ? 1 : 0, duration: 200, useNativeDriver: true }).start();
+    Animated.timing(x, { toValue: on ? 1 : 0, duration: 250, easing: Easing.bezier(0.2, 0.9, 0.3, 1.3), useNativeDriver: true }).start();
   }, [on, reduceMotion, x]);
   return (
     <Pressable onPress={onChange} accessibilityRole="switch" accessibilityLabel="Visível em Por perto" accessibilityState={{ checked: on }} aria-checked={on}

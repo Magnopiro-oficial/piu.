@@ -10,7 +10,8 @@
  * - Estado salvo (`export`): sessões, fila própria, ids vistos (contra replay) e contatos.
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
-import { fromUtf8, utf8 } from '../protocol/bytes';
+import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
+import { random } from '../protocol/suite';
 import { envelopeId, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
@@ -24,9 +25,14 @@ export interface Contact {
   via: IdentityKind;
   pub: PublicIdentity;
   name: string;
-  /** Escreveu primeiro sem que eu tivesse o código dele: ainda não aceito. */
+  /** Escreveu primeiro (usou o meu convite) sem que eu tivesse o código dele. */
   request?: boolean;
+  /** Código do convite do cartão que EU escaneei: vai nas primeiras mensagens até a sessão firmar. */
+  invite?: string;
 }
+
+/** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
+interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
 export interface IncomingText { msgId: string; text: string; sentAt: number }
 
@@ -37,6 +43,8 @@ export interface MessengerEvents {
   newContact(c: Contact, m: IncomingText): void;
   /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
+  /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
+  inviteUsed(): void;
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
@@ -59,7 +67,7 @@ export interface MessengerOptions {
 
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
 type Payload =
-  | { t: 'm'; i: string; x: string; n?: string }
+  | { t: 'm'; i: string; x: string; n?: string; k?: string }
   | { t: 'a'; i: string[] };
 
 interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean }
@@ -68,6 +76,9 @@ const TTL_SEC = 3 * 24 * 3600;
 const MAX_TEXT = 4000;
 const MAX_CONTACTS_FROM_STRANGERS = 50;
 const MAX_DELIVERED_IDS = 5000;
+const INVITE_TTL_SEC = 24 * 3600;
+const MAX_INVITES = 100;
+const randomHex = (n: number) => toHex(random(n));
 
 export class Messenger {
   readonly router: Router;
@@ -77,6 +88,7 @@ export class Messenger {
   private delivered: string[] = [];
   private deliveredSet = new Set<string>();
   private peers = new Map<string, TransportClass>();
+  private invites = new Map<string, Invite>();
   private o: MessengerOptions;
   /** Nome enviado na primeira mensagem para quem ainda não nos conhece. */
   displayName = '';
@@ -95,7 +107,8 @@ export class Messenger {
       acceptDest: (d, e) => this.managers.public.acceptsDest(d, e) || this.managers.anon.acceptsDest(d, e),
     });
     if (!st) return;
-    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
+    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
+    for (const i of (st.inv ?? []) as Invite[]) if (i.expiresAt > o.now()) this.invites.set(i.code, i);
     // A fila própria volta antes dos ids vistos (senão os próprios envelopes contariam como repetidos).
     for (const q of (st.q ?? []) as Outgoing[]) {
       if (this.router.send(unb64url(q.bytes), o.now()).status === 'stored') this.outbox.set(q.env, q);
@@ -128,13 +141,33 @@ export class Messenger {
   pendingFor(contactId: string) { return [...this.outbox.values()].filter(q => q.to === contactId).map(q => q.msgId); }
 
   /** Cifra e enfileira. `msgId` é o id da mensagem na conversa (para os estados). */
+  /**
+   * Convite atual para o QR da identidade `kind`: o mesmo enquanto não for usado e tiver mais de 1 h
+   * de validade; `fresh` revoga os anteriores dessa identidade e gera outro ("Gerar novo código").
+   */
+  issueInvite(kind: IdentityKind, fresh = false): { code: string; expiresAt: number } {
+    const now = this.o.now();
+    for (const [k, i] of this.invites) if (i.expiresAt <= now || (fresh && i.kind === kind)) this.invites.delete(k);
+    if (!fresh) {
+      const cur = [...this.invites.values()].filter(i => i.kind === kind && i.expiresAt - now > 3600).sort((a, b) => b.expiresAt - a.expiresAt)[0];
+      if (cur) return { code: cur.code, expiresAt: cur.expiresAt };
+    }
+    const inv: Invite = { code: randomHex(8), kind, expiresAt: now + INVITE_TTL_SEC };
+    this.invites.set(inv.code, inv);
+    while (this.invites.size > MAX_INVITES) this.invites.delete(this.invites.keys().next().value!);
+    this.o.events.changed?.();
+    return { code: inv.code, expiresAt: inv.expiresAt };
+  }
+
   sendText(contactId: string, msgId: string, text: string) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     const x = text.slice(0, MAX_TEXT);
     const mgr = this.managers[c.via];
     const p: Payload = { t: 'm', i: msgId, x };
-    if (!mgr.get(contactId)?.established && c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
+    const firm = mgr.get(contactId)?.established;
+    if (!firm && c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
+    if (!firm && c.invite) p.k = c.invite; // prova que escaneei o QR (uso único do lado de lá)
     this.enqueue(c, p, msgId, Priority.Normal);
   }
 
@@ -209,8 +242,13 @@ export class Messenger {
     // Sempre confirma (mesmo repetida: o recibo anterior pode ter se perdido).
     const isNew = !c;
     if (!c) {
+      // Contato novo só com convite válido, emitido por mim para a identidade que recebeu, e ainda não usado.
+      const inv = typeof p.k === 'string' ? this.invites.get(p.k) : undefined;
+      if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return r; }
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
       if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return r; // contra enxurrada de pedidos
+      this.invites.delete(inv.code); // uso único
+      this.o.events.inviteUsed?.();
       const name = typeof p.n === 'string' && used === 'public' ? p.n.slice(0, 40) : '';
       c = { id: m.fromId, via: used, pub: m.from, name, request: true };
       this.contacts.set(c.id, c);
@@ -236,7 +274,8 @@ export class Messenger {
     return JSON.stringify({
       v: 1,
       s: { public: this.managers.public.export(), anon: this.managers.anon.export() },
-      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
+      inv: [...this.invites.values()],
+      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],
       seen: this.router.exportSeen(),
       d: this.delivered,

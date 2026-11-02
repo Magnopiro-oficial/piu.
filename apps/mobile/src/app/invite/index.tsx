@@ -28,10 +28,10 @@ export default function Invite() {
             {card ? <QrCode value={card} size={128} radius={18} label="QR do convite" /> : <View style={{ width: 128, height: 128, borderRadius: 18, backgroundColor: c.invink, opacity: 0.2 }} />}
             <View style={{ gap: 6, minWidth: 0, flex: 1 }}>
               <T size={15} w={600} color={c.invink}>Convite de {inviter}</T>
-              <T size={11.5} mono lh={1.5} color={c.invink} style={{ opacity: 0.72 }}>{`vale por 24 h\nassinado ${fp ? fp[0] + '…' + fp[7] : '…'}`}</T>
+              <T size={11.5} mono lh={1.5} color={c.invink} style={{ opacity: 0.72 }}>{`uso único\nexpira em 24 h\nassinado ${fp ? fp[0] + '…' + fp[7] : '…'}`}</T>
             </View>
           </View>
-          <Pressable onPress={() => { bump(); showToast({ icon: 'qr_code_scanner', title: 'Novo código gerado', body: 'Este vale por 24 h. Quem tiver o anterior ainda consegue escrever até ele vencer.' }); }} accessibilityRole="button"
+          <Pressable onPress={() => { bump(); showToast({ icon: 'qr_code_scanner', title: 'Novo código gerado', body: 'O anterior foi revogado. Este vale por 24 h, para uma pessoa.' }); }} accessibilityRole="button"
             style={{ height: 42, borderRadius: 21, borderWidth: 1, borderColor: c.invink, alignItems: 'center', justifyContent: 'center', opacity: 0.9 }}>
             <T size={14} w={550} color={c.invink}>Gerar novo código</T>
           </Pressable>
