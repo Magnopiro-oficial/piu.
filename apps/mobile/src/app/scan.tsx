@@ -3,7 +3,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import type { ContactCard } from '../messaging/card';
-import { useMessaging } from '../state/messaging';
+import { GROUP_LINK, useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
@@ -20,7 +20,7 @@ import { T } from '../ui/T';
  */
 export default function Scan() {
   const { c } = useTheme();
-  const { readCard, addFromCard, testDeviceCard, ready } = useMessaging();
+  const { readCard, addFromCard, testDeviceCard, ready, joinFromLink } = useMessaging();
   const { chats, showToast, setVerified } = useStore();
   // `verify`: veio da tela do contato para conferir pessoalmente que o QR é mesmo dele.
   const { verify } = useLocalSearchParams<{ verify?: string }>();
@@ -34,6 +34,14 @@ export default function Scan() {
 
   const parse = (text: string) => {
     try {
+      // Convite de grupo, canal ou comunidade: pede para entrar (o admin aprova, se o grupo exigir).
+      if (text.trim().startsWith(GROUP_LINK) && !target) {
+        const name = joinFromLink(text);
+        setCamera(false);
+        showToast({ icon: 'schedule_send', title: `Pedido enviado para ${name}`, body: 'Você entra quando um admin receber o pedido (e aprovar, se o grupo exigir).' });
+        router.back();
+        return;
+      }
       const k = readCard(text);
       setCamera(false);
       if (target) {

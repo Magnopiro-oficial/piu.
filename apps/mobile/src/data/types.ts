@@ -27,6 +27,8 @@ export interface Chat {
   peer?: string;
   /** Escreveu primeiro, sem que você tivesse o código dele: confira antes de confiar. */
   request?: boolean;
+  /** Grupo, canal ou comunidade real (id do grupo no protocolo). */
+  group?: string;
   /** Silenciado: sem banners desta conversa. */
   muted?: boolean;
   msgs?: Msg[];

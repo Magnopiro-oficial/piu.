@@ -409,7 +409,7 @@ export class Messenger {
   }
 
   /** Cria um grupo, canal ou comunidade comigo como admin e envia o estado a cada membro. */
-  createGroup(o: { kind: GroupKind; name: string; desc?: string; via: IdentityKind; memberIds: string[]; send?: 'all' | 'admins'; inv?: 'all' | 'admins'; approve?: boolean; visibility?: ChannelVisibility; parent?: string }): GroupState {
+  createGroup(o: { kind: GroupKind; name: string; desc?: string; via: IdentityKind; memberIds: string[]; send?: 'all' | 'admins'; inv?: 'all' | 'admins'; approve?: boolean; visibility?: ChannelVisibility; parent?: string; postMods?: boolean }): GroupState {
     const me = this.o.identities[o.via];
     const members: GroupMember[] = [{ id: me.id, name: o.via === 'public' ? this.displayName || 'Você' : '', role: 'admin', pub: toPublic(me) }];
     for (const id of o.memberIds) {
@@ -421,7 +421,7 @@ export class Messenger {
     const g: GroupState = {
       id: newGroupId(), kind: o.kind, name: o.name.trim().slice(0, 60), desc: (o.desc ?? '').slice(0, 200), via: o.via, rev: 1, keyV: 1, key: newKey(), members,
       send: o.kind === 'group' ? o.send ?? 'all' : 'admins', inv: o.inv ?? 'admins', approve: o.approve ?? true,
-      visibility: o.kind === 'channel' ? o.visibility ?? 'private' : undefined, children: o.kind === 'community' ? [] : undefined, parent: o.parent,
+      visibility: o.kind === 'channel' ? o.visibility ?? 'private' : undefined, postMods: o.kind === 'channel' ? !!o.postMods : undefined, children: o.kind === 'community' ? [] : undefined, parent: o.parent,
     };
     this.groups.set(g.id, g);
     this.refreshGroupKeys();
@@ -452,7 +452,7 @@ export class Messenger {
   }
 
   /** Muda nome, regras ou a lista de uma comunidade (admin). */
-  updateGroup(gid: string, patch: Partial<Pick<GroupState, 'name' | 'desc' | 'send' | 'inv' | 'approve' | 'visibility' | 'children'>>) {
+  updateGroup(gid: string, patch: Partial<Pick<GroupState, 'name' | 'desc' | 'send' | 'inv' | 'approve' | 'visibility' | 'children' | 'postMods'>>) {
     const g = this.assertAdmin(gid);
     const next: GroupState = { ...g, ...patch, rev: g.rev + 1 };
     if (next.kind !== 'group') next.send = 'admins';
@@ -500,7 +500,7 @@ export class Messenger {
   }
 
   /** Torna alguém admin (ou membro de novo). */
-  setRole(gid: string, id: string, role: 'admin' | 'member') {
+  setRole(gid: string, id: string, role: 'admin' | 'mod' | 'member') {
     const g = this.assertAdmin(gid);
     const next = { ...g, members: g.members.map(m => (m.id === id ? { ...m, role } : m)), rev: g.rev + 1 };
     if (!next.members.some(m => m.role === 'admin')) throw new Error('O grupo precisa de pelo menos um admin.');
@@ -560,6 +560,21 @@ export class Messenger {
     this.enqueue(this.contacts.get(c.id)!, p, null, Priority.High);
   }
 
+  /** Membro de uma comunidade pede para entrar num grupo/canal dela (vai para os admins do grupo). */
+  requestJoinChild(communityId: string, childId: string) {
+    const com = this.groups.get(communityId);
+    if (!com || !com.children?.some(x => x.id === childId)) throw new Error('Grupo fora desta comunidade.');
+    const p: Payload = { t: 'gj', g: childId, c: 'community:' + communityId };
+    if (com.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
+    const me = this.myId(com.via);
+    for (const m of com.members) {
+      if (m.role !== 'admin' || m.id === me) continue;
+      const c = this.contacts.get(m.id) ?? { id: m.id, via: com.via, pub: m.pub, name: m.name };
+      if (!this.contacts.has(c.id)) this.contacts.set(c.id, c);
+      this.enqueue(c, p, null, Priority.High);
+    }
+  }
+
   /** Admin aprova ou recusa um pedido pendente. */
   answerJoin(gid: string, id: string, accept: boolean) {
     const list = this.pendingJoins.get(gid) ?? [];
@@ -577,10 +592,14 @@ export class Messenger {
     const g = typeof p.g === 'string' ? this.groups.get(p.g) : undefined;
     if (!g || g.via !== via || !isAdmin(g, this.myId(via))) return;
     const inv = g.invite;
-    if (!inv || inv.code !== p.c || inv.expiresAt <= this.o.now() || inv.uses >= GROUP_INVITE_MAX_USES) return;
+    // Pedido por convite (código do link) ou por fazer parte da comunidade que reúne o grupo.
+    const viaCommunity = typeof p.c === 'string' && p.c.startsWith('community:') && g.parent === p.c.slice(10)
+      && !!this.groups.get(g.parent) && isMemberOf(this.groups.get(g.parent)!, from);
+    const viaInvite = !!inv && inv.code === p.c && inv.expiresAt > this.o.now() && inv.uses < GROUP_INVITE_MAX_USES;
+    if (!viaCommunity && !viaInvite) return;
     if (isMemberOf(g, from)) { this.distribute(g); return; }
     const name = typeof p.n === 'string' && via === 'public' ? p.n.slice(0, 40) : '';
-    this.groups.set(g.id, { ...g, invite: { ...inv, uses: inv.uses + 1 } });
+    if (viaInvite && inv) this.groups.set(g.id, { ...g, invite: { ...inv, uses: inv.uses + 1 } });
     if (g.approve) {
       const list = (this.pendingJoins.get(g.id) ?? []).filter(x => x.id !== from);
       if (list.length >= 100) return;

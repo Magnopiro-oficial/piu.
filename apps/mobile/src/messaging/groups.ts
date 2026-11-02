@@ -21,7 +21,8 @@ import { b64url, unb64url } from './card';
 export type GroupKind = 'group' | 'channel' | 'community';
 export type ChannelVisibility = 'public' | 'private' | 'secret';
 
-export interface GroupMember { id: string; name: string; role: 'admin' | 'member'; pub: PublicIdentity }
+/** `mod`: moderador (canal com "Admins e moderadores" publicando). */
+export interface GroupMember { id: string; name: string; role: 'admin' | 'mod' | 'member'; pub: PublicIdentity }
 
 export interface GroupState {
   /** 16 bytes em hex. */
@@ -42,6 +43,8 @@ export interface GroupState {
   /** Quem pode convidar. */
   inv: 'all' | 'admins';
   approve: boolean;
+  /** Canal: moderadores também publicam. */
+  postMods?: boolean;
   visibility?: ChannelVisibility;
   /** Comunidade: grupos e canais que ela reúne. */
   children?: { id: string; name: string; kind: 'group' | 'channel' }[];
@@ -62,7 +65,7 @@ export const isAdmin = (g: GroupState, id: string) => g.members.some(m => m.id =
 export const isMemberOf = (g: GroupState, id: string) => g.members.some(m => m.id === id);
 /** Pode publicar mensagens no grupo? */
 export const canPost = (g: GroupState, id: string) =>
-  isMemberOf(g, id) && (g.kind === 'group' && g.send === 'all' ? true : isAdmin(g, id));
+  isMemberOf(g, id) && (g.kind === 'group' && g.send === 'all' ? true : isAdmin(g, id) || (!!g.postMods && g.members.some(m => m.id === id && m.role === 'mod')));
 
 export const groupKeyOf = (g: { id: string; keyV: number; key: string }): GroupKey =>
   ({ groupId: Uint8Array.from(g.id.match(/../g)!.map(x => parseInt(x, 16))), version: g.keyV, key: unb64url(g.key) });
@@ -87,7 +90,7 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
     if (typeof j.key !== 'string' || unb64url(j.key).length !== 32) return null;
     if (!Array.isArray(j.members) || j.members.length < 1 || j.members.length > MAX_GROUP_MEMBERS) return null;
     const members: GroupMember[] = j.members.map((m: Record<string, string>) => ({
-      id: String(m.id), name: String(m.name ?? '').slice(0, 40), role: m.role === 'admin' ? 'admin' : 'member',
+      id: String(m.id), name: String(m.name ?? '').slice(0, 40), role: m.role === 'admin' ? 'admin' : m.role === 'mod' ? 'mod' : 'member',
       pub: { signPk: unb64url(m.s), agreePk: unb64url(m.a), binding: unb64url(m.b) },
     }));
     if (!members.some(m => m.role === 'admin')) return null;
@@ -95,7 +98,7 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
     return {
       id: j.id, kind: j.kind, name: String(j.name ?? '').slice(0, 60), desc: String(j.desc ?? '').slice(0, 200), via,
       rev: j.rev, keyV: j.keyV, key: j.key, members,
-      send: j.kind === 'group' && j.send === 'all' ? 'all' : 'admins', inv: j.inv === 'all' ? 'all' : 'admins', approve: !!j.approve,
+      send: j.kind === 'group' && j.send === 'all' ? 'all' : 'admins', inv: j.inv === 'all' ? 'all' : 'admins', approve: !!j.approve, postMods: j.kind === 'channel' && !!j.postMods,
       visibility: ['public', 'private', 'secret'].includes(j.visibility) ? j.visibility : undefined,
       children, parent: typeof j.parent === 'string' && /^[0-9a-f]{32}$/.test(j.parent) ? j.parent : undefined,
       invite: j.invite && typeof j.invite.code === 'string' ? { code: j.invite.code, expiresAt: Number(j.invite.expiresAt), uses: Number(j.invite.uses) || 0 } : undefined,

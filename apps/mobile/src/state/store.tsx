@@ -191,10 +191,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chat = chats.find(c => c.id === cid);
       const id = 'n' + Date.now();
       push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now() });
-      if (chat?.peer) {
-        // Real: cifrado na sessão e na fila do roteador; os estados seguintes vêm da rede.
-        const ok = outbound.current?.(cid, chat.peer, id, text) ?? false;
-        later(ok ? 300 : 0, () => setStatus(cid, id, ok ? 'aguardando' : 'falha'));
+      if (chat?.peer || chat?.group) {
+        // Real: cifrado na sessão (ou com a chave do grupo) e na fila do roteador; os estados seguintes vêm da rede.
+        const ok = outbound.current?.(cid, chat.peer ?? 'group:' + chat.group, id, text) ?? false;
+        // Só passa para "na fila" se a rede ainda não avançou o estado (o vizinho pode já ter recebido).
+        later(ok ? 300 : 0, () => patchMsg(cid, id, m => (m.status === 'criada' ? { status: ok ? 'aguardando' : 'falha' } : {})));
         if (chat.request) setChats(cs => cs.map(c => (c.id === cid ? { ...c, request: false } : c)));
         return;
       }
@@ -209,9 +210,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     retry: (cid, mid) => {
       const chat = chats.find(c => c.id === cid);
-      if (chat?.peer) {
+      if (chat?.peer || chat?.group) {
         const m = chat.msgs?.find(x => x.id === mid);
-        const ok = !!m && (outbound.current?.(cid, chat.peer, mid, m.text) ?? false);
+        const ok = !!m && (outbound.current?.(cid, chat.peer ?? 'group:' + chat.group, mid, m.text) ?? false);
         setStatus(cid, mid, ok ? 'aguardando' : 'falha');
         return;
       }
@@ -258,9 +259,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const id = 'f' + Date.now();
       const icon = f.mime.startsWith('image/') ? 'image' as const : 'description' as const;
       const mb = Math.max(0.1, Math.round((f.data.length / 1048576) * 10) / 10);
+      // O balão entra antes do envio: o progresso pode começar a chegar na hora.
+      push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'aguardando', at: Date.now(),
+        file: { name: f.name, mb, blocks: Math.max(1, Math.ceil(f.data.length / (12 * 1024))), icon, done: 0, state: 'sending', real: true, preview: f.preview } });
       const r = fileOps.current?.send(cid, chat.peer, id, f) ?? null;
-      push(cid, { id, from: 'me', text: '', time: nowHM(), status: r ? 'aguardando' : 'falha', at: Date.now(),
-        file: { name: f.name, mb, blocks: r?.blocks ?? 1, icon, done: 0, state: 'sending', real: true, preview: f.preview } });
+      if (!r) setStatus(cid, id, 'falha');
     },
     setFileOps: ops => { fileOps.current = ops; },
     patchFile,

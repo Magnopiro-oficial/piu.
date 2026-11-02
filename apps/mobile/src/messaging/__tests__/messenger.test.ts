@@ -412,3 +412,17 @@ test('grupo: estado salvo e restaurado continua lendo e publicando', () => {
   net.run();
   assert.ok(glog.get('Caio')!.some(([w, t]) => w === 'Beto' && t === 'Beto também publica'));
 });
+
+test('comunidade: membro pede para entrar num grupo dela; sem ser da comunidade, não entra', () => {
+  const { net, a, b, c, all } = trio();
+  const com = a.m.createGroup({ kind: 'community', name: 'Vila', via: 'public', memberIds: [b.ids.public.id] });
+  const g = a.m.createGroup({ kind: 'group', name: 'Horta', via: 'public', memberIds: [], parent: com.id, approve: false });
+  all();
+  b.m.requestJoinChild(com.id, g.id);
+  net.run();
+  assert.equal(b.m.getGroup(g.id)?.name, 'Horta', 'membro da comunidade entrou (sem aprovação)');
+  // Caio não é da comunidade: forja o pedido direto para Ana.
+  (c.m as unknown as { enqueue: (ct: unknown, p: unknown, i: null, pr: number) => void }).enqueue(c.m.getContact(a.ids.public.id), { t: 'gj', g: g.id, c: 'community:' + com.id }, null, 2);
+  net.run();
+  assert.equal(c.m.getGroup(g.id), undefined);
+});

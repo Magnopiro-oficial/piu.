@@ -1,8 +1,9 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { CHANNEL_TYPES } from '../data/seed';
 import type { ChannelType, IdentityKind } from '../data/types';
+import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
@@ -14,8 +15,10 @@ import { T } from '../ui/T';
 
 /** Criar canal (FUN-007): público, privado ou secreto; quem publica; com identidade pública ou anônima. */
 export default function NewChannel() {
+  const { parent } = useLocalSearchParams<{ parent?: string }>();
   const { c } = useTheme();
-  const { createChannel, profile } = useStore();
+  const { createChannel, profile, showToast } = useStore();
+  const { ready, createGroup } = useMessaging();
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [type, setType] = useState<ChannelType>('public');
@@ -26,7 +29,13 @@ export default function NewChannel() {
 
   const create = () => {
     if (!ok) return;
-    const id = createChannel({ name, desc, type, post, ident });
+    // Canal real pelo protocolo (os inscritos entram pelo convite do canal). Sem chaves ainda: só local.
+    let id: string;
+    try {
+      id = ready
+        ? createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent })
+        : createChannel({ name, desc, type, post, ident });
+    } catch (e) { showToast({ icon: 'error', title: 'Não foi possível criar', body: (e as Error).message }); return; }
     router.dismissTo('/(tabs)');
     router.push({ pathname: '/chat/[id]', params: { id } });
   };

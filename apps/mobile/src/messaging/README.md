@@ -32,4 +32,14 @@ No navegador e no Expo Go não há Bluetooth. Por isso, o transporte simulado tr
 
 - **Celulares de verdade:** o caminho foi testado no Node (`__tests__/messenger.test.ts`: entrega, relay, Modo nó, reabrir o app, replay, identidade anônima, chaves trocadas) e no navegador. Falta o teste em celulares com o módulo nativo.
 - **Envelopes grandes no Bluetooth:** o transporte nativo já fatia em blocos; a fragmentação do protocolo (`fragment.ts`) será necessária para LoRa.
-- Arquivos, grupos e canais reais.
+
+## Arquivos (FUN-009)
+Oferta com nome, tamanho, tipo e SHA-256; blocos de 12 KB dentro da sessão, cada um confirmado (janela de 8 sem confirmação); pausar e retomar continuam de onde parou; envelopes de arquivo marcados como mídia (nunca por LoRa); o destino monta, confere o SHA-256 e confirma. Limite de 50 MB. Só de contatos aceitos.
+
+## Grupos, canais e comunidades (`groups.ts`)
+- Estado do grupo com revisão e versão de chave; só admins mudam, e o estado vai a cada membro pela sessão 1:1 (autenticado). Não aceita revisão antiga nem chave mais velha.
+- Mensagens no envelope de grupo com a chave da versão atual; o roteador só abre mensagem de quem ainda é membro e pode publicar (canal e comunidade: admins, e moderadores se o canal permitir).
+- Remover troca a chave para os demais; quem saiu é avisado e apaga o grupo. Sair avisa os admins, que trocam a chave.
+- Convite do grupo: link `piug:` com o cartão assinado do admin e um código que vale 7 dias e até 50 usos; com "Aprovar quem entra", o pedido espera um admin.
+- Comunidade: lista os grupos e canais criados nela; membros da comunidade pedem para entrar sem precisar de convite.
+

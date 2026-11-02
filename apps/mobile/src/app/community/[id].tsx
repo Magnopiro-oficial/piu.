@@ -1,4 +1,7 @@
+import { useLocalSearchParams } from 'expo-router';
 import { ScrollView, View } from 'react-native';
+import { useStore } from '../../state/store';
+import { RealCommunity } from '../../ui/RealCommunity';
 import { COMMUNITY } from '../../data/seed';
 import { useTheme } from '../../theme/ThemeProvider';
 import { BackHeader } from '../../ui/Controls';
@@ -9,6 +12,9 @@ import { T } from '../../ui/T';
 /** Comunidade: grupos e canais agrupados. */
 export default function Community() {
   const { c } = useTheme();
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const real = useStore().chats.find(x => x.id === id && x.group);
+  if (real) return <RealCommunity chat={real} />;
   const k = COMMUNITY;
   return (
     <Screen>

@@ -41,14 +41,16 @@ export default function ChatScreen() {
   }
 
   const msgs = chat.msgs ?? [];
-  const readOnly = chat.kind === 'channel' && !chat.owner;
+  // Real (grupo/canal pelo protocolo): publica quem o estado do grupo permite. Exemplo: canal só do dono.
+  const readOnly = chat.group ? !chat.owner : chat.kind === 'channel' && !chat.owner;
   const canSend = draft.trim().length > 0;
   const submit = () => { if (!canSend) return; send(chat.id, draft.trim()); setDraft(''); toEnd(); };
   const selected = msgs.find(m => m.id === routeMsg);
   // ⋯ abre o contato (conversa direta), o grupo, ou mostra os dados do canal.
   const openInfo = () => {
     if (chat.kind === 'direct') router.push({ pathname: '/contact/[id]', params: { id: chat.id } });
-    else if (chat.kind === 'group') router.push({ pathname: '/group/[id]', params: { id: chat.id } });
+    else if (chat.kind === 'group' || (chat.group && chat.kind === 'channel')) router.push({ pathname: '/group/[id]', params: { id: chat.id } });
+    else if (chat.group && chat.kind === 'community') router.push({ pathname: '/community/[id]', params: { id: chat.id } });
     else showToast({ icon: 'campaign', title: chat.name, body: chat.sub ?? '' });
   };
   const onAttach = (k: 'image' | 'doc' | 'location') => {

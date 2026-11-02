@@ -5,6 +5,7 @@ import { GROUP_SIZE } from '../../data/seed';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
+import { RealGroupInfo } from '../../ui/RealGroupInfo';
 import { Button } from '../../ui/Button';
 import { BackHeader, QrPlaceholder, SectionLabel, Segmented, Toggle } from '../../ui/Controls';
 import { Dialog } from '../../ui/Dialog';
@@ -20,6 +21,7 @@ export default function GroupInfo() {
   const [target, setTarget] = useState<string | null>(null);
   const chat = chats.find(x => x.id === id);
   if (!chat) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Grupo não encontrado.</T></Screen>;
+  if (chat.group) return <RealGroupInfo chat={chat} />;
 
   const removed = 6 - group.members.length;
   const count = GROUP_SIZE - removed;

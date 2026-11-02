@@ -13,11 +13,10 @@ import { T } from '../ui/T';
 export default function NewChat() {
   const { c } = useTheme();
   const { chats, showToast } = useStore();
-  const soon = (title: string) => () => showToast({ icon: 'hourglass_top', title, body: 'Chega numa próxima versão do app.' });
   const actions: [IconName, string, string, () => void][] = [
-    ['group_add', 'Novo grupo', 'Até 200 membros, com convites', soon('Novo grupo')],
+    ['group_add', 'Novo grupo', 'Até 200 membros, com convites', () => router.push('/new-group')],
     ['campaign', 'Novo canal', 'Público, privado ou secreto', () => router.push('/new-channel')],
-    ['workspaces', 'Nova comunidade', 'Reúna grupos e canais', soon('Nova comunidade')],
+    ['workspaces', 'Nova comunidade', 'Reúna grupos e canais', () => router.push({ pathname: '/new-group', params: { kind: 'community' } })],
     ['qr_code_scanner', 'Escanear código', 'Adicione alguém pessoalmente', () => router.push('/scan')],
     ['qr_code_2', 'Meu código', 'Mostre para a pessoa escanear', () => router.push('/my-code')],
     ['person_add', 'Convidar para o Piu', 'Envie o app sem internet, de celular para celular', () => router.push('/invite')],

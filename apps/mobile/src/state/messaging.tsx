@@ -3,7 +3,10 @@ import type { Chat } from '../data/types';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
+import { router } from 'expo-router';
 import { type Contact, Messenger } from '../messaging/messenger';
+import { canPost, type GroupState } from '../messaging/groups';
+import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
 import { getTransport } from '../transport';
@@ -40,6 +43,26 @@ interface Messaging {
   contactKeys: (chatId: string) => PublicIdentity | null;
   /** Cartão do aparelho de teste (só no transporte simulado). */
   testDeviceCard: (() => string) | null;
+  /** Contatos aceitos de uma identidade (para escolher membros). */
+  contactsFor: (via: IdentityKind) => { id: string; name: string }[];
+  /** Estado real de um grupo/canal/comunidade da conversa (ou null). */
+  groupOf: (chatId: string) => GroupState | null;
+  /** Meu id na identidade usada pelo grupo (para saber se sou admin). */
+  myIdIn: (via: IdentityKind) => string;
+  createGroup: (o: Parameters<Messenger['createGroup']>[0]) => string;
+  groupOps: {
+    update: Messenger['updateGroup']; addMembers: Messenger['addMembers']; remove: Messenger['removeMember'];
+    setRole: Messenger['setRole']; leave: (gid: string) => void; answerJoin: Messenger['answerJoin'];
+    pending: (gid: string) => { id: string; name: string }[];
+    joinChild: (communityId: string, childId: string) => void;
+    isMember: (gid: string) => boolean;
+    /** Link/QR do convite do grupo (7 dias, até 50 usos). */
+    inviteLink: (gid: string, fresh?: boolean) => string;
+  } | null;
+  /** Lê um convite de grupo (`piug:`) e pede para entrar. Devolve o nome do grupo. */
+  joinFromLink: (text: string) => string;
+  /** Muda quando grupos ou pedidos mudam (para as telas se atualizarem). */
+  groupEpoch: number;
 }
 
 const Ctx = createContext<Messaging | null>(null);
@@ -52,7 +75,7 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
   const { priv, sto, bat } = useSettings();
@@ -60,6 +83,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
   const [inviteEpoch, setInviteEpoch] = useState(0);
+  const [groupEpoch, setGroupEpoch] = useState(0);
 
   // Referências para os eventos do mensageiro (que vivem fora do React).
   const chatsRef = useRef(chats); chatsRef.current = chats;
@@ -77,8 +101,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => { void saveNow().catch(() => {}); }, SAVE_DELAY);
   }, [saveNow]);
 
-  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile });
-  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile };
+  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat });
+  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat };
 
   // Cria o mensageiro quando as chaves existem.
   useEffect(() => {
@@ -97,6 +121,28 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
+        // Grupos: entrar, mudanças, remoção e mensagens.
+        groupUpdated: (g, change) => {
+          setGroupEpoch(e => e + 1);
+          const cid = chatIdForGroup(g.id);
+          const exists = chatsRef.current.some(c => c.id === cid);
+          if (change === 'removed') {
+            if (exists) handlers.current.receive(cid, { id: 'sys-rm-' + Date.now(), from: 'sys', time: nowHM(), text: g.kind === 'channel' ? 'Você não está mais neste canal.' : 'Você foi removido. A chave foi trocada: você não lê nada novo.' });
+            return;
+          }
+          const myId = identities[g.via].id;
+          if (!exists) handlers.current.addChat(chatForGroup(g, myId));
+          else handlers.current.patchChat(cid, { name: g.name, initials: initialsOf(g.name), sub: groupSub(g), owner: canPost(g, myId) || undefined });
+        },
+        groupMessage: (gid, _fromId, fromName, x) => {
+          const cid = chatIdForGroup(gid);
+          if (!chatsRef.current.some(c => c.id === cid)) return;
+          handlers.current.receive(cid, { id: 'in-' + gid.slice(0, 6) + '-' + x.msgId, from: 'them', sender: fromName, text: x.text, time: nowHM() });
+        },
+        joinRequest: (gid, who) => {
+          setGroupEpoch(e => e + 1);
+          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver', go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
+        },
         // Arquivos: progresso por bloco, entrega conferida e recebimento.
         fileProgress: (msgId, done, total, dir) => {
           const cid = dir === 'out' ? msgToChat.current.get(msgId) : msgToChat.current.get('in-' + msgId);
@@ -190,7 +236,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         // Responder aceita o pedido de conversa.
         const ct = messenger.getContact(peer);
         if (ct?.request) messenger.addContact(ct);
-        msgToChat.current.set(msgId, chatId); messenger.sendText(peer, msgId, text); return true;
+        msgToChat.current.set(msgId, chatId);
+        if (peer.startsWith('group:')) messenger.sendGroupText(peer.slice(6), msgId, text);
+        else messenger.sendText(peer, msgId, text);
+        return true;
       } catch { return false; }
     });
     return () => setOutbound(null);
@@ -228,9 +277,74 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return (peer && messenger?.getContact(peer)?.pub) || null;
     },
     testDeviceCard: testDevice ? testDevice.card : null,
-  }), [messenger, identities, profile.name, chats, addChat, testDevice, inviteEpoch]);
+    contactsFor: via => (messenger ? messenger.listContacts().filter(c => c.via === via && !c.request).map(c => ({ id: c.id, name: c.name || c.id.slice(4, 8).toUpperCase() })) : []),
+    groupOf: chatId => {
+      const gid = chats.find(c => c.id === chatId)?.group;
+      return (gid && messenger?.getGroup(gid)) || null;
+    },
+    myIdIn: via => identities?.[via].id ?? '',
+    createGroup: o => {
+      if (!messenger) throw new Error('As chaves ainda estão carregando.');
+      const g = messenger.createGroup(o);
+      addChat(chatForGroup(g, identities![o.via].id));
+      setIdentity(o.via);
+      setGroupEpoch(e => e + 1);
+      return chatIdForGroup(g.id);
+    },
+    groupOps: messenger ? {
+      update: (gid, p) => { const g = messenger.updateGroup(gid, p); setGroupEpoch(e => e + 1); patchChat(chatIdForGroup(gid), { name: g.name, initials: initialsOf(g.name), sub: groupSub(g), owner: canPost(g, identities![g.via].id) || undefined }); return g; },
+      addMembers: (gid, ids) => { const g = messenger.addMembers(gid, ids); setGroupEpoch(e => e + 1); patchChat(chatIdForGroup(gid), { sub: groupSub(g) }); return g; },
+      remove: (gid, id) => { const g = messenger.removeMember(gid, id); setGroupEpoch(e => e + 1); patchChat(chatIdForGroup(gid), { sub: groupSub(g) }); return g; },
+      setRole: (gid, id, role) => { const g = messenger.setRole(gid, id, role); setGroupEpoch(e => e + 1); return g; },
+      leave: gid => { messenger.leaveGroup(gid); setGroupEpoch(e => e + 1); },
+      answerJoin: (gid, id, ok) => { messenger.answerJoin(gid, id, ok); setGroupEpoch(e => e + 1); },
+      pending: gid => messenger.pendingJoinsOf(gid),
+      joinChild: (comId, childId) => messenger.requestJoinChild(comId, childId),
+      isMember: gid => !!messenger.getGroup(gid),
+      inviteLink: (gid, fresh) => {
+        const g = messenger.getGroup(gid)!;
+        const inv = messenger.groupInvite(gid, fresh);
+        if (fresh) setGroupEpoch(e => e + 1);
+        // O link leva o meu cartão (assinado, com o código do convite) e o id do grupo.
+        const card = encodeCard(identities![g.via], g.via === 'public' ? profile.name : '', { code: inv.code, expiresAt: inv.expiresAt });
+        return GROUP_LINK + b64url(new TextEncoder().encode(JSON.stringify({ c: card, g: g.id, n: g.name, k: g.kind })));
+      },
+    } : null,
+    joinFromLink: text => {
+      if (!messenger) throw new Error('As chaves ainda estão carregando.');
+      const t = text.trim();
+      if (!t.startsWith(GROUP_LINK)) throw new Error('Isto não é um convite de grupo do Piu.');
+      let j: { c?: string; g?: string; n?: string; k?: string };
+      try { j = JSON.parse(new TextDecoder().decode(unb64url(t.slice(GROUP_LINK.length)))); } catch { throw new Error('Convite incompleto ou corrompido.'); }
+      if (typeof j.c !== 'string' || typeof j.g !== 'string' || !/^[0-9a-f]{32}$/.test(j.g)) throw new Error('Convite incompleto ou corrompido.');
+      const card = decodeCard(j.c, now()); // assinatura e validade (7 dias) conferidas aqui
+      if (messenger.getGroup(j.g)) throw new Error('Você já participa deste grupo.');
+      messenger.requestJoin({ id: card.id, via: card.kind, pub: card.pub, name: card.name }, j.g, card.invite);
+      return String(j.n ?? 'grupo').slice(0, 60);
+    },
+    groupEpoch,
+  }), [messenger, identities, profile.name, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Prefixo do link de convite de grupo, canal ou comunidade. */
+export const GROUP_LINK = 'piug:';
+export const chatIdForGroup = (gid: string) => 'g' + gid.slice(0, 20);
+const KIND_LABEL = { group: 'grupo', channel: 'canal', community: 'comunidade' } as const;
+function groupSub(g: GroupState) {
+  const n = g.members.length;
+  if (g.kind === 'channel') return `canal ${g.visibility === 'public' ? 'público' : g.visibility === 'secret' ? 'secreto' : 'privado'} · ${n} ${n === 1 ? 'inscrito' : 'inscritos'}`;
+  if (g.kind === 'community') return `comunidade · ${(g.children ?? []).length} grupos e canais`;
+  return `${n} ${n === 1 ? 'membro' : 'membros'} · chave v${g.keyV}`;
+}
+function chatForGroup(g: GroupState, myId: string): Chat {
+  return {
+    id: chatIdForGroup(g.id), group: g.id, ident: g.via, kind: g.kind === 'community' ? 'community' : g.kind, name: g.name, initials: initialsOf(g.name),
+    time: nowHM(), unread: 0, owner: canPost(g, myId) || undefined,
+    sub: groupSub(g), via: 'Por perto', viaIcon: 'hub',
+    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${KIND_LABEL[g.kind][0].toUpperCase() + KIND_LABEL[g.kind].slice(1)} cifrado de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
+  };
 }
 
 function chatFor(c: Contact, request: boolean): Chat {
