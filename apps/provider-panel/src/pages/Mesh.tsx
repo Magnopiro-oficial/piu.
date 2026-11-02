@@ -37,7 +37,7 @@ export function Mesh() {
               <div key={key} style={{ position: 'absolute', left: x, top: y, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {kind === 'own' && (
                   <div style={{ position: 'relative', width: 46, height: 46 }}>
-                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 2.6s ease-out infinite' }} />
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 3.2s ease-out infinite' }} />
                     <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={icon!} size={22} wght={400} /></div>
                   </div>
                 )}
