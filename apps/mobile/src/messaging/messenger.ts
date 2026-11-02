@@ -63,6 +63,8 @@ export interface MessengerEvents {
   groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
+  /** Um contato avisou que revogou um aparelho (texto do aviso; quem chama confere a assinatura). */
+  notice(contactId: string, notice: string): void;
   /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
   lotClosed(lot: Lot): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
@@ -115,7 +117,9 @@ type Payload =
   /** Pedido para entrar (código do convite do grupo) e aviso de saída/remoção. */
   | { t: 'gj'; g: string; c: string; n?: string }
   | { t: 'gl'; g: string }
-  | { t: 'gr'; g: string };
+  | { t: 'gr'; g: string }
+  /** Aviso assinado de aparelho revogado (lib/devicesCore.ts), para os contatos. */
+  | { t: 'rv'; n: string };
 
 /** Pedido para entrar aguardando um admin (só no aparelho do admin). */
 interface PendingJoin { id: string; name: string; via: IdentityKind; pub: PublicIdentity; at: number }
@@ -590,6 +594,11 @@ export class Messenger {
     }
   }
 
+  /** Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via`. */
+  broadcastNotice(via: IdentityKind, notice: string) {
+    for (const c of this.contacts.values()) if (c.via === via && !c.request) this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High);
+  }
+
   /** Admin aprova ou recusa um pedido pendente. */
   answerJoin(gid: string, id: string, accept: boolean) {
     const list = this.pendingJoins.get(gid) ?? [];
@@ -853,6 +862,7 @@ export class Messenger {
     if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p); return r; }
     if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return r; }
     if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
+    if (p?.t === 'rv') { if (this.contacts.has(m.fromId) && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n); return r; }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
         for (const [k, q] of this.outbox) {

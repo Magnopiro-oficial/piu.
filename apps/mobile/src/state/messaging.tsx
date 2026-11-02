@@ -11,6 +11,10 @@ import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
 import { getTransport } from '../transport';
+import { applySessionRotation, takeRestoredData, useSessionRotationEpoch } from '../lib/migrationState';
+import { markRevocationsSent, pendingRevocations } from '../lib/devices';
+import { decodeRevocation, encodeRevocation, verifyRevocation } from '../lib/devicesCore';
+import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
 import type { IncomingFile } from '../messaging/messenger';
@@ -93,6 +97,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
   const [inviteEpoch, setInviteEpoch] = useState(0);
   const [groupEpoch, setGroupEpoch] = useState(0);
+  const rotationEpoch = useSessionRotationEpoch();
+  const { setProfile, setVerified, addChat: addChatRestore } = useStore();
+  const importRestored = useRef((d: Record<string, unknown>) => {
+    if (d.profile && typeof d.profile === 'object') setProfile(d.profile as never);
+    if (Array.isArray(d.chats)) for (const ch of d.chats as Chat[]) addChatRestore(ch);
+    if (d.verified && typeof d.verified === 'object') for (const [k, v] of Object.entries(d.verified as Record<string, boolean>)) setVerified(k, !!v);
+  });
 
   // Referências para os eventos do mensageiro (que vivem fora do React).
   const chatsRef = useRef(chats); chatsRef.current = chats;
@@ -117,8 +128,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!identities || !node || !onboarded) return;
     let saving: Promise<void> | null = null;
+    // Backup restaurado por arquivo: importa perfil, conversas e verificações uma vez.
+    const restored = takeRestoredData();
+    const restoredState = typeof restored?.['msg.state'] === 'string' ? (restored['msg.state'] as string) : undefined;
+    if (restored) importRestored.current(restored);
     const m = new Messenger({
-      identities, node, relay, now, state: readPersisted<string>(STATE_KEY),
+      // Rotação pendente (migração/revogação) descarta as sessões; dados de um backup restaurado entram aqui.
+      identities, node, relay, now, state: applySessionRotation(readPersisted<string>(STATE_KEY) ?? restoredState),
       randomDelay: () => privRef.current.delay,
       pad: () => privRef.current.pad,
       transmit: async (peerId, bytes) => {
@@ -130,6 +146,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
+        notice: (contactId, text) => {
+          try {
+            const n = decodeRevocation(text);
+            const c = mRef.current?.getContact(contactId);
+            if (!c || !verifyRevocation(n, c.pub.signPk)) return;
+            const cid = chatIdFor(contactId);
+            if (!chatsRef.current.some(x => x.id === cid)) return;
+            handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: 'Este contato revogou um aparelho perdido ou comprometido. Confira o código de segurança pessoalmente antes de confiar em mensagens novas.' });
+          } catch { /* aviso inválido: ignora */ }
+        },
         lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
         // Grupos: entrar, mudanças, remoção e mensagens.
         groupUpdated: (g, change) => {
@@ -196,7 +222,21 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     mRef.current = m;
     setMessenger(m);
     return () => { clearTimeout(saveTimer.current); void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
-  }, [identities, node, onboarded]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [identities, node, onboarded, rotationEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Avisos de aparelho revogado: envia os pendentes aos contatos (pública e anônima, cada um pela sua).
+  useEffect(() => {
+    if (!messenger) return;
+    const flush = () => {
+      const list = pendingRevocations();
+      if (!list.length || !identities) return;
+      for (const n of list) messenger.broadcastNotice(toHex(identities.public.signPk) === toHex(unb64url(n.by)) ? 'public' : 'anon', encodeRevocation(n));
+      void markRevocationsSent(list.map(n => n.sig));
+    };
+    flush();
+    const t = setInterval(flush, 30_000);
+    return () => clearInterval(t);
+  }, [messenger, identities]);
 
   useEffect(() => { if (messenger) { messenger.relay = relay; } }, [messenger, relay]);
   // Limites do nó (Rede e Ajustes → Armazenamento / Bateria e limites) aplicados no roteador.

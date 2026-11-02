@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CHANNEL_TYPES, seedChats, seedMembers } from '../data/seed';
 import type { ChannelType, Chat, FileXfer, IdentityKind, Member, Msg, Status, ToastData } from '../data/types';
+import { notify } from '../lib/notifications';
 import { usePersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 
@@ -139,6 +140,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const viewingIt = viewing.current === cid;
     if (msg.from === 'them' && !viewingIt) {
       const c = chatsRef.current.find(x => x.id === cid);
+      // Com o app em segundo plano, vira notificação do sistema (respeita prévia, tipos e silêncio).
+      if (c && !c.muted) notify({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' || c.kind === 'community' ? 'channel' : 'msg', title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''), data: { href: `/chat/${cid}` } });
       if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
