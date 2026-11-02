@@ -5,7 +5,7 @@
   "description": "piu-node (referência): API local do provider (pareamento, sessão, CSRF, pacotes assinados) e motor de retransmissão LNNP v1 (LAN)",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=20.19"
   },
   "scripts": {
     "dev": "tsx src/main.ts",

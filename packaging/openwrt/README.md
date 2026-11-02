@@ -15,18 +15,18 @@ O piu-node vira um único arquivo JS (esbuild), sem `node_modules` nem addons na
 
 ## Requisitos
 
-### Node.js 22 ou mais novo: atenção à versão do feed
-O piu-node exige Node.js ≥ 22. Versão do pacote `node` no feed `packages` de cada série (lida no `lang/node/Makefile` de cada branch do repositório `openwrt/packages`, em novembro de 2026):
+### Node.js 20.19 ou mais novo: atenção à versão do feed
+O piu-node exige Node.js ≥ 20.19 (o mínimo das bibliotecas `@noble`). O CI roda o piu-node e este pacote em Node 20.19 e 22. Versão do pacote `node` no feed `packages` de cada série (lida no `lang/node/Makefile` de cada branch do repositório `openwrt/packages`, em novembro de 2026):
 
 | OpenWrt | `node` no feed | Gerenciador | Este `.ipk` |
 |---|---|---|---|
 | 23.05 | 18.20.6 | opkg | instala, mas **não inicia** (Node antigo) |
-| 24.10 | 20.20.2 | opkg | instala, mas **não inicia** (Node antigo) |
+| 24.10 | 20.20.2 | opkg | **instala e inicia** (série recomendada para o `.ipk`) |
 | 25.12 | 22.23.4 | **apk** | não instala (`.ipk` é do opkg); use o `Makefile` no SDK 25.12, que gera `.apk` |
 
-Ou seja: **com o feed oficial, nenhuma série atual junta opkg e Node ≥ 22**. Num 23.05/24.10, o pacote só sobe com um `node` ≥ 22 vindo de outro lugar (compilado com o SDK a partir de um feed `packages` mais novo, por exemplo). Quando o Node é antigo, o init script não inicia o serviço e registra no log: `precisa do Node.js 22 ou mais novo; instalado: v20.20.2`. Se o piu-node roda em Node 20 não foi testado (não havia como obter esse Node aqui); a exigência de 22 vem do `engines` do `apps/piu-node/package.json`.
+Ou seja: **use o OpenWrt 24.10 com o `.ipk`**, ou o 25.12 com o `.apk` gerado pelo `Makefile` no SDK. No 23.05, o pacote só sobe com um `node` ≥ 20.19 vindo de outro lugar. Quando o Node é antigo, o init script não inicia o serviço e registra no log, por exemplo: `precisa do Node.js 20.19 ou mais novo; instalado: v18.20.6`. O Node 20 foi testado no CI com o binário oficial x86_64; o do feed do OpenWrt (outro alvo, outras bibliotecas) ainda é **a confirmar no roteador**.
 
-O `Depends: node` não tem versão de propósito: no 23.05 a versão do pacote é `v18.20.6`, e pela comparação do opkg o prefixo `v` passaria num `node (>= 22)`. A conferência fica no init script, que lê `node -v`.
+O `Depends: node` não tem versão de propósito: no 23.05 a versão do pacote é `v18.20.6`, e pela comparação do opkg o prefixo `v` passaria num `node (>= 20.19)`. A conferência fica no init script, que lê `node -v`.
 
 ### Arquiteturas
 O `Makefile` do pacote `node` só permite compilar em alvos **com FPU** e arquitetura `i386`, `x86_64`, `arm` ou `aarch64` (24.10 e 25.12; o 23.05 também aceitava `mipsel`). Isso é o que o build permite; se os servidores do OpenWrt publicam o binário pronto para o **seu** alvo, **a confirmar no roteador**: `opkg update && opkg info node`.
@@ -37,7 +37,7 @@ O `Makefile` do pacote `node` só permite compilar em alvos **com FPU** e arquit
 - **Flash**: o `.ipk` tem cerca de 6,1 MiB e instala 8,4 MiB (o painel é 5,9 MiB, dos quais 5,2 MiB são a fonte Material Symbols). Some o `node` e as dependências dele (`libstdcpp`, `libopenssl`, `zlib`, `libnghttp2`, `libcares`, `libatomic`, ICU opcional): tamanho **a confirmar** com `opkg info`. Na prática, é para equipamento com flash folgada ou com [extroot](https://openwrt.org/docs/guide-user/additional-software/extroot_configuration).
 
 ## Gerar o pacote
-Nesta pasta, com Node 22 e npm:
+Nesta pasta, com Node 20.19+ e npm:
 
 ```bash
 npm run deps          # npm ci no apps/piu-node e no apps/provider-panel
@@ -61,7 +61,7 @@ O OpenWrt usa o dropbear, sem servidor SFTP: com OpenSSH 9 ou mais novo no compu
 scp -O dist/piu-node_0.1.0-1_all.ipk root@192.168.1.1:/tmp/
 ssh root@192.168.1.1
 opkg update
-opkg install node                        # confira antes: node -v (precisa ser >= 22)
+opkg install node                        # confira antes: node -v (precisa ser >= 20.19)
 opkg install /tmp/piu-node_0.1.0-1_all.ipk
 ```
 
@@ -154,5 +154,5 @@ Confirmado no repositório do OpenWrt: na branch `openwrt-25.12` o build usa **a
 ### Só no roteador
 - `opkg install` de verdade (aqui não há opkg: o formato foi conferido contra o código do opkg-lede e o ipkg-build), criação do usuário, `enable`/`start` pelo `default_postinst`.
 - `rc.common` e procd reais: respawn, `no_new_privs`, stdout no `logread`, reload ao `uci commit`, IP da `lan` por `network_get_ipaddr`.
-- Node ≥ 22 no alvo, memória real do processo e espaço em flash do `node`.
+- Node ≥ 20.19 no alvo, memória real do processo e espaço em flash do `node`.
 - Backup e restauração de `/etc/piu-node` pelo `sysupgrade`.

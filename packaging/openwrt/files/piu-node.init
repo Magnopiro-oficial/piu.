@@ -11,8 +11,10 @@ NAME=piu-node
 PROG=/usr/lib/piu-node/piu-node.mjs
 PANEL=/usr/share/piu-node/panel
 NODE_BIN=/usr/bin/node
-# O piu-node exige Node.js 22 ou mais novo (apps/piu-node/package.json, "engines").
-MIN_NODE_MAJOR=22
+# O piu-node exige Node.js 20.19 ou mais novo (apps/piu-node/package.json, "engines"; o mínimo das
+# bibliotecas @noble). O OpenWrt 24.10 traz o 20.20 no feed oficial.
+MIN_NODE_MAJOR=20
+MIN_NODE_MINOR=19
 
 # UCI -> ambiente: tipo, seção, opção, variável. Para suportar uma variável nova, acrescente
 # uma linha aqui e a opção (comentada, com o padrão) em /etc/config/piu-node.
@@ -78,22 +80,24 @@ piu_env() {
 }
 
 piu_check_node() {
-	local v major
+	local v major minor
 	[ -x "$NODE_BIN" ] || {
 		piu_log "Node.js não encontrado em $NODE_BIN (opkg install node)"
 		return 1
 	}
 	v="$("$NODE_BIN" -v 2>/dev/null)"
 	major="${v#v}"
+	minor="${major#*.}"
 	major="${major%%.*}"
-	case "$major" in
+	minor="${minor%%.*}"
+	case "$major$minor" in
 		''|*[!0-9]*)
 			piu_log "versão do Node.js ilegível: '$v'"
 			return 1
 			;;
 	esac
-	[ "$major" -ge "$MIN_NODE_MAJOR" ] || {
-		piu_log "precisa do Node.js $MIN_NODE_MAJOR ou mais novo; instalado: $v"
+	[ "$major" -gt "$MIN_NODE_MAJOR" ] || { [ "$major" -eq "$MIN_NODE_MAJOR" ] && [ "$minor" -ge "$MIN_NODE_MINOR" ]; } || {
+		piu_log "precisa do Node.js $MIN_NODE_MAJOR.$MIN_NODE_MINOR ou mais novo; instalado: $v"
 		return 1
 	}
 }

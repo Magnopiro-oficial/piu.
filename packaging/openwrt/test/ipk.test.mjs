@@ -266,11 +266,14 @@ describe('init script procd e config UCI', () => {
     assert.ok(!('PIU_LNNP_ALLOW' in r.env));
   });
 
-  test('Node.js antigo (ex.: 20, do feed do 24.10) ou desligado: não inicia', () => {
+  test('Node.js antigo (18 do 23.05, 20 antes do 20.19) ou desligado: não inicia; 20.20 do 24.10 inicia', () => {
     const cfg = withData(shipped(), join(tmp, 'data-velho'));
-    const old = startService({ config: cfg, nodeVersion: 'v20.20.2' });
-    assert.equal(old.rc, 'rc=1');
-    assert.doesNotMatch(old.out, /open_instance/);
+    for (const v of ['v18.20.6', 'v20.18.3', 'v19.9.0']) {
+      const old = startService({ config: cfg, nodeVersion: v });
+      assert.equal(old.rc, 'rc=1', v);
+      assert.doesNotMatch(old.out, /open_instance/, v);
+    }
+    for (const v of ['v20.20.2', 'v20.19.0', 'v22.23.4', 'v24.1.0']) assert.match(startService({ config: cfg, nodeVersion: v }).out, /open_instance/, v);
     const off = startService({ config: cfg.replace("config piu-node 'main'\n\toption enabled '1'", "config piu-node 'main'\n\toption enabled '0'") });
     assert.equal(off.rc, 'rc=0');
     assert.doesNotMatch(off.out, /open_instance/);

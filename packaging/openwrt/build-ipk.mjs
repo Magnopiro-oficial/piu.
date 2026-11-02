@@ -61,7 +61,7 @@ await build({
   bundle: true,
   platform: 'node',
   format: 'esm',
-  target: 'node22',
+  target: 'node20',
   banner: { js: "import { createRequire as __piuCreateRequire } from 'node:module';\nconst require = __piuCreateRequire(import.meta.url);" },
   // Dependências opcionais do pino (logger do Fastify) que o nó não usa (transports).
   logOverride: { 'require-resolve-not-external': 'silent' },
@@ -134,7 +134,7 @@ Maintainer: Lunes Network
 Architecture: all
 Description: Nó de referência do Piu: painel do provider por HTTPS (porta 8420) e
  retransmissão de envelopes LNNP v1 na rede local (TCP 8422, UDP 8423).
- Requer Node.js 22 ou mais novo. Configuração em /etc/config/piu-node.
+ Requer Node.js 20.19 ou mais novo. Configuração em /etc/config/piu-node.
 `;
 
 const { ipk, installedSize } = buildIpk({
