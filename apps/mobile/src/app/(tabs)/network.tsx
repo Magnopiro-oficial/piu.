@@ -8,10 +8,12 @@ import { SectionLabel, Segmented, Toggle } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { useStats } from '../../state/messaging';
 
 /** Rede: radar de nós, Modo nó (FUN-016), provider, diagnóstico, transportes, limites e nós alcançáveis. */
 export default function Network() {
   const { c } = useTheme();
+  const diag7 = useStats(5000);
   const n = useNetwork();
   const live = (t: keyof typeof n.tx) => n.tx[t];
   const liveCount = NEIGHBORS.filter(x => live(x.t) && !x.spoof).length;
@@ -67,7 +69,7 @@ export default function Network() {
           <Icon name="monitoring" size={22} w={300} />
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <T size={15} w={600}>Diagnóstico local</T>
-            <T size={12.5} color={c.ink2}>96,4% entregues em 7 dias · sem telemetria</T>
+            <T size={12.5} color={c.ink2}>{diag7 && diag7.metrics.sent ? `${Math.round((diag7.metrics.delivered / diag7.metrics.sent) * 1000) / 10}% entregues em 7 dias`.replace('.', ',') : 'Sem envios nesta semana'} · sem telemetria</T>
           </View>
           <Icon name="chevron_right" size={20} w={300} color={c.ink2} />
         </Pressable>

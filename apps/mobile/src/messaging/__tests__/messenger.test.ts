@@ -426,3 +426,75 @@ test('comunidade: membro pede para entrar num grupo dela; sem ser da comunidade,
   net.run();
   assert.equal(c.m.getGroup(g.id), undefined);
 });
+
+test('créditos: relay ganha recibo, a prova de entrega volta pela malha e valida; sem prova, rejeitado', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), r = device(net, 'Relay'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto'));
+  a.m.sendText(b.ids.public.id, 'm1', 'Pela malha');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  assert.equal(r.m.credits.list().length, 0, 'recibo só nasce ao repassar');
+  net.link('Relay', 'Beto'); // repassa (recibo) → entrega → Beto publica a prova, que chega ao relay
+  assert.equal(r.m.credits.totals().pendente, 0);
+  assert.ok(r.m.credits.totals().validado > 0, 'validado pela prova do destino');
+  // Prova falsa (segredo errado) não valida outro envelope.
+  net.unlink('Relay', 'Beto');
+  const eva = device(net, 'Eva');
+  a.m.sendText(b.ids.public.id, 'm2', 'Segunda');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  net.link('Relay', 'Eva'); net.unlink('Relay', 'Eva'); // repassou a quem não é o destino: pendente
+  void eva;
+  const pend = r.m.credits.list().find(c => c.state === 'pendente')!;
+  const fake = new Uint8Array(3 + 32); fake[0] = 0x50; fake[1] = 0x52; fake[2] = 1;
+  fake.set(Uint8Array.from(pend.envelopeId.match(/../g)!.map(x => parseInt(x, 16))), 3);
+  r.m.receive('Eva', fake);
+  assert.equal(r.m.credits.get(pend.envelopeId)?.state, 'pendente');
+  // Nunca entregue: depois de vencer, rejeitado.
+  net.clock += 4 * 24 * 3600; r.m.tick();
+  assert.equal(r.m.credits.get(pend.envelopeId)?.state, 'rejeitado');
+  // O remetente não ganha crédito pelas próprias mensagens.
+  assert.equal(a.m.credits.list().length, 0);
+});
+
+test('créditos: lote semanal (simulado) paga validados depois da carência, com mínimo de 5 LUNES', async () => {
+  const { CreditBook, CREDIT_PARAMS } = await import('../credits');
+  const { makeRelayReceipt } = await import('../../protocol/receipts');
+  const { deriveNodeKey: dn } = await import('../../protocol/keys');
+  const { hash } = await import('../../protocol/suite');
+  const node = dn(newSeed());
+  const book = new CreditBook();
+  const t0 = 1_800_000_000;
+  const n = CREDIT_PARAMS.minLotLunes * CREDIT_PARAMS.creditsPerLunes + 10;
+  for (let i = 0; i < n; i++) {
+    const secret = Uint8Array.of(i & 255, i >> 8, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7, 7);
+    const id = (i.toString(16).padStart(8, '0')).repeat(4);
+    book.addReceipt(makeRelayReceipt(node, id, hash(secret).slice(0, 16), t0), { bytes: 300, expiresAt: t0 + 3600 }, 'ble');
+    assert.ok(book.applyProof(id, secret));
+  }
+  assert.equal(book.tick(t0 + 3 * 86400).lot, undefined, 'ainda na carência');
+  const res = book.tick(t0 + 15 * 86400);
+  assert.ok(res.lot);
+  assert.equal(res.lot!.count, n);
+  assert.equal(res.lot!.simulated, true);
+  assert.equal(book.totals().validado, 0);
+  assert.equal(book.totals().pago, n);
+  // Estado salvo e restaurado.
+  const again = new CreditBook(book.export(t0 + 15 * 86400));
+  assert.equal(again.totals().pago, n);
+  assert.equal(again.lots.length, 1);
+});
+
+test('métricas: enviadas, entregues, latência e saltos medidos neste aparelho', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), r = device(net, 'Relay'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto'));
+  a.m.sendText(b.ids.public.id, 'm1', 'Oi');
+  net.link('Ana', 'Relay'); net.link('Relay', 'Beto');
+  net.clock += 5; a.m.tick(); b.m.tick(); r.m.tick(); net.run();
+  const m = a.m.metrics();
+  assert.equal(m.sent, 1);
+  assert.equal(m.delivered, 1);
+  assert.ok(m.latencyMedian !== null);
+  assert.deepEqual(Object.keys(b.m.metrics().hops), ['2']);
+  assert.equal(r.m.metrics().relayedToday > 0, true);
+});

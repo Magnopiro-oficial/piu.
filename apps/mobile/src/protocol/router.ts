@@ -35,7 +35,7 @@ export interface RouterLimits {
 export const DEFAULT_LIMITS: RouterLimits = { maxBytes: 512 * 1024 * 1024, maxCount: 20000, maxRetentionSec: 48 * 3600, maxEnvelopeBytes: 32 * 1024, maxCopies: 6, maxSeen: 100_000, peerPerMinute: 600, peerBurst: 120 };
 
 export type IngestResult =
-  | { status: 'delivered'; message: Opened; stored: boolean }
+  | { status: 'delivered'; message: Opened; stored: boolean; /** Saltos que ainda restavam ao chegar. */ hopsLeft: number }
   | { status: 'stored' | 'duplicate' | 'expired' | 'relay-off' | 'full'; id: string }
   | { status: 'rejected'; reason: string };
 
@@ -74,6 +74,12 @@ export class Router {
   }
 
   get size() { return this.store.size; }
+  /** Tamanho e validade de um envelope guardado (para o crédito do recibo). */
+  infoOf(id: string) { const e = this.store.get(id); return e ? { bytes: e.bytes.length, expiresAt: e.header.expiresAt, copies: e.copies } : null; }
+  /** Já passou por aqui (vale para provas de entrega: só repassa prova de envelope conhecido). */
+  hasSeen(id: string) { return this.seen.has(id); }
+  /** Bytes guardados de terceiros (diagnóstico). */
+  thirdPartyBytes() { let n = 0; for (const e of this.store.values()) if (!e.own) n += e.bytes.length; return n; }
   /** Envelope criado neste aparelho (não é de terceiros)? */
   isOwn(id: string) { return this.store.get(id)?.own ?? false; }
   has(id: string) { return this.store.has(id); }
@@ -110,7 +116,7 @@ export class Router {
       this.inbox.push(opened);
       // Direta: chegou ao destino, não segue adiante. Grupo: os outros membros ainda precisam receber.
       const stored = h.kind === 2 && this.relay ? this.keep(id, bytes, h, from, false, now) === 'stored' : false;
-      return { status: 'delivered', message: opened, stored };
+      return { status: 'delivered', message: opened, stored, hopsLeft: h.hops };
     }
     if (!own && !this.relay) return { status: 'relay-off', id };
     const r = this.keep(id, bytes, h, from, own, now);

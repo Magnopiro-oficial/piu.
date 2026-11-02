@@ -6,6 +6,7 @@ import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
 import { type Contact, Messenger } from '../messaging/messenger';
 import { canPost, type GroupState } from '../messaging/groups';
+import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
@@ -63,6 +64,14 @@ interface Messaging {
   joinFromLink: (text: string) => string;
   /** Muda quando grupos ou pedidos mudam (para as telas se atualizarem). */
   groupEpoch: number;
+  /** Métricas e créditos deste aparelho (null antes das chaves). */
+  stats: () => Stats | null;
+}
+
+export interface Stats {
+  metrics: ReturnType<Messenger['metrics']>;
+  credits: { totals: ReturnType<CreditBook['totals']>; list: Credit[]; lots: Lot[] };
+  relay: ReturnType<Messenger['relayStatus']>;
 }
 
 const Ctx = createContext<Messaging | null>(null);
@@ -121,6 +130,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
+        lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
         // Grupos: entrar, mudanças, remoção e mensagens.
         groupUpdated: (g, change) => {
           setGroupEpoch(e => e + 1);
@@ -324,6 +334,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return String(j.n ?? 'grupo').slice(0, 60);
     },
     groupEpoch,
+    stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
   }), [messenger, identities, profile.name, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
@@ -380,4 +391,16 @@ export function useMyCard(kind: IdentityKind): [string, () => void] {
     return myCard(kind, f);
   }, [ready, myCard, kind, tick, inviteEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
   return [card, () => { fresh.current = true; setTick(x => x + 1); }];
+}
+
+/** Métricas e créditos atualizados a cada `ms` (padrão 2 s), para as telas de diagnóstico e carteira. */
+export function useStats(ms = 2000): Stats | null {
+  const { stats } = useMessaging();
+  const [v, setV] = useState<Stats | null>(() => stats());
+  useEffect(() => {
+    setV(stats());
+    const t = setInterval(() => setV(stats()), ms);
+    return () => clearInterval(t);
+  }, [stats, ms]);
+  return v;
 }

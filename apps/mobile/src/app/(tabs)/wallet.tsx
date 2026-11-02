@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { BASE_ACTIVITY, BONUS_STEPS, CREDITS, CREDIT_HISTORY, WALLET_ADDR, fmtLunes } from '../../data/wallet';
+import { BASE_ACTIVITY, BONUS_STEPS, WALLET_ADDR, fmtLunes } from '../../data/wallet';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -11,6 +11,8 @@ import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 import { ReceiveSheet, SendSheet } from '../../ui/WalletSheets';
+import { CREDIT_PARAMS } from '../../messaging/credits';
+import { useStats } from '../../state/messaging';
 
 /** Carteira: Saldo (enviar, receber, convidar, bônus, distribuição, atividade) e Créditos de rede. */
 export default function WalletTab() {
@@ -136,27 +138,42 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
 
 function Rewards() {
   const { c } = useTheme();
-  const total = CREDITS.reduce((a, x) => a + x[1], 0);
+  const st = useStats(3000);
+  // Antes das chaves (ou sem nada ainda), mostra os números deste aparelho mesmo assim: zero.
+  const t = st?.credits.totals ?? { pendente: 0, validado: 0, rejeitado: 0, pago: 0 };
+  const rows: [string, number, number][] = [['Validados', t.validado, 1], ['Pendentes', t.pendente, 0.55], ['Pagos', t.pago, 0.3], ['Rejeitados', t.rejeitado, 0.15]];
+  const total = rows.reduce((a, x) => a + x[1], 0);
+  const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const lunes = (n: number) => (n / CREDIT_PARAMS.creditsPerLunes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const history: [IconName, string, string, string][] = [
+    ...(st?.credits.lots ?? []).map(l => ['account_balance_wallet', `Lote ${l.id.replace('lote-', '')} liquidado`, `${new Date(l.closedAt * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · ${lunes(l.credits)} LUNES · simulado`, fmt(l.credits)] as [IconName, string, string, string]),
+    ...(st?.credits.list ?? []).slice(0, 12).map(x => [
+      x.state === 'rejeitado' ? 'block' : x.state === 'pendente' ? 'hourglass_top' : 'verified',
+      `Entrega de terceiro · ${Math.round(x.bytes / 100) / 10} KB`,
+      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${x.state}${x.reason ? ` (${x.reason})` : ''}`,
+      `${x.state === 'rejeitado' ? '' : '+'}${fmt(x.credits)}`,
+    ] as [IconName, string, string, string]),
+  ];
   return (
     <>
       <View style={{ marginTop: 10, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, borderRadius: 26, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
           <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar</T>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>1.042,0</T>
+            <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>{fmt(t.validado)}</T>
             <T size={15} color={c.invink} style={{ opacity: 0.7 }}>créditos</T>
           </View>
-          <T size={12.5} mono color={c.invink} style={{ opacity: 0.7 }}>≈ 10,42 LUNES · estimativa</T>
+          <T size={12.5} mono color={c.invink} style={{ opacity: 0.7 }}>≈ {lunes(t.validado)} LUNES · estimativa</T>
         </View>
-        <View accessibilityLabel="Créditos por estado" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
-          {CREDITS.map(([l, n, , op]) => <View key={l} style={{ width: `${(n / total) * 100}%`, backgroundColor: c.invink, opacity: op }} />)}
+        <View accessibilityLabel="Créditos por estado" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: total ? 'transparent' : 'rgba(127,127,127,0.35)' }}>
+          {total > 0 && rows.map(([l, n, op]) => <View key={l} style={{ width: `${(n / total) * 100}%`, backgroundColor: c.invink, opacity: op }} />)}
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10, columnGap: 16 }}>
-          {CREDITS.map(([l, , v, op]) => (
+          {rows.map(([l, n, op]) => (
             <View key={l} style={{ width: '46%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: c.invink, opacity: op }} />
               <T size={12.5} color={c.invink} style={{ flex: 1, opacity: 0.75 }}>{l}</T>
-              <T size={13} w={600} tabular color={c.invink}>{v}</T>
+              <T size={13} w={600} tabular color={c.invink}>{fmt(n)}</T>
             </View>
           ))}
         </View>
@@ -165,12 +182,13 @@ function Rewards() {
         <Icon name="cloud_off" size={22} w={300} />
         <View style={{ flex: 1, gap: 2 }}>
           <T size={14} w={600}>Liquidação aguardando Mainnet</T>
-          <T size={12.5} lh={1.35} color={c.ink2}>Seus créditos ficam guardados aqui. A liquidação em LUNES acontece quando houver conexão.</T>
+          <T size={12.5} lh={1.35} color={c.ink2}>Seus créditos ficam guardados aqui. Nesta versão, o lote semanal é uma liquidação simulada: a integração com a Lunes Mainnet ainda não existe.</T>
         </View>
       </View>
       <SectionLabel>HISTÓRICO</SectionLabel>
       <View style={{ marginHorizontal: 20 }}>
-        {CREDIT_HISTORY.map(([icon, t, d, s, v]) => <Row key={t} icon={icon} t={t} d={`${d} · ${s}`} v={v} />)}
+        {history.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>Nenhum crédito ainda. Com o Modo nó ligado, cada mensagem de outra pessoa que você levar até o destino gera créditos depois que a entrega for comprovada.</T>}
+        {history.map(([icon, title, d, v], i) => <Row key={`${title}-${i}`} icon={icon} t={title} d={d} v={v} />)}
       </View>
       <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
     </>

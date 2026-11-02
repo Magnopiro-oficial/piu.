@@ -13,11 +13,12 @@
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
-import { envelopeId, Priority } from '../protocol/envelope';
+import { DEFAULT_HOPS, envelopeId, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
 import { b64url, unb64url } from './card';
+import { CreditBook, type Lot } from './credits';
 import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
 import { EnvelopeKind, MsgType, type Opened, sealGroup } from '../protocol/envelope';
 import { toPublic } from '../protocol/keys';
@@ -62,6 +63,8 @@ export interface MessengerEvents {
   groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
+  /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
+  lotClosed(lot: Lot): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
   inviteUsed(): void;
   /** Estado mudou: salvar `export()`. */
@@ -128,7 +131,17 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const FILE_WINDOW = 8;
 const BLOCK_TAG = 0x01;
 
-interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean }
+interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean; /** criada (s) */ at?: number; /** primeira saída (s) e meio */ fwdAt?: number; via?: TransportClass; peers?: string[] }
+
+/** Prova de entrega circulando pela malha (pública: não diz quem é o destino). */
+interface Proof { secret: Uint8Array; at: number; sentTo: Set<string> }
+const PROOF_MAGIC = [0x50, 0x52]; // "PR": quadro de provas (envelopes começam com a versão 0)
+const PROOF_TTL_SEC = 48 * 3600;
+
+/** Métricas locais do diagnóstico (sem telemetria): por dia, só neste aparelho. */
+export interface DayMetrics { sent: number; delivered: number; expired: number; lat: number[]; queue: number[]; hops: Record<string, number>; relayed: number; altRoutes: number; via: Record<string, { ok: number; fail: number; lat: number[] }> }
+const emptyDay = (): DayMetrics => ({ sent: 0, delivered: 0, expired: 0, lat: [], queue: [], hops: {}, relayed: 0, altRoutes: 0, via: {} });
+const MAX_SAMPLES = 300;
 
 const TTL_SEC = 3 * 24 * 3600;
 const MAX_TEXT = 4000;
@@ -174,6 +187,8 @@ export class Messenger {
       anon: st?.s?.anon ? SessionManager.import(o.identities.anon, st.s.anon) : new SessionManager(o.identities.anon),
     };
     this.wantRelay = o.relay;
+    this.credits = new CreditBook(st?.cr);
+    for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
     this.router = new Router({
       node: o.node,
       identities: [o.identities.public, o.identities.anon],
@@ -287,7 +302,7 @@ export class Messenger {
     const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec: TTL_SEC, priority, bulk, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
-    if (msgId && r.status === 'stored') this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false });
+    if (msgId && r.status === 'stored') { this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false, at: now }); if (!(p instanceof Uint8Array) && p.t === 'm') this.day().sent++; }
     this.o.events.changed?.();
     this.flushAll();
   }
@@ -665,6 +680,83 @@ export class Messenger {
     this.o.events.changed?.();
   }
 
+  // ── créditos, provas de entrega e métricas ───────────────────────────
+
+  readonly credits: CreditBook;
+  private proofs = new Map<string, Proof>();
+  private days = new Map<string, DayMetrics>();
+
+  private day(): DayMetrics {
+    const k = this.clock.day();
+    let d = this.days.get(k);
+    if (!d) { d = emptyDay(); this.days.set(k, d); while (this.days.size > 7) this.days.delete(this.days.keys().next().value!); }
+    return d;
+  }
+  private sample(arr: number[], v: number) { arr.push(Math.max(0, v)); if (arr.length > MAX_SAMPLES) arr.shift(); }
+
+  /** Métricas dos últimos 7 dias (diagnóstico local). */
+  metrics() {
+    const days = [...this.days.values()];
+    const sum = (f: (d: DayMetrics) => number) => days.reduce((a, d) => a + f(d), 0);
+    const all = (f: (d: DayMetrics) => number[]) => days.flatMap(f).sort((a, b) => a - b);
+    const pct = (xs: number[], p: number) => (xs.length ? xs[Math.min(xs.length - 1, Math.floor(p * xs.length))] : null);
+    const hops: Record<string, number> = {};
+    for (const d of days) for (const [k, v] of Object.entries(d.hops)) hops[k] = (hops[k] ?? 0) + v;
+    const via: Record<string, { ok: number; fail: number; median: number | null }> = {};
+    for (const d of days) for (const [k, v] of Object.entries(d.via)) {
+      const cur = via[k] ?? { ok: 0, fail: 0, median: null };
+      via[k] = { ok: cur.ok + v.ok, fail: cur.fail + v.fail, median: null };
+    }
+    for (const k of Object.keys(via)) via[k].median = pct(days.flatMap(d => d.via[k]?.lat ?? []).sort((a, b) => a - b), 0.5);
+    const lat = all(d => d.lat), queue = all(d => d.queue);
+    const today = this.day();
+    return {
+      sent: sum(d => d.sent), delivered: sum(d => d.delivered), expired: sum(d => d.expired),
+      latencyMedian: pct(lat, 0.5), latencyP95: pct(lat, 0.95), queueMean: queue.length ? queue.reduce((a, b) => a + b, 0) / queue.length : null, queueMax: queue.at(-1) ?? null,
+      hops, via, relayedToday: today.relayed, altRoutes: sum(d => d.altRoutes), thirdPartyBytes: this.router.thirdPartyBytes(), queued: this.outbox.size,
+    };
+  }
+
+  private addProof(envId: string, secret: Uint8Array) {
+    if (this.proofs.has(envId)) return;
+    this.proofs.set(envId, { secret, at: this.o.now(), sentTo: new Set() });
+    while (this.proofs.size > 2000) this.proofs.delete(this.proofs.keys().next().value!);
+    if (this.credits.applyProof(envId, secret)) this.o.events.changed?.();
+    for (const p of this.peers.keys()) this.sendProofs(p);
+  }
+
+  /** Envia a um vizinho as provas recentes que ele ainda não recebeu de mim (até 64 por quadro). */
+  private sendProofs(peerId: string) {
+    const now = this.o.now();
+    const batch: [string, Proof][] = [];
+    for (const [id, p] of this.proofs) {
+      if (now - p.at > PROOF_TTL_SEC) { this.proofs.delete(id); continue; }
+      if (!p.sentTo.has(peerId)) batch.push([id, p]);
+      if (batch.length >= 64) break;
+    }
+    if (!batch.length) return;
+    const out = new Uint8Array(3 + batch.length * 32);
+    out[0] = PROOF_MAGIC[0]; out[1] = PROOF_MAGIC[1]; out[2] = batch.length;
+    batch.forEach(([id, p], i) => { out.set(Uint8Array.from(id.match(/../g)!.map(x => parseInt(x, 16))), 3 + i * 32); out.set(p.secret, 3 + i * 32 + 16); p.sentTo.add(peerId); });
+    this.o.transmit(peerId, out).catch(() => {});
+  }
+
+  private onProofs(from: string, b: Uint8Array) {
+    const n = b[2];
+    if (b.length !== 3 + n * 32 || n === 0) return;
+    let changed = false;
+    for (let i = 0; i < n; i++) {
+      const id = toHex(b.subarray(3 + i * 32, 3 + i * 32 + 16));
+      const secret = b.slice(3 + i * 32 + 16, 3 + i * 32 + 32);
+      // Só guarda e repassa prova de envelope que passou por aqui (contra enxurrada de provas falsas).
+      if (this.proofs.has(id) || !this.router.hasSeen(id)) continue;
+      if (this.credits.applyProof(id, secret)) changed = true;
+      this.proofs.set(id, { secret, at: this.o.now(), sentTo: new Set([from]) });
+    }
+    if (changed) this.o.events.changed?.();
+    for (const p of this.peers.keys()) if (p !== from) this.sendProofs(p);
+  }
+
   peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); }
   peerDisconnected(peerId: string) { this.peers.delete(peerId); }
   clearPeers() { this.peers.clear(); }
@@ -672,6 +764,9 @@ export class Messenger {
   /** Chamar de tempos em tempos: libera envios com atraso aleatório e apaga o que venceu. */
   tick() {
     this.applyRelay();
+    const ct = this.credits.tick(this.o.now());
+    if (ct.lot) this.o.events.lotClosed?.(ct.lot);
+    if (ct.changed) this.o.events.changed?.();
     this.router.purge(this.o.now());
     // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
     let changed = false;
@@ -679,6 +774,7 @@ export class Messenger {
       if (this.router.has(k)) continue;
       this.outbox.delete(k); changed = true;
       this.o.events.status?.(q.msgId, 'expirada');
+      this.day().expired++;
     }
     if (changed) this.o.events.changed?.();
     this.flushAll();
@@ -714,16 +810,33 @@ export class Messenger {
       const gm = this.groupOut.get(id);
       if (gm) { this.groupOut.delete(id); changed = true; this.o.events.status?.(gm, 'encaminhada'); }
       const q = this.outbox.get(id);
-      if (q && !q.forwarded) { q.forwarded = true; changed = true; this.o.events.status?.(q.msgId, 'encaminhada'); }
-      this.o.transmit(peerId, bytes).catch(() => { /* o vizinho saiu; fica na fila para o próximo */ });
+      if (q && !q.forwarded) { q.forwarded = true; q.fwdAt = now; q.via = via; changed = true; this.o.events.status?.(q.msgId, 'encaminhada'); if (q.at != null) this.sample(this.day().queue, now - q.at); }
+      if (q) { q.peers = [...new Set([...(q.peers ?? []), peerId])]; if (q.peers.length === 2) this.day().altRoutes++; }
+      if (!this.router.isOwn(id)) this.day().relayed++;
+      const vm = (this.day().via[via] ??= { ok: 0, fail: 0, lat: [] });
+      this.o.transmit(peerId, bytes).then(() => { vm.ok++; }, () => { vm.fail++; /* o vizinho saiu; fica na fila para o próximo */ });
     }
+    // Recibos que o roteador acabou de assinar (envelopes de terceiros): viram créditos pendentes.
+    for (const rc of this.router.receipts.splice(0)) {
+      const info = this.router.infoOf(rc.envelopeId);
+      if (info) { this.credits.addReceipt(rc, info, via); changed = true; }
+    }
+    this.sendProofs(peerId);
     if (p && this.relayDay.bytes >= p.dailyBytes) this.applyRelay(); // chegou ao limite do dia
     if (changed) this.o.events.changed?.();
   }
 
   /** Bytes que chegaram de um vizinho. */
   receive(peerId: string, bytes: Uint8Array) {
+    if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     const r = this.router.ingest(bytes, peerId, this.o.now());
+    if (r.status === 'delivered') {
+      // Sou o destino: publico a prova de entrega (segredo que só quem decifrou conhece) e conto os saltos.
+      this.addProof(r.message.id, r.message.ackSecret);
+      const hopsUsed = Math.max(1, DEFAULT_HOPS - r.hopsLeft);
+      const k = hopsUsed >= 4 ? '4+' : String(hopsUsed);
+      this.day().hops[k] = (this.day().hops[k] ?? 0) + 1;
+    }
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
     const m = r.message;
@@ -743,7 +856,11 @@ export class Messenger {
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
         for (const [k, q] of this.outbox) {
-          if (q.msgId === id && q.to === m.fromId) { this.outbox.delete(k); this.router.forget(k); this.o.events.status?.(id, 'entregue'); }
+          if (q.msgId === id && q.to === m.fromId) {
+            this.outbox.delete(k); this.router.forget(k); this.o.events.status?.(id, 'entregue');
+            const d = this.day(); d.delivered++;
+            if (q.at != null) { this.sample(d.lat, this.o.now() - q.at); if (q.via) { const v = (d.via[q.via] ??= { ok: 0, fail: 0, lat: [] }); this.sample(v.lat, this.o.now() - q.at); } }
+          }
         }
       }
       this.o.events.changed?.();
@@ -787,6 +904,8 @@ export class Messenger {
       v: 1,
       s: { public: this.managers.public.export(), anon: this.managers.anon.export() },
       inv: [...this.invites.values()],
+      cr: this.credits.export(this.o.now()),
+      mx: [...this.days],
       g: [...this.groups.values()].map(g => encodeState(g, true)),
       gp: [...this.prevKeys],
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
