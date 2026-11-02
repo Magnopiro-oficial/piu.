@@ -11,4 +11,5 @@ export function getTransport(): Transport {
 }
 
 export { requestTransportPermissions } from './permissions';
+export { MEDIA, rankLinks, SMALL_ENVELOPE_BYTES } from './select';
 export * from './types';
