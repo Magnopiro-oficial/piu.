@@ -1,0 +1,31 @@
+{
+  "name": "piu-settlement",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Liquidação dos lotes de créditos de rede em LUNES na Lunes Mainnet (Substrate): validação, lote numa transação, diário à prova de pagamento duplo",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "build": "tsc -p tsconfig.json",
+    "test": "node --import tsx --test test/*.test.ts",
+    "mainnet:check": "tsx src/cli.ts check",
+    "lot:plan": "tsx src/cli.ts plan",
+    "lot:pay": "tsx src/cli.ts pay"
+  },
+  "dependencies": {
+    "@polkadot/api": "^16.5.6",
+    "@polkadot/api-augment": "^16.5.6",
+    "@polkadot/keyring": "^14.0.3",
+    "@polkadot/util": "^14.0.3",
+    "@polkadot/util-crypto": "^14.0.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2"
+  }
+}

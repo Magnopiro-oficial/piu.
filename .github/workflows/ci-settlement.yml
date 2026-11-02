@@ -1,0 +1,42 @@
+name: CI · liquidação
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/settlement/**', '.github/workflows/ci-settlement.yml']
+  pull_request:
+    paths: ['apps/settlement/**', '.github/workflows/ci-settlement.yml']
+
+# Menor privilégio: o token do GitHub só lê o código.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-settlement-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: liquidação
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/settlement
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/settlement/package-lock.json
+      - run: npm ci
+      - name: Auditoria de dependências (falha em alto/crítico)
+        run: npm audit --omit=dev --audit-level=high
+      - name: Typecheck
+        run: npm run typecheck
+      - name: Testes
+        run: npm test
+      - name: Plano do lote de exemplo (sem rede)
+        run: npm run lot:plan -- examples/lote-exemplo.json
