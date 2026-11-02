@@ -7,12 +7,15 @@ import '@fontsource/geist-mono/600.css';
 import 'material-symbols/rounded.css';
 import './styles.css';
 import { App } from './App';
+import { NodeProvider } from './state/node';
 import { StoreProvider } from './state/store';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <StoreProvider>
-      <App />
-    </StoreProvider>
+    <NodeProvider>
+      <StoreProvider>
+        <App />
+      </StoreProvider>
+    </NodeProvider>
   </StrictMode>,
 );

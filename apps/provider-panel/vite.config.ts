@@ -6,6 +6,8 @@ import react from '@vitejs/plugin-react';
 export default defineConfig({
   plugins: [react()],
   base: './',
+  // Nada embutido como data: (fontes viram arquivos): permite CSP estrita (font-src 'self').
+  build: { assetsInlineLimit: 0 },
   server: { port: 8420, host: true },
   preview: { port: 8420, host: true },
 });

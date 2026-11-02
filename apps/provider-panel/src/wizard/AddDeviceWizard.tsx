@@ -20,8 +20,9 @@ const SCAN_MS = 1600;
 const CHECK_MS = 700;
 
 export function AddDeviceWizard() {
-  const { devices, setWizardOpen, addDevice, navigate, showToast } = useStore();
+  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode } = useStore();
   const parents = devices.filter(d => !d.passive && d.cls !== 'Super Node');
+  const [activating, setActivating] = useState(false);
   const [w, setW] = useState<WizState>(() => ({
     step: 0, fam: 'router', install: 'dl', scan: 'searching', paired: false, n: 0,
     name: FAMILIES[0].defName!, pub: FAMILIES[0].defPub!, parent: parents.find(p => p.id === 'mini')?.id ?? parents[0]?.id ?? '',
@@ -58,7 +59,7 @@ export function AddDeviceWizard() {
     if (w.step === 0) patch({ step: 1, scan: 'searching', paired: false });
     else if (w.step === 1) patch({ step: 2, n: 0 });
     else if (w.step === 2) patch({ step: 3 });
-    else activate();
+    else void activate();
   };
   const back = () => {
     if (w.step === 0) return;
@@ -66,16 +67,20 @@ export function AddDeviceWizard() {
     patch(step === 1 ? { step, scan: 'searching', paired: false } : { step });
   };
 
-  const activate = () => {
-    const id = 'd' + Date.now();
+  const activate = async () => {
+    if (activating) return;
+    const tempId = 'd' + Date.now();
     const dev: RelayNode = {
-      id, name: (w.name || fam.defName || '').trim(), cls: fam.result!, short: fam.short!, model: fam.model!, icon: fam.icon,
+      id: tempId, name: (w.name || fam.defName || '').trim(), cls: fam.result!, short: fam.short!, model: fam.model!, icon: fam.icon,
       status: isAp ? 'active' : 'warming', pph: 0, today: 0, month: 0, neighbors: Number(fam.nb),
       storage: isAp ? null : [0, w.sto], uptime: 'agora', ifaces: fam.ifaces ?? [], receipts: [], fresh: true,
       pub: 'piu.' + w.pub, passive: isAp, parent: isAp ? w.parent : undefined,
     };
     if (isAp) dev.model = `Repetidor comum · firmware original · ligado ao ${parent}`;
-    addDevice(dev);
+    setActivating(true);
+    const id = await addDevice(dev, fam.id);
+    setActivating(false);
+    if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
     navigate('devices', id);
     showToast({ icon: fam.icon, title: dev.name + ' entrou na malha', body: isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
@@ -127,8 +132,18 @@ export function AddDeviceWizard() {
                               <div style={{ fontSize: 11.5, color: 'var(--ink2)' }}>2,1 MB · assinado Lunes · 4C9A…E1F0</div>
                             </div>
                           </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Sem internet: este Mini-PC serve o pacote na rede local. Abra a interface do equipamento e aponte para piu-node.local.</div>
-                          <button type="button" className="btn btn-outline" onClick={() => { const url = `http://${NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
+                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Sem internet: este Mini-PC serve o pacote na rede local, por HTTPS. Abra a interface do equipamento e aponte para piu-node.local.</div>
+                          {(() => {
+                            const m = packages.find(p => p.file === fam.pkg);
+                            return (
+                              <div className="col mono" style={{ gap: 6, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)', fontSize: 11.5, lineHeight: 1.5, wordBreak: 'break-all' }}>
+                                <span style={{ color: 'var(--ink2)' }}>{m ? `sha256 ${m.sha256}` : 'manifesto assinado ao lado do pacote (.manifest.json)'}</span>
+                                <span style={{ userSelect: 'all' }}>node verify-package.mjs {fam.pkg} {fam.pkg}.manifest.json</span>
+                                <span style={{ fontFamily: 'inherit', color: 'var(--ink2)' }}>O instalador só executa se a assinatura da Lunes e o hash conferirem.</span>
+                              </div>
+                            );
+                          })()}
+                          <button type="button" className="btn btn-outline" onClick={() => { const url = `https://${nodeMode === 'node' ? window.location.host : NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
                             style={{ height: 36, borderRadius: 18, fontSize: 13 }}>Copiar link local do pacote</button>
                         </div>
                       ) : (
@@ -287,7 +302,7 @@ export function AddDeviceWizard() {
             <button type="button" className="btn btn-outline" disabled={w.step === 0} onClick={back} style={{ height: 44, padding: '0 18px', borderRadius: 22, fontSize: 14, opacity: w.step > 0 ? 1 : 0.35 }}>Voltar</button>
             <div className="mono" aria-live="polite" style={{ flex: 1, fontSize: 12, color: 'var(--ink2)' }}>{hint}</div>
             <button type="button" className="btn btn-primary" aria-disabled={!canNext} onClick={next} style={{ height: 44, padding: '0 22px', borderRadius: 22, fontSize: 14, opacity: canNext ? 1 : 0.35, transition: 'opacity .25s,transform .15s' }}>
-              {w.step === 3 ? 'Ativar equipamento' : 'Continuar'}
+              {w.step === 3 ? (activating ? 'Ativando…' : 'Ativar equipamento') : 'Continuar'}
             </button>
           </div>
         </div>

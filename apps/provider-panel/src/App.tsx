@@ -1,4 +1,6 @@
 import { Toast } from './components/Overlays';
+import { PairScreen } from './components/Pair';
+import { useNode } from './state/node';
 import { PageHeader, Sidebar, TopBar } from './components/Shell';
 import { Devices } from './pages/Devices';
 import { Earnings } from './pages/Earnings';
@@ -12,6 +14,14 @@ import { AddDeviceWizard } from './wizard/AddDeviceWizard';
 const PAGES = { overview: Overview, devices: Devices, mesh: Mesh, earnings: Earnings, wallet: Wallet, settings: Settings };
 
 export function App() {
+  const { mode } = useNode();
+  // Servido por um piu-node sem sessão: nada do painel aparece antes do pareamento.
+  if (mode.kind === 'loading') return <div aria-busy="true" style={{ height: '100%', background: 'var(--bg)' }} />;
+  if (mode.kind === 'pair') return <PairScreen />;
+  return <Panel />;
+}
+
+function Panel() {
   const { page, wizardOpen } = useStore();
   const Page = PAGES[page];
   return (

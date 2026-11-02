@@ -91,9 +91,9 @@ function DeviceDetail({ d }: { d: RelayNode }) {
     ? [['—', 'LUNES próprios'], [String(d.neighbors), 'celulares'], [parent.split(' ')[0], 'nó pai']]
     : [['+' + fmt(d.today), 'LUNES hoje'], [paused ? '0' : d.pph ? fmtInt(d.pph) : '—', 'pacotes/h'], [String(d.neighbors), 'vizinhos']];
 
-  const revoke = () => {
+  const revoke = async () => {
     setConfirmRevoke(false);
-    revokeDevice(d.id);
+    if (!(await revokeDevice(d.id))) return; // o erro já foi mostrado
     navigate('devices');
     showToast({ icon: 'key_off', title: 'Credencial revogada', body: d.name + ' saiu da sua operação.' });
   };

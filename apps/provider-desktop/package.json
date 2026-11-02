@@ -1,0 +1,34 @@
+{
+  "name": "piu-provider-desktop",
+  "productName": "Piu Provider",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Piu Provider para computador (Linux e macOS): o painel do provider com o piu-node embutido",
+  "license": "AGPL-3.0-only",
+  "author": {
+    "name": "Lunes Network"
+  },
+  "homepage": "https://github.com/lunes-platform/piu.",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lunes-platform/piu..git",
+    "directory": "apps/provider-desktop"
+  },
+  "main": "dist/main.cjs",
+  "scripts": {
+    "deps": "npm --prefix ../piu-node ci && npm --prefix ../provider-panel ci",
+    "build:panel": "npm --prefix ../provider-panel run build",
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "start": "npm run build && electron .",
+    "dist:linux": "npm run build:panel && npm run build && electron-builder --linux AppImage deb",
+    "dist:mac": "npm run build:panel && npm run build && electron-builder --mac dmg zip"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.5",
+    "electron": "45.2.1",
+    "electron-builder": "26.18.1",
+    "esbuild": "0.28.2",
+    "typescript": "~6.0.3"
+  }
+}
