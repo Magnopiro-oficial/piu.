@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
+import { StepUpDialog } from '../components/Pair';
 import { Icon, Segmented, Toggle } from '../components/ui';
 import { OPERATOR, PUB_RULES, SESSIONS } from '../data/seed';
 import { useStore } from '../state/store';
@@ -7,7 +8,25 @@ import type { HoursPolicy, Policies } from '../types';
 const segProps = { gap: 4, radius: 12, btnRadius: 9 } as const;
 
 export function Settings() {
-  const { limits, setLimits, policies, togglePolicy, devices, showToast } = useStore();
+  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp } = useStore();
+  const [stepUpOpen, setStepUpOpen] = useState(false);
+  // Com o piu-node: acessos reais; na demonstração, os do exemplo.
+  const rows: [string, string, string, string][] = sessions
+    ? sessions.map(x => [x.label.startsWith('App') ? 'desktop_windows' : 'computer', x.current ? 'Este acesso' : x.label, `${x.current ? x.label + ' · ' : ''}desde ${when(x.createdAt)}`, x.current ? 'agora' : `visto ${when(x.lastSeen)}`])
+    : SESSIONS;
+  const others = sessions ? sessions.filter(x => !x.current).length : 1;
+  const endOthers = async () => {
+    const r = await revokeOtherSessions();
+    if (r === 'reauth') { setStepUpOpen(true); return; }
+    if (r === 'ok') showToast({ icon: 'logout', title: 'Outras sessões encerradas', body: 'Só este acesso continua aberto.' });
+  };
+  const confirmStepUp = async (code: string) => {
+    const problem = await stepUp(code);
+    if (problem) return problem;
+    setStepUpOpen(false);
+    await endOthers();
+    return null;
+  };
   const policyRows: [keyof Policies | 'alerts', string, string][] = [
     ['media', 'Aceitar arquivos e mídia', 'Só por Wi-Fi e cabo; nunca por LoRa'],
     ['alerts', 'Priorizar alertas oficiais', 'Sempre ativo para alertas assinados'],
@@ -49,7 +68,7 @@ export function Settings() {
 
       <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
         <CardHead title="Acesso a este painel" sub="Disponível só na rede local, nunca pela internet" />
-        {SESSIONS.map(([icon, n, d, s]) => (
+        {rows.map(([icon, n, d, s]) => (
           <div key={n} className="row" style={{ gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
             <Icon name={icon} size={20} wght={300} />
             <div className="col" style={{ flex: 1, gap: 2 }}>
@@ -59,8 +78,9 @@ export function Settings() {
             <span style={{ fontSize: 12, fontWeight: 600 }}>{s}</span>
           </div>
         ))}
-        <button type="button" className="btn btn-outline" onClick={() => showToast({ icon: 'logout', title: 'Outras sessões encerradas', body: 'Só este computador continua com acesso.' })}
-          style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Encerrar outras sessões</button>
+        <button type="button" className="btn btn-outline" disabled={others === 0} onClick={() => void endOthers()}
+          style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, opacity: others === 0 ? 0.4 : 1 }}>{others === 0 ? 'Nenhuma outra sessão' : 'Encerrar outras sessões'}</button>
+        {stepUpOpen && <StepUpDialog onConfirm={confirmStepUp} onClose={() => setStepUpOpen(false)} />}
       </section>
 
       <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
@@ -104,6 +124,15 @@ export function Settings() {
       </section>
     </div>
   );
+}
+
+/** "agora", "há 5 min", "há 2 h", "12/11". */
+function when(at: number) {
+  const m = Math.round((Date.now() - at) / 60_000);
+  if (m < 1) return 'agora';
+  if (m < 60) return `há ${m} min`;
+  if (m < 24 * 60) return `há ${Math.round(m / 60)} h`;
+  return new Date(at).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
 }
 
 export const HOURS: { value: HoursPolicy; label: string }[] = [{ value: 'always', label: 'Sempre' }, { value: 'night', label: '22h–7h' }, { value: 'day', label: '8h–18h' }];

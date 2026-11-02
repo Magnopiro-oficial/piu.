@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
-import { ApiError, NeedsReauth, type ApiDevice, type ApiPackage } from '../lib/api';
+import { ApiError, NeedsReauth, type ApiDevice, type ApiPackage, type ApiSession, type ApiSettings } from '../lib/api';
 import type { DeviceFilter, HoursPolicy, NodeClass, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
 import { useNode } from './node';
 
@@ -41,7 +41,8 @@ interface Store {
   theme: Theme; setTheme: (t: Theme) => void;
   page: PageId; sel: string | null; navigate: (page: PageId, sel?: string | null) => void;
   devices: RelayNode[];
-  addDevice: (d: RelayNode) => void;
+  /** No piu-node: cria no servidor e devolve o id definitivo (ou null se falhou). */
+  addDevice: (d: RelayNode, family: string) => Promise<string | null>;
   togglePause: (id: string) => void;
   /** No piu-node: revoga no servidor; `false` se não foi possível. */
   revokeDevice: (id: string) => Promise<boolean>;
@@ -49,7 +50,10 @@ interface Store {
   devQuery: string; setDevQuery: (q: string) => void;
   balance: number; txs: WalletTx[];
   /** No piu-node: `reauth` quando o servidor pede confirmação recente (step-up). */
-  recordTransfer: (amount: number, tx: WalletTx) => Promise<'ok' | 'reauth' | 'error'>;
+  recordTransfer: (amount: number, tx: WalletTx, to?: string) => Promise<'ok' | 'reauth' | 'error'>;
+  /** Acessos abertos (só com piu-node). */
+  sessions: ApiSession[] | null;
+  revokeOtherSessions: () => Promise<'ok' | 'reauth' | 'error'>;
   /** Confirma com um código novo do equipamento; devolve a mensagem de erro, ou null. */
   stepUp: (code: string) => Promise<string | null>;
   /** 'node' quando servido por um piu-node com sessão; 'demo' quando estático (site, prévia). */
@@ -89,6 +93,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [wizardOpen, setWizardOpen] = useState(false);
   const [toast, setToast] = useState<Store['toast']>(null);
   const [packages, setPackages] = useState<ApiPackage[]>([]);
+  const [sessions, setSessions] = useState<ApiSession[] | null>(null);
+  const settingsLoaded = useRef(false);
   const toastTimer = useRef<number | undefined>(undefined);
   const toastSeq = useRef(0);
 
@@ -104,7 +110,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     node.guard(api.devices()).then(ds => setDevices(ds.map(d => fromApi(d, templates)))).catch(() => {});
     node.guard(api.wallet()).then(w => setBalance(w.balance)).catch(() => {});
     node.guard(api.packages()).then(setPackages).catch(() => {});
-  }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
+    node.guard(api.sessions()).then(setSessions).catch(() => {});
+    node.guard(api.settings()).then(s => { setLimitsState(s.limits); setPolicies(s.policies); settingsLoaded.current = true; }).catch(() => {});
+  }, [api]);
+
+  // Ajustes salvos no nó (depois de carregados, para não sobrescrever com o padrão).
+  useEffect(() => {
+    if (!api || !settingsLoaded.current) return;
+    const t = window.setTimeout(() => {
+      node.guard(api.saveSettings({ limits, policies } as ApiSettings))
+        .catch(e => showToast({ icon: 'error', title: 'Ajuste não salvo', body: e instanceof ApiError ? e.message : 'Tente de novo.' }));
+    }, 400);
+    return () => window.clearTimeout(t);
+  }, [limits, policies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Embutido no site (iframe), acompanha o tema escolhido lá: por mensagem ou pela mesma chave salva.
   useEffect(() => {
@@ -132,7 +150,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       theme, setTheme,
       page: route.page, sel: route.sel, navigate,
       devices,
-      addDevice: d => { setDevices(ds => [...ds, d]); setDevFilter('all'); setDevQuery(''); },
+      addDevice: async (d, family) => {
+        let id = d.id;
+        if (api) {
+          try {
+            const r = await node.guard(api.createDevice({ name: d.name, cls: d.cls, family, ...(d.pub ? { pub: d.pub } : {}) }));
+            id = r.id;
+          } catch (e) {
+            showToast({ icon: 'error', title: 'Não foi possível ativar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+            return null;
+          }
+        }
+        setDevices(ds => [...ds, { ...d, id }]); setDevFilter('all'); setDevQuery('');
+        return id;
+      },
       togglePause: id => {
         const flip = () => setDevices(ds => ds.map(d => (d.id !== id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' })));
         flip();
@@ -150,9 +181,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       devFilter, setDevFilter, devQuery, setDevQuery,
       balance, txs,
-      recordTransfer: async (amount, tx) => {
+      recordTransfer: async (amount, tx, to) => {
         if (api) {
-          try { await node.guard(api.transfer(amount)); } catch (e) {
+          try { await node.guard(api.transfer(amount, to)); } catch (e) {
             if (e instanceof NeedsReauth) return 'reauth';
             showToast({ icon: 'error', title: 'Transferência não feita', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return 'error';
@@ -165,6 +196,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!api) return null;
         try { await node.guard(api.reauth(code)); return null; } catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível confirmar.'; }
       },
+      sessions,
+      revokeOtherSessions: async () => {
+        if (!api) return 'ok';
+        try { await node.guard(api.revokeOtherSessions()); } catch (e) {
+          if (e instanceof NeedsReauth) return 'reauth';
+          showToast({ icon: 'error', title: 'Não foi possível encerrar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+          return 'error';
+        }
+        node.guard(api.sessions()).then(setSessions).catch(() => {});
+        return 'ok';
+      },
       nodeMode: api ? 'node' : 'demo',
       operatorName: node.mode.kind === 'node' ? node.mode.operator.name : null,
       logout: () => { if (api) void api.logout().catch(() => {}).finally(() => node.lost()); },
@@ -175,7 +217,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toast, showToast,
       totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: month - PENDING },
     };
-  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages]);
+  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

@@ -9,6 +9,8 @@
 export interface Operator { id: string; name: string }
 export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; today: number }
 export interface ApiWallet { balance: number; txs: { id: string; amount: number; at: number; to: 'personal' }[] }
+export interface ApiSession { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }
+export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
 export interface ApiPackage { name: string; version: string; file: string; size: number; sha256: string }
 
 export class AuthLost extends Error {}
@@ -73,7 +75,13 @@ export class NodeApi {
   togglePause = (id: string) => this.call<{ id: string; status: 'active' | 'paused' }>('POST', `/api/devices/${encodeURIComponent(id)}/pause`);
   revoke = (id: string) => this.call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`);
   wallet = () => this.call<ApiWallet>('GET', '/api/wallet');
-  transfer = (amount: number) => this.call<{ id: string }>('POST', '/api/wallet/transfer', { amount });
+  /** `to`: 'personal' ou um endereço `lunes:…`. */
+  transfer = (amount: number, to = 'personal') => this.call<{ id: string }>('POST', '/api/wallet/transfer', { amount, to });
+  createDevice = (d: { name: string; cls: string; family: string; pub?: string }) => this.call<ApiDevice>('POST', '/api/devices', d);
+  settings = () => this.call<ApiSettings>('GET', '/api/settings');
+  saveSettings = (s: ApiSettings) => this.call<ApiSettings>('PUT', '/api/settings', s);
+  sessions = () => this.call<ApiSession[]>('GET', '/api/sessions');
+  revokeOtherSessions = () => this.call<{ revoked: number }>('POST', '/api/sessions/revoke-others');
   reauth = (code: string) => this.call<{ ok: true }>('POST', '/api/reauth', { code });
   packages = () => this.call<ApiPackage[]>('GET', '/api/packages');
   logout = () => this.call<{ ok: true }>('POST', '/api/logout');

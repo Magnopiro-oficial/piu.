@@ -8,20 +8,27 @@ import { copyText } from '../lib/io';
 import { useStore } from '../state/store';
 
 type Dest = 'personal' | 'other';
+/** Mesmo formato que o piu-node aceita: `lunes:` + base58 (sem 0, O, I e l). */
+const LUNES_ADDR = /^lunes:[1-9A-HJ-NP-Za-km-z]{26,44}$/;
 
 export function Wallet() {
-  const { balance, txs, totals, recordTransfer, stepUp, showToast } = useStore();
+  const { balance, txs, totals, recordTransfer, stepUp, showToast, nodeMode } = useStore();
+  const [addr, setAddr] = useState('');
+  const addrOk = LUNES_ADDR.test(addr.trim());
   const [stepUpOpen, setStepUpOpen] = useState(false);
   const [to, setTo] = useState<Dest>('personal');
   const [amtStr, setAmtStr] = useState('200');
   const [signing, setSigning] = useState(false);
   const amtRef = useRef<HTMLInputElement>(null);
   const amt = parseAmount(amtStr);
-  const valid = amt > 0 && amt <= balance;
+  // Com o piu-node, "Outro endereço" usa o endereço colado; na demonstração, o do exemplo.
+  const real = nodeMode === 'node';
+  const valid = amt > 0 && amt <= balance && (to === 'personal' || !real || addrOk);
+  const destShort = to === 'personal' ? WALLETS.personal.short : real ? `${addr.trim().slice(0, 10)}…${addr.trim().slice(-4)}` : WALLETS.other.short;
 
   const approve = async () => {
     setSigning(false);
-    const r = await recordTransfer(amt, { id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${WALLETS.other.short}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true });
+    const r = await recordTransfer(amt, { id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${destShort}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true }, to === 'personal' || !real ? 'personal' : addr.trim());
     if (r === 'reauth') { setStepUpOpen(true); return; }
     if (r === 'ok') showToast({ icon: 'check_circle', title: 'Transferência assinada', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' });
   };
@@ -63,7 +70,17 @@ export function Wallet() {
       <section className="span5 card-soft col" style={{ padding: 20, borderRadius: 24, gap: 14 }}>
         <h2 className="h-card" style={{ margin: 0 }}>Transferir</h2>
         <Segmented<Dest> label="Destino" value={to} onChange={setTo} options={[{ value: 'personal', label: 'Carteira pessoal' }, { value: 'other', label: 'Outro endereço' }]} />
-        <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink2)' }}>{to === 'personal' ? `para ${WALLETS.personal.short} · pessoal` : `para ${WALLETS.other.short} · colado`}</div>
+        {to === 'other' && real ? (
+          <label className="col" style={{ gap: 6 }}>
+            <span className="sr-only">Endereço LUNES de destino</span>
+            <input value={addr} onChange={e => setAddr(e.target.value.replace(/\s/g, ''))} placeholder="lunes:…" spellCheck={false} autoComplete="off" maxLength={52}
+              aria-invalid={addr.length > 0 && !addrOk}
+              className="mono" style={{ height: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: 'var(--bg)', boxShadow: `0 0 0 1px ${addr && !addrOk ? 'var(--ink)' : 'var(--line2)'} inset`, fontSize: 13, color: 'var(--ink)', outline: 'none' }} />
+            {addr && !addrOk && <span style={{ fontSize: 12, color: 'var(--ink2)' }}>Endereço LUNES inválido. Confira se colou inteiro.</span>}
+          </label>
+        ) : (
+          <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink2)' }}>{to === 'personal' ? `para ${WALLETS.personal.short} · pessoal` : `para ${WALLETS.other.short} · colado`}</div>
+        )}
         <label className="row" style={{ gap: 10, height: 56, padding: '0 16px', borderRadius: 16, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset' }}>
           <span className="sr-only">Valor em LUNES</span>
           <input ref={amtRef} inputMode="decimal" value={amtStr} onChange={e => setAmtStr(e.target.value.replace(/[^0-9,.]/g, ''))}

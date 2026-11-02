@@ -17,13 +17,21 @@ npm run typecheck
 - `src/wizard/AddDeviceWizard.tsx`: assistente de 4 etapas (Equipamento, Conectar, Teste real, Regras), incluindo o Ponto de Acesso.
 - `src/data/seed.ts` e `src/data/topology.ts`: dados de exemplo do protótipo (**ilustrativos**).
 
-## O que ainda é simulado
-Ainda não existe API do `piu-node`, então os dados vêm de `src/data/` e algumas ações só mostram o resultado:
-- busca e pareamento de equipamento, teste real (temporizadores);
-- aprovação da transferência no celular (“Simular aprovação no celular”);
-- atualizar, reiniciar, encerrar sessões, backup e rotação de chaves (só toast).
+## O que vem do piu-node e o que ainda é simulado
+Servido pelo `piu-node` (com sessão), estes dados e ações são **reais**:
+- equipamentos: lista, pausar, revogar e **ativar pelo assistente** (`POST /api/devices`);
+- **limites globais e política de tráfego**: carregados e salvos no nó, por operador;
+- **acessos a este painel**: a lista real de sessões ("Chrome · Linux", "App Piu Provider · macOS") e **Encerrar outras sessões** (pede um código novo do equipamento se a última confirmação passou de 15 min);
+- carteira: saldo e **transferência para a carteira pessoal ou para um endereço `lunes:…` colado** (com step-up);
+- pacotes assinados do instalador.
 
-Funcionam de verdade: navegação, filtros e busca, pausar e revogar, adicionar equipamento, checagem do nome `piu.*`, limites e políticas, tema, **Exportar CSV** (baixa o arquivo) e copiar endereço ou link (área de transferência).
+Ainda **simulados** (dados de `src/data/`, também com o `piu-node`), até existir o motor de retransmissão (LNNP) e o app pareado:
+- Visão geral, Malha e Ganhos (métricas, topologia, créditos e lotes);
+- movimentações da carteira (só o saldo é real) e a aprovação no celular ("Simular aprovação no celular");
+- busca, pareamento e teste real no assistente (temporizadores);
+- atualizar e reiniciar equipamento, backup e rotação da chave de operador (só aviso).
+
+Sem `piu-node` (site, prévia), tudo funciona com os dados de exemplo.
 
 ## Diferenças em relação ao protótipo
 - O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Largura mínima: 1180px.
@@ -33,7 +41,7 @@ Funcionam de verdade: navegação, filtros e busca, pausar e revogar, adicionar 
 ## Segurança
 - **CSP estrita** em `<meta>` no `index.html` (vale em qualquer servidor, inclusive o `piu-node`) e por header em `public/_headers` (Cloudflare Pages / Netlify): só recursos do próprio painel (`'self'`), sem scripts inline, sem `eval`, sem `data:` para fontes (`build.assetsInlineLimit: 0`). Estilos por atributo (`style=`) são liberados com `style-src-attr`.
 - **Headers** (`public/_headers`): `X-Frame-Options: DENY` e `frame-ancestors 'none'`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, `Permissions-Policy` restritiva, `Cross-Origin-Opener-Policy`/`Resource-Policy`, HSTS (só tem efeito sob HTTPS).
-- **piu-node** (fora deste repositório): ao servir o painel, deve enviar os mesmos headers e, antes de expor qualquer API, exigir pareamento/autenticação do operador (ver a auditoria de segurança no PR).
+- **piu-node** (`apps/piu-node`): envia os mesmos headers e exige pareamento antes de qualquer API.
 
 ## Com o piu-node (pareamento)
 Quando servido pelo `apps/piu-node`, o painel só aparece depois do **pareamento**: o operador digita o código de 8 dígitos mostrado na tela do equipamento. A sessão fica num cookie `HttpOnly` (o painel nunca vê o token). Toda ação (pausar, revogar, transferir) vai para a API com o token CSRF da sessão. Transferências pedem um código novo do equipamento quando a última confirmação tem mais de 15 minutos. O botão "Sair" encerra a sessão no servidor.

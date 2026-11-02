@@ -22,6 +22,7 @@ const CHECK_MS = 700;
 export function AddDeviceWizard() {
   const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode } = useStore();
   const parents = devices.filter(d => !d.passive && d.cls !== 'Super Node');
+  const [activating, setActivating] = useState(false);
   const [w, setW] = useState<WizState>(() => ({
     step: 0, fam: 'router', install: 'dl', scan: 'searching', paired: false, n: 0,
     name: FAMILIES[0].defName!, pub: FAMILIES[0].defPub!, parent: parents.find(p => p.id === 'mini')?.id ?? parents[0]?.id ?? '',
@@ -58,7 +59,7 @@ export function AddDeviceWizard() {
     if (w.step === 0) patch({ step: 1, scan: 'searching', paired: false });
     else if (w.step === 1) patch({ step: 2, n: 0 });
     else if (w.step === 2) patch({ step: 3 });
-    else activate();
+    else void activate();
   };
   const back = () => {
     if (w.step === 0) return;
@@ -66,16 +67,20 @@ export function AddDeviceWizard() {
     patch(step === 1 ? { step, scan: 'searching', paired: false } : { step });
   };
 
-  const activate = () => {
-    const id = 'd' + Date.now();
+  const activate = async () => {
+    if (activating) return;
+    const tempId = 'd' + Date.now();
     const dev: RelayNode = {
-      id, name: (w.name || fam.defName || '').trim(), cls: fam.result!, short: fam.short!, model: fam.model!, icon: fam.icon,
+      id: tempId, name: (w.name || fam.defName || '').trim(), cls: fam.result!, short: fam.short!, model: fam.model!, icon: fam.icon,
       status: isAp ? 'active' : 'warming', pph: 0, today: 0, month: 0, neighbors: Number(fam.nb),
       storage: isAp ? null : [0, w.sto], uptime: 'agora', ifaces: fam.ifaces ?? [], receipts: [], fresh: true,
       pub: 'piu.' + w.pub, passive: isAp, parent: isAp ? w.parent : undefined,
     };
     if (isAp) dev.model = `Repetidor comum · firmware original · ligado ao ${parent}`;
-    addDevice(dev);
+    setActivating(true);
+    const id = await addDevice(dev, fam.id);
+    setActivating(false);
+    if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
     navigate('devices', id);
     showToast({ icon: fam.icon, title: dev.name + ' entrou na malha', body: isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
@@ -297,7 +302,7 @@ export function AddDeviceWizard() {
             <button type="button" className="btn btn-outline" disabled={w.step === 0} onClick={back} style={{ height: 44, padding: '0 18px', borderRadius: 22, fontSize: 14, opacity: w.step > 0 ? 1 : 0.35 }}>Voltar</button>
             <div className="mono" aria-live="polite" style={{ flex: 1, fontSize: 12, color: 'var(--ink2)' }}>{hint}</div>
             <button type="button" className="btn btn-primary" aria-disabled={!canNext} onClick={next} style={{ height: 44, padding: '0 22px', borderRadius: 22, fontSize: 14, opacity: canNext ? 1 : 0.35, transition: 'opacity .25s,transform .15s' }}>
-              {w.step === 3 ? 'Ativar equipamento' : 'Continuar'}
+              {w.step === 3 ? (activating ? 'Ativando…' : 'Ativar equipamento') : 'Continuar'}
             </button>
           </div>
         </div>
