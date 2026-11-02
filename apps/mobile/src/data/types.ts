@@ -13,6 +13,10 @@ export interface Chat {
   id: string; ident: IdentityKind; kind: Kind; name: string; initials: string; time: string; unread: number;
   inv?: boolean; sub?: string; via?: string; viaIcon?: string; preview?: string; offline?: boolean; priority?: string; owner?: boolean;
   route?: { nodes: RouteNode[]; vias: string[] };
+  /** Contato real (`piu:…`): as mensagens vão cifradas pelo transporte, não pela simulação. */
+  peer?: string;
+  /** Escreveu primeiro, sem que você tivesse o código dele: confira antes de confiar. */
+  request?: boolean;
   msgs?: Msg[];
 }
 

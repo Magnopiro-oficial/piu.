@@ -18,7 +18,8 @@ export default function NewChat() {
     ['group_add', 'Novo grupo', 'Até 200 membros, com convites', soon('Novo grupo')],
     ['campaign', 'Novo canal', 'Público, privado ou secreto', () => router.push('/new-channel')],
     ['workspaces', 'Nova comunidade', 'Reúna grupos e canais', soon('Nova comunidade')],
-    ['qr_code_scanner', 'Escanear código', 'Adicione alguém pessoalmente', soon('Escanear código')],
+    ['qr_code_scanner', 'Escanear código', 'Adicione alguém pessoalmente', () => router.push('/scan')],
+    ['qr_code_2', 'Meu código', 'Mostre para a pessoa escanear', () => router.push('/my-code')],
     ['person_add', 'Convidar para o Piu', 'Envie o app sem internet, de celular para celular', () => router.push('/invite')],
   ];
   const talk = (id: string, name: string) => {

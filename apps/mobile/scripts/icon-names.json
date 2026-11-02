@@ -118,5 +118,7 @@
   "touch_app",
   "flashlight_on",
   "photo_camera",
-  "public"
+  "public",
+  "qr_code_2",
+  "person_check"
 ]

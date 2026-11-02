@@ -43,6 +43,15 @@
             "backgroundColor": "#0A0A0A"
           }
         }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "O Piu usa a câmera só para ler o QR de contato de alguém que está com você.",
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "barcodeScannerEnabled": true
+        }
       ]
     ],
     "experiments": {

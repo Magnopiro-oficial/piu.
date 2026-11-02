@@ -1,6 +1,6 @@
 # Protocolo de comunicação do Piu (protótipo v0)
 
-Criptografia e regras de comunicação descentralizada, em TypeScript puro, sem dependência de React Native: roda no app (Hermes), no navegador e no Node. `npm test` executa os testes (30 cenários, inclusive de ataque).
+Criptografia e regras de comunicação descentralizada, em TypeScript puro, sem dependência de React Native: roda no app (Hermes), no navegador e no Node. `npm test` executa os testes deste protocolo e da camada de mensagens, inclusive cenários de ataque.
 
 > ⚠️ **Protótipo, não decisão final.** O documento de requisitos (seção 9) exige que os algoritmos sejam escolhidos numa etapa formal de *threat modeling* e revisão especializada, e que haja **auditoria de segurança independente antes de produção**. Esta versão usa candidatos listados no próprio documento, por meio de bibliotecas auditadas, e cada envelope declara a suíte usada. Assim, ela pode ser trocada sem quebrar a rede.
 
@@ -69,4 +69,4 @@ O corpo cifrado contém: tipo, horário de envio, segredo de entrega, chaves pú
 3. **Grupos grandes:** a troca de chave manda um envelope por membro (O(n)), e as mensagens de grupo não têm sigilo futuro. O MLS resolve as duas coisas em O(log n), mas é grande e precisa da revisão formal.
 4. **Antifraude:** ainda falta o desafio de auditoria em si (como um nó prova, na prática, que retransmite). Hoje o validador recebe o resultado pronto. A detecção de colusão é por tetos, não por análise de grafo.
 5. **Semente compatível com BIP39:** a frase usa a lista e o checksum do BIP39, mas a derivação é própria do Piu. Não importe a frase em carteiras de terceiros.
-6. **Integração no app:** a semente vai para o cofre do sistema (`expo-secure-store`), e o Hermes precisa de `crypto.getRandomValues` (`expo-crypto`). Isso está no PR seguinte, de integração.
+6. **Integração no app:** feita. A semente fica no cofre do sistema, e as conversas reais usam este protocolo por meio de `src/messaging/` (ver o README de lá).

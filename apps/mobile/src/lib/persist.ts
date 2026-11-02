@@ -88,6 +88,23 @@ function schedule(key: string, value: unknown) {
   }, WRITE_DELAY));
 }
 
+/** Valor salvo (já carregado por `loadPersisted`), sem hook. */
+export const readPersisted = <T,>(key: string): T | undefined => snapshot[key] as T | undefined;
+
+/**
+ * Grava já, sem atraso, e só resolve depois de gravado. Para estado que não pode voltar atrás
+ * (ex.: catraca das sessões: reusar uma chave de mensagem depois de um travamento seria grave).
+ */
+export async function persistNow(key: string, value: unknown): Promise<void> {
+  clearTimeout(pending.get(key));
+  pending.delete(key);
+  const at = epoch;
+  snapshot[key] = value;
+  const sealed = seal(key, value); // sem chave, falha: quem chama não deve transmitir
+  await AsyncStorage.setItem(PREFIX + key, sealed);
+  if (at !== epoch) await AsyncStorage.removeItem(PREFIX + key); // apagado enquanto gravava
+}
+
 /** Apaga todos os dados do Piu neste aparelho e cancela gravações pendentes. */
 export async function clearPersisted(): Promise<void> {
   epoch += 1;

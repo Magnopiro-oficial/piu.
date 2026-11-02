@@ -12,7 +12,7 @@ npm test           # testes do protocolo (criptografia e roteamento)
 ```
 
 ## Estrutura
-- `src/app/`: rotas (Expo Router). Onboarding em `welcome`, `identity`, `keys`, `restore` e `migrate`; as 5 abas em `(tabs)/`; a conversa em `chat/[id]`; `contact/[id]`, `group/[id]`, `community/[id]`, `new` e `new-channel`; `diagnostics`; o provider em `provider/` (`intro`, `add`, `connect`, `test`, `config`, o painel em `index`, `device/[id]` e `earnings`); `wallet/referrals`; o convite P2P em `invite/` (`index`, `share`, `page`, `verify`, `accept`); Por perto em `nearby/` (`[id]`, `requests`, `match`); `backup`, `devices`, `notifications`, `settings/[page]` (privacy, storage, battery), a prévia da tela bloqueada em `lock` e o alerta de emergência em `alert`.
+- `src/app/`: rotas (Expo Router). Onboarding em `welcome`, `identity`, `keys`, `restore` e `migrate`; as 5 abas em `(tabs)/`; a conversa em `chat/[id]`; `contact/[id]`, `group/[id]`, `community/[id]`, `new` e `new-channel`; `diagnostics`; o provider em `provider/` (`intro`, `add`, `connect`, `test`, `config`, o painel em `index`, `device/[id]` e `earnings`); `wallet/referrals`; o convite P2P em `invite/` (`index`, `share`, `page`, `verify`, `accept`); Por perto em `nearby/` (`[id]`, `requests`, `match`); `scan` (adicionar contato pelo QR) e `my-code` (meu QR); `backup`, `devices`, `notifications`, `settings/[page]` (privacy, storage, battery), a prévia da tela bloqueada em `lock` e o alerta de emergência em `alert`.
 - `src/theme/`: tokens claro/escuro (segue o tema do aparelho), fontes e a opção "reduzir movimento".
 - `src/ui/`: `T` (texto Geist/Geist Mono com os pesos do design), `Icon`, `Button`, `Avatar`, `Screen`, `Sheet` (folha inferior), `Dialog`, `Toast` (banner in-app), `Controls` (segmentado, toggle, rótulos), `RouteSheet`, `AttachSheet`, `FileBubble`, `WalletSheets` (enviar e receber LUNES), `Stripes` (placeholder listrado das fotos), `Settings` (grupos e linhas de ajustes, cartão de opção). O `Dialog` aceita `hold` (segurar para confirmar ações irreversíveis).
 - `src/state/store.tsx`: identidades, conversas, envio com os estados criada → na fila → encaminhada → entregue, verificação de contatos, grupo (membros, permissões, versão da chave), canais, arquivos em blocos e banners.
@@ -26,6 +26,7 @@ npm test           # testes do protocolo (criptografia e roteamento)
 - `src/transport/`: transporte P2P (`getTransport()`): o nativo quando existe, senão o simulado; permissões do Android. `src/state/transport.tsx` liga o transporte depois do onboarding, enquanto Bluetooth LE ou Wi-Fi Direct estiverem ativos na aba Rede, e o Diagnóstico mostra o estado e os vizinhos.
 - `modules/piu-transport/`: módulo nativo local (Kotlin com Nearby Connections; Swift com Bluetooth LE). Protocolo, limitações e como testar em aparelhos estão no [README do módulo](modules/piu-transport/README.md).
 - `src/protocol/`: protocolo de comunicação (protótipo v0): chaves, envelope cifrado, grupos com troca de chave, roteamento store-and-forward, fragmentação, recibos e código de segurança. TypeScript puro, testado com `npm test`. Detalhes, requisitos atendidos e pontos em aberto no [README do protocolo](src/protocol/README.md).
+- `src/messaging/`: mensagens reais. `card.ts` é o cartão de contato assinado (o QR); `messenger.ts` liga as sessões cifradas, o roteador e o transporte, com confirmação de entrega cifrada; `testDevice.ts` é o aparelho de teste da simulação. `src/state/messaging.tsx` conecta tudo ao app. Detalhes no [README das mensagens](src/messaging/README.md).
 - `scripts/gen-icons.mjs`: gera `src/ui/icons.generated.ts` com os Material Symbols Rounded usados. Para usar um ícone novo, acrescente o nome em `scripts/icon-names.json` e rode `npm run icons`.
 
 ## Decisões técnicas
@@ -53,15 +54,15 @@ npm test           # testes do protocolo (criptografia e roteamento)
 - Na **web** (demonstração e testes) não há cofre nem bloqueio do aparelho: a frase e a chave de dados ficam no navegador, com aviso na tela.
 
 ## Ainda simulado
-- **Chaves reais:** no onboarding é gerada uma frase de recuperação (12 palavras BIP39 em inglês), guardada no cofre do sistema (`expo-secure-store`: Keychain/Keystore, só neste aparelho). As identidades pública e anônima, a impressão digital, o código de segurança e o backup derivam dela, e restaurar pela frase recupera as mesmas chaves. Ainda são simulados: a transferência de outro aparelho ou por arquivo (que por enquanto gera chaves novas), a revogação de aparelhos e o envio das mensagens, que ainda não passa pelo protocolo.
+- **Chaves reais:** no onboarding é gerada uma frase de recuperação (12 palavras BIP39 em inglês), guardada no cofre do sistema (`expo-secure-store`: Keychain/Keystore, só neste aparelho). As identidades pública e anônima, a impressão digital, o código de segurança e o backup derivam dela, e restaurar pela frase recupera as mesmas chaves. Ainda são simulados: a transferência de outro aparelho ou por arquivo (que por enquanto gera chaves novas) e a revogação de aparelhos.
+- **Mensagens reais com contatos adicionados pelo QR:** quem entra pelo QR (ou escreve primeiro, como pedido de conversa) conversa de verdade: Double Ratchet dentro do envelope selado, fila store-and-forward, transporte por perto e confirmação de entrega. No navegador e no Expo Go, use **Nova conversa → Escanear código → Usar o aparelho de teste** para ver o caminho completo sem dois celulares. Texto apenas por enquanto: arquivos, grupos e canais continuam simulados.
 - **Contatos de exemplo:** recebem chaves determinísticas de demonstração (`src/lib/demoContacts.ts`), para que o código de segurança seja calculado com o algoritmo real.
-- O envio percorre os estados por temporizador, e a Marina responde sozinha, como no protótipo.
+- Com os **contatos de exemplo**, o envio percorre os estados por temporizador, e a Marina responde sozinha, como no protótipo.
 - O envio de arquivo é simulado (blocos por temporizador); a câmera e o seletor de arquivos entram com os módulos nativos.
-- Novo grupo, nova comunidade, escanear código e enviar localização mostram que chegam numa próxima versão.
-- O QR é um placeholder (listras), como no design.
-- O transporte nativo foi escrito, mas ainda não foi compilado nem testado em aparelhos. No navegador e no Expo Go, o transporte é simulado (vizinhos do protótipo), e as mensagens ainda não passam por ele.
+- Novo grupo, nova comunidade e enviar localização mostram que chegam numa próxima versão.
+- Os QRs do Perfil, do convite, do contato e de "Meu código" são reais (cartão assinado, vale 24 h). Os da carteira, do grupo e do compartilhamento do app ainda são placeholders.
+- O transporte nativo foi escrito, mas ainda não foi compilado nem testado em aparelhos. No navegador e no Expo Go, o transporte é simulado (vizinhos do protótipo e o aparelho de teste).
 - Rede e provider usam dados de exemplo: a busca de equipamentos, o envio do pacote, o pareamento e o teste real são simulados por temporizador, até existir a API do `piu-node` e o transporte nativo.
 - Carteira e Por perto usam valores ilustrativos (o modelo econômico ainda está em aberto): assinaturas, liquidação na Mainnet, transferência P2P do instalador e proximidade são simulados; as fotos são placeholders listrados.
 - Notificações do sistema ainda não são disparadas: a tela bloqueada é uma prévia dentro do app, e os ajustes não chegam ao sistema operacional.
-- Os dados do app ficam no AsyncStorage (sem cifragem própria); a frase de recuperação fica à parte, no cofre do sistema. Na versão **web** (demonstração e testes) não existe cofre seguro, e a frase vai para o localStorage.
 - Os identificadores das lojas (`bundleIdentifier` e `package`) ainda não estão definidos em `app.json`.

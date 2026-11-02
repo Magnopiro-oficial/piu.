@@ -200,6 +200,17 @@ export class Router {
   /** Para uma mensagem direta entregue, o destino pode parar de guardar cópias dela (confirmação). */
   forget(id: string) { this.drop(id); }
 
+  /**
+   * Ids já vistos, para salvar no aparelho. Sem isto, depois de reabrir o app um envelope antigo
+   * repetido (replay) seria aceito de novo até vencer.
+   */
+  exportSeen(): [string, number][] { return [...this.seen]; }
+  /** Restaura os ids vistos (os vencidos são ignorados). */
+  importSeen(list: [string, number][], now: number) {
+    for (const [id, exp] of list) if (exp > now && !this.seen.has(id)) this.seen.set(id, exp);
+    while (this.seen.size > this.limits.maxSeen) this.seen.delete(this.seen.keys().next().value!);
+  }
+
   stats() { return { stored: this.store.size, bytes: this.bytesUsed, seen: this.seen.size, nodePk: toHex(this.o.node.pk).slice(0, 8) }; }
 }
 

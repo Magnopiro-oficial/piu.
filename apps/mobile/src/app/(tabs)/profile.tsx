@@ -8,7 +8,8 @@ import { useResetApp } from '../../state/reset';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
-import { QrPlaceholder } from '../../ui/Controls';
+import { useMyCard } from '../../state/messaging';
+import { QrCode } from '../../ui/QrCode';
 import { Dialog } from '../../ui/Dialog';
 import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
@@ -25,6 +26,7 @@ export default function Profile() {
   const pub = identity === 'public';
   const { identities } = useKeys();
   const me = identities?.[identity];
+  const [card] = useMyCard(identity);
   const fp = me ? fingerprintOf(me) : Array(8).fill('····');
   const short = me ? `${me.id.slice(0, 8)}…${me.id.slice(-4)}` : 'piu:…';
   const p = pub
@@ -76,7 +78,9 @@ export default function Profile() {
         </View>
 
         <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-          <QrPlaceholder size={104} radius={14} />
+          <Pressable onPress={() => router.push('/my-code')} accessibilityRole="button" accessibilityLabel="Abrir meu código em tela cheia">
+            {card ? <QrCode value={card} size={104} label="QR do meu contato" /> : <View style={{ width: 104, height: 104, borderRadius: 14, backgroundColor: c.bg }} />}
+          </Pressable>
           <View accessible accessibilityLabel={'Impressão digital: ' + p.fp.join(' ')} style={{ flex: 1, gap: 8 }}>
             <T size={12.5} color={c.ink2}>Impressão digital</T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 }}>

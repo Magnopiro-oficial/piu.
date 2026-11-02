@@ -1,5 +1,5 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
-import { deriveIdentity, deriveNodeKey, type Identity, isValidPhrase, newPhrase, seedFromPhrase } from '../protocol';
+import { deriveIdentity, deriveNodeKey, type Identity, isValidPhrase, type KeyPair, newPhrase, seedFromPhrase } from '../protocol';
 import { clearPhrase, loadPhrase, savePhrase, vaultIsSecure } from '../lib/vault';
 
 /** Impressão digital exibida: o id da identidade em 8 grupos de 4 (ex.: 7F3A 91C2 …). */
@@ -10,6 +10,8 @@ interface Keys {
   phrase: string[] | null;
   identities: { public: Identity; anon: Identity } | null;
   nodePk: Uint8Array | null;
+  /** Chave técnica do nó (assina recibos de retransmissão). */
+  node: KeyPair | null;
   vaultIsSecure: boolean;
   /** Gera uma frase nova e guarda no cofre. */
   create: () => Promise<void>;
@@ -27,7 +29,8 @@ export async function wipeKeys() { preloaded = null; await clearPhrase(); }
 
 function derive(words: string[]) {
   const seed = seedFromPhrase(words);
-  return { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, nodePk: deriveNodeKey(seed).pk };
+  const node = deriveNodeKey(seed);
+  return { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node, nodePk: node.pk };
 }
 
 /** Chaves reais do aparelho: tudo deriva da frase de recuperação guardada no cofre do sistema. */
@@ -39,6 +42,7 @@ export function KeysProvider({ children }: { children: ReactNode }) {
     phrase,
     identities: derived?.identities ?? null,
     nodePk: derived?.nodePk ?? null,
+    node: derived?.node ?? null,
     vaultIsSecure,
     create: async () => { const w = newPhrase(); await savePhrase(w); preloaded = w; setPhrase(w); },
     restore: async words => {

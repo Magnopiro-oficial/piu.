@@ -36,6 +36,13 @@ interface Store {
   /** Acrescenta uma conversa no topo (se ainda não existir). */
   addChat: (c: Chat) => void;
   sendFile: (chatId: string, kind: 'image' | 'doc') => void;
+  /** Camada de mensagens real (MessagingProvider): envia cifrado para contatos com `peer`. */
+  setOutbound: (fn: ((chatId: string, peer: string, msgId: string, text: string) => boolean) | null) => void;
+  /** Mensagem real recebida (já decifrada e conferida). */
+  receive: (chatId: string, msg: Msg) => void;
+  setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
+  patchChat: (chatId: string, p: Partial<Chat>) => void;
+  removeChat: (chatId: string) => void;
   toggleFilePause: (chatId: string, msgId: string) => void;
   toast: (ToastData & { seq: number }) | null;
   showToast: (t: ToastData) => void;
@@ -59,7 +66,7 @@ function reviveChats(saved: Chat[]): Chat[] {
     ...c,
     msgs: c.msgs?.map(m => {
       const { fresh: _fresh, ...rest } = m;
-      const status: Status | undefined = m.status === 'criada' || (m.status === 'encaminhada' && !m.file) ? 'aguardando' : m.status;
+      const status: Status | undefined = m.status === 'criada' || (m.status === 'encaminhada' && !m.file && !c.peer) ? 'aguardando' : m.status;
       const file = m.file && m.file.state !== 'verified' ? { ...m.file, state: 'userPaused' as const } : m.file;
       return { ...rest, status, file };
     }),
@@ -81,6 +88,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const toastSeq = useRef(0);
   const viewing = useRef<string | null>(null);
+  const outbound = useRef<((chatId: string, peer: string, msgId: string, text: string) => boolean) | null>(null);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
   useEffect(() => () => {
@@ -160,6 +168,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const chat = chats.find(c => c.id === cid);
       const id = 'n' + Date.now();
       push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada' });
+      if (chat?.peer) {
+        // Real: cifrado na sessão e na fila do roteador; os estados seguintes vêm da rede.
+        const ok = outbound.current?.(cid, chat.peer, id, text) ?? false;
+        later(ok ? 300 : 0, () => setStatus(cid, id, ok ? 'aguardando' : 'falha'));
+        if (chat.request) setChats(cs => cs.map(c => (c.id === cid ? { ...c, request: false } : c)));
+        return;
+      }
       later(600, () => setStatus(cid, id, 'aguardando'));
       if (chat?.offline) return;
       later(1700, () => setStatus(cid, id, 'encaminhada'));
@@ -171,6 +186,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     retry: (cid, mid) => {
       const chat = chats.find(c => c.id === cid);
+      if (chat?.peer) {
+        const m = chat.msgs?.find(x => x.id === mid);
+        const ok = !!m && (outbound.current?.(cid, chat.peer, mid, m.text) ?? false);
+        setStatus(cid, mid, ok ? 'aguardando' : 'falha');
+        return;
+      }
       setStatus(cid, mid, 'aguardando');
       if (chat?.offline) return;
       later(1400, () => setStatus(cid, mid, 'encaminhada'));
@@ -214,6 +235,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Depois de reabrir o app o motor do envio não existe mais: retomar o reinicia.
       if (paused && !fileTimers.current[mid]) startFile(cid, mid);
     },
+    setOutbound: fn => { outbound.current = fn; },
+    receive: (cid, msg) => push(cid, msg),
+    setMsgStatus: (cid, mid, st) => setStatus(cid, mid, st),
+    patchChat: (cid, p) => setChats(cs => cs.map(c => (c.id === cid ? { ...c, ...p } : c))),
+    removeChat: cid => setChats(cs => cs.filter(c => c.id !== cid)),
     toast,
     showToast,
     dismissToast,

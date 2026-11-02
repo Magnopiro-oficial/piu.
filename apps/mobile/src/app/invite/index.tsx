@@ -2,7 +2,10 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
-import { BackHeader, QrPlaceholder } from '../../ui/Controls';
+import { BackHeader } from '../../ui/Controls';
+import { fingerprintOf, useKeys } from '../../state/keys';
+import { useMyCard } from '../../state/messaging';
+import { QrCode } from '../../ui/QrCode';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
@@ -10,7 +13,10 @@ import { T } from '../../ui/T';
 /** Convidar: QR de convite assinado (uso único, 24 h); a pessoa já tem o Piu ou recebe o app de celular para celular. */
 export default function Invite() {
   const { c } = useTheme();
-  const { profile, showToast } = useStore();
+  const { profile, identity, showToast } = useStore();
+  const [card, bump] = useMyCard(identity);
+  const me = useKeys().identities?.[identity];
+  const fp = me ? fingerprintOf(me) : null;
   const inviter = profile.idType === 'public' && profile.name.trim() ? profile.name.trim() : 'Cardeal';
   return (
     <Screen>
@@ -19,13 +25,13 @@ export default function Invite() {
         <View style={{ paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, borderRadius: 28, backgroundColor: c.ink, gap: 18 }}>
           <T size={28} w={650} ls={-0.035} lh={1.05} color={c.invink} accessibilityRole="header">Traga alguém para a rede.</T>
           <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-            <QrPlaceholder size={128} radius={18} />
+            {card ? <QrCode value={card} size={128} radius={18} label="QR do convite" /> : <View style={{ width: 128, height: 128, borderRadius: 18, backgroundColor: c.invink, opacity: 0.2 }} />}
             <View style={{ gap: 6, minWidth: 0, flex: 1 }}>
               <T size={15} w={600} color={c.invink}>Convite de {inviter}</T>
-              <T size={11.5} mono lh={1.5} color={c.invink} style={{ opacity: 0.72 }}>{'uso único\nexpira em 24 h\nassinado 7F3A…C19E'}</T>
+              <T size={11.5} mono lh={1.5} color={c.invink} style={{ opacity: 0.72 }}>{`vale por 24 h\nassinado ${fp ? fp[0] + '…' + fp[7] : '…'}`}</T>
             </View>
           </View>
-          <Pressable onPress={() => showToast({ icon: 'qr_code_scanner', title: 'Novo código gerado', body: 'O anterior foi revogado. Este vale por 24 h, para uma pessoa.' })} accessibilityRole="button"
+          <Pressable onPress={() => { bump(); showToast({ icon: 'qr_code_scanner', title: 'Novo código gerado', body: 'Este vale por 24 h. Quem tiver o anterior ainda consegue escrever até ele vencer.' }); }} accessibilityRole="button"
             style={{ height: 42, borderRadius: 21, borderWidth: 1, borderColor: c.invink, alignItems: 'center', justifyContent: 'center', opacity: 0.9 }}>
             <T size={14} w={550} color={c.invink}>Gerar novo código</T>
           </Pressable>

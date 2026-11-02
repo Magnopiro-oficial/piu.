@@ -7,6 +7,7 @@ import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { loadPersisted } from '../lib/persist';
 import { KeysProvider, preloadKeys } from '../state/keys';
+import { MessagingProvider } from '../state/messaging';
 import { NetworkProvider } from '../state/network';
 import { StoreProvider, useStore } from '../state/store';
 import { ResetProvider } from '../state/reset';
@@ -38,7 +39,9 @@ export default function RootLayout() {
                 <WalletProvider>
                   <SettingsProvider>
                     <TransportProvider>
-                      <Navigator />
+                      <MessagingProvider>
+                        <Navigator />
+                      </MessagingProvider>
                     </TransportProvider>
                   </SettingsProvider>
                 </WalletProvider>
