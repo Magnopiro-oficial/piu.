@@ -1,13 +1,42 @@
 # piu-node (referência)
 
-API local do equipamento do provider, com o painel (`apps/provider-panel`) servido por HTTPS na rede local. É a **implementação de referência da camada de acesso** do `piu-node`: pareamento, sessão, autorização e pacotes assinados. O motor de retransmissão (LNNP) fica fora deste projeto.
+Nó de referência do provider para Linux (INF-006): um Home Node ou Gateway Local (seção 8 do documento) que **retransmite envelopes de verdade** pela rede local, mais a API local com o painel (`apps/provider-panel`) servido por HTTPS. Tem duas partes:
+
+- **Motor de retransmissão LNNP v1** (`src/relay/`): descobre vizinhos na rede local, abre enlaces TCP autenticados com o handshake LNNP e passa envelopes cifrados com o roteador store-and-forward do protocolo. Especificação: [`docs/lnnp/especificacao-v1.md`](../../docs/lnnp/especificacao-v1.md).
+- **Camada de acesso**: pareamento, sessão, autorização e pacotes assinados.
 
 ```bash
 npm ci
-npm test            # 19 testes de segurança (ataques simulados)
+npm test            # 19 testes de segurança (ataques simulados) + 8 de retransmissão + 1 de sincronia do protocolo
 npm run typecheck
-npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist)
+npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist); LNNP em TCP 8422 e UDP 8423
 ```
+
+## Retransmissão (LNNP v1, adapter LAN)
+
+O que acontece quando o nó sobe:
+
+1. **Identidade do nó**: na primeira execução, gera uma semente própria em `<data>/lnnp/node.seed` (0600) e deriva a chave Ed25519 do nó (`deriveNodeKey`). Ela não tem relação com o operador nem com a carteira.
+2. **Descoberta** (Ethernet e Wi‑Fi local, INF-007): a cada 5 s, um anúncio UDP de 18 bytes vai para o broadcast da rede (porta 8423). Quem recebe conecta por TCP (porta 8422) se a sua etiqueta for menor; vizinhos fixos (`PIU_LNNP_PEERS`) são conectados e reconectados sempre.
+3. **Handshake LNNP**: HELLO/AUTH assinados, negociação da maior versão comum e das capacidades (MTU, meios, relay, armazenamento, suítes, formatos de envelope). Depois, todo quadro vai cifrado. Conexão que não fala LNNP, nó fora de `PIU_LNNP_ALLOW` ou assinatura errada: recusados e contados.
+4. **Encaminhamento**: cada envelope recebido entra no `Router` do protocolo, que guarda o que é de terceiros, descarta duplicatas pelo id, respeita TTL, saltos e cópias, e repassa a todos os outros vizinhos (e aos que aparecerem depois, até vencer). Envelope maior que a MTU do vizinho vai em fragmentos. O nó **nunca decifra** nada (INF-011): não tem chave social.
+5. **Recibos**: na primeira cópia de cada envelope de terceiro, o nó assina um recibo de retransmissão (guardados os 1.000 mais recentes, para o validador).
+
+### Limites do operador ligados ao roteador
+Os ajustes do **dono do equipamento** (o primeiro operador pareado) em `PUT /api/settings` valem na hora:
+
+| Ajuste do painel | No motor |
+|---|---|
+| Banda (20/50/100 Mbps) | balde de fichas em bytes/s para envelopes de terceiros (rajada de 1 s); o que não cabe fica para a próxima rodada |
+| Armazenamento (4/8/16 GB) | `maxBytes` do roteador, limitado pelo teto de memória `PIU_LNNP_MEMORY_MB` (os envelopes ficam em memória nesta versão) |
+| Horário (sempre / 22h–7h / 8h–18h, hora local) | fora do horário o nó não guarda nem repassa terceiros; os vizinhos ficam sabendo por `CAPS_UPDATE` |
+| Política "mídia" desligada | envelope de terceiro marcado como mídia é recusado sem guardar |
+
+### `GET /api/relay` (com sessão)
+Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retransmitindo agora), versão LNNP, id do nó, `neighbors` (id, endereço, versão, meios, relay, MTU, desde quando), `store` (envelopes e bytes guardados, teto), `counters` (`received`, `stored`, `forwarded`, `delivered`, `duplicates`, `rejected`, `relayOff`, `full`, `expired`, `receipts`, `receiptsReceived`, `handshakesOk`, `handshakesFailed`) e os limites em vigor. Com o motor desligado: `{ "enabled": false }`.
+
+### Código do protocolo
+`src/protocol/` é uma **cópia gerada** de `apps/mobile/src/protocol/` (`npm run protocol:sync`), não um import relativo: o piu-node é ESM com `moduleResolution: nodenext` (exige `.js` nos imports, que o app não usa), compila com `noUncheckedIndexedAccess` e precisa rodar sozinho em Linux/OpenWrt, sem o projeto Expo e o `node_modules` dele. O teste `test/protocol-sync.test.ts` falha se a cópia ficar diferente da fonte. O app desktop continua empacotando com esbuild normalmente (as dependências `@noble/*` estão no `package.json` daqui).
 
 ## Como o operador entra
 1. Ao iniciar, o nó mostra **no próprio console/tela** um código de 8 dígitos (vale 10 min, uso único) e a impressão digital SHA-256 do certificado TLS.
@@ -26,9 +55,10 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `GET`/`PUT /api/settings` | limites globais (banda, armazenamento, horário) e política de tráfego, por operador |
 | `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`) |
 | `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up) |
+| `GET /api/relay` | estatísticas da retransmissão LNNP (vizinhos, guardados, encaminhados, duplicatas, recibos) |
 | `GET /api/packages`, `GET /pkg/:file` | pacotes assinados do instalador |
 
-`src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, API e painel) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
+`src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, motor de retransmissão, API e painel; se o motor não subir, por exemplo com a porta ocupada, o painel sobe mesmo assim e o motivo vai para o log) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
 
 ## Proteções (cada uma com teste em `test/security.test.ts`)
 
@@ -71,7 +101,22 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_NODE_DATA` | `./data` | estado, TLS e pacotes |
 | `PIU_NODE_PANEL` | `../provider-panel/dist` | build do painel |
 | `PIU_RELEASE_PUBKEY` | — | chave pública de release (SPKI DER em base64). Sem ela, nenhum pacote é oferecido |
+| `PIU_LNNP` | `1` | `0` desliga o motor de retransmissão inteiro |
+| `PIU_LNNP_RELAY` | `1` | Modo nó: `0` mantém os enlaces mas não guarda nem repassa envelopes de terceiros |
+| `PIU_LNNP_LISTEN` | `0.0.0.0` | endereço de escuta do enlace e da descoberta |
+| `PIU_LNNP_PORT` | `8422` | porta TCP do enlace LNNP |
+| `PIU_LNNP_DISCOVERY_PORT` | `8423` | porta UDP do anúncio; `off` desliga a descoberta |
+| `PIU_LNNP_BROADCAST` | `255.255.255.255` | destinos do anúncio (ex.: `192.168.0.255`, ou `host:porta`), separados por vírgula |
+| `PIU_LNNP_PEERS` | — | vizinhos fixos `host:porta`, separados por vírgula |
+| `PIU_LNNP_ALLOW` | — | só aceita estes nós (chave do nó em hex, 64 caracteres); vazio aceita qualquer nó LNNP |
+| `PIU_LNNP_MEMORY_MB` | `256` | teto de memória para envelopes guardados |
+| `PIU_LNNP_BEACON_MS` | `5000` | intervalo do anúncio e das reconexões |
+
+Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 
 ## Próximos passos
 - Passkeys (WebAuthn) depois do primeiro pareamento, para não depender do código a cada novo navegador.
-- Os dados (carteira e equipamentos) aqui são de referência; ligar ao motor LNNP e à carteira real.
+- Os dados de carteira e equipamentos ainda são de referência; ligar à carteira real e aos recibos do motor.
+- Guardar os envelopes em disco (hoje ficam em memória, até `PIU_LNNP_MEMORY_MB`) e salvar os ids vistos entre reinícios (`Router.exportSeen`).
+- Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.
+- Enviar os recibos ao validador quando houver rota (`RelayEngine.sendReceipts`).

@@ -70,3 +70,22 @@ O corpo cifrado contém: tipo, horário de envio, segredo de entrega, chaves pú
 4. **Antifraude:** ainda falta o desafio de auditoria em si (como um nó prova, na prática, que retransmite). Hoje o validador recebe o resultado pronto. A detecção de colusão é por tetos, não por análise de grafo.
 5. **Semente compatível com BIP39:** a frase usa a lista e o checksum do BIP39, mas a derivação é própria do Piu. Não importe a frase em carteiras de terceiros.
 6. **Integração no app:** feita. A semente fica no cofre do sistema, e as conversas reais usam este protocolo por meio de `src/messaging/` (ver o README de lá).
+
+## LNNP v1: o enlace entre nós (`lnnp.ts`)
+
+Especificação completa: [`docs/lnnp/especificacao-v1.md`](../../../../docs/lnnp/especificacao-v1.md).
+
+O **envelope** (formato `0`, acima) é o que vai de ponta a ponta. O **LNNP** (versão `1`, o `net.piu.lnnp.v1` do `SERVICE_ID`) é o que dois vizinhos falam entre si para trocar envelopes. São camadas e numerações independentes: o LNNP anuncia os formatos de envelope que aceita (`ENVELOPE_VERSIONS`), então um formato novo de envelope não exige LNNP novo, e o contrário também vale.
+
+| O que | Como | Teste (`__tests__/lnnp.test.ts`) |
+|---|---|---|
+| Identidade técnica do nó | chave Ed25519 de `deriveNodeKey`; nenhuma identidade social no enlace | "o enlace não revela identidade social…" |
+| Handshake autenticado | HELLO/AUTH simétricos: cada lado assina os dois HELLO, que têm o desafio novo do outro | "handshake autenticado…", "assinatura errada…" |
+| Anti-replay e anti-downgrade | `ReplayGuard` + horário; a assinatura cobre as faixas de versão e as capacidades | "replay do desafio…", "HELLO adulterado…" |
+| Negociação de versão (INF-013) | maior versão comum; versão desconhecida não derruba o enlace | "negociação entre versões diferentes…" |
+| Capacidades | TLV: MTU, meios, relay, armazenamento, suítes, formatos, recursos; desconhecidas ignoradas | "capacidades desconhecidas…", "CAPS_UPDATE…" |
+| Autorização | `authorize(chave, capacidades)`: lista de permitidos ou revogação | "autorização recusa…" |
+| Enlace cifrado | XChaCha20-Poly1305 por sentido, contador crescente, chaves efêmeras X25519 | "handshake autenticado…" |
+| Recibos e descoberta | codecs de `RELAY_RECEIPT` e do anúncio UDP | "recibo de retransmissão e anúncio…" |
+
+O `apps/piu-node` usa este arquivo (cópia gerada em `apps/piu-node/src/protocol/`) no motor de retransmissão com o adapter LAN.
