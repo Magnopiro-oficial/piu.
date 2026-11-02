@@ -1,0 +1,30 @@
+name: CI · Painel do provider
+
+on:
+  push:
+    branches: [main]
+    paths: ['apps/provider-panel/**', '.github/workflows/ci-provider-panel.yml']
+  pull_request:
+    paths: ['apps/provider-panel/**', '.github/workflows/ci-provider-panel.yml']
+
+concurrency:
+  group: ci-provider-panel-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Painel do provider
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/provider-panel
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/provider-panel/package-lock.json
+      - run: npm ci
+      - name: Typecheck e build
+        run: npm run build

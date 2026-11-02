@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'net.piu'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.piutransport"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // Nearby Connections: descoberta e conexão por Bluetooth, BLE e Wi-Fi Direct, sem internet.
+  // Confira a versão mais recente em https://developers.google.com/nearby/connections/android/get-started
+  implementation 'com.google.android.gms:play-services-nearby:19.3.0'
+  implementation 'androidx.core:core-ktx:1.13.1'
+}

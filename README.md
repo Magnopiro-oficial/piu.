@@ -1,25 +1,58 @@
-# CODING AGENTS: READ THIS FIRST
+# piu.
 
-This is a **handoff bundle** from Claude Design (claude.ai/design).
+Mensageiro **descentralizado e offline-first** da Lunes Network. As mensagens viajam de aparelho em aparelho (Bluetooth LE, Wi-Fi Direct, Wi-Fi Mesh, LoRa, USB/Ethernet), sem internet nem servidor central, com criptografia ponta a ponta e store-and-forward.
 
-A user mocked up designs in HTML/CSS/JS using an AI design tool, then exported this bundle so a coding agent can implement the designs for real.
+## Estrutura
 
-## What you should do — IMPORTANT
+Cada pasta em `apps/` é um projeto independente: tem o próprio `package.json`, `package-lock.json`, README e CI (que só roda quando a pasta muda). Instale e rode cada um dentro da sua pasta. A única ligação é o site, que embute o build do painel.
 
-**Read the chat transcripts first.** There are 1 chat transcript(s) in `chats/`. The transcripts show the full back-and-forth between the user and the design assistant — they tell you **what the user actually wants** and **where they landed** after iterating. Don't skip them. The final HTML files are the output, but the chat is where the intent lives.
+| Pasta | Conteúdo |
+|---|---|
+| [`apps/provider-panel`](apps/provider-panel) | Painel local do provider (Vite + React + TypeScript), servido pelo `piu-node` em `piu-node.local:8420` |
+| [`apps/site`](apps/site) | Site do projeto em PT e EN (Astro), com o painel embutido |
+| [`apps/mobile`](apps/mobile) | App Piu para Android e iOS (Expo + React Native), em construção por etapas |
+| [`design/`](design) | Protótipos de referência em HTML (Claude Design): app mobile, painel do provider e site em PT/EN |
+| [`docs/design-spec.md`](docs/design-spec.md) | Especificação de design: tokens, tipografia, movimento, telas e regras de produto |
+| [`docs/requisitos/`](docs/requisitos) | Documento de requisitos da Lunes Network (IDs FUN, INF e NFR) |
+| [`docs/historico-do-design.md`](docs/historico-do-design.md) | Conversa de design com as decisões tomadas |
 
-**Read `project/PiuProviderDesktop.dc.html` in full.** The user had this file open when they triggered the handoff, so it's almost certainly the primary design they want built. Read it top to bottom — don't skim. Then **follow its imports**: open every file it pulls in (shared components, CSS, scripts) so you understand how the pieces fit together before you start implementing.
+## Painel do provider
 
-**If anything is ambiguous, ask the user to confirm before you start implementing.** It's much cheaper to clarify scope up front than to build the wrong thing.
+```bash
+cd apps/provider-panel
+npm install
+npm run dev      # http://localhost:8420
+npm run build    # gera dist/
+```
 
-## About the design files
+Detalhes em [`apps/provider-panel/README.md`](apps/provider-panel/README.md).
 
-The design medium is **HTML/CSS/JS** — these are prototypes, not production code. Your job is to **recreate them pixel-perfectly** in whatever technology makes sense for the target codebase (React, Vue, native, whatever fits). Match the visual output; don't copy the prototype's internal structure unless it happens to fit.
+## Site
 
-**Don't render these files in a browser or take screenshots unless the user asks you to.** Everything you need — dimensions, colors, layout rules — is spelled out in the source. Read the HTML and CSS directly; a screenshot won't tell you anything they don't.
+```bash
+cd apps/site
+npm install
+npm run dev      # http://localhost:4321
+```
 
-## Bundle contents
+Detalhes em [`apps/site/README.md`](apps/site/README.md).
 
-- `README.md` — this file
-- `chats/` — conversation transcripts (read these!)
-- `project/` — the `Piu Decentralized Messenger Design` project files (HTML prototypes, assets, components)
+## App mobile
+
+```bash
+cd apps/mobile
+npm install
+npm start        # Android, iOS ou web
+```
+
+Detalhes em [`apps/mobile/README.md`](apps/mobile/README.md).
+
+## Protótipos
+
+Abra qualquer `design/*.dc.html` no navegador (o `support.js` precisa estar na mesma pasta). O índice é `design/Piu.dc.html`. Eles são **referência visual**, não código de produção.
+
+## Roadmap
+
+- [x] Painel do provider para computador
+- [ ] Site do projeto (PT e EN): pronto, em revisão no PR #2
+- [ ] App mobile (Android e iOS): etapa 1 de 5 (onboarding e Conversas) em revisão no PR #3
