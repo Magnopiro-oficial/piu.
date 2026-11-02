@@ -6,6 +6,7 @@ import { generate } from 'selfsigned';
 import { buildApp } from './app.js';
 import type { Config } from './config.js';
 import { loadPackages, type Manifest, releaseKey } from './packages.js';
+import { loadNodeKey, type RelayHandle, startRelay } from './relay/index.js';
 import { Pairing } from './security/pairing.js';
 import { Store } from './store.js';
 
@@ -21,11 +22,15 @@ export interface NodeServer {
   packages: Manifest[];
   /** Gera um código de pareamento novo (10 min, uso único). Só para a tela local do equipamento. */
   issueCode: () => string;
+  /** Motor de retransmissão LNNP (`null` se desligado por `PIU_LNNP=0` ou se não conseguiu subir). */
+  relay: RelayHandle | null;
   close: () => Promise<void>;
 }
 
 export interface StartOptions {
   logger?: boolean;
+  /** Mensagens do motor de retransmissão (vizinhos, erros). */
+  log?: (msg: string) => void;
   /** Código novo depois que o anterior foi usado ou bloqueado (mostrar só localmente). */
   onCode?: (code: string, reason: 'used' | 'locked') => void;
 }
@@ -65,9 +70,20 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   const packages = loadPackages(packagesDir, key);
   const pairing = new Pairing();
   const issueCode = () => pairing.issue(Date.now());
+  const store = new Store(config.dataDir);
+
+  // Retransmissão: um erro aqui (porta ocupada, por exemplo) não derruba o painel; o operador vê no log.
+  let relay: RelayHandle | null = null;
+  if (config.lnnp?.enabled) {
+    try {
+      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), { log: o.log });
+    } catch (e) {
+      o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
+    }
+  }
 
   const app = await buildApp({
-    config, store: new Store(config.dataDir), pairing, packages, packagesDir,
+    config, store, pairing, packages, packagesDir, relay,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).
@@ -75,9 +91,15 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
       else o.onCode?.(issueCode(), 'used');
     },
   });
-  await app.listen({ port: config.port, host: config.host });
+  try {
+    await app.listen({ port: config.port, host: config.host });
+  } catch (e) {
+    await relay?.close();
+    throw e;
+  }
   const addr = app.server.address();
   const port = typeof addr === 'object' && addr ? addr.port : config.port;
   const host = config.allowedHosts.find(h => !h.includes(':')) ?? 'localhost';
-  return { app, url: `https://${host}:${port}`, port, cert: t.cert, fingerprint: t.fingerprint, packages, issueCode, close: () => app.close() };
+  return { app, url: `https://${host}:${port}`, port, cert: t.cert, fingerprint: t.fingerprint, packages, issueCode, relay,
+    close: async () => { await relay?.close(); await app.close(); } };
 }

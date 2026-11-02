@@ -26,6 +26,8 @@ export interface AppOptions {
   now?: () => number;
   /** Código consumido ou bloqueado: o nó gera outro e mostra só no console local. */
   onCodeSpent?: (reason: 'used' | 'locked') => void;
+  /** Motor de retransmissão LNNP (ausente: `GET /api/relay` responde `enabled: false`). */
+  relay?: { stats(): object; applySettings(s: Settings): void } | null;
 }
 
 /** CSP igual à do painel (a mesma política vale para o HTML servido aqui). */
@@ -171,8 +173,16 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     },
   } as const;
   app.get('/api/settings', authed(), async req => store.settings(req.piuSession!.operatorId));
-  app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async req =>
-    store.setSettings(req.piuSession!.operatorId, req.body));
+  app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async req => {
+    const saved = store.setSettings(req.piuSession!.operatorId, req.body);
+    // Os limites do dono do equipamento passam a valer no roteador na hora (banda, espaço, horário, mídia).
+    o.relay?.applySettings(store.nodeSettings());
+    return saved;
+  });
+
+  // ── retransmissão (LNNP) ──────────────────────────────
+  /** Estatísticas reais do motor: vizinhos, envelopes guardados e encaminhados, duplicatas, recibos. */
+  app.get('/api/relay', authed(), async () => (o.relay ? o.relay.stats() : { enabled: false }));
 
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   app.get('/api/devices', authed(), async req =>

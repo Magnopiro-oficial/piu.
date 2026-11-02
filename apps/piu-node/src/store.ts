@@ -101,6 +101,12 @@ export class Store {
   removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
 
   settings(operatorId: string): Settings { return this.s.settings[operatorId] ?? DEFAULT_SETTINGS; }
+  /**
+   * Ajustes que valem para ESTE equipamento: os do dono (o primeiro operador pareado).
+   * Outros operadores podem entrar no painel, mas não mudam os limites do equipamento de outra pessoa.
+   */
+  nodeSettings(): Settings { const owner = this.s.operators[0]; return owner ? this.settings(owner.id) : DEFAULT_SETTINGS; }
+  isOwner(operatorId: string) { return this.s.operators[0]?.id === operatorId; }
   setSettings(operatorId: string, v: Settings) { this.s.settings[operatorId] = v; this.save(); return v; }
 
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }

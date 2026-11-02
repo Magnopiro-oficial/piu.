@@ -10,6 +10,7 @@ const show = (reason: string, code: string) =>
 
 const node = await startNode(config, {
   logger: true,
+  log: msg => process.stdout.write(`  ${msg}\n`),
   onCode: (code, reason) => show(reason === 'locked' ? 'Código anterior bloqueado por tentativas erradas.' : 'Código usado. Novo código para o próximo pareamento:', code),
 });
 
@@ -19,5 +20,10 @@ process.stdout.write(
   config.releasePubKey
     ? `  Pacotes assinados oferecidos: ${node.packages.length} · chave de release ${createHash('sha256').update(config.releasePubKey).digest('hex').slice(0, 16)}\n`
     : '  PIU_RELEASE_PUBKEY não definida: nenhum pacote do instalador será oferecido.\n',
+);
+process.stdout.write(
+  node.relay
+    ? `  Retransmissão LNNP v1: enlace TCP ${node.relay.port}, descoberta UDP ${node.relay.discoveryPort ?? 'desligada'}, nó ${node.relay.engine.stats().node}${node.relay.engine.relaying ? '' : ' (sem retransmitir agora)'}\n`
+    : '  Retransmissão LNNP desligada.\n',
 );
 show('Para entrar no painel, use este código:', node.issueCode());
