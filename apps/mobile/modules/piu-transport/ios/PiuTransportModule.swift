@@ -15,6 +15,7 @@ public final class PiuTransportModule: Module {
     Events("onState", "onPeerFound", "onPeerLost", "onConnected", "onDisconnected", "onEnvelope")
 
     Function("kind") { "ble" }
+    Function("media") { ["ble"] }
 
     AsyncFunction("start") { (name: String, _: String) in
       if self.engine != nil { return }
@@ -33,6 +34,18 @@ public final class PiuTransportModule: Module {
       guard bytes.count <= 32 * 1024 else { throw TooLargeException() }
       try engine.send(to: peerId, bytes)
     }
+
+    // Só há um meio no iPhone: `sendVia("ble", …)` é o mesmo que `send`.
+    AsyncFunction("sendVia") { (medium: String, peerId: String, data: String) throws in
+      guard medium == "ble" else { throw PeerNotConnectedException(peerId) }
+      guard let engine = self.engine else { throw NotRunningException() }
+      guard let bytes = Data(base64Encoded: data) else { throw InvalidEnvelopeException() }
+      guard bytes.count <= 32 * 1024 else { throw TooLargeException() }
+      try engine.send(to: peerId, bytes)
+    }
+
+    // Sem modo de fundo no iPhone (decisão de design: só com o app aberto, nunca prometer 24 h).
+    AsyncFunction("setBackground") { (_: Bool, _: String, _: String) in }
 
     OnDestroy {
       self.engine?.stop()
@@ -64,6 +77,9 @@ private let inboxUUID = CBUUID(string: "7B41CD1F-85C3-400F-A6F9-5B89DD6B0915")
 private let outboxUUID = CBUUID(string: "E7D5F504-1483-497F-B64E-9DB52C4D3240")
 /** Cabeçalho de cada bloco: id da mensagem (UInt32), índice (UInt16), total (UInt16), big-endian. */
 private let headerSize = 8
+/** id 0 é o `hello`: bloco único com o nome curto do nó (UTF-8, até 64 bytes). */
+private let helloId: UInt32 = 0
+private let maxHelloBytes = 64
 /** Limites da remontagem (proteção de memória contra vizinho malicioso). */
 private let maxEnvelopeBytes = 32 * 1024
 private let maxPartialMessages = 64
@@ -87,7 +103,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var pendingNotify: [(Data, CBCentral)] = []
 
   private var nextMessageId: UInt32 = 1
-  private var partial: [String: (parts: [Int: Data], bytes: Int, started: Date)] = [:]
+  /** Nome curto do nó de cada vizinho (anúncio ou `hello`). */
+  private var names: [UUID: String] = [:]
+  private var partial: [String: (parts: [Int: Data], bytes: Int, count: Int, started: Date)] = [:]
 
   init(name: String, emit: @escaping Emit) {
     self.name = name
@@ -104,7 +122,7 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
       peripherals.values.forEach { central.cancelPeripheralConnection($0) }
       peripheralManager.stopAdvertising()
       peripheralManager.removeAllServices()
-      peripherals.removeAll(); inboxes.removeAll(); subscribers.removeAll(); pendingNotify.removeAll(); partial.removeAll()
+      peripherals.removeAll(); inboxes.removeAll(); subscribers.removeAll(); pendingNotify.removeAll(); partial.removeAll(); names.removeAll()
     }
   }
 
@@ -127,11 +145,17 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     }
   }
 
-  private func frames(_ data: Data, mtu: Int) -> [Data] {
+  private func frames(_ data: Data, mtu: Int, id fixedId: UInt32? = nil) -> [Data] {
     let size = max(1, mtu - headerSize)
     let count = max(1, Int((Double(data.count) / Double(size)).rounded(.up)))
-    let id = nextMessageId
-    nextMessageId &+= 1
+    let id: UInt32
+    if let fixedId = fixedId {
+      id = fixedId
+    } else {
+      id = nextMessageId
+      nextMessageId &+= 1
+      if nextMessageId == helloId { nextMessageId = 1 } // 0 é reservado ao hello
+    }
     return (0..<count).map { i in
       var header = Data()
       withUnsafeBytes(of: id.bigEndian) { header.append(contentsOf: $0) }
@@ -142,6 +166,11 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     }
   }
 
+  private func helloFrame() -> Data {
+    let bytes = Data(name.utf8.prefix(maxHelloBytes))
+    return frames(bytes, mtu: headerSize + maxHelloBytes, id: helloId)[0]
+  }
+
   private func receive(_ chunk: Data, from peer: UUID) {
     guard chunk.count >= headerSize else { return }
     let bytes = [UInt8](chunk)
@@ -150,21 +179,32 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     let count = Int(UInt16(bytes[6]) << 8 | UInt16(bytes[7]))
     // Um envelope tem no máximo 32 KB: total de blocos acima disso é inválido.
     guard count > 0, index < count, count <= maxEnvelopeBytes else { return }
+    let body = chunk.subdata(in: headerSize..<chunk.count)
+    if id == helloId {
+      guard count == 1, !body.isEmpty, body.count <= maxHelloBytes, let peerName = String(data: body, encoding: .utf8) else { return }
+      if names[peer] != peerName {
+        names[peer] = peerName
+        emit("onPeerFound", ["id": peer.uuidString, "name": peerName, "via": "ble"])
+      }
+      return
+    }
+    // Todos os blocos menos o último têm o mesmo tamanho: recusa cedo um envelope grande demais.
+    if index < count - 1 && body.count * (count - 1) > maxEnvelopeBytes { return }
     let now = Date()
     partial = partial.filter { now.timeIntervalSince($0.value.started) < partialTimeout }
     let key = "\(peer.uuidString)-\(id)"
-    var entry = partial[key] ?? (parts: [:], bytes: 0, started: now)
-    if entry.parts.isEmpty && partial.count >= maxPartialMessages {
+    var entry = partial[key] ?? (parts: [:], bytes: 0, count: count, started: now)
+    if entry.count != count { entry = (parts: [:], bytes: 0, count: count, started: now) } // total mudou: recomeça
+    if entry.parts.isEmpty && partial[key] == nil && partial.count >= maxPartialMessages {
       // Muitas remontagens abertas: descarta a mais antiga.
       if let oldest = partial.min(by: { $0.value.started < $1.value.started })?.key { partial[oldest] = nil }
     }
-    let data = chunk.subdata(in: headerSize..<chunk.count)
-    if entry.parts[index] == nil { entry.parts[index] = data; entry.bytes += data.count }
+    if entry.parts[index] == nil { entry.parts[index] = body; entry.bytes += body.count }
     guard entry.bytes <= maxEnvelopeBytes else { partial[key] = nil; return }
     if entry.parts.count == count {
       partial[key] = nil
       let whole = (0..<count).reduce(into: Data()) { acc, i in acc.append(entry.parts[i] ?? Data()) }
-      emit("onEnvelope", ["from": peer.uuidString, "data": whole.base64EncodedString()])
+      emit("onEnvelope", ["from": peer.uuidString, "data": whole.base64EncodedString(), "via": "ble"])
     } else {
       partial[key] = entry
     }
@@ -190,7 +230,10 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData ad: [String: Any], rssi: NSNumber) {
     guard peripherals[p.identifier] == nil else { return }
     peripherals[p.identifier] = p
-    let peerName = ad[CBAdvertisementDataLocalNameKey] as? String ?? p.name ?? "piu"
+    // iPhone anuncia o nome local; Android, no service data do serviço Piu (resposta de varredura).
+    let serviceData = (ad[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data])?[serviceUUID].flatMap { String(data: $0, encoding: .utf8) }
+    let peerName = ad[CBAdvertisementDataLocalNameKey] as? String ?? serviceData ?? p.name ?? "piu"
+    names[p.identifier] = peerName
     emit("onPeerFound", ["id": p.identifier.uuidString, "name": peerName, "via": "ble"])
     p.delegate = self
     c.connect(p)
@@ -202,13 +245,16 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
 
   func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
     peripherals[p.identifier] = nil
+    emit("onPeerLost", ["id": p.identifier.uuidString, "via": "ble"])
   }
 
   func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
     peripherals[p.identifier] = nil
     inboxes[p.identifier] = nil
-    emit("onDisconnected", ["id": p.identifier.uuidString])
-    emit("onPeerLost", ["id": p.identifier.uuidString])
+    // O mesmo vizinho pode seguir conectado pelo outro papel (ele inscrito na nossa outbox).
+    guard subscribers[p.identifier] == nil else { return }
+    emit("onDisconnected", ["id": p.identifier.uuidString, "via": "ble"])
+    emit("onPeerLost", ["id": p.identifier.uuidString, "via": "ble"])
   }
 
   func peripheral(_ p: CBPeripheral, didDiscoverServices error: Error?) {
@@ -221,7 +267,11 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
       if ch.uuid == inboxUUID { inboxes[p.identifier] = ch }
       if ch.uuid == outboxUUID { p.setNotifyValue(true, for: ch) }
     }
-    if inboxes[p.identifier] != nil { emit("onConnected", ["id": p.identifier.uuidString, "name": p.name]) }
+    if let inbox = inboxes[p.identifier] {
+      emit("onConnected", ["id": p.identifier.uuidString, "name": names[p.identifier], "via": "ble"])
+      // Apresenta-se: o periférico não vê o nosso anúncio.
+      p.writeValue(helloFrame(), for: inbox, type: .withResponse)
+    }
   }
 
   func peripheral(_ p: CBPeripheral, didUpdateValueFor ch: CBCharacteristic, error: Error?) {
@@ -251,12 +301,19 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
 
   func peripheralManager(_ pm: CBPeripheralManager, central: CBCentral, didSubscribeTo ch: CBCharacteristic) {
     subscribers[central.identifier] = central
-    emit("onConnected", ["id": central.identifier.uuidString])
+    emit("onConnected", ["id": central.identifier.uuidString, "name": names[central.identifier], "via": "ble"])
+    if let out = outbox {
+      let hello = helloFrame()
+      if !pm.updateValue(hello, for: out, onSubscribedCentrals: [central]) { pendingNotify.append((hello, central)) }
+    }
   }
 
   func peripheralManager(_ pm: CBPeripheralManager, central: CBCentral, didUnsubscribeFrom ch: CBCharacteristic) {
     subscribers[central.identifier] = nil
-    emit("onDisconnected", ["id": central.identifier.uuidString])
+    pendingNotify.removeAll { $0.1.identifier == central.identifier }
+    guard inboxes[central.identifier] == nil else { return }
+    emit("onDisconnected", ["id": central.identifier.uuidString, "via": "ble"])
+    emit("onPeerLost", ["id": central.identifier.uuidString, "via": "ble"])
   }
 
   func peripheralManagerIsReady(toUpdateSubscribers pm: CBPeripheralManager) {

@@ -1,14 +1,23 @@
 import { NativeModule, requireOptionalNativeModule } from 'expo-modules-core';
-import type { PiuTransportEvents } from './PiuTransport.types';
+import type { PiuMedium, PiuTransportEvents } from './PiuTransport.types';
 
 declare class PiuTransportNativeModule extends NativeModule<PiuTransportEvents> {
-  /** "nearby" no Android (Nearby Connections: BLE + Wi-Fi Direct), "ble" no iPhone (Bluetooth LE). */
+  /** Meio principal: "nearby" no Android, "ble" no iPhone. */
   kind(): 'nearby' | 'ble';
-  /** Começa a anunciar e procurar vizinhos. `name` é o identificador curto do nó; `serviceId` separa redes. */
+  /** Meios deste aparelho: ["nearby", "ble"] no Android, ["ble"] no iPhone. Ausente em binários antigos. */
+  media?(): PiuMedium[];
+  /** Começa a anunciar e procurar vizinhos em todos os meios. `name` é o identificador curto do nó; `serviceId` separa redes. */
   start(name: string, serviceId: string): Promise<void>;
   stop(): Promise<void>;
-  /** Envia um envelope (já cifrado) para um vizinho conectado. `data` em base64. */
+  /** Envia um envelope (já cifrado) a um enlace conectado, pelo primeiro meio que o conheça. `data` em base64. */
   send(peerId: string, data: string): Promise<void>;
+  /** Envia por um meio específico (a seleção de meio é feita em src/transport). */
+  sendVia?(medium: PiuMedium, peerId: string, data: string): Promise<void>;
+  /**
+   * Android: liga/desliga o serviço em primeiro plano (aviso fixo) que mantém o transporte vivo em
+   * segundo plano enquanto o Modo nó estiver ligado. iPhone: sem efeito.
+   */
+  setBackground?(on: boolean, title: string, text: string): Promise<void>;
 }
 
 /**

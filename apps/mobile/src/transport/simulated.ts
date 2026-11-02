@@ -1,4 +1,5 @@
 import { NEIGHBORS } from '../data/network';
+import { MEDIA } from './select';
 import type { Transport, TransportEvent } from './types';
 
 /** Aparelho virtual dentro do transporte simulado (ex.: o aparelho de teste do navegador). */
@@ -38,6 +39,7 @@ export function createSimulatedTransport(): Transport {
   onAttach = p => { if (running) announce(p, 100); };
   return {
     kind: 'sim',
+    media: [MEDIA.sim],
     start: async () => {
       running = true;
       emit({ type: 'state', state: 'starting' });
