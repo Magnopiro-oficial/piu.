@@ -133,7 +133,7 @@ export class Router {
   }
 
   private keep(id: string, bytes: Uint8Array, h: Header, from: string | null, own: boolean, now: number): 'stored' | 'full' {
-    const e: Entry = { id, bytes, header: h, from, own, storedAt: now, dropAt: Math.min(h.expiresAt, now + this.limits.maxRetentionSec), sentTo: new Set(), copies: 0, releaseAt: now };
+    const e: Entry = { id, bytes, header: h, from, own, storedAt: now, dropAt: own ? h.expiresAt : Math.min(h.expiresAt, now + this.limits.maxRetentionSec) /* a retenção limita o que é de terceiros; as próprias ficam até o TTL */, sentTo: new Set(), copies: 0, releaseAt: now };
     if (!this.makeRoom(e)) return 'full';
     this.store.set(id, e);
     this.bytesUsed += bytes.length;

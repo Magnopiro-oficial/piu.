@@ -45,7 +45,8 @@ const Ctx = createContext<Messaging | null>(null);
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
   const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast } = useStore();
-  const { relay } = useNetwork();
+  const { relay: relayOn, relayPaused } = useNetwork();
+  const relay = relayOn && !relayPaused;
   const { priv } = useSettings();
   const transport = useMemo(getTransport, []);
   const [messenger, setMessenger] = useState<Messenger | null>(null);

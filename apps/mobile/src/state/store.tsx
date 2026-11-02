@@ -1,3 +1,4 @@
+import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CHANNEL_TYPES, seedChats, seedMembers } from '../data/seed';
 import type { ChannelType, Chat, FileXfer, IdentityKind, Member, Msg, Status, ToastData } from '../data/types';
@@ -41,10 +42,12 @@ interface Store {
   /** Mensagem real recebida (já decifrada e conferida). */
   receive: (chatId: string, msg: Msg) => void;
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
+  /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
+  setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
   patchChat: (chatId: string, p: Partial<Chat>) => void;
   removeChat: (chatId: string) => void;
   toggleFilePause: (chatId: string, msgId: string) => void;
-  toast: (ToastData & { seq: number }) | null;
+  toast: (ToastData & { seq: number; leaving?: boolean }) | null;
   showToast: (t: ToastData) => void;
   dismissToast: () => void;
 }
@@ -88,6 +91,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const toastSeq = useRef(0);
   const viewing = useRef<string | null>(null);
+  const retryRef = useRef<(cid: string, mid: string) => void>(() => {});
+  const notifyFilter = useRef<((t: ToastData) => boolean) | null>(null);
   const outbound = useRef<((chatId: string, peer: string, msgId: string, text: string) => boolean) | null>(null);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
@@ -105,18 +110,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {})), [patchMsg]);
 
   const showToast = useCallback((t: ToastData) => {
+    if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
     setToast({ ...t, seq: toastSeq.current });
-    toastTimer.current = setTimeout(() => setToast(null), TOAST_MS);
-  }, []);
-  const dismissToast = useCallback(() => { clearTimeout(toastTimer.current); setToast(null); }, []);
+    toastTimer.current = setTimeout(() => leave(), TOAST_MS);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  /** Sai em 300 ms (sobe e some), como no design. */
+  const leave = () => {
+    clearTimeout(toastTimer.current);
+    setToast(t => (t ? { ...t, leaving: true } : t));
+    toastTimer.current = setTimeout(() => setToast(null), 300);
+  };
+  const dismissToast = useCallback(leave, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const push = useCallback((cid: string, msg: Msg) => {
     const viewingIt = viewing.current === cid;
     if (msg.from === 'them' && !viewingIt) {
       const c = chatsRef.current.find(x => x.id === cid);
-      if (c) showToast({ av: c.initials, title: c.name, body: msg.text });
+      if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
       ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, fresh: true }],
@@ -167,7 +179,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     send: (cid, text) => {
       const chat = chats.find(c => c.id === cid);
       const id = 'n' + Date.now();
-      push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada' });
+      push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now() });
       if (chat?.peer) {
         // Real: cifrado na sessão e na fila do roteador; os estados seguintes vêm da rede.
         const ok = outbound.current?.(cid, chat.peer, id, text) ?? false;
@@ -237,7 +249,24 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     },
     setOutbound: fn => { outbound.current = fn; },
     receive: (cid, msg) => push(cid, msg),
-    setMsgStatus: (cid, mid, st) => setStatus(cid, mid, st),
+    setMsgStatus: (cid, mid, st) => {
+      setStatus(cid, mid, st);
+      const c = chatsRef.current.find(x => x.id === cid);
+      const m = c?.msgs?.find(x => x.id === mid);
+      if (!c || !m || m.from !== 'me' || c.muted || viewing.current === cid) return;
+      const open = () => router.push({ pathname: '/chat/[id]', params: { id: cid } });
+      const quote = m.text.length > 40 ? m.text.slice(0, 39) + '…' : m.text;
+      if (st === 'entregue' && m.at && Date.now() - m.at > 60_000) {
+        const min = Math.round((Date.now() - m.at) / 60_000);
+        const wait = min >= 120 ? `${Math.round(min / 60)} h` : `${min} min`;
+        showToast({ kind: 'msg', icon: 'done_all', title: `Entregue a ${c.name}`, body: `Uma rota surgiu depois de ${wait} na fila.`, go: open });
+      }
+      if (st === 'expirada') {
+        showToast({ kind: 'msg', icon: 'timer_off', title: 'Mensagem expirou', body: `“${quote}” não encontrou rota a tempo.`, action: 'Reenviar',
+          go: () => { open(); retryRef.current(cid, mid); } });
+      }
+    },
+    setNotifyFilter: fn => { notifyFilter.current = fn; },
     patchChat: (cid, p) => setChats(cs => cs.map(c => (c.id === cid ? { ...c, ...p } : c))),
     removeChat: cid => setChats(cs => cs.filter(c => c.id !== cid)),
     toast,
@@ -245,6 +274,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     dismissToast,
   }), [profile, onboarded, identity, chats, typing, verified, group, toast, push, setStatus, patchFile, startFile, showToast, dismissToast]);
 
+  retryRef.current = store.retry;
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }
 

@@ -1,4 +1,5 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { router } from 'expo-router';
+import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
 import { getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
 import { useNetwork } from './network';
@@ -23,7 +24,7 @@ const randomNodeName = () => 'piu-' + Math.floor(Math.random() * 0xffffff).toStr
  * na aba Rede. Mantém a lista de vizinhos descobertos e conectados.
  */
 export function TransportProvider({ children }: { children: ReactNode }) {
-  const { onboarded } = useStore();
+  const { onboarded, showToast } = useStore();
   const { tx } = useNetwork();
   const [nodeName] = usePersisted('transport.nodeName', randomNodeName);
   const transport = useMemo(getTransport, []);
@@ -32,6 +33,36 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const [permission, setPermission] = useState<TransportCtx['permission']>('unknown');
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const enabled = onboarded && (tx.ble || tx.direct);
+
+  // Banners de rede (Ajustes → Notificações → Rede e nós): novo nó e saída da malha.
+  const startedAt = useRef(0);
+  const known = useRef(new Set<string>());
+  const lastNodeBanner = useRef(0);
+  const hadPeers = useRef(false);
+  const toastRef = useRef(showToast); toastRef.current = showToast;
+  const goNetwork = () => router.push('/(tabs)/network');
+  useEffect(() => {
+    if (state === 'running') startedAt.current = Date.now();
+    else { known.current.clear(); hadPeers.current = false; }
+  }, [state]);
+  useEffect(() => {
+    const connected = Object.values(peers).filter(p => p.connected);
+    for (const p of Object.values(peers)) {
+      if (known.current.has(p.id)) continue;
+      known.current.add(p.id);
+      // Os vizinhos da primeira busca não viram banner; depois, no máximo um por minuto.
+      const now = Date.now();
+      if (state === 'running' && now - startedAt.current > 10_000 && now - lastNodeBanner.current > 60_000) {
+        lastNodeBanner.current = now;
+        toastRef.current({ kind: 'network', icon: 'settings_input_antenna', title: 'Novo nó alcançável', body: `${p.name} · ${p.via === 'ble' ? 'Bluetooth LE' : p.via === 'nearby' ? 'Wi-Fi Direct' : 'por perto'}`, go: goNetwork });
+      }
+    }
+    if (connected.length) hadPeers.current = true;
+    else if (hadPeers.current && state === 'running') {
+      hadPeers.current = false;
+      toastRef.current({ kind: 'network', icon: 'portable_wifi_off', title: 'Você saiu da malha', body: 'Nenhum nó por perto. Mensagens ficam na fila até reencontrar um.', go: goNetwork });
+    }
+  }, [peers, state]);
 
   useEffect(() => transport.subscribe(e => {
     switch (e.type) {

@@ -159,3 +159,17 @@ test('contatos: recusa o próprio código e chaves trocadas', () => {
   const forged = { ...contactOf(b, 'Beto'), pub: { ...toPublic(b.ids.public), agreePk: e.ids.public.agreePk } };
   assert.throws(() => a.m.addContact(forged), /inválidas/);
 });
+
+test('expiração: sem rota até o fim do TTL, a mensagem sai da fila como "expirada"', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto'));
+  a.m.sendText(b.ids.public.id, 'm1', 'Ninguém por perto');
+  net.clock += 2 * 24 * 3600;
+  a.m.tick();
+  assert.deepEqual(a.m.pendingFor(b.ids.public.id), ['m1'], 'ainda dentro do TTL de 3 dias');
+  net.clock += 2 * 24 * 3600;
+  a.m.tick();
+  assert.deepEqual(a.m.pendingFor(b.ids.public.id), []);
+  assert.deepEqual(a.log.status.at(-1), ['m1', 'expirada']);
+});

@@ -120,5 +120,8 @@
   "photo_camera",
   "public",
   "qr_code_2",
-  "person_check"
+  "person_check",
+  "battery_alert",
+  "portable_wifi_off",
+  "notifications_paused"
 ]

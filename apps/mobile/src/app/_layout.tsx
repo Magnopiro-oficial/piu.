@@ -17,6 +17,7 @@ import { WalletProvider } from '../state/wallet';
 import { FONT_FILES } from '../theme/fonts';
 import { ThemeProvider, useTheme } from '../theme/ThemeProvider';
 import { AppLock } from '../ui/AppLock';
+import { SystemPrompts } from '../ui/SystemPrompts';
 import { Toast } from '../ui/Toast';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -75,6 +76,7 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'slide_from_right' }} />
       <OnboardingGuard />
       <Toast />
+      <SystemPrompts />
       <AppLock />
     </>
   );

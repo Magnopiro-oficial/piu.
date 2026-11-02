@@ -36,7 +36,7 @@ export interface MessengerEvents {
   /** Alguém que tem o meu código escreveu pela primeira vez (pedido de conversa). */
   newContact(c: Contact, m: IncomingText): void;
   /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
-  status(msgId: string, status: 'encaminhada' | 'entregue'): void;
+  status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
@@ -153,7 +153,18 @@ export class Messenger {
   clearPeers() { this.peers.clear(); }
 
   /** Chamar de tempos em tempos: libera envios com atraso aleatório e apaga o que venceu. */
-  tick() { this.router.purge(this.o.now()); this.flushAll(); }
+  tick() {
+    this.router.purge(this.o.now());
+    // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
+    let changed = false;
+    for (const [k, q] of this.outbox) {
+      if (this.router.has(k)) continue;
+      this.outbox.delete(k); changed = true;
+      this.o.events.status?.(q.msgId, 'expirada');
+    }
+    if (changed) this.o.events.changed?.();
+    this.flushAll();
+  }
 
   private flushAll() { for (const p of this.peers.keys()) this.flush(p); }
 

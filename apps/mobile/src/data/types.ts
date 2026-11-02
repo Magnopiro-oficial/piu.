@@ -6,7 +6,7 @@ export type IdentityKind = 'public' | 'anon';
 export type FileState = 'sending' | 'paused' | 'userPaused' | 'resuming' | 'verified';
 export interface FileXfer { name: string; mb: number; blocks: number; icon: 'image' | 'description'; done: number; state: FileState; pausedOnce?: boolean }
 
-export interface Msg { id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; sender?: string; fresh?: boolean; file?: FileXfer }
+export interface Msg { id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; /** Quando foi criada (ms), para o banner de entrega. */ at?: number; sender?: string; fresh?: boolean; file?: FileXfer }
 export interface RouteNode { n: string; k: string }
 /** Conversa (Conversation/Group/Channel/Community no modelo da seção 12). */
 export interface Chat {
@@ -17,9 +17,19 @@ export interface Chat {
   peer?: string;
   /** Escreveu primeiro, sem que você tivesse o código dele: confira antes de confiar. */
   request?: boolean;
+  /** Silenciado: sem banners desta conversa. */
+  muted?: boolean;
   msgs?: Msg[];
 }
 
 export interface Member { id: string; name: string; initials: string; role: string }
 export type ChannelType = 'public' | 'private' | 'secret';
-export interface ToastData { icon?: string; av?: string; title: string; body: string; go?: () => void }
+export interface ToastData {
+  icon?: string; av?: string; title: string; body: string; go?: () => void;
+  /** Botão à direita (ex.: "Ver", "Reenviar"). */
+  action?: string;
+  /** Ícone de moeda girando (LUNES recebidos). */
+  coin?: boolean;
+  /** Tipo de notificação (Ajustes → Notificações): desligado ou em silêncio, o banner não aparece. */
+  kind?: 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network';
+}

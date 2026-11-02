@@ -20,7 +20,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { chats, send, retry, typing, verified, sendFile, toggleFilePause, showToast } = useStore();
+  const { chats, send, retry, typing, verified, sendFile, toggleFilePause, showToast, patchChat } = useStore();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
@@ -107,6 +107,12 @@ export default function ChatScreen() {
             <T size={13.5} w={550}>Somente administradores publicam</T>
             <T size={11} mono color={c.ink2}>{chat.via}</T>
           </View>
+          <Pressable onPress={() => { patchChat(chat.id, { muted: !chat.muted }); showToast({ icon: chat.muted ? 'notifications' : 'notifications_off', title: chat.muted ? 'Canal com notificações' : 'Canal silenciado', body: chat.muted ? 'Novas publicações voltam a aparecer como banner.' : 'As publicações continuam chegando, sem banner.' }); }}
+            accessibilityRole="button" accessibilityState={{ selected: !!chat.muted }} accessibilityLabel={chat.muted ? 'Reativar notificações do canal' : 'Silenciar canal'}
+            style={({ pressed }) => ({ height: 38, paddingHorizontal: 16, borderRadius: 19, borderWidth: 1, borderColor: c.line2, justifyContent: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.7 : 1 })}>
+            {chat.muted && <Icon name="notifications_off" size={16} />}
+            <T size={14} w={550}>{chat.muted ? 'Silenciado' : 'Silenciar'}</T>
+          </Pressable>
         </View>
       ) : (
         <View style={{ paddingTop: 8, paddingHorizontal: 10, paddingBottom: Math.max(insets.bottom, 12), borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.bg, gap: 6 }}>

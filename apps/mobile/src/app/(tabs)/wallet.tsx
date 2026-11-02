@@ -49,7 +49,9 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
     ['person_add', 'Convidar', () => router.push('/invite')],
   ];
   const activity: [IconName, string, string, string, string][] = [
-    ...earned.map(x => ['waving_hand', `Convite aceito · ${x.from}`, 'Agora', 'recebido', `+${fmtLunes(x.amt)}`] as [IconName, string, string, string, string]),
+    ...earned.map(x => (x.kind === 'referral'
+      ? ['person_add', `Distribuição · ${x.from}`, 'Agora', 'pago', `+${fmtLunes(x.amt)}`]
+      : ['waving_hand', `Convite aceito · ${x.from}`, 'Agora', 'recebido', `+${fmtLunes(x.amt)}`]) as [IconName, string, string, string, string]),
     ...reserved.map(x => ['waving_hand', `Convite para ${x.to}`, 'Agora', 'reservado por 24 h', `−${fmtLunes(x.amt)}`] as [IconName, string, string, string, string]),
     ...sent.map(x => ['north_east', `Enviado para ${x.to}`, 'Agora', 'na fila da malha', `−${fmtLunes(x.amt)}`] as [IconName, string, string, string, string]),
     ...BASE_ACTIVITY,

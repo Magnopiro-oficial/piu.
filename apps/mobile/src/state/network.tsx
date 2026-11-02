@@ -13,6 +13,8 @@ export interface ProvDraft {
 interface Network {
   /** Modo nó (FUN-016): retransmitir mensagens cifradas de outras pessoas. */
   relay: boolean; setRelay: (v: boolean) => void;
+  /** Modo nó pausado pela bateria (abaixo do limite, ou fora da tomada com "Só retransmitir carregando"). */
+  relayPaused: boolean; setRelayPaused: (v: boolean) => void;
   tx: Record<TxKey, boolean>; toggleTx: (k: TxKey) => void;
   battery: 20 | 30 | 50; setBattery: (v: 20 | 30 | 50) => void;
   storage: 256 | 512 | 1024; setStorage: (v: 256 | 512 | 1024) => void;
@@ -41,10 +43,11 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   const [chargingOnly, setChargingOnly] = usePersisted('net.chargingOnly', false);
   // Equipamentos do provider; `fresh` (animação de entrada) não sobrevive a reabrir o app.
   const [devices, setDevices] = usePersisted<ProvDevice[]>('net.devices', seedProvDevices, ds => ds.map(d => ({ ...d, fresh: false })));
+  const [relayPaused, setRelayPaused] = useState(false);
   const [draft, setDraftState] = useState<ProvDraft>(() => freshDraft(seedProvDevices()));
 
   const value = useMemo<Network>(() => ({
-    relay, setRelay, tx, toggleTx: k => setTx(t => ({ ...t, [k]: !t[k] })),
+    relay, setRelay, relayPaused, setRelayPaused, tx, toggleTx: k => setTx(t => ({ ...t, [k]: !t[k] })),
     battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly,
     devices,
     togglePause: id => setDevices(ds => ds.map(d => (d.id !== id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' }))),
@@ -66,7 +69,7 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
       setDraftState(freshDraft([...devices, dev]));
       return dev;
     },
-  }), [relay, tx, battery, storage, chargingOnly, devices, draft]);
+  }), [relay, relayPaused, tx, battery, storage, chargingOnly, devices, draft]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

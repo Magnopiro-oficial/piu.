@@ -1,5 +1,6 @@
 import { ScrollView, View } from 'react-native';
 import { REFERRALS, REF_RULES } from '../../data/wallet';
+import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
@@ -8,6 +9,7 @@ import { T } from '../../ui/T';
 
 /** Seus convidados: 25 LUNES por pessoa ativa, só indicação direta (sem níveis). */
 export default function Referrals() {
+  const { joaoPaid } = useWallet();
   const { c } = useTheme();
   return (
     <Screen>
@@ -33,7 +35,7 @@ export default function Referrals() {
         </View>
         <SectionLabel>{`${REFERRALS.length} CONVITES`}</SectionLabel>
         <View style={{ marginHorizontal: 20 }}>
-          {REFERRALS.map(([ini, name, w, s, v, op]) => (
+          {REFERRALS.map(r => (joaoPaid && r[1] === 'João Souza' ? [r[0], r[1], 100, 'Pago agora · ativo há 7 dias', '+25,00', 1] as typeof r : r)).map(([ini, name, w, s, v, op]) => (
             <View key={name} accessibilityLabel={`${name}: ${s}, ${v}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.line, opacity: op }}>
               <View style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: c.ink, backgroundColor: w === 100 ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                 <T size={13.5} w={600} color={w === 100 ? c.invink : c.ink}>{ini}</T>
