@@ -13,8 +13,8 @@ export function TopBar() {
       <div style={{ flex: 1, display: 'flex', justifyContent: 'center' }}>
         <div className="mono" style={{ height: 26, padding: '0 14px', borderRadius: 8, background: 'var(--bg2)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink2)', minWidth: 380, justifyContent: 'center' }}>
           <Icon name="lock" size={14} style={{ color: 'var(--ink)' }} />
-          {NODE.host}
-          <span style={{ opacity: 0.5 }}>· {NODE.label}</span>
+          {nodeMode === 'node' ? window.location.host : NODE.host}
+          <span style={{ opacity: 0.5 }}>· {nodeMode === 'node' ? 'painel local deste nó' : NODE.label}</span>
         </div>
       </div>
       <div className="row" style={{ gap: 6, fontSize: 12, fontWeight: 550, color: 'var(--ink2)' }}>
@@ -38,7 +38,9 @@ const NAV: [PageId, string, string][] = [
 ];
 
 export function Sidebar() {
-  const { page, navigate, devices, theme, setTheme } = useStore();
+  const { page, navigate, devices, theme, setTheme, operatorName } = useStore();
+  // Com o piu-node, o nome do operador pareado; na demonstração, o do exemplo.
+  const opName = operatorName ?? OPERATOR.name;
   return (
     <nav aria-label="Painel" style={{ width: 232, flex: 'none', background: 'var(--side)', borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '22px 14px 16px', gap: 22 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 8px' }}>
@@ -46,9 +48,9 @@ export function Sidebar() {
         <div className="mono" style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '.06em', padding: '2px 7px', borderRadius: 6, border: '1px solid var(--line2)', color: 'var(--ink2)' }}>PROVIDER</div>
       </div>
       <div className="row" style={{ gap: 10, padding: 10, borderRadius: 14, background: 'var(--bg2)' }}>
-        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, flex: 'none' }}>{OPERATOR.initial}</div>
+        <div style={{ width: 34, height: 34, borderRadius: '50%', background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 13, fontWeight: 600, flex: 'none' }}>{(opName.trim().charAt(0) || '?').toUpperCase()}</div>
         <div className="col grow" style={{ gap: 1 }}>
-          <div style={{ fontSize: 14, fontWeight: 600 }}>{OPERATOR.name}</div>
+          <div className="ellipsis" style={{ fontSize: 14, fontWeight: 600 }}>{opName}</div>
           <div className="mono ellipsis" style={{ fontSize: 11, color: 'var(--ink2)' }}>operador · {devices.length} equipamentos</div>
         </div>
       </div>
