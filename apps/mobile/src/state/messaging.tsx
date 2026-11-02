@@ -207,7 +207,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!messenger) return;
     const off = transport.subscribe(e => {
-      if (e.type === 'connected') messenger.peerConnected(e.id, transport.kind === 'nearby' ? 'direct' : 'ble');
+      // Classe do enlace pelo meio real do vizinho (Nearby/Wi-Fi Direct ou BLE).
+      if (e.type === 'connected') messenger.peerConnected(e.id, (e.via ?? transport.kind) === 'nearby' ? 'direct' : 'ble');
       else if (e.type === 'disconnected' || e.type === 'peerLost') messenger.peerDisconnected(e.id);
       else if (e.type === 'envelope') messenger.receive(e.from, e.data);
       else if (e.type === 'state' && e.state === 'off') messenger.clearPeers(); // vizinhos somem com o transporte

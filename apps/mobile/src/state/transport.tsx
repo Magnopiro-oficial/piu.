@@ -2,7 +2,9 @@ import { router } from 'expo-router';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
 import { getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
+import { useBattery } from '../lib/battery';
 import { useNetwork } from './network';
+import { useSettings } from './settings';
 import { useStore } from './store';
 
 interface TransportCtx {
@@ -25,7 +27,8 @@ const randomNodeName = () => 'piu-' + Math.floor(Math.random() * 0xffffff).toStr
  */
 export function TransportProvider({ children }: { children: ReactNode }) {
   const { onboarded, showToast } = useStore();
-  const { tx } = useNetwork();
+  const { tx, relay, relayPaused, battery } = useNetwork();
+  const { bat } = useSettings();
   const [nodeName] = usePersisted('transport.nodeName', randomNodeName);
   const transport = useMemo(getTransport, []);
   const [state, setState] = useState<TransportState>('off');
@@ -33,6 +36,19 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const [permission, setPermission] = useState<TransportCtx['permission']>('unknown');
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const enabled = onboarded && (tx.ble || tx.direct);
+
+  // Meios ligados na aba Rede (BLE e Wi-Fi Direct/Nearby).
+  useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble, nearby: tx.direct }); }, [transport, tx.ble, tx.direct]);
+  // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando
+  // e "Retransmitir em segundo plano" ligado. No iPhone não tem efeito (só com o app aberto).
+  useEffect(() => {
+    void transport.setBackgroundRelay?.(relay && !relayPaused && bat.bg && state === 'running').catch(() => {});
+  }, [transport, relay, relayPaused, bat.bg, state]);
+  // Bateria abaixo do limite do usuário: prefere o meio que gasta menos (BLE).
+  const { level, charging } = useBattery();
+  useEffect(() => {
+    transport.setPowerHint?.(level < 0 || charging === null ? null : !charging && level * 100 <= battery);
+  }, [transport, level, charging, battery]);
 
   // Banners de rede (Ajustes → Notificações → Rede e nós): novo nó e saída da malha.
   const startedAt = useRef(0);
