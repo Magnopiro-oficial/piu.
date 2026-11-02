@@ -88,8 +88,16 @@ O LoRa é a ponte entre malhas distantes: só mensagens pequenas, nunca mídia.
 - **Anote (tabela):** distância, visada (sim/não), SF/banda, entregues/enviadas, latência, `airtimeMs`, `retries` e `dutyUsedPercent` de `/api/relay`.
 - **Ajuste se precisar:** perdas altas → SF maior (alcança mais, transmite mais devagar).
 
-## 11. Lunes (testnet, sem dinheiro real)
-Depende de liberar `ws-test.lunes.io` e os domínios da Mainnet na rede.
-1. `cd apps/settlement && npm run mainnet:check -- --ws wss://ws-test.lunes.io` e depois sem `--ws` (Mainnet, só leitura).
-2. Com uma conta de teste com saldo de testnet: `validator:demo` → `validator:close` (2 épocas) → `lot:pay --ws wss://ws-test.lunes.io --confirm <id>` → `validator:paid`.
-- **Esperado:** todos os itens `[ok]`; o lote aparece no explorador com o remark `piu/lote/v1`.
+## 11. Lunes: conferência da Mainnet e pagamento de teste
+Endereços de produção: `wss://ws.lunes.com`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io` e `wss://ws-archive.lunes.io`.
+1. **Mainnet, só leitura:** `cd apps/settlement && npm ci && npm run mainnet:check`. Não usa chave nem envia nada.
+2. **Pagamento de teste numa chain local** (sem dinheiro real):
+   - no repositório `lunes-platform/lunes-nightly`, rode `./artefacts/lunes-node --dev --tmp`; a chain fica em `ws://127.0.0.1:9944`;
+   - aqui: `npm run validator:demo -- dados`, depois `validator:close` duas vezes (épocas 2026-S40 e 2026-S41, como no README);
+   - pague com a conta de desenvolvimento: `PIU_SETTLEMENT_SEED=//Alice npm run lot:pay -- dados/lotes/piu-lote-2026-S41.json --ws ws://127.0.0.1:9944 --confirm piu-lote-2026-S41`;
+   - por fim, `npm run validator:paid -- --lot piu-lote-2026-S41`.
+3. **Mainnet com valor mínimo**, só depois dos passos 1 e 2: um lote de 5 LUNES para uma carteira própria, pago pela conta da tesouraria.
+- **Esperado:**
+  - no passo 1, todos os itens `[ok]`;
+  - no passo 2, o lote finalizado e marcado como pago;
+  - no passo 3, o lote aparece no explorador com o remark `piu/lote/v1`.

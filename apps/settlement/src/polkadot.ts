@@ -3,8 +3,7 @@
  * (lunes-platform/blockexplorer-ui). As chamadas e os índices vêm dos metadados do próprio nó, não
  * estão fixos aqui.
  *
- * Endereços do explorador (.env): wss://ws-lunes-main-01.lunes.io, wss://ws-lunes-main-02.lunes.io,
- * wss://ws-up.lunes.io, wss://ws-bolunes.lunes.io, wss://ws-lunesblock.lunes.io, wss://ws.lunes.io.
+ * Endereços de produção informados pela Lunes. Outros endereços: `--ws` ou PIU_SETTLEMENT_WS.
  */
 import '@polkadot/api-augment';
 import { ApiPromise, WsProvider } from '@polkadot/api';
@@ -15,9 +14,11 @@ import { TxRejected } from './chain.js';
 import type { PlannedLot } from './lot.js';
 
 export const MAINNET_ENDPOINTS = [
+  'wss://ws.lunes.com',
   'wss://ws-lunes-main-01.lunes.io',
   'wss://ws-lunes-main-02.lunes.io',
-  'wss://ws.lunes.io',
+  // Nó de arquivo: guarda o estado de blocos antigos (útil para conferir um lote pago há tempo).
+  'wss://ws-archive.lunes.io',
 ];
 
 /** Validade da transação: 64 blocos (~6,4 min com blocos de 6 s). Depois disso ela nunca mais entra. */
