@@ -215,3 +215,85 @@ test('QR de uso único: o segundo uso e quem não tem convite são recusados; no
   net.link('Hugo', 'Beto');
   assert.equal(b.log.requests.length, 1);
 });
+
+test('limites do nó: tráfego diário, horário e banda valem só para terceiros', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), r = device(net, 'Relay'), b = device(net, 'Beto');
+  let hour = 12;
+  r.m.clock = { hour: () => hour, day: () => 'd1' };
+  r.m.setPolicy({ maxBytes: 64 << 20, retentionSec: 48 * 3600, dailyBytes: 1 << 20, bytesPerSec: Infinity, hours: 'night' });
+  a.m.addContact(contactOf(b, 'Beto'));
+  a.m.sendText(b.ids.public.id, 'm1', 'De dia o relay não aceita');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  assert.equal(r.m.relayStatus().reason, 'hours');
+  net.link('Relay', 'Beto'); net.unlink('Relay', 'Beto');
+  assert.equal(b.log.msgs.length, 0, 'fora do horário: não guardou');
+  // À noite, guarda e entrega.
+  hour = 23; r.m.tick();
+  a.m.sendText(b.ids.public.id, 'm2', 'À noite o relay aceita');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  net.link('Relay', 'Beto');
+  assert.equal(b.log.msgs.length, 1);
+  // Teto diário minúsculo: depois do primeiro envelope de terceiros, para de retransmitir.
+  net.unlink('Relay', 'Beto');
+  r.m.setPolicy({ maxBytes: 64 << 20, retentionSec: 48 * 3600, dailyBytes: 1, bytesPerSec: Infinity, hours: 'always' });
+  assert.equal(r.m.relayStatus().reason, 'daily');
+  // As próprias mensagens do relay continuam saindo.
+  r.m.addContact(contactOf(b, 'Beto'));
+  r.m.sendText(b.ids.public.id, 'r1', 'Minha própria');
+  net.link('Relay', 'Beto');
+  assert.ok(b.log.msgs.some(([, t]) => t === 'Minha própria'));
+});
+
+test('limites do nó: banda zero segura terceiros na fila, sem marcar como enviados', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), r = device(net, 'Relay'), b = device(net, 'Beto');
+  r.m.setPolicy({ maxBytes: 64 << 20, retentionSec: 48 * 3600, dailyBytes: 1 << 30, bytesPerSec: 0, hours: 'always' });
+  a.m.addContact(contactOf(b, 'Beto'));
+  a.m.sendText(b.ids.public.id, 'm1', 'Banda zero');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  net.link('Relay', 'Beto');
+  assert.equal(b.log.msgs.length, 0, 'sem banda: não saiu');
+  r.m.setPolicy({ maxBytes: 64 << 20, retentionSec: 48 * 3600, dailyBytes: 1 << 30, bytesPerSec: Infinity, hours: 'always' });
+  r.m.tick(); net.run();
+  assert.equal(b.log.msgs.length, 1, 'com banda: sai na rodada seguinte');
+});
+
+test('arquivo em blocos: chega inteiro e conferido, mesmo com pausa e retomada no meio', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto'));
+  b.m.addContact(contactOf(a, 'Ana'));
+  const files: { name: string; data: Uint8Array }[] = [];
+  const progress: number[] = [];
+  let delivered = '';
+  (b.m as unknown as { o: { events: Record<string, unknown> } }).o.events.fileReceived = (_c: string, f: { name: string; data: Uint8Array }) => files.push(f);
+  (a.m as unknown as { o: { events: Record<string, unknown> } }).o.events.fileProgress = (_i: string, d: number) => progress.push(d);
+  (a.m as unknown as { o: { events: Record<string, unknown> } }).o.events.fileDelivered = (id: string) => { delivered = id; };
+  const data = new Uint8Array(100_000); for (let i = 0; i < data.length; i++) data[i] = (i * 31) & 0xff;
+  const { blocks } = a.m.sendFile(b.ids.public.id, 'f1', { name: 'mapa.pdf', mime: 'application/pdf', data });
+  assert.equal(blocks, Math.ceil(100_000 / (12 * 1024)));
+  a.m.setFilePaused('f1', true);
+  net.link('Ana', 'Beto');
+  assert.equal(files.length, 0, 'pausado: só a primeira janela saiu');
+  a.m.setFilePaused('f1', false); net.run();
+  for (let i = 0; i < 50 && !files.length; i++) { a.m.tick(); b.m.tick(); net.run(); }
+  assert.equal(files.length, 1);
+  assert.equal(files[0].name, 'mapa.pdf');
+  assert.deepEqual(files[0].data, data);
+  assert.equal(delivered, 'f1');
+  assert.equal(progress.at(-1), blocks);
+  for (const w of net.wire) assert.ok(!Buffer.from(w).includes(Buffer.from('mapa.pdf')), 'nome do arquivo não aparece no fio');
+});
+
+test('arquivo: bloco adulterado ou de desconhecido não monta nada', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto')); // Beto não conhece Ana: oferta de arquivo é ignorada
+  let got = 0;
+  (b.m as unknown as { o: { events: Record<string, unknown> } }).o.events.fileReceived = () => { got++; };
+  a.m.sendFile(b.ids.public.id, 'f1', { name: 'x.bin', mime: 'application/octet-stream', data: new Uint8Array(5000).fill(7) });
+  net.link('Ana', 'Beto');
+  assert.equal(got, 0);
+  assert.throws(() => a.m.sendFile(b.ids.public.id, 'f2', { name: 'grande', mime: '', data: new Uint8Array(51 * 1024 * 1024) }), /50 MB/);
+});

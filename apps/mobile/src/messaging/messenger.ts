@@ -11,6 +11,7 @@
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
+import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
 import { envelopeId, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
@@ -35,6 +36,7 @@ export interface Contact {
 interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
 export interface IncomingText { msgId: string; text: string; sentAt: number }
+export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array }
 
 export interface MessengerEvents {
   /** Mensagem nova de um contato conhecido. */
@@ -43,6 +45,14 @@ export interface MessengerEvents {
   newContact(c: Contact, m: IncomingText): void;
   /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
+  /** Arquivo: progresso de envio (blocos confirmados) ou de recebimento. */
+  fileProgress(msgId: string, done: number, total: number, dir: 'out' | 'in'): void;
+  /** Arquivo recebido inteiro, com integridade conferida (SHA-256). */
+  fileReceived(contactId: string, f: IncomingFile): void;
+  /** Arquivo enviado: o destino confirmou que montou e conferiu. */
+  fileDelivered(msgId: string): void;
+  /** Alguém começou a enviar um arquivo (para mostrar o balão em andamento). */
+  fileOffered(contactId: string, f: Omit<IncomingFile, 'data'>): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
   inviteUsed(): void;
   /** Estado mudou: salvar `export()`. */
@@ -82,7 +92,23 @@ export interface MessengerOptions {
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
 type Payload =
   | { t: 'm'; i: string; x: string; n?: string; k?: string }
-  | { t: 'a'; i: string[] };
+  | { t: 'a'; i: string[] }
+  /** Oferta de arquivo: nome, tamanho, tipo, total de blocos e SHA-256 do conteúdo. */
+  | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string }
+  /** Blocos recebidos (confirmação parcial) e arquivo montado e conferido. */
+  | { t: 'fa'; i: string; k: number[] }
+  | { t: 'fd'; i: string };
+
+/** Envio de arquivo em andamento (só na memória: o conteúdo não vai para o armazenamento do app). */
+interface FileJob { msgId: string; to: string; data: Uint8Array; total: number; next: number; acked: Set<number>; inFlight: Set<number>; paused: boolean }
+interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number }
+
+/** Bloco de arquivo: 12 KB de dados por envelope (cabe no preenchimento de 16 KB). */
+export const FILE_BLOCK = 12 * 1024;
+export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+/** Quantos blocos sem confirmação podem estar na malha ao mesmo tempo. */
+const FILE_WINDOW = 8;
+const BLOCK_TAG = 0x01;
 
 interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean }
 
@@ -103,6 +129,8 @@ export class Messenger {
   private deliveredSet = new Set<string>();
   private peers = new Map<string, TransportClass>();
   private invites = new Map<string, Invite>();
+  private fileJobs = new Map<string, FileJob>();
+  private fileRx = new Map<string, FileRx>();
   private wantRelay: boolean;
   private policy: NodePolicy | null = null;
   /** Bytes de terceiros enviados hoje (dia local) e o balde de banda. */
@@ -218,14 +246,113 @@ export class Messenger {
     this.enqueue(c, p, msgId, Priority.Normal);
   }
 
-  private enqueue(c: Contact, p: Payload, msgId: string | null, priority: Priority) {
+  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false) {
     const now = this.o.now();
-    const sealed = this.managers[c.via].seal(c.pub, utf8(JSON.stringify(p)), { now, ttlSec: TTL_SEC, priority, pad: this.o.pad?.() ?? true });
+    const body = p instanceof Uint8Array ? p : utf8(JSON.stringify(p));
+    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec: TTL_SEC, priority, bulk, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (msgId && r.status === 'stored') this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false });
     this.o.events.changed?.();
     this.flushAll();
+  }
+
+  // ── arquivos (FUN-009): oferta, blocos com confirmação, pausa/retomada e SHA-256 no fim ──
+
+  /** Começa a enviar um arquivo para o contato. `msgId` é o id do balão na conversa. */
+  sendFile(contactId: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }) {
+    const c = this.contacts.get(contactId);
+    if (!c) throw new Error('Contato desconhecido.');
+    if (f.data.length === 0 || f.data.length > MAX_FILE_BYTES) throw new Error('Arquivo vazio ou maior que 50 MB.');
+    const total = Math.ceil(f.data.length / FILE_BLOCK);
+    const job: FileJob = { msgId, to: contactId, data: f.data, total, next: 0, acked: new Set(), inFlight: new Set(), paused: false };
+    this.fileJobs.set(msgId, job);
+    this.enqueue(c, { t: 'f', i: msgId, n: f.name.slice(0, 120), s: f.data.length, m: f.mime.slice(0, 80), c: total, h: toHex(sha256(f.data)) }, null, Priority.Normal);
+    this.pumpFile(job);
+    return { blocks: total };
+  }
+
+  /** Pausar/retomar pelo usuário. Retomar continua de onde parou (só os blocos que faltam). */
+  setFilePaused(msgId: string, paused: boolean) {
+    const job = this.fileJobs.get(msgId);
+    if (!job) return false;
+    job.paused = paused;
+    if (!paused) { job.inFlight.clear(); job.next = 0; this.pumpFile(job); }
+    return true;
+  }
+
+  /** O envio ainda existe nesta execução do app? (depois de reabrir, o conteúdo não fica guardado). */
+  hasFileJob(msgId: string) { return this.fileJobs.has(msgId); }
+
+  private pumpFile(job: FileJob) {
+    const c = this.contacts.get(job.to);
+    if (!c || job.paused) return;
+    while (job.inFlight.size < FILE_WINDOW) {
+      while (job.next < job.total && (job.acked.has(job.next) || job.inFlight.has(job.next))) job.next++;
+      if (job.next >= job.total) break;
+      const k = job.next++;
+      job.inFlight.add(k);
+      const id = utf8(job.msgId);
+      const chunk = job.data.subarray(k * FILE_BLOCK, (k + 1) * FILE_BLOCK);
+      const body = new Uint8Array(1 + 1 + id.length + 4 + chunk.length);
+      body[0] = BLOCK_TAG; body[1] = id.length; body.set(id, 2);
+      new DataView(body.buffer).setUint32(2 + id.length, k);
+      body.set(chunk, 6 + id.length);
+      // Mídia nunca vai por LoRa (flag bulk no envelope).
+      this.enqueue(c, body, null, Priority.Low, true);
+    }
+  }
+
+  private onBlock(from: string, pt: Uint8Array) {
+    if (pt.length < 7) return;
+    const n = pt[1];
+    if (n === 0 || n > 64 || pt.length < 6 + n) return;
+    const msgId = fromUtf8(pt.subarray(2, 2 + n));
+    const k = new DataView(pt.buffer, pt.byteOffset).getUint32(2 + n);
+    const rx = this.fileRx.get(`${from}|${msgId}`);
+    if (!rx || k >= rx.total) return;
+    const data = pt.slice(6 + n);
+    if (data.length > FILE_BLOCK || (k < rx.total - 1 && data.length !== FILE_BLOCK)) return;
+    if (!rx.parts.has(k)) { rx.parts.set(k, data); rx.bytes += data.length; }
+    if (rx.bytes > rx.size) { this.fileRx.delete(`${from}|${msgId}`); return; }
+    const c = this.contacts.get(from);
+    if (!c) return;
+    this.o.events.fileProgress?.(msgId, rx.parts.size, rx.total, 'in');
+    // Confirma cada bloco (repetido também: a confirmação anterior pode ter se perdido).
+    this.enqueue(c, { t: 'fa', i: msgId, k: [k] }, null, Priority.High);
+    if (rx.parts.size < rx.total) return;
+    const whole = new Uint8Array(rx.size);
+    let o = 0;
+    for (let i = 0; i < rx.total; i++) { const part = rx.parts.get(i)!; whole.set(part, o); o += part.length; }
+    this.fileRx.delete(`${from}|${msgId}`);
+    if (o !== rx.size || toHex(sha256(whole)) !== rx.hash) return; // integridade não confere: descarta
+    this.enqueue(c, { t: 'fd', i: msgId }, null, Priority.High);
+    this.o.events.fileReceived?.(from, { msgId, name: rx.name, size: rx.size, mime: rx.mime, blocks: rx.total, data: whole });
+  }
+
+  private onFileControl(from: string, p: Payload) {
+    const c = this.contacts.get(from);
+    if (!c) return; // arquivo só de contato já aceito
+    if (p.t === 'f') {
+      if (typeof p.i !== 'string' || p.i.length > 64 || !(p.s > 0 && p.s <= MAX_FILE_BYTES) || p.c !== Math.ceil(p.s / FILE_BLOCK) || !/^[0-9a-f]{64}$/.test(p.h)) return;
+      const key = `${from}|${p.i}`;
+      if (this.fileRx.has(key) || this.deliveredSet.has(`${from}|file|${p.i}`)) return;
+      if (this.fileRx.size >= 8) return; // poucos recebimentos simultâneos (memória)
+      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now() });
+      this.markDelivered(`${from}|file|${p.i}`);
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c });
+      return;
+    }
+    const job = typeof p.i === 'string' ? this.fileJobs.get(p.i) : undefined;
+    if (!job || job.to !== from) return;
+    if (p.t === 'fa' && Array.isArray(p.k)) {
+      for (const k of p.k.slice(0, 64)) if (Number.isInteger(k) && k >= 0 && k < job.total) { job.acked.add(k); job.inFlight.delete(k); }
+      this.o.events.fileProgress?.(job.msgId, job.acked.size, job.total, 'out');
+      this.pumpFile(job);
+    } else if (p.t === 'fd') { // montado e conferido do lado de lá (pode chegar antes da última confirmação de bloco)
+      this.fileJobs.delete(job.msgId);
+      this.o.events.fileDelivered?.(job.msgId);
+    }
   }
 
   peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); }
@@ -294,8 +421,10 @@ export class Messenger {
     if (!pt) { used = via === 'public' ? 'anon' : 'public'; pt = this.managers[used].open(m); }
     this.o.events.changed?.();
     if (!pt) return r;
+    if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return r; }
     let p: Payload;
     try { p = JSON.parse(fromUtf8(pt)); } catch { return r; }
+    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p); return r; }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
         for (const [k, q] of this.outbox) {

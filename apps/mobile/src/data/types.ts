@@ -4,7 +4,17 @@ export type IdentityKind = 'public' | 'anon';
 
 /** Arquivo enviado em blocos (FUN-009): pausa quando a rota vira LoRa e retoma depois. */
 export type FileState = 'sending' | 'paused' | 'userPaused' | 'resuming' | 'verified';
-export interface FileXfer { name: string; mb: number; blocks: number; icon: 'image' | 'description'; done: number; state: FileState; pausedOnce?: boolean }
+export interface FileXfer {
+  name: string; mb: number; blocks: number; icon: 'image' | 'description'; done: number; state: FileState; pausedOnce?: boolean;
+  /** Envio real pelo protocolo (conversas pelo QR), não a simulação do protótipo. */
+  real?: boolean;
+  /** Recebendo (do contato) em vez de enviando. */
+  incoming?: boolean;
+  /** Prévia de foto (data URI), só para fotos pequenas. */
+  preview?: string;
+  /** Depois de reabrir o app, o envio real não continua (o conteúdo não fica guardado). */
+  lost?: boolean;
+}
 
 export interface Msg { id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; /** Quando foi criada (ms), para o banner de entrega. */ at?: number; sender?: string; fresh?: boolean; file?: FileXfer }
 export interface RouteNode { n: string; k: string }

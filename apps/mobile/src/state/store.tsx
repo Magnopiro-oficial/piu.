@@ -5,6 +5,12 @@ import type { ChannelType, Chat, FileXfer, IdentityKind, Member, Msg, Status, To
 import { usePersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 
+/** Operações de arquivo reais (MessagingProvider). */
+export interface FileOps {
+  send: (chatId: string, peer: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }) => { blocks: number } | null;
+  setPaused: (msgId: string, paused: boolean) => boolean;
+}
+
 interface Profile { idType: IdentityKind; name: string }
 
 export interface GroupSettings { members: Member[]; keyV: number; approve: boolean; send: 'all' | 'admins'; inv: 'admins' | 'all' }
@@ -37,6 +43,10 @@ interface Store {
   /** Acrescenta uma conversa no topo (se ainda não existir). */
   addChat: (c: Chat) => void;
   sendFile: (chatId: string, kind: 'image' | 'doc') => void;
+  /** Conversa real: envia o arquivo escolhido pelo protocolo. */
+  sendRealFile: (chatId: string, f: { name: string; mime: string; data: Uint8Array; preview?: string }) => void;
+  setFileOps: (ops: FileOps | null) => void;
+  patchFile: (chatId: string, msgId: string, p: Partial<FileXfer>) => void;
   /** Camada de mensagens real (MessagingProvider): envia cifrado para contatos com `peer`. */
   setOutbound: (fn: ((chatId: string, peer: string, msgId: string, text: string) => boolean) | null) => void;
   /** Mensagem real recebida (já decifrada e conferida). */
@@ -70,7 +80,7 @@ function reviveChats(saved: Chat[]): Chat[] {
     msgs: c.msgs?.map(m => {
       const { fresh: _fresh, ...rest } = m;
       const status: Status | undefined = m.status === 'criada' || (m.status === 'encaminhada' && !m.file && !c.peer) ? 'aguardando' : m.status;
-      const file = m.file && m.file.state !== 'verified' ? { ...m.file, state: 'userPaused' as const } : m.file;
+      const file = m.file && m.file.state !== 'verified' ? { ...m.file, state: 'userPaused' as const, lost: m.file.real ? true : m.file.lost } : m.file;
       return { ...rest, status, file };
     }),
   }));
@@ -93,6 +103,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const viewing = useRef<string | null>(null);
   const retryRef = useRef<(cid: string, mid: string) => void>(() => {});
   const notifyFilter = useRef<((t: ToastData) => boolean) | null>(null);
+  const fileOps = useRef<FileOps | null>(null);
   const outbound = useRef<((chatId: string, peer: string, msgId: string, text: string) => boolean) | null>(null);
   const chatsRef = useRef(chats);
   chatsRef.current = chats;
@@ -241,7 +252,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'encaminhada', file: { ...FILES[kind], done: 0, state: 'sending' } });
       startFile(cid, id);
     },
+    sendRealFile: (cid, f) => {
+      const chat = chats.find(c => c.id === cid);
+      if (!chat?.peer) return;
+      const id = 'f' + Date.now();
+      const icon = f.mime.startsWith('image/') ? 'image' as const : 'description' as const;
+      const mb = Math.max(0.1, Math.round((f.data.length / 1048576) * 10) / 10);
+      const r = fileOps.current?.send(cid, chat.peer, id, f) ?? null;
+      push(cid, { id, from: 'me', text: '', time: nowHM(), status: r ? 'aguardando' : 'falha', at: Date.now(),
+        file: { name: f.name, mb, blocks: r?.blocks ?? 1, icon, done: 0, state: 'sending', real: true, preview: f.preview } });
+    },
+    setFileOps: ops => { fileOps.current = ops; },
+    patchFile,
     toggleFilePause: (cid, mid) => {
+      const real = chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file;
+      if (real?.real) {
+        const pause = real.state !== 'userPaused';
+        if (fileOps.current?.setPaused(mid, pause)) patchFile(cid, mid, { state: pause ? 'userPaused' : 'resuming' });
+        else patchFile(cid, mid, { lost: true });
+        return;
+      }
       const paused = chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file?.state === 'userPaused';
       patchFile(cid, mid, { state: paused ? 'resuming' : 'userPaused' });
       // Depois de reabrir o app o motor do envio não existe mais: retomar o reinicia.

@@ -12,6 +12,8 @@ import { Avatar } from '../../ui/Avatar';
 import { Icon, type IconName } from '../../ui/Icon';
 import { AttachSheet } from '../../ui/AttachSheet';
 import { FileBubble } from '../../ui/FileBubble';
+import { pickDocument, pickImage } from '../../lib/pickFile';
+import { MAX_FILE_BYTES } from '../../messaging/messenger';
 import { RouteSheet } from '../../ui/RouteSheet';
 import { T } from '../../ui/T';
 
@@ -20,7 +22,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { chats, send, retry, typing, verified, sendFile, toggleFilePause, showToast, patchChat } = useStore();
+  const { chats, send, retry, typing, verified, sendFile, sendRealFile, toggleFilePause, showToast, patchChat } = useStore();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
@@ -51,6 +53,14 @@ export default function ChatScreen() {
   };
   const onAttach = (k: 'image' | 'doc' | 'location') => {
     if (k === 'location') showToast({ icon: 'location_on', title: 'Localização', body: 'Envio de localização chega numa próxima versão.' });
+    else if (chat.peer) {
+      // Conversa real: escolhe a foto ou o documento e envia em blocos pelo protocolo.
+      void (k === 'image' ? pickImage() : pickDocument()).then(f => {
+        if (!f) return;
+        if (f.data.length > MAX_FILE_BYTES) { showToast({ icon: 'error', title: 'Arquivo grande demais', body: 'O limite por arquivo é 50 MB.' }); return; }
+        sendRealFile(chat.id, f); toEnd();
+      }).catch(() => showToast({ icon: 'error', title: 'Não foi possível abrir o arquivo', body: 'Tente outro arquivo.' }));
+    }
     else { sendFile(chat.id, k); toEnd(); }
   };
 
@@ -205,7 +215,7 @@ function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; 
             ? { paddingTop: 8, paddingBottom: 6, paddingLeft: 14, paddingRight: 12, borderRadius: 20, borderBottomRightRadius: 6, backgroundColor: c.ink, gap: 2 }
             : { paddingTop: 8, paddingBottom: 6, paddingLeft: 12, paddingRight: 14, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: c.bub, borderWidth: 1, borderColor: c.line, gap: 2 }}>
           {!me && chat.kind === 'group' && msg.sender && <T size={12.5} w={650}>{msg.sender}</T>}
-          {msg.file && <FileBubble file={msg.file} onToggle={onToggleFile} />}
+          {msg.file && <FileBubble file={msg.file} onToggle={onToggleFile} inverse={me} />}
           {!!msg.text && <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>}
           {me ? (
             <View style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.72 }}>

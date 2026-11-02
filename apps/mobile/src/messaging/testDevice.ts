@@ -27,6 +27,7 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
       changed: () => save?.(JSON.stringify({ seed: toHex(seed), m: m.export() })),
       newContact: (c, msg) => { m.addContact(c); answer(c.id, msg.text); },
       message: (cid, msg) => answer(cid, msg.text),
+      fileReceived: (cid, f) => setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi o arquivo “${f.name}” (${Math.round(f.size / 1024)} KB, ${f.blocks} blocos). SHA-256 conferido.`), 600),
     },
   });
   m.displayName = TEST_DEVICE_NAME;

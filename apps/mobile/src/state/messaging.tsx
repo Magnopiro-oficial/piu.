@@ -7,6 +7,9 @@ import { type Contact, Messenger } from '../messaging/messenger';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
 import { getTransport } from '../transport';
+import { toBase64 } from '../transport/base64';
+import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
+import type { IncomingFile } from '../messaging/messenger';
 import { attachVirtualPeer } from '../transport/simulated';
 import { useKeys } from './keys';
 import { useNetwork } from './network';
@@ -14,6 +17,8 @@ import { useSettings } from './settings';
 import { useStore } from './store';
 
 const STATE_KEY = 'msg.state';
+/** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
+export const receivedFiles = new Map<string, IncomingFile>();
 const SAVE_DELAY = 300;
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -47,7 +52,7 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
   const { priv, sto, bat } = useSettings();
@@ -72,8 +77,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => { void saveNow().catch(() => {}); }, SAVE_DELAY);
   }, [saveNow]);
 
-  const handlers = useRef({ receive, setMsgStatus, addChat, showToast });
-  handlers.current = { receive, setMsgStatus, addChat, showToast };
+  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile });
+  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile };
 
   // Cria o mensageiro quando as chaves existem.
   useEffect(() => {
@@ -92,6 +97,30 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
+        // Arquivos: progresso por bloco, entrega conferida e recebimento.
+        fileProgress: (msgId, done, total, dir) => {
+          const cid = dir === 'out' ? msgToChat.current.get(msgId) : msgToChat.current.get('in-' + msgId);
+          if (cid) handlers.current.patchFile(cid, dir === 'out' ? msgId : 'in-' + msgId, { done: Math.min(done, total), blocks: total });
+        },
+        fileDelivered: msgId => {
+          const cid = msgToChat.current.get(msgId);
+          if (!cid) return;
+          handlers.current.patchFile(cid, msgId, { state: 'verified' });
+          handlers.current.setMsgStatus(cid, msgId, 'entregue');
+        },
+        fileOffered: (contactId, f) => {
+          const cid = chatIdFor(contactId);
+          if (!chatsRef.current.some(c => c.id === cid)) return;
+          msgToChat.current.set('in-' + f.msgId, cid);
+          handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(),
+            file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true } });
+        },
+        fileReceived: (contactId, f) => {
+          const cid = msgToChat.current.get('in-' + f.msgId) ?? chatIdFor(contactId);
+          const preview = f.mime.startsWith('image/') && f.data.length <= PREVIEW_MAX_BYTES ? `data:${f.mime};base64,${toBase64(f.data)}` : undefined;
+          receivedFiles.set('in-' + f.msgId, f);
+          handlers.current.patchFile(cid, 'in-' + f.msgId, { state: 'verified', done: f.blocks, preview });
+        },
         status: (msgId, st) => {
           const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => c.peer && c.msgs?.some(x => x.id === msgId))?.id;
           if (cid) handlers.current.setMsgStatus(cid, msgId, st);
@@ -140,6 +169,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     const tick = setInterval(() => messenger.tick(), 5000);
     return () => { off(); clearInterval(tick); };
   }, [messenger, transport]);
+
+  // Store → mensageiro (arquivos reais).
+  useEffect(() => {
+    if (!messenger) { setFileOps(null); return; }
+    setFileOps({
+      send: (chatId, peer, msgId, f) => {
+        try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f); } catch { return null; }
+      },
+      setPaused: (msgId, paused) => messenger.setFilePaused(msgId, paused),
+    });
+    return () => setFileOps(null);
+  }, [messenger, setFileOps]);
 
   // Store → mensageiro (envio real).
   useEffect(() => {
