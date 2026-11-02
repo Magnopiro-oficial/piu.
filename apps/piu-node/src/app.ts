@@ -112,7 +112,9 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (r === 'locked') { o.onCodeSpent?.('locked'); return fail(reply, 429, 'Código bloqueado depois de várias tentativas. Gere um novo no equipamento.'); }
     if (r !== 'ok') return fail(reply, 401, 'Código inválido ou expirado.');
     o.onCodeSpent?.('used');
-    const op = store.addOperator(req.body.name.trim(), now());
+    // O código prova acesso físico ao equipamento. Com um nome que já existe, a sessão é da mesma conta
+    // (sessão expirada, outro navegador); com um nome novo, cria outro operador.
+    const op = store.operatorByName(req.body.name) ?? store.addOperator(req.body.name.trim(), now());
     const { token, session } = createSession(store, op.id, now(), sessionLabel(req.headers['user-agent']));
     reply.setCookie(SESSION_COOKIE, token, cookieOptions);
     return { operator: { id: op.id, name: op.name }, csrf: session.csrf };

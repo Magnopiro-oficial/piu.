@@ -4,7 +4,7 @@ API local do equipamento do provider, com o painel (`apps/provider-panel`) servi
 
 ```bash
 npm ci
-npm test            # 18 testes de segurança (ataques simulados)
+npm test            # 19 testes de segurança (ataques simulados)
 npm run typecheck
 npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist)
 ```
@@ -13,6 +13,8 @@ npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/d
 1. Ao iniciar, o nó mostra **no próprio console/tela** um código de 8 dígitos (vale 10 min, uso único) e a impressão digital SHA-256 do certificado TLS.
 2. No navegador, a pessoa abre `https://piu-node.local:8420`, confere a impressão digital antes de aceitar o certificado e digita o código.
 3. O nó cria uma sessão: cookie `__Host-piu_session` (`HttpOnly`, `Secure`, `SameSite=Strict`), 30 min de inatividade, 12 h no máximo. O token fica só como hash no servidor.
+
+Parear de novo com o **mesmo nome** (sessão expirada, outro navegador) volta à mesma conta, com os mesmos equipamentos; um nome novo cria outro operador.
 
 Provar o código é provar acesso físico ao equipamento. Quem está só na mesma rede Wi‑Fi não vê o código.
 

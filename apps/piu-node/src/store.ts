@@ -69,6 +69,9 @@ export class Store {
     return op;
   }
 
+  /** Operador com este nome (sem diferenciar maiúsculas). Parear de novo com o mesmo nome volta à mesma conta. */
+  operatorByName(name: string) { const n = name.trim().toLocaleLowerCase('pt-BR'); return this.s.operators.find(o => o.name.toLocaleLowerCase('pt-BR') === n) ?? null; }
+
   operator(id: string) { return this.s.operators.find(o => o.id === id) ?? null; }
 
   addSession(sess: Session) { this.s.sessions.push(sess); this.save(); }
