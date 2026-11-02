@@ -25,7 +25,7 @@
     "@noble/curves": "^2.4.0",
     "@noble/hashes": "^2.4.0",
     "@polkadot/api": "^16.5.6",
-    "@polkadot/api-augment": "^16.5.6",
+    "@polkadot/api-augment": "^17.0.2",
     "@polkadot/keyring": "^14.0.3",
     "@polkadot/util": "^14.0.3",
     "@polkadot/util-crypto": "^14.0.3"
