@@ -1,5 +1,6 @@
 import { X509Certificate } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { generate } from 'selfsigned';
@@ -76,14 +77,20 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   let relay: RelayHandle | null = null;
   if (config.lnnp?.enabled) {
     try {
-      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), { log: o.log });
+      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), { log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json') });
     } catch (e) {
       o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
     }
   }
 
+  // O próprio nó é um equipamento do dono: com rádio ou cabo serial ligado, é um Gateway Local.
+  const selfDevice = { name: (hostname().trim() || 'piu-node').slice(0, 40), cls: config.lnnp?.serial?.length ? 'Gateway Local' : 'Home Node' };
+  store.ensureSelfDevice(selfDevice, Date.now());
+  // Pausado no painel antes de reiniciar: continua pausado.
+  if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
+
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay,
+    config, store, pairing, packages, packagesDir, relay, selfDevice,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).

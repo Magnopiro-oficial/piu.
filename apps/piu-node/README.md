@@ -58,6 +58,13 @@ Os ajustes do **dono do equipamento** (o primeiro operador pareado) em `PUT /api
 ### `GET /api/relay` (com sessão)
 Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retransmitindo agora), versão LNNP, id do nó, `neighbors` (id, endereço, versão, meios, relay, MTU, desde quando), `store` (envelopes e bytes guardados, teto), `counters` (`received`, `stored`, `forwarded`, `delivered`, `duplicates`, `rejected`, `relayOff`, `full`, `expired`, `receipts`, `receiptsReceived`, `handshakesOk`, `handshakesFailed`) e os limites em vigor. Com o motor desligado: `{ "enabled": false }`.
 
+### Histórico, recibos e o próprio equipamento (com sessão)
+- **`GET /api/relay/history`**: a cada `PIU_RELAY_SAMPLE_MS` (padrão 5 min), a diferença dos contadores do motor vira uma amostra, e as amostras se somam por dia (hora local). Volta `{ enabled, sampleMs, samples, days }`: amostras das últimas 24 h (`received`, `stored`, `forwarded`, `duplicates`, `rejected`, `relayOff`, `full`, `expired`, `receipts`, `receiptsReceived`, mais `neighbors` e `storedBytes` no fim da rodada) e até 120 dias de totais. Guardado em `<data>/lnnp/relay-history.json` (0600, gravação atômica); a última rodada é gravada ao desligar. Só contagens: nada de conteúdo, destino, chave ou id de envelope.
+- **`GET /api/relay/receipts`**: recibos guardados para o validador (`kept`, `keptOwn`, `max`) e o horário dos 20 mais recentes, com `own` (assinado por este nó). Sem id de envelope, hash do segredo de entrega nem chave.
+- **LUNES não aparecem aqui**: o valor de um recibo depende do validador e da liquidação na Mainnet. O painel mostra contagens e diz que o valor ainda não existe.
+- **O próprio nó é um equipamento do dono**: no primeiro pareamento (ou ao subir, se já há dono), o nó se registra com o nome da máquina (`hostname`) e a classe Home Node (Gateway Local com `PIU_SERIAL`). `GET /api/devices` marca com `self: true`. Pausar esse equipamento pausa a retransmissão de terceiros no motor na hora (e continua pausado depois de reiniciar); removê-lo pelo painel não pode (`409`). Os outros equipamentos são registros do assistente: ainda não mandam estatísticas a este nó.
+- **Carteira sem valor de exemplo**: operador novo começa com saldo 0 e sem movimentações. `GET /api/wallet` traz as movimentações reais (`kind: 'out'` para transferências; `kind: 'in'` para liquidação recebida, com a referência do lote em `from`). Não há rota que credite: só a liquidação de verdade (ferramenta local) chama `Store.credit`.
+
 ### Código do protocolo
 `src/protocol/` é uma **cópia gerada** de `apps/mobile/src/protocol/` (`npm run protocol:sync`), não um import relativo: o piu-node é ESM com `moduleResolution: nodenext` (exige `.js` nos imports, que o app não usa), compila com `noUncheckedIndexedAccess` e precisa rodar sozinho em Linux/OpenWrt, sem o projeto Expo e o `node_modules` dele. O teste `test/protocol-sync.test.ts` falha se a cópia ficar diferente da fonte. O app desktop continua empacotando com esbuild normalmente (as dependências `@noble/*` estão no `package.json` daqui).
 
@@ -76,11 +83,13 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `POST /api/pair`, `POST /api/reauth`, `GET /api/session`, `POST /api/logout` | pareamento, step-up e sessão |
 | `GET /api/sessions`, `POST /api/sessions/revoke-others` | acessos abertos do operador (rótulo "Firefox · Linux", sem token) e encerrar os outros (exige step-up) |
 | `GET`/`PUT /api/settings` | limites globais (banda, armazenamento, horário) e política de tráfego, por operador |
-| `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`) |
+| `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`; o próprio nó vem com `self: true`) |
 | `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up). Com celular pareado, devolve `202` com o pedido a aprovar |
 | `POST /api/wallet/transfer/:id/approve` | conclui o pedido com o código de aprovação que o celular mostrou (uso único, 5 tentativas a cada 10 min) |
 | `GET /api/phones`, `POST /api/phones`, `POST /api/phones/:id/confirm`, `DELETE /api/phones/:id` | celulares que aprovam transferências: listar (sem o segredo), parear (exige step-up; devolve o QR), confirmar com os 6 dígitos e remover |
-| `GET /api/relay` | estatísticas da retransmissão LNNP (vizinhos, guardados, encaminhados, duplicatas, recibos) |
+| `GET /api/relay` | estatísticas da retransmissão LNNP (vizinhos, guardados, encaminhados, duplicatas, recibos, `paused`, `startedAt`) |
+| `GET /api/relay/history` | histórico das estatísticas: amostras de 24 h e totais por dia, guardados no nó |
+| `GET /api/relay/receipts` | recibos guardados para o validador (contagem e horários, sem ids) |
 | `GET /api/packages`, `GET /pkg/:file` | pacotes assinados do instalador |
 
 `src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, motor de retransmissão, API e painel; se o motor não subir, por exemplo com a porta ocupada, o painel sobe mesmo assim e o motivo vai para o log) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
@@ -151,12 +160,14 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LORA_DUTY` | `10` | ocupação máxima do canal, % por hora |
 | `PIU_LORA_MAX_ENVELOPE` | `1536` | maior envelope enviado pelo rádio (bytes) |
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
+| `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 
 ## Próximos passos
 - Passkeys (WebAuthn) depois do primeiro pareamento, para não depender do código a cada novo navegador.
-- Os dados de carteira e equipamentos ainda são de referência; ligar à carteira real e aos recibos do motor.
+- Ligar a carteira à liquidação real (Mainnet) e os recibos ao validador; até lá o saldo só muda com transferências e créditos locais.
+- Estatísticas dos outros equipamentos do operador (hoje só o nó que serve o painel tem dados reais).
 - Guardar os envelopes em disco (hoje ficam em memória, até `PIU_LNNP_MEMORY_MB`) e salvar os ids vistos entre reinícios (`Router.exportSeen`).
 - Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.
 - Enviar os recibos ao validador quando houver rota (`RelayEngine.sendReceipts`).

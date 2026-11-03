@@ -11,9 +11,17 @@ export interface Session {
   label: string;
 }
 export type DeviceStatus = 'active' | 'paused';
-export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today: number; family?: string; pub?: string; createdAt?: number }
-/** Destino: a carteira pessoal do operador ou outro endereço `lunes:…`. */
-export interface WalletTx { id: string; amount: number; at: number; to: string }
+/**
+ * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais);
+ * os outros são registros feitos pelo assistente e ainda não mandam estatísticas a este nó.
+ * `today` é legado (versões antigas guardavam um valor de referência) e não sai mais pela API.
+ */
+export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today?: number; family?: string; pub?: string; createdAt?: number; self?: boolean }
+/**
+ * Movimentação da carteira. Saída (`out`, ou sem `kind` nas versões antigas): para a carteira pessoal
+ * ou outro endereço `lunes:…`. Entrada (`in`): liquidação recebida, com a referência do lote em `from`.
+ */
+export interface WalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
 export interface Wallet { balance: number; txs: WalletTx[] }
 
 export type HoursPolicy = 'always' | 'night' | 'day';
@@ -63,13 +71,8 @@ export class Store {
   addOperator(name: string, now: number): Operator {
     const op: Operator = { id: randomUUID(), name, createdAt: now };
     this.s.operators.push(op);
-    this.s.wallets[op.id] = { balance: 1284.6, txs: [] };
-    // Referência: o primeiro operador recebe os equipamentos de demonstração do painel.
-    if (this.s.operators.length === 1) {
-      for (const [name, cls] of [['Mini-PC da garagem', 'Gateway Local'], ['Antena do telhado', 'Super Node'], ['Roteador da sala', 'Home Node']] as const) {
-        this.s.devices.push({ id: randomUUID(), ownerId: op.id, name, cls, status: 'active', today: 4.12 });
-      }
-    }
+    // Saldo começa em zero: LUNES só entram com uma liquidação de verdade (nada de valor de exemplo).
+    this.s.wallets[op.id] = { balance: 0, txs: [] };
     this.save();
     return op;
   }
@@ -104,6 +107,20 @@ export class Store {
     return dev;
   }
   removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+  /** O equipamento que serve o painel, se já tem dono. */
+  selfDevice() { return this.s.devices.find(d => d.self) ?? null; }
+  /**
+   * Registra o próprio nó como equipamento do dono (o primeiro operador), uma vez. Chamado ao subir
+   * e no primeiro pareamento. Sem dono ainda, não faz nada.
+   */
+  ensureSelfDevice(info: { name: string; cls: string }, now: number) {
+    const owner = this.s.operators[0];
+    if (!owner || this.selfDevice()) return this.selfDevice();
+    const dev: Device = { id: randomUUID(), ownerId: owner.id, name: info.name, cls: info.cls, status: 'active', family: 'linux', createdAt: now, self: true };
+    this.s.devices.unshift(dev);
+    this.save();
+    return dev;
+  }
 
   settings(operatorId: string): Settings { return this.s.settings[operatorId] ?? DEFAULT_SETTINGS; }
   /**
@@ -128,8 +145,21 @@ export class Store {
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {
     const w = this.s.wallets[operatorId];
     if (!w) throw new Error('sem carteira');
-    const tx: WalletTx = { id: randomUUID(), amount, at: now, to };
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to, kind: 'out' };
     w.balance = Math.round((w.balance - amount) * 100) / 100;
+    w.txs.unshift(tx);
+    this.save();
+    return tx;
+  }
+  /**
+   * Entrada na carteira: liquidação de um lote (`from` é a referência do lote). Não há caminho pela
+   * API: só quem liquida de verdade (ferramenta local, testes) credita.
+   */
+  credit(operatorId: string, amount: number, now: number, from: string): WalletTx {
+    const w = this.s.wallets[operatorId];
+    if (!w) throw new Error('sem carteira');
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to: 'provider', kind: 'in', from };
+    w.balance = Math.round((w.balance + amount) * 100) / 100;
     w.txs.unshift(tx);
     this.save();
     return tx;
