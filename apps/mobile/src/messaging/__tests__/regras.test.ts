@@ -236,3 +236,27 @@ test('1.2 aparelho revogado: o admin confere o aviso e troca a chave; o próprio
   net.run();
   assert.equal(b.m.getGroup(g.id)!.keyV, before + 1);
 });
+
+// ── 7.9 horário do recibo arredondado para a hora ───────────────────
+
+test('7.9 recibo: horário arredondado para a hora antes de assinar, e a assinatura confere', async () => {
+  const { makeRelayReceipt, verifyRelayReceipt, ContributionLedger } = await import('../../protocol/receipts');
+  const node = deriveNodeKey(newSeed());
+  const r = makeRelayReceipt(node, 'env1', new Uint8Array(16), T0 + 1234);
+  assert.equal(r.at, T0, 'T0 é hora cheia');
+  assert.ok(verifyRelayReceipt(r));
+  assert.ok(!verifyRelayReceipt({ ...r, at: T0 + 1234 }), 'o horário exato não confere com a assinatura');
+  // O validador aceita (para baixo, nunca fica no futuro).
+  assert.equal(new ContributionLedger().submit(r, T0 + 1234), 'pendente');
+  // O recibo que o roteador gera ao repassar também sai arredondado.
+  const net = new Net();
+  const a = device(net, 'Ana'), relay = device(net, 'Relay'), b = device(net, 'Beto');
+  know(a, b); know(b, a);
+  net.clock = T0 + 1800;
+  a.m.sendText(b.ids.public.id, 'm1', 'Pela malha');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay');
+  net.link('Relay', 'Beto');
+  const c = relay.m.credits.list()[0];
+  assert.equal(c.at, T0);
+  assert.ok(verifyRelayReceipt(relay.m.credits.receiptOf(c)));
+});
