@@ -6,6 +6,7 @@ import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/de
 import { notify } from '../lib/notifications';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { nowHM } from '../lib/text';
+import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 
 /** Operações de arquivo reais (MessagingProvider). */
 export interface FileOps {
@@ -230,7 +231,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         showToast({ kind: 'msg', icon: 'done_all', title: `Entregue a ${c.name}`, body: `Uma rota surgiu depois de ${wait} na fila.`, go: open });
       }
       if (st === 'expirada') {
-        showToast({ kind: 'msg', icon: 'timer_off', title: 'Mensagem expirou', body: `“${quote}” não encontrou rota a tempo.`, action: 'Reenviar',
+        showToast({ kind: 'msg', icon: 'timer_off', title: 'Mensagem expirou', body: `“${quote}” não encontrou rota em ${MESSAGE_TTL_SEC / 3600} h.`, action: 'Reenviar',
           go: () => { open(); retryRef.current(cid, mid); } });
       }
     },

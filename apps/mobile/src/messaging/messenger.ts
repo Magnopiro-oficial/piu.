@@ -172,6 +172,7 @@ interface Outgoing { env: string; msgId: string; to: string; bytes: string; forw
 /** Prova de entrega circulando pela malha (pública: não diz quem é o destino). */
 interface Proof { secret: Uint8Array; at: number; sentTo: Set<string> }
 const PROOF_MAGIC = [0x50, 0x52]; // "PR": quadro de provas (envelopes começam com a versão 0)
+/** A prova circula enquanto a mensagem ainda pode estar na malha. */
 const PROOF_TTL_SEC = 48 * 3600;
 
 /** Métricas locais do diagnóstico (sem telemetria): por dia, só neste aparelho. */
@@ -179,7 +180,12 @@ export interface DayMetrics { sent: number; delivered: number; expired: number; 
 const emptyDay = (): DayMetrics => ({ sent: 0, delivered: 0, expired: 0, lat: [], queue: [], hops: {}, relayed: 0, altRoutes: 0, via: {} });
 const MAX_SAMPLES = 300;
 
-const TTL_SEC = 3 * 24 * 3600;
+/**
+ * Prazo de uma mensagem sem rota (FUN-011): 48 h, como no design ("não encontrou rota em 48 h",
+ * "Expira em 47 h"). Vale para conversa, grupo e arquivo; as telas leem daqui (lib/route.ts).
+ */
+export const MESSAGE_TTL_SEC = 48 * 3600;
+const TTL_SEC = MESSAGE_TTL_SEC;
 const MAX_TEXT = 4000;
 const MAX_CONTACTS_FROM_STRANGERS = 50;
 const MAX_DELIVERED_IDS = 5000;
