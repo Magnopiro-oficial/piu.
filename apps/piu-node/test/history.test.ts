@@ -34,6 +34,12 @@ test('histórico: amostras com a diferença dos contadores, totais por dia, arqu
     assert.deepEqual(v.samples.map(s => s.received), [10, 5, 1], 'cada amostra é o que aconteceu na rodada');
     assert.deepEqual(v.samples.map(s => s.neighbors), [2, 3, 3]);
     assert.deepEqual(v.days.map(d => [d.day, d.receipts, d.forwarded]), [['2026-11-03', 6, 12], ['2026-11-04', 1, 1]]);
+    // Contadores atuais (ainda sem rodada): entram no total de hoje e em `unsampled`, sem gravar.
+    const live = h.view(300_000, counters({ received: 20, forwarded: 13, receipts: 9, duplicates: 2 }));
+    assert.equal(live.today, '2026-11-04');
+    assert.equal(live.unsampled.received, 4);
+    assert.equal(live.days.at(-1)!.receipts, 3);
+    assert.equal(h.view(300_000).days.at(-1)!.receipts, 1, 'a visão ao vivo não altera o histórico');
     assert.equal(statSync(file).mode & 0o777, 0o600, 'só o usuário do serviço lê');
     assert.equal(statSync(join(dir, 'lnnp')).mode & 0o777, 0o700);
     // Sem dado sensível no arquivo: só contagens e horários.

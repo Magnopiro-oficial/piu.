@@ -84,7 +84,7 @@ export async function startRelay(
     engine, lan, serial, port, discoveryPort,
     applySettings: s => engine.applySettings(s),
     setPaused: p => engine.setPaused(p),
-    history: () => history.view(sampleMs),
+    history: () => history.view(sampleMs, engine.counters),
     receipts: () => engine.receiptsView(),
     sample,
     stats: () => ({ ...engine.stats(), lan: { port, discoveryPort }, serial: serial.map(a => a.stats()) }),

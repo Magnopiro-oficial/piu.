@@ -202,7 +202,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   app.get('/api/relay/receipts', authed(), async () => (o.relay?.receipts ? { enabled: true, ...o.relay.receipts() } : { enabled: false }));
 
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
-  const deviceView = ({ id, name, cls, status, self }: Device) => ({ id, name, cls, status, self: !!self });
+  /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
+  const deviceView = ({ id, name, cls, status, self, pub }: Device) => ({ id, name, cls, status, self: !!self, ...(pub ? { pub } : {}) });
   app.get('/api/devices', authed(), async req => store.devicesOf(req.piuSession!.operatorId).map(deviceView));
 
   /** Equipamento ativado pelo assistente "Adicionar equipamento". */

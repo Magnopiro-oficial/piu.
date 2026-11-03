@@ -99,8 +99,23 @@ export class RelayHistory {
     chmodSync(this.file, 0o600);
   }
 
-  /** Para `GET /api/relay/history`: amostras das últimas 24 h e totais por dia (do mais antigo ao mais novo). */
-  view(sampleMs: number) {
-    return { sampleMs, samples: this.samples.map(s => ({ ...s })), days: this.days.map(d => ({ ...d })) };
+  /**
+   * Para `GET /api/relay/history`: amostras das últimas 24 h e totais por dia (do mais antigo ao mais
+   * novo). Com `live` (contadores atuais do motor), o que aconteceu depois da última rodada vai em
+   * `unsampled` e já entra no total de hoje, sem gravar nada: o painel vê o dia em tempo real.
+   */
+  view(sampleMs: number, live?: Counters) {
+    const now = this.now();
+    const days = this.days.map(d => ({ ...d }));
+    const unsampled = zero();
+    if (live) {
+      const prev = this.last ?? zero();
+      for (const k of HISTORY_FIELDS) unsampled[k] = live[k] >= prev[k] ? live[k] - prev[k] : live[k];
+      const key = dayKey(now);
+      let day = days.find(d => d.day === key);
+      if (!day) { day = { day: key, ...zero() }; days.push(day); }
+      for (const k of HISTORY_FIELDS) day[k] += unsampled[k];
+    }
+    return { sampleMs, today: dayKey(now), samples: this.samples.map(s => ({ ...s })), days: days.slice(-MAX_DAYS), unsampled };
   }
 }
