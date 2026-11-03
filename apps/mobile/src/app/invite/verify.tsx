@@ -1,16 +1,27 @@
 import { router } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import { VERIFY_CHECKS } from '../../data/wallet';
+import { useInviter } from '../../lib/inviter';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
-/** Primeira abertura de uma cópia recebida de outra pessoa: 5 verificações antes de criar a identidade. */
+/**
+ * Prévia da primeira abertura de uma cópia recebida de outra pessoa: as 5 verificações antes de criar a
+ * identidade. Sem o envio do app, não há cópia recebida para conferir: a tela é marcada como prévia.
+ */
 export default function VerifyCopy() {
   const { c } = useTheme();
+  const { name } = useInviter();
+  const checks: [string, string][] = [
+    ['Assinatura do desenvolvedor', 'certificado da Lunes Network'],
+    ['Integridade do pacote', 'SHA-256 do pacote recebido'],
+    ['Versão não revogada', 'lista de revogação recebida pela malha'],
+    ['Confirmação independente', 'nós por perto anunciam o mesmo hash'],
+    [name === 'Você' ? 'Convite' : `Convite de ${name}`, 'assinatura válida · uso único'],
+  ];
   const [n, setN] = useState(0);
   const done = n >= 5;
   useEffect(() => {
@@ -21,12 +32,12 @@ export default function VerifyCopy() {
     <Screen style={{ paddingHorizontal: 24 }}>
       <View style={{ flex: 1, paddingTop: 42, gap: 24 }}>
         <View style={{ gap: 8 }}>
-          <T size={12} w={500} mono ls={0.04} color={c.ink2}>PRIMEIRA ABERTURA</T>
-          <T size={30} w={650} ls={-0.035} lh={1.06} accessibilityRole="header" accessibilityLiveRegion="polite">{done ? 'Esta cópia é autêntica.' : 'Verificando sua cópia do Piu…'}</T>
+          <T size={12} w={500} mono ls={0.04} color={c.ink2}>PRÉVIA · PRIMEIRA ABERTURA</T>
+          <T size={30} w={650} ls={-0.035} lh={1.06} accessibilityRole="header" accessibilityLiveRegion="polite">{done ? 'Assim a cópia é conferida.' : 'Verificando a cópia do Piu…'}</T>
           <T size={14.5} lh={1.4} color={c.ink2}>Antes de criar sua identidade, o Piu confere se esta cópia é original.</T>
         </View>
         <View>
-          {VERIFY_CHECKS('Cardeal').map(([t, d], i) => {
+          {checks.map(([t, d], i) => {
             const ok = i < n, cur = i === n;
             return (
               <View key={t} accessibilityLabel={`${t}: ${ok ? 'confere' : cur ? 'verificando' : 'aguardando'}`}
