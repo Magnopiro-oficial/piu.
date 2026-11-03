@@ -255,7 +255,7 @@ export function AddDeviceWizard() {
                           <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{real ? 'sem software do Piu: vínculo só registrado neste nó' : fam.addr}</div>
                         </div>
                       </div>
-                      {!isAp && (
+                      {!isAp && !real && (
                         <>
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Confira se o código aparece {fam.where}:</div>
                           <div aria-label={'Código de pareamento ' + PAIR_CODE.join(' ')} style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
