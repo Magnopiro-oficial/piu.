@@ -1,18 +1,18 @@
-import { useState, type ReactNode } from 'react';
-import { StepUpDialog } from '../components/Pair';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { Dialog } from '../components/Overlays';
+import { PasswordDialog, StepUpDialog } from '../components/Pair';
 import { PairPhone } from '../components/Phone';
-import { ApiError, NeedsReauth } from '../lib/api';
+import { ApiError, NeedsReauth, type ApiOperatorKey } from '../lib/api';
+import { downloadText } from '../lib/io';
 import { Icon, Segmented, Toggle } from '../components/ui';
 import { OPERATOR, PUB_RULES, SESSIONS } from '../data/seed';
-import { relayOn } from '../lib/live';
 import { useStore } from '../state/store';
 import type { HoursPolicy, Policies } from '../types';
 
 const segProps = { gap: 4, radius: 12, btnRadius: 9 } as const;
 
 export function Settings() {
-  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api, live } = useStore();
-  const nodeId = relayOn(live)?.node ?? null;
+  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api } = useStore();
   const [pairing, setPairing] = useState<{ id: string; qr: string } | null>(null);
   const [pairStepUp, setPairStepUp] = useState(false);
   const startPair = async () => {
@@ -127,19 +127,7 @@ export function Settings() {
 
       <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
         <CardHead title="Identidade de operador" sub="Assina seus equipamentos. Separada da sua identidade de conversa." />
-        {api ? (
-          // Com piu-node: a chave de operador ainda não existe (o acesso é pelo código do equipamento). Nada de impressão digital de exemplo.
-          <>
-            <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)' }}>
-              Este nó ainda não tem chave de operador: o acesso é pelo código mostrado no equipamento.{nodeId ? <> A identidade técnica do nó (LNNP) é <span className="mono" style={{ color: 'var(--ink)' }}>{nodeId}</span>.</> : null}
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <button type="button" className="btn btn-primary" disabled style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, opacity: 0.4 }}>Exportar backup cifrado</button>
-              <button type="button" className="btn btn-outline" disabled style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, opacity: 0.4 }}>Rotacionar chaves</button>
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>Backup e rotação ainda não estão disponíveis: dependem da chave de operador, que esta versão não cria.</div>
-          </>
-        ) : (<>
+        {api ? <OperatorKey /> : (<>
         <div className="mono" aria-label="Impressão digital da chave de operador" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, fontSize: 15, fontWeight: 500, padding: '12px 14px', borderRadius: 14, background: 'var(--bg2)' }}>
           {OPERATOR.fingerprint.map(g => <span key={g}>{g}</span>)}
         </div>
@@ -210,5 +198,93 @@ function LimitRow({ title, hint, children }: { title: string; hint: string; chil
       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}><span style={{ fontWeight: 550 }}>{title}</span><span style={{ color: 'var(--ink2)' }}>{hint}</span></div>
       {children}
     </div>
+  );
+}
+
+const fmtDay = (ms: number) => new Date(ms).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' });
+
+/**
+ * Chave de operador real (piu-node): impressão digital, backup cifrado com senha e rotação.
+ * Backup e rotação pedem um código novo do equipamento (step-up).
+ */
+function OperatorKey() {
+  const { api, showToast, stepUp, live } = useStore();
+  const [key, setKey] = useState<ApiOperatorKey | null>(null);
+  const [failed, setFailed] = useState(false);
+  const [pwOpen, setPwOpen] = useState(false);
+  const [rotateOpen, setRotateOpen] = useState(false);
+  /** Ação esperando o código do equipamento. */
+  const [pending, setPending] = useState<null | { reason: string; label: string; run: () => Promise<void> }>(null);
+  const load = useCallback(() => { api?.operatorKey().then(k => { setKey(k); setFailed(false); }).catch(() => setFailed(true)); }, [api]);
+  useEffect(load, [load]);
+  const signed = live?.relay && live.relay.enabled ? live.relay.operator?.signed : undefined;
+
+  const backup = async (password: string): Promise<string | null> => {
+    if (!api) return null;
+    try {
+      const r = await api.backupOperatorKey(password);
+      downloadText(r.filename, r.backup, 'application/octet-stream');
+      setPwOpen(false);
+      load();
+      showToast({ icon: 'key', title: 'Backup cifrado exportado', body: `${r.filename} · protegido pela senha que você escolheu` });
+      return null;
+    } catch (e) {
+      if (e instanceof NeedsReauth) {
+        setPwOpen(false);
+        setPending({ reason: 'O backup da chave de operador exige uma confirmação recente.', label: 'Confirmar e exportar', run: async () => { await backup(password); } });
+        return null;
+      }
+      return e instanceof ApiError ? e.message : 'Não foi possível exportar.';
+    }
+  };
+  const rotate = async () => {
+    if (!api) return;
+    setRotateOpen(false);
+    try {
+      setKey(await api.rotateOperatorKey());
+      load();
+      showToast({ icon: 'sync_lock', title: 'Chaves rotacionadas', body: 'Equipamentos recebem a nova chave na próxima sincronização. Exporte um backup novo.' });
+    } catch (e) {
+      if (e instanceof NeedsReauth) setPending({ reason: 'Rotacionar a chave de operador exige uma confirmação recente.', label: 'Confirmar e rotacionar', run: rotate });
+      else showToast({ icon: 'error', title: 'Não foi possível rotacionar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+    }
+  };
+
+  if (!key) {
+    return <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 13, color: 'var(--ink2)' }}>{failed ? 'Não foi possível ler a chave de operador deste nó.' : 'Lendo a chave de operador…'}</div>;
+  }
+  const facts = [
+    `criada em ${fmtDay(key.createdAt)}`,
+    key.rotations ? `${key.rotations} ${key.rotations === 1 ? 'rotação' : 'rotações'}, a última em ${fmtDay(key.rotatedAt!)}` : 'nunca rotacionada',
+    key.lastBackupAt ? `backup em ${fmtDay(key.lastBackupAt)}` : 'sem backup ainda',
+  ];
+  return (
+    <>
+      <div className="mono" aria-label="Impressão digital da chave de operador" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, fontSize: 15, fontWeight: 500, padding: '12px 14px', borderRadius: 14, background: 'var(--bg2)' }}>
+        {key.fingerprint.map((g, i) => <span key={i}>{g}</span>)}
+      </div>
+      <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>
+        {facts.join(' · ')}. {key.signedDevices ? `Assina ${key.signedDevices} ${key.signedDevices === 1 ? 'equipamento' : 'equipamentos'}${signed === false ? ' (este nó ainda não anunciou o certificado novo)' : ''}.` : ''}
+        {key.revoked ? ` ${key.revoked} ${key.revoked === 1 ? 'credencial revogada' : 'credenciais revogadas'}.` : ''}
+      </div>
+      {key.rotatedElsewhere && (
+        <div role="note" style={{ padding: '10px 12px', borderRadius: 12, border: '1px dashed var(--line2)', fontSize: 12.5, lineHeight: 1.45 }}>
+          Outro equipamento seu rotacionou a chave e este nó já recebeu a nova na sincronização. Para assinar daqui com ela, restaure neste nó o backup novo.
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        <button type="button" className="btn btn-primary" onClick={() => setPwOpen(true)} style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Exportar backup cifrado</button>
+        <button type="button" className="btn btn-outline" onClick={() => setRotateOpen(true)} style={{ height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13 }}>Rotacionar chaves</button>
+      </div>
+      {pwOpen && <PasswordDialog onConfirm={backup} onClose={() => setPwOpen(false)} />}
+      {rotateOpen && (
+        <Dialog icon="sync_lock" title="Rotacionar a chave de operador?" primaryLabel="Rotacionar" onPrimary={() => void rotate()} onClose={() => setRotateOpen(false)}
+          body="Uma chave nova substitui a atual, que assina a troca. Equipamentos recebem a nova chave na próxima sincronização. O backup antigo deixa de servir: exporte outro depois." />
+      )}
+      {pending && (
+        <StepUpDialog reason={pending.reason} confirmLabel={pending.label} onClose={() => setPending(null)}
+          onConfirm={async code => { const p = await stepUp(code); if (p) return p; const run = pending.run; setPending(null); await run(); return null; }} />
+      )}
+    </>
   );
 }

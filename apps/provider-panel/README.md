@@ -24,14 +24,15 @@ Servido pelo `piu-node` (com sessão), o painel **não usa dados de exemplo**: o
 |---|---|
 | Visão geral | recibos assinados no mês e por dia (`GET /api/relay/history`), recebidos/encaminhados/duplicatas de hoje, vizinhos por meio (`GET /api/relay`), recibos guardados para o validador (`GET /api/relay/receipts`), atividade real (vizinhos, recibos, transferências). Sem LUNES: o valor sai do validador |
 | Malha | este nó no centro e os vizinhos LNNP de verdade (meio, MTU, versão, se retransmite, desde quando); "sem vizinhos ainda" quando não há |
-| Ganhos | recibos por dia e por semana, pagos = entradas reais da carteira; lotes só quando houver liquidação; rejeitados "—" (o validador ainda não respondeu) |
+| Ganhos | recibos por dia e por semana, pagos = entradas reais da carteira; lotes só quando houver liquidação; rejeitados "—" (o validador ainda não respondeu). **Carteira do lote**: o nó assina a carteira LUNES desta semana ou da próxima (`POST /api/payout-claims`, com step-up; endereço SS58 conferido pelo nó), e os botões baixam as evidências (`EvidenceFile`) e a declaração (`ClaimFile`) para levar ao validador |
 | Carteira | saldo e movimentações reais (`GET /api/wallet`); operador novo começa com 0. Endereço da carteira e "Receber" ficam indisponíveis (ainda não configurados no nó) |
-| Equipamentos | o próprio nó (`self`) com estatísticas reais (encaminhados na última hora, recibos de hoje, vizinhos, memória usada, interfaces, recibos recentes); pausar ele pausa o motor. Os outros são registros do assistente, marcados "sem dados neste nó" |
-| Configurações | limites, políticas, sessões e celulares reais. Chave de operador, backup e rotação: indisponíveis (esta versão não cria chave de operador) |
+| Equipamentos | o próprio nó (`self`) com estatísticas reais (encaminhados na última hora, recibos de hoje, vizinhos, memória usada, interfaces, recibos recentes); pausar ele pausa o motor. Os outros são registros do assistente, marcados "sem dados neste nó". Identidade técnica e se está assinada pela chave de operador; **regras do equipamento** (banda, armazenamento, horário), que no próprio nó valem no motor; **revogar** um equipamento com identidade técnica põe a chave dele na lista de revogação do operador (os nós do operador recusam a conexão dele) |
+| Assistente | no passo "Conectar", o operador escolhe qual vizinho LNNP conectado é o equipamento novo (a identidade técnica dele é assinada pela chave de operador); no passo "Regras", banda, armazenamento e horário vão para o nó |
+| Configurações | limites, políticas, sessões e celulares reais. **Chave de operador**: impressão digital real, backup cifrado com senha (`piu-operador.backup`) e rotação, os dois com um código novo do equipamento |
 
 Também reais: pareamento, sessões, ajustes, transferência com aprovação no celular e pacotes assinados.
 
-Indisponível com o piu-node (dito na tela, sem simular sucesso): busca e pareamento automáticos e teste real no assistente (o equipamento entra "registrado"), atualizar e reiniciar equipamento, backup e rotação da chave de operador, verificação/assinatura do nome público na malha.
+Indisponível com o piu-node (dito na tela, sem simular sucesso): busca e pareamento automáticos e teste real no assistente (o equipamento entra "registrado"; o vínculo com a identidade técnica é a escolha de um vizinho conectado), atualizar e reiniciar equipamento, verificação/assinatura do nome público na malha, restaurar o backup da chave de operador pela tela (só pela API, `POST /api/operator/restore`).
 
 Sem `piu-node` (site, prévia, selo "demonstração"), tudo funciona com os dados de exemplo de `src/data/`.
 

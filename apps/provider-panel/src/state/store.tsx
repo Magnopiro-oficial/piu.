@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
-import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
+import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiDeviceLimits, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
 import { type Live, liveDevice, liveTx } from '../lib/live';
 import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
 import { useNode } from './node';
@@ -43,10 +43,15 @@ interface Store {
   page: PageId; sel: string | null; navigate: (page: PageId, sel?: string | null) => void;
   devices: RelayNode[];
   /** No piu-node: cria no servidor e devolve o id definitivo (ou null se falhou). */
-  addDevice: (d: RelayNode, family: string) => Promise<string | null>;
+  addDevice: (d: RelayNode, family: string, extra?: { nodePk?: string; limits?: ApiDeviceLimits }) => Promise<string | null>;
+  /** No piu-node: regras do equipamento (no próprio nó, valem no motor). `false` se não salvou. */
+  setDeviceLimits: (id: string, limits: ApiDeviceLimits | null) => Promise<boolean>;
   togglePause: (id: string) => void;
-  /** No piu-node: revoga no servidor; `false` se não foi possível. */
-  revokeDevice: (id: string) => Promise<boolean>;
+  /**
+   * No piu-node: `revoked` = a identidade técnica entrou na lista de revogação do operador;
+   * `removed` = só saiu do painel (sem identidade técnica); `false` se não foi possível.
+   */
+  revokeDevice: (id: string) => Promise<false | 'revoked' | 'removed'>;
   devFilter: DeviceFilter; setDevFilter: (f: DeviceFilter) => void;
   devQuery: string; setDevQuery: (q: string) => void;
   balance: number; txs: WalletTx[];
@@ -181,10 +186,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       theme, setTheme,
       page: route.page, sel: route.sel, navigate,
       devices,
-      addDevice: async (d, family) => {
+      addDevice: async (d, family, extra = {}) => {
         if (api) {
           try {
-            const r = await node.guard(api.createDevice({ name: d.name, cls: d.cls, family, ...(d.pub ? { pub: d.pub } : {}) }));
+            const r = await node.guard(api.createDevice({ name: d.name, cls: d.cls, family, ...(d.pub ? { pub: d.pub } : {}), ...extra }));
             setApiDevices(ds => [...ds, r]); setFresh(r.id); setDevFilter('all'); setDevQuery('');
             return r.id;
           } catch (e) {
@@ -207,15 +212,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       },
       revokeDevice: async id => {
         if (api) {
-          try { await node.guard(api.revoke(id)); } catch (e) {
+          let r: { revoked: boolean } | undefined;
+          try { r = await node.guard(api.revoke(id)); } catch (e) {
             showToast({ icon: 'error', title: 'Não foi possível revogar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return false;
           }
           setApiDevices(ds => ds.filter(d => d.id !== id));
-          return true;
+          return r?.revoked ? 'revoked' : 'removed';
         }
         setDevices(ds => ds.filter(d => d.id !== id));
-        return true;
+        return 'revoked';
+      },
+      setDeviceLimits: async (id, limits) => {
+        if (!api) { setDevices(ds => ds.map(d => (d.id === id ? { ...d, limits: limits ?? undefined } : d))); return true; }
+        try {
+          const r = await node.guard(api.setDeviceLimits(id, limits));
+          setApiDevices(ds => ds.map(d => (d.id === r.id ? r : d)));
+          void node.guard(api.relay()).then(relay => setLive(l => (l ? { ...l, relay } : l))).catch(() => {});
+          return true;
+        } catch (e) {
+          showToast({ icon: 'error', title: 'Regras não salvas', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+          return false;
+        }
       },
       devFilter, setDevFilter, devQuery, setDevQuery,
       balance, txs,
