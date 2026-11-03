@@ -105,7 +105,7 @@ export const en: Dict = {
     cols: [
       { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar']] },
       { t: 'PROVIDER', links: [['Become a provider', '#provider'], ['Provider dashboard', '/painel/'], ['Piu Node', '#baixar']] },
-      { t: 'PROJECT', links: [['App screens', 'https://github.com/lunes-platform/piu./tree/main/design'], ['LNNP specification', '#faq'], ['Requirements document v1.1', 'https://github.com/lunes-platform/piu./tree/main/docs/requisitos']] },
+      { t: 'PROJECT', links: [['App screens', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['LNNP specification', '#faq'], ['Requirements document v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
     ],
     legal: '© 2026 Lunes Network · No central server · Messages never go on the blockchain',
   },

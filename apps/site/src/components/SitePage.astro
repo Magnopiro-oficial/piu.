@@ -2,11 +2,12 @@
 import Base from '../layouts/Base.astro';
 import type { Dict } from '../i18n/pt';
 import PhoneDemo from './PhoneDemo';
+import { url } from '../lib/url';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
 const isPt = t.lang.startsWith('pt');
-const panelSrc = '/painel/';
+const panelSrc = url('/painel/');
 ---
 <Base t={t} alt={alt}>
   <header class="nav">
@@ -16,8 +17,8 @@ const panelSrc = '/painel/';
         <a href="#como">{t.nav.how}</a><a href="#privacidade">{t.nav.privacy}</a><a href="#provider">{t.nav.provider}</a><a href="#lunes">{t.nav.lunes}</a><a href="#faq">{t.nav.faq}</a>
       </nav>
       <div class="lang" role="group" aria-label={t.nav.langLabel}>
-        {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href="/" lang="pt-BR" hreflang="pt-BR">PT</a>}
-        {isPt ? <a href="/en/" lang="en" hreflang="en">EN</a> : <span aria-current="true" lang="en">EN</span>}
+        {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href={url("/")} lang="pt-BR" hreflang="pt-BR">PT</a>}
+        {isPt ? <a href={url("/en/")} lang="en" hreflang="en">EN</a> : <span aria-current="true" lang="en">EN</span>}
       </div>
       <button type="button" class="icon-btn" data-theme-toggle>
         <span class="ic only-light" style="font-size:19px" aria-hidden="true">dark_mode</span>
@@ -230,7 +231,7 @@ const panelSrc = '/painel/';
       {t.footer.cols.map(col => (
         <nav class="col" style="gap:10px" aria-label={col.t}>
           <div class="kicker">{col.t}</div>
-          {col.links.map(([l, href]) => <a href={href} style="font-size:14.5px">{l}</a>)}
+          {col.links.map(([l, href]) => <a href={url(href)} style="font-size:14.5px">{l}</a>)}
         </nav>
       ))}
     </div>
