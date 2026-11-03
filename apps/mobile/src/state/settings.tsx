@@ -15,10 +15,12 @@ interface Settings {
   quiet: boolean; setQuiet: (v: boolean) => void;
   discreet: boolean; setDiscreet: (v: boolean) => void;
   backupDone: boolean; setBackupDone: (v: boolean) => void;
-  dropped: Record<string, boolean>; dropDevice: (id: string) => void;
+  /** @deprecated Sempre vazio: desconectar e revogar aparelhos ficam no registro real (lib/devices.ts). */
+  dropped: Record<string, boolean>;
   restoreMode: RestoreMode; setRestoreMode: (m: RestoreMode) => void;
-  mediaCleared: boolean; clearMedia: () => void;
 }
+
+const NONE: Record<string, boolean> = Object.freeze({}) as Record<string, boolean>;
 
 const Ctx = createContext<Settings | null>(null);
 
@@ -32,9 +34,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [quiet, setQuiet] = usePersisted('set.quiet', false);
   const [discreet, setDiscreet] = usePersisted('set.discreet', true);
   const [backupDone, setBackupDone] = usePersisted('set.backupDone', false);
-  const [dropped, setDropped] = usePersisted<Record<string, boolean>>('set.dropped', {});
   const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');
-  const [mediaCleared, setMediaCleared] = usePersisted('set.mediaCleared', false);
 
   const value = useMemo<Settings>(() => ({
     priv, setPriv: p => setPrivS(s => ({ ...s, ...p })),
@@ -44,10 +44,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     notifs, toggleNotif: k => setNotifs(n => ({ ...n, [k]: !n[k] })),
     quiet, setQuiet, discreet, setDiscreet,
     backupDone, setBackupDone,
-    dropped, dropDevice: id => setDropped(d => ({ ...d, [id]: true })),
+    dropped: NONE,
     restoreMode, setRestoreMode,
-    mediaCleared, clearMedia: () => setMediaCleared(true),
-  }), [priv, sto, bat, preview, notifs, quiet, discreet, backupDone, dropped, restoreMode, mediaCleared]);
+  }), [priv, setPrivS, sto, setStoS, bat, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, backupDone, setBackupDone, restoreMode, setRestoreMode]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

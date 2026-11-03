@@ -123,7 +123,7 @@ export const notify = (n: NotifyInput) => deliver(n, 0);
  * do app e ver como fica com a pré-visualização escolhida.
  */
 export const sendTestNotification = () =>
-  deliver({ kind: 'msg', title: 'Marina Alves', body: 'Cheguei na praça! Onde você está?', data: { href: '/lock' } }, 5);
+  deliver({ kind: 'msg', title: 'Piu · aviso de teste', body: 'Assim chega uma mensagem nova com a pré-visualização escolhida.', data: { href: '/lock' } }, 5);
 
 async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
   const c = cfg;

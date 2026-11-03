@@ -90,3 +90,9 @@ export function useDevices(): DeviceRecord[] {
   const rank = (d: DeviceRecord) => (d.revokedAt ? 1 : 0);
   return [thisDevice(), ...[...list].sort((a, b) => rank(a) - rank(b) || b.addedAt - a.addedAt)];
 }
+
+/** Aparelhos com as suas chaves e ainda ativos (este incluído), para contadores como o do Perfil. */
+export function useActiveDeviceCount(): number {
+  const list = useSyncExternalStore(subscribe, others, others);
+  return 1 + list.filter(d => !d.revokedAt).length;
+}
