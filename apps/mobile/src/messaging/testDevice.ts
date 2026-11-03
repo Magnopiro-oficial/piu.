@@ -25,8 +25,8 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
     transmit: async (_peer, bytes) => reply(bytes),
     events: {
       changed: () => save?.(JSON.stringify({ seed: toHex(seed), m: m.export() })),
-      newContact: (c, msg) => { m.addContact(c); answer(c.id, msg.text); },
-      message: (cid, msg) => answer(cid, msg.text),
+      newContact: (c, msg) => { m.addContact(c); answer(c.id, msg.msgId, msg.text); },
+      message: (cid, msg) => answer(cid, msg.msgId, msg.text),
       // Grupo: responde no próprio grupo (quando pode publicar).
       groupMessage: (gid, _from, who, msg) => setTimeout(() => { try { m.sendGroupText(gid, `tg${Date.now()}-${n++}`, `${who}, recebi no grupo: “${msg.text.slice(0, 120)}”`); } catch { /* só admins publicam */ } }, 600),
       fileReceived: (cid, f) => setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi o arquivo “${f.name}” (${Math.round(f.size / 1024)} KB, ${f.blocks} blocos). SHA-256 conferido.`), 600),
@@ -34,7 +34,11 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
   });
   m.displayName = TEST_DEVICE_NAME;
   let n = 0;
-  const answer = (cid: string, text: string) => setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi cifrado: “${text.slice(0, 200)}”`), 600);
+  // Lê (confirmação de leitura), "digita" e responde, como uma pessoa com os ajustes padrão.
+  const answer = (cid: string, msgId: string, text: string) => {
+    setTimeout(() => { m.sendRead(cid, [msgId]); m.sendTyping(cid); }, 300);
+    setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi cifrado: “${text.slice(0, 200)}”`), 1800);
+  };
   return {
     card: () => encodeCard(ids.public, TEST_DEVICE_NAME, m.issueInvite('public')),
     messenger: m,

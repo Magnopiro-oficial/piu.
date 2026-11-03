@@ -5,8 +5,12 @@
  *   é o destino); a prova circula pela malha. hash(segredo) = ackHash do envelope ⇒ entrega comprovada.
  * - Estados: pendente → validado (com prova) ou rejeitado (sem prova até vencer, duplicata, teto
  *   diário); validado → pago quando o lote da semana fecha.
- * - Valor: créditos por entrega conforme o tamanho e o meio (proposta econômica, valores
- *   PROVISÓRIOS para teste); 100 créditos = 1 LUNES (texto do design).
+ * - Valor ESTIMADO: créditos por entrega conforme o tamanho e o meio (proposta econômica, valores
+ *   PROVISÓRIOS para teste), DIVIDIDOS entre os relays da entrega, como no validador (seção 3.2);
+ *   100 créditos = 1 LUNES (texto do design). O aparelho só conhece os relays até ele (pelo contador
+ *   de saltos), então a estimativa é um teto. O teto de 2% do orçamento por nó e por época não entra
+ *   aqui: o orçamento da época é da Lunes e não chega ao aparelho. O valor final é o do validador.
+ * - Validade: validado e não liquidado em 180 dias expira (seção 3.4) e fica 30 dias na lista.
  *
  * LIQUIDAÇÃO SIMULADA: não há integração com a Lunes Mainnet (decimais, taxas e endpoint ainda não
  * definidos). Um lote "pago" aqui é uma simulação local, marcada como tal na tela.
@@ -32,11 +36,26 @@ export const CREDIT_PARAMS = {
   minLotLunes: 5,
   /** Sem prova até este tempo depois do vencimento do envelope: rejeitado. */
   proofGraceSec: 3600,
+  /** Teto de relays por envelope (o mesmo do validador, `maxRelaysPerEnvelope`). */
+  maxRelays: 8,
+  /** Validado e não liquidado expira depois disto (proposta, seção 3.4 [decidir]; validador: 180 dias). */
+  validitySec: 180 * 86400,
+  /** Quanto tempo o expirado continua na lista antes de sair do aparelho. */
+  keepExpiredSec: 30 * 86400,
+  /** Pendentes, rejeitados e pagos ficam guardados por este tempo. */
+  keepSec: 90 * 86400,
 };
+
+const EXPIRED_REASON = 'expirou: 180 dias sem liquidação';
 
 export interface Credit {
   envelopeId: string; at: number; expiresAt: number; bytes: number; via: TransportClass;
+  /** Estimativa: peso da entrega ÷ `relays`. */
   credits: number; state: CreditState; reason?: string; lot?: string;
+  /** Relays da entrega que este aparelho conhece (ele e os anteriores); a unidade é dividida por eles. */
+  relays?: number;
+  /** Quando expirou sem liquidação (s). */
+  expiredAt?: number;
   receipt: { ackHash: string; nodePk: string; sig: string };
 }
 export interface Lot { id: string; closedAt: number; credits: number; lunes: number; count: number; simulated: true }
@@ -73,13 +92,18 @@ export class CreditBook {
     return t;
   }
 
-  /** Recibo novo do meu roteador (envelope de terceiro que eu repassei). */
-  addReceipt(r: RelayReceipt, h: { bytes: number; expiresAt: number }, via: TransportClass) {
+  /**
+   * Recibo novo do meu roteador (envelope de terceiro que eu repassei). `relays`: quantos relays a
+   * entrega teve até mim, contando comigo (pelo contador de saltos do envelope); a unidade é dividida
+   * entre eles, como no validador.
+   */
+  addReceipt(r: RelayReceipt, h: { bytes: number; expiresAt: number; relays?: number }, via: TransportClass) {
     if (this.credits.has(r.envelopeId) || !verifyRelayReceipt(r)) return;
     const day = Math.floor(r.at / 86400);
     const today = [...this.credits.values()].filter(c => Math.floor(c.at / 86400) === day).length;
-    const credits = Math.round(CREDIT_PARAMS.sizeWeight(h.bytes) * CREDIT_PARAMS.mediumWeight(via) * 10) / 10;
-    const base = { envelopeId: r.envelopeId, at: r.at, expiresAt: h.expiresAt, bytes: h.bytes, via, credits, receipt: { ackHash: toHex(r.ackHash), nodePk: b64url(r.nodePk), sig: b64url(r.sig) } };
+    const relays = Math.min(CREDIT_PARAMS.maxRelays, Math.max(1, Math.floor(h.relays ?? 1)));
+    const credits = Math.round((CREDIT_PARAMS.sizeWeight(h.bytes) * CREDIT_PARAMS.mediumWeight(via) / relays) * 100) / 100;
+    const base = { envelopeId: r.envelopeId, at: r.at, expiresAt: h.expiresAt, bytes: h.bytes, via, credits, relays, receipt: { ackHash: toHex(r.ackHash), nodePk: b64url(r.nodePk), sig: b64url(r.sig) } };
     this.credits.set(r.envelopeId, today >= CREDIT_PARAMS.maxPerDay ? { ...base, state: 'rejeitado', reason: 'teto diário do nó' } : { ...base, state: 'pendente' });
   }
 
@@ -100,6 +124,8 @@ export class CreditBook {
     let changed = false;
     for (const c of this.credits.values()) {
       if (c.state === 'pendente' && now > c.expiresAt + CREDIT_PARAMS.proofGraceSec) { c.state = 'rejeitado'; c.reason = 'sem prova de entrega até vencer'; changed = true; }
+      // Validado que não entrou em lote em 180 dias: expira (não acumula passivo eterno).
+      if (c.state === 'validado' && now - c.at > CREDIT_PARAMS.validitySec) { c.state = 'rejeitado'; c.reason = EXPIRED_REASON; c.expiredAt = now; changed = true; }
     }
     const thisWeek = weekOf(now);
     const lastWeek = weekOf(now - 7 * 86400);
@@ -120,9 +146,15 @@ export class CreditBook {
     return { envelopeId: c.envelopeId, at: c.at, ackHash: Uint8Array.from(c.receipt.ackHash.match(/../g)!.map(x => parseInt(x, 16))), nodePk: unb64url(c.receipt.nodePk), sig: unb64url(c.receipt.sig) };
   }
 
-  /** Guarda só os últimos 90 dias de créditos e 52 lotes. */
+  /**
+   * Guarda 90 dias de créditos (validados ainda não pagos: até expirarem, em 180 dias; expirados: mais
+   * 30 dias, para aparecerem na lista) e 52 lotes.
+   */
   export(now: number): string {
-    const keep = [...this.credits.values()].filter(c => now - c.at < 90 * 86400);
+    const keep = [...this.credits.values()].filter(c =>
+      c.state === 'validado' ? now - c.at <= CREDIT_PARAMS.validitySec + 86400
+        : c.expiredAt ? now - c.expiredAt < CREDIT_PARAMS.keepExpiredSec
+          : now - c.at < CREDIT_PARAMS.keepSec);
     return JSON.stringify({ c: keep, l: this.lots.slice(0, 52) });
   }
 }

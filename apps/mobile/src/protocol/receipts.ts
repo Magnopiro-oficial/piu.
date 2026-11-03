@@ -17,8 +17,17 @@ export interface RelayReceipt { envelopeId: string; ackHash: Uint8Array; nodePk:
 const receiptMessage = (envelopeId: string, ackHash: Uint8Array, nodePk: Uint8Array, at: number) =>
   hash(concat(utf8('piu/v0/relay-receipt'), utf8(envelopeId), ackHash, nodePk, new Writer().u32(at).done()));
 
+/**
+ * Horário do recibo arredondado para a hora (para baixo) ANTES de assinar (proposta econômica, seção 7:
+ * contra correlação por horário). Para baixo, o recibo nunca fica "no futuro" para o validador.
+ */
+export const RECEIPT_TIME_STEP_SEC = 3600;
+export const roundReceiptTime = (at: number) => Math.floor(at / RECEIPT_TIME_STEP_SEC) * RECEIPT_TIME_STEP_SEC;
+
+/** Assina o recibo. `at` (segundos) é arredondado para a hora: o horário exato não sai do aparelho. */
 export function makeRelayReceipt(node: KeyPair, envelopeId: string, ackHash: Uint8Array, at: number): RelayReceipt {
-  return { envelopeId, ackHash, nodePk: node.pk, at, sig: sign.sign(receiptMessage(envelopeId, ackHash, node.pk, at), node.sk) };
+  const t = roundReceiptTime(at);
+  return { envelopeId, ackHash, nodePk: node.pk, at: t, sig: sign.sign(receiptMessage(envelopeId, ackHash, node.pk, t), node.sk) };
 }
 
 export const verifyRelayReceipt = (r: RelayReceipt) => sign.verify(r.sig, receiptMessage(r.envelopeId, r.ackHash, r.nodePk, r.at), r.nodePk);

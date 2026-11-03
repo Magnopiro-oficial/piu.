@@ -1,12 +1,12 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Chat } from '../data/types';
+import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
 import { type Contact, Messenger } from '../messaging/messenger';
-import { canPost, type GroupState } from '../messaging/groups';
+import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
@@ -63,6 +63,8 @@ interface Messaging {
     pending: (gid: string) => { id: string; name: string }[];
     joinChild: (communityId: string, childId: string) => void;
     isMember: (gid: string) => boolean;
+    /** Posso convidar? (admin, ou membro com "Quem pode convidar: Todos os membros"). */
+    canInvite: (gid: string) => boolean;
     /** Link/QR do convite do grupo (7 dias, até 50 usos). */
     inviteLink: (gid: string, fresh?: boolean) => string;
   } | null;
@@ -92,10 +94,12 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
-  const { priv, sto, bat } = useSettings();
+  const { priv, sto, bat, preview } = useSettings();
+  // Pré-visualização "Nunca" também nos banners dentro do app (store.tsx, showToast).
+  useEffect(() => { setPreviewMode(preview); }, [preview, setPreviewMode]);
   const transport = useMemo(getTransport, []);
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
@@ -126,13 +130,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => { void saveNow().catch(() => {}); }, SAVE_DELAY);
   }, [saveNow]);
 
-  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat });
-  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat };
+  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping });
+  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping };
 
   // Cria o mensageiro quando as chaves existem.
   useEffect(() => {
     if (!identities || !node || !onboarded) return;
     let saving: Promise<void> | null = null;
+    /** Mensagem de sistema na conversa do grupo cuja chave foi trocada. */
+    const rotatedNote = (g: GroupState, text: string) => {
+      const cid = chatIdForGroup(g.id);
+      if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text });
+    };
     // Backup restaurado por arquivo: importa perfil, conversas e verificações uma vez.
     const restored = takeRestoredData();
     const restoredState = typeof restored?.['msg.state'] === 'string' ? (restored['msg.state'] as string) : undefined;
@@ -151,13 +160,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
-        notice: (contactId, text) => {
+        notice: (contactId, text, pub) => {
           try {
             const n = decodeRevocation(text);
             const c = mRef.current?.getContact(contactId);
-            if (!c || !verifyRevocation(n, c.pub.signPk)) return;
+            if (!verifyRevocation(n, (c?.pub ?? pub).signPk)) return;
+            // Grupos em que sou admin e o contato participa trocam de chave (o aparelho perdido tinha a antiga).
+            for (const g of mRef.current?.rotateForRevocation(contactId, n.sig) ?? []) {
+              const who = c?.name || g.members.find(x => x.id === contactId)?.name || 'um membro';
+              rotatedNote(g, `${who} revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.`);
+            }
             const cid = chatIdFor(contactId);
-            if (!chatsRef.current.some(x => x.id === cid)) return;
+            if (!c || !chatsRef.current.some(x => x.id === cid)) return;
             handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: 'Este contato revogou um aparelho perdido ou comprometido. Confira o código de segurança pessoalmente antes de confiar em mensagens novas.' });
           } catch { /* aviso inválido: ignora */ }
         },
@@ -187,7 +201,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         },
         joinRequest: (gid, who) => {
           setGroupEpoch(e => e + 1);
-          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver', go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
+          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver',
+            hidden: { title: 'Pedido para entrar', body: 'Abra os dados do grupo para aprovar ou recusar.' }, go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
         },
         // Arquivos: progresso por bloco, entrega conferida e recebimento.
         fileProgress: (msgId, done, total, dir) => {
@@ -204,7 +219,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
           msgToChat.current.set('in-' + f.msgId, cid);
-          handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(),
+          const expiresAt = expiryOf({ sentAt: f.sentAt ?? now(), expireSec: f.expireSec });
+          handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
             file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true } });
         },
         fileReceived: (contactId, f) => {
@@ -213,6 +229,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           receivedFiles.set('in-' + f.msgId, f);
           handlers.current.patchFile(cid, 'in-' + f.msgId, { state: 'verified', done: f.blocks, preview });
         },
+        // Confirmação de leitura do contato: só mensagens minhas daquela conversa.
+        read: (contactId, ids) => {
+          const cid = chatIdFor(contactId);
+          const chat = chatsRef.current.find(c => c.id === cid);
+          for (const id of ids) if (chat?.msgs?.some(x => x.id === id && x.from === 'me')) handlers.current.setMsgStatus(cid, id, 'lida');
+        },
+        typing: contactId => {
+          const cid = chatIdFor(contactId);
+          if (chatsRef.current.some(c => c.id === cid)) handlers.current.setTyping(cid);
+        },
         status: (msgId, st) => {
           const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => c.peer && c.msgs?.some(x => x.id === msgId))?.id;
           if (cid) handlers.current.setMsgStatus(cid, msgId, st);
@@ -220,12 +246,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         message: (contactId, x) => {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM() });
+          const expiresAt = expiryOf(x);
+          if (expiresAt && expiresAt <= Date.now()) return; // temporária que já venceu no caminho
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
         newContact: (c, x) => {
           const cid = chatIdFor(c.id);
-          handlers.current.addChat(chatFor(c, true));
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM() });
+          handlers.current.addChat(chatFor(c, true, privRef.current.temp));
+          const expiresAt = expiryOf(x);
+          if (expiresAt && expiresAt <= Date.now()) return;
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
       },
     });
@@ -240,7 +270,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     const flush = () => {
       const list = pendingRevocations();
       if (!list.length || !identities) return;
-      for (const n of list) messenger.broadcastNotice(toHex(identities.public.signPk) === toHex(unb64url(n.by)) ? 'public' : 'anon', encodeRevocation(n));
+      for (const n of list) {
+        const via: IdentityKind = toHex(identities.public.signPk) === toHex(unb64url(n.by)) ? 'public' : 'anon';
+        // Contatos e admins dos meus grupos recebem o aviso; nos grupos em que sou admin, a chave troca aqui.
+        messenger.broadcastNotice(via, encodeRevocation(n));
+        for (const g of messenger.rotateForRevocation(identities[via].id, n.sig, via)) {
+          const cid = chatIdForGroup(g.id);
+          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: 'Você revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.' });
+        }
+      }
       void markRevocationsSent(list.map(n => n.sig));
     };
     flush();
@@ -283,8 +321,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!messenger) { setFileOps(null); return; }
     setFileOps({
-      send: (chatId, peer, msgId, f) => {
-        try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f); } catch { return null; }
+      send: (chatId, peer, msgId, f, expireSec) => {
+        try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f, expireSec); } catch { return null; }
       },
       setPaused: (msgId, paused) => messenger.setFilePaused(msgId, paused),
     });
@@ -294,19 +332,36 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Store → mensageiro (envio real).
   useEffect(() => {
     if (!messenger) { setOutbound(null); return; }
-    setOutbound((chatId, peer, msgId, text) => {
+    setOutbound((chatId, peer, msgId, text, expireSec) => {
       try {
         // Responder aceita o pedido de conversa.
         const ct = messenger.getContact(peer);
         if (ct?.request) messenger.addContact(ct);
         msgToChat.current.set(msgId, chatId);
         if (peer.startsWith('group:')) messenger.sendGroupText(peer.slice(6), msgId, text);
-        else messenger.sendText(peer, msgId, text);
+        else messenger.sendText(peer, msgId, text, expireSec);
         return true;
       } catch { return false; }
     });
     return () => setOutbound(null);
   }, [messenger, setOutbound]);
+
+  // Store → mensageiro: confirmação de leitura e "digitando…", só com o ajuste de Privacidade ligado.
+  useEffect(() => {
+    if (!messenger) { setSignals(null); return; }
+    setSignals({
+      read: (_chatId, peer, ids) => { if (privRef.current.read) messenger.sendRead(peer, ids); },
+      typing: (_chatId, peer) => { if (privRef.current.typing) messenger.sendTyping(peer); },
+    });
+    return () => setSignals(null);
+  }, [messenger, setSignals]);
+
+  // Arquivo recebido de mensagem temporária que já sumiu da conversa: o conteúdo sai da memória também.
+  useEffect(() => {
+    if (!receivedFiles.size) return;
+    const alive = new Set(chats.flatMap(c => (c.msgs ?? []).map(m => m.id)));
+    for (const k of [...receivedFiles.keys()]) if (!alive.has(k)) receivedFiles.delete(k);
+  }, [chats]);
 
   // Aparelho de teste: só no transporte simulado (navegador / Expo Go).
   useEffect(() => {
@@ -332,7 +387,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       const contact: Contact = { id: card.id, via, pub: card.pub, name: card.name, invite: card.invite };
       messenger.addContact(contact);
       const cid = chatIdFor(card.id);
-      addChat(chatFor(contact, false));
+      addChat(chatFor(contact, false, priv.temp));
       // Contato público novo: recebe a foto do perfil público (o anônimo nunca recebe foto).
       if (via === 'public' && profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, card.id);
       return cid;
@@ -370,6 +425,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       pending: gid => messenger.pendingJoinsOf(gid),
       joinChild: (comId, childId) => messenger.requestJoinChild(comId, childId),
       isMember: gid => !!messenger.getGroup(gid),
+      canInvite: gid => messenger.canInvite(gid),
       inviteLink: (gid, fresh) => {
         const g = messenger.getGroup(gid)!;
         const inv = messenger.groupInvite(gid, fresh);
@@ -393,7 +449,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     },
     groupEpoch,
     stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity, priv.temp]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -402,7 +458,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 export const GROUP_LINK = 'piug:';
 export const chatIdForGroup = (gid: string) => 'g' + gid.slice(0, 20);
 function groupSub(g: GroupState) {
-  const n = g.members.length;
+  const n = memberCount(g);
   if (g.kind === 'channel') return `canal ${g.visibility === 'public' ? 'público' : g.visibility === 'secret' ? 'secreto' : 'privado'} · ${n} ${n === 1 ? 'inscrito' : 'inscritos'}`;
   if (g.kind === 'community') return `comunidade · ${(g.children ?? []).length} grupos e canais`;
   return `${n} ${n === 1 ? 'membro' : 'membros'} · chave v${g.keyV}`;
@@ -416,10 +472,14 @@ function chatForGroup(g: GroupState, myId: string): Chat {
   };
 }
 
-function chatFor(c: Contact, request: boolean): Chat {
+/** Fim de uma mensagem temporária recebida (ms): prazo contado do envio (sem passar de agora). */
+const expiryOf = (x: { sentAt: number; expireSec?: number }) => (x.expireSec ? (Math.min(x.sentAt, now()) + x.expireSec) * 1000 : undefined);
+
+/** Conversa nova com um contato. `temp`: padrão de Privacidade para novas conversas. */
+function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
   const name = c.name || (c.via === 'anon' ? 'Anônimo · ' + c.id.slice(4, 8).toUpperCase() : 'Contato · ' + c.id.slice(4, 8).toUpperCase());
   return {
-    id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0,
+    id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0, temp,
     sub: request ? 'pedido de conversa · confira o código' : 'cifrada de ponta a ponta', via: 'Por perto', viaIcon: 'bluetooth',
     msgs: [{ id: 'sys-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: request
       ? 'Esta pessoa escreveu primeiro. Confira o código de segurança pessoalmente antes de confiar.'
