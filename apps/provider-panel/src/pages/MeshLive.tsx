@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Icon } from '../components/ui';
+import { ApiError, type ApiPeer } from '../lib/api';
 import { LINE_STYLE, MAP_H, MAP_W } from '../data/topology';
 import { fmtInt } from '../lib/format';
-import { clock, MEDIUM, relayOn } from '../lib/live';
+import { ago, clock, MEDIUM, relayOn } from '../lib/live';
 import { useStore } from '../state/store';
 
 /**
@@ -56,7 +58,7 @@ export function MeshLive() {
         </div>
         {!nb.length && (
           <div style={{ position: 'absolute', left: 16, right: 16, top: 16, maxWidth: 360, padding: '12px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12.5, lineHeight: 1.45, color: 'var(--ink2)' }}>
-            {r ? 'Sem vizinhos ainda. Outro piu-node na mesma rede aparece aqui sozinho (anúncio a cada 5 s), ou configure PIU_LNNP_PEERS.' : 'Retransmissão LNNP desligada neste nó (PIU_LNNP=0 ou o motor não subiu).'}
+            {r ? 'Sem vizinhos ainda. Outro piu-node na mesma rede aparece aqui sozinho (anúncio a cada 5 s). Se a rede bloquear o anúncio, adicione pelo endereço em "Adicionar equipamento" ou configure PIU_LNNP_PEERS.' : 'Retransmissão LNNP desligada neste nó (PIU_LNNP=0 ou o motor não subiu).'}
           </div>
         )}
         {kinds.length > 0 && (
@@ -87,14 +89,54 @@ export function MeshLive() {
             <div className="col" style={{ alignItems: 'flex-end', gap: 2, flex: 'none' }}>
               <div className="mono" style={{ fontSize: 11.5, fontWeight: 500 }}>MTU {fmtInt(n.mtu)}</div>
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink2)' }}>v{n.version} · desde {clock(n.since)}</div>
+              {n.confirmCode && <div className="mono" title="Código de confirmação deste enlace: o outro nó mostra o mesmo" style={{ fontSize: 11.5, fontWeight: 600 }}>código {n.confirmCode.slice(0, 3)} {n.confirmCode.slice(3)}</div>}
             </div>
           </div>
         ))}
         {!nb.length && <div style={{ padding: '10px 0', borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--ink2)' }}>Sem vizinhos ainda.</div>}
+        {(r?.lan?.peers?.length ?? 0) > 0 && <FixedPeers peers={r!.lan!.peers!} />}
         <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 10 }}>
+          O código de cada vizinho sai do handshake e é o mesmo no painel do outro nó: serve para conferir, nos dois, que o enlace é com o equipamento certo.
           Enlaces autenticados e cifrados (LNNP v{r?.lnnp.version ?? 1}){r ? ` · ${fmtInt(r.counters.handshakesFailed)} conexões recusadas` : ''}. A qualidade do enlace ainda não é medida. Mídia nunca é enviada por LoRa.
         </div>
       </section>
+    </div>
+  );
+}
+
+const PEER_STATE: Record<ApiPeer['state'], string> = { connecting: 'conectando', connected: 'conectado', failed: 'falhou' };
+
+/** Vizinhos fixos (host:porta): os da configuração do nó e os adicionados pelo assistente, com o estado real de cada um. */
+function FixedPeers({ peers }: { peers: ApiPeer[] }) {
+  const { api, refreshLive, showToast } = useStore();
+  const [busy, setBusy] = useState<string | null>(null);
+  const remove = async (address: string) => {
+    if (!api || busy) return;
+    setBusy(address);
+    try { await api.removeRelayPeer(address); await refreshLive(); showToast({ icon: 'link_off', title: 'Vizinho removido', body: `${address} · este nó parou de conectar a ele.` }); }
+    catch (e) { showToast({ icon: 'error', title: 'Não foi possível remover', body: e instanceof ApiError ? e.message : 'Tente de novo.' }); }
+    finally { setBusy(null); }
+  };
+  return (
+    <div className="col" style={{ gap: 2, paddingTop: 12 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 6 }}>
+        <div style={{ fontSize: 13.5, fontWeight: 650 }}>Vizinhos por endereço</div>
+        <div className="mono" style={{ fontSize: 11, color: 'var(--ink2)' }}>reconecta sozinho</div>
+      </div>
+      {peers.map(p => (
+        <div key={p.address} className="row" style={{ gap: 10, padding: '8px 0', borderTop: '1px solid var(--line)' }}>
+          <Icon name={p.state === 'connected' ? 'link' : p.state === 'failed' ? 'link_off' : 'pending'} size={18} wght={300} />
+          <div className="col grow" style={{ gap: 2, minWidth: 0 }}>
+            <div className="mono ellipsis" style={{ fontSize: 12.5, fontWeight: 600 }}>{p.address}</div>
+            <div className="mono" style={{ fontSize: 11, color: 'var(--ink2)', lineHeight: 1.4, overflowWrap: 'anywhere' }}>
+              {PEER_STATE[p.state]}{p.nodeId ? ` · nó ${p.nodeId}` : ''}{p.state !== 'connected' && p.error ? ` · ${p.error}${p.errorAt ? ` (${ago(p.errorAt)})` : ''}` : ''}{p.source === 'config' ? ' · PIU_LNNP_PEERS' : ''}
+            </div>
+          </div>
+          {p.source === 'panel' && (
+            <button type="button" className="btn btn-outline" aria-disabled={busy === p.address} onClick={() => void remove(p.address)} style={{ height: 30, padding: '0 12px', borderRadius: 15, fontSize: 12.5, flex: 'none' }}>Remover</button>
+          )}
+        </div>
+      ))}
     </div>
   );
 }

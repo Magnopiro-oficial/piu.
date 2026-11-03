@@ -13,14 +13,24 @@ export interface ApiDeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: 'alwa
  * `self`: o nó que serve o painel (com estatísticas reais); os outros são registros do assistente.
  * `nodeId`: identidade técnica (16 hex) quando o equipamento tem uma; `signed`: assinada pela chave de operador atual.
  */
-export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; self: boolean; pub?: string; nodeId?: string; signed?: boolean; limits?: ApiDeviceLimits }
+export interface ApiDevice {
+  id: string; name: string; cls: string; status: 'active' | 'paused'; self: boolean; pub?: string; nodeId?: string; signed?: boolean; limits?: ApiDeviceLimits;
+  /** Enlace LNNP real com este equipamento (só com identidade técnica): conectado agora e última vez visto desde que o nó ligou. */
+  link?: { online: boolean; lastSeen: number | null; address: string | null };
+}
 /** `kind` ausente (versões antigas) = saída. Entrada (`in`) é liquidação recebida, com o lote em `from`. */
 export interface ApiWalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
 export interface ApiWallet { balance: number; txs: ApiWalletTx[] }
 
 /** Contadores do motor (os mesmos nomes de `GET /api/relay`). */
 export interface ApiTotals { received: number; stored: number; forwarded: number; duplicates: number; rejected: number; relayOff: number; full: number; expired: number; receipts: number; receiptsReceived: number }
-export interface ApiNeighbor { id: string; pk?: string; sameOperator?: boolean; address: string; link: string; inbound: boolean; since: number; version: number; relay: boolean; mtu: number; media: string[] }
+/** `confirmCode`: 6 dígitos derivados do handshake deste enlace, iguais no painel do outro nó. */
+export interface ApiNeighbor { id: string; pk?: string; sameOperator?: boolean; address: string; link: string; inbound: boolean; since: number; version: number; relay: boolean; mtu: number; media: string[]; confirmCode?: string | null }
+/** Vizinho fixo do enlace (`host:porta`): da configuração (PIU_LNNP_PEERS) ou adicionado pelo painel. */
+export interface ApiPeer {
+  address: string; source: 'config' | 'panel'; state: 'connecting' | 'connected' | 'failed';
+  error: string | null; errorAt: number | null; nodeId: string | null; pk: string | null; since: number | null; attempts: number;
+}
 export interface ApiSerial { label: string; kind: 'lora' | 'usb'; packetsSent: number; packetsReceived: number; retries: number; lost: number; dutyPercent?: number; dutyUsedPercent?: number }
 /** `GET /api/relay`. Com o motor desligado: `{ enabled: false }`. */
 export type ApiRelay = { enabled: false } | {
@@ -30,7 +40,7 @@ export type ApiRelay = { enabled: false } | {
   counters: ApiTotals & { delivered: number; handshakesOk: number; handshakesFailed: number };
   limits: { bwMbps: number; stoGB: number; hours: string; media: boolean; device?: ApiDeviceLimits | null; effective?: { bwMbps: number; stoGB: number; hours: string[] } };
   operator?: { signed: boolean; revoked: number; listSeq: number };
-  lan?: { port: number; discoveryPort: number | null }; serial?: ApiSerial[];
+  lan?: { port: number; discoveryPort: number | null; peers?: ApiPeer[] }; serial?: ApiSerial[];
 };
 export interface ApiSample extends ApiTotals { at: number; neighbors: number; storedBytes: number }
 export interface ApiDay extends ApiTotals { day: string }
@@ -139,6 +149,9 @@ export class NodeApi {
   reauth = (code: string) => this.call<{ ok: true }>('POST', '/api/reauth', { code });
   packages = () => this.call<ApiPackage[]>('GET', '/api/packages');
   relay = () => this.call<ApiRelay>('GET', '/api/relay');
+  /** Adiciona um vizinho por endereço (`host:porta`); o nó espera o handshake (até ~6 s) e devolve o estado. */
+  addRelayPeer = (address: string) => this.call<{ peer: ApiPeer | null }>('POST', '/api/relay/peers', { address });
+  removeRelayPeer = (address: string) => this.call<void>('DELETE', `/api/relay/peers/${encodeURIComponent(address)}`);
   history = () => this.call<ApiHistory>('GET', '/api/relay/history');
   receipts = () => this.call<ApiReceipts>('GET', '/api/relay/receipts');
   logout = () => this.call<{ ok: true }>('POST', '/api/logout');

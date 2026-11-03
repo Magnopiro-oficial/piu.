@@ -97,9 +97,16 @@ export function liveDevice(d: ApiDevice, live: Live | null): RelayNode {
     ...(d.nodeId ? { nodeId: d.nodeId, signed: !!d.signed } : {}), ...(d.limits ? { limits: d.limits } : {}),
   };
   if (!d.self && d.nodeId) {
-    // Vinculado a um vizinho: se ele está conectado agora, o painel diz isso (as estatísticas dele ainda não chegam aqui).
+    // Vinculado a um vizinho: o enlace real (o nó diz se está conectado e quando foi visto por último).
+    // Conectado também quando a leitura de equipamentos ainda não pegou a conexão nova, mas o relay já.
     const on = relayOn(live)?.neighbors.find(n => n.id === d.nodeId);
-    base.model = on ? `Identidade ${d.nodeId} · conectado a este nó agora (${on.address})` : `Identidade ${d.nodeId} · não está conectado a este nó agora`;
+    const link = on ? { online: true, lastSeen: Date.now(), address: on.address } : d.link ?? null;
+    if (link) base.link = link;
+    base.model = link?.online ? `Identidade ${d.nodeId} · enlace LNNP com este nó (${link.address ?? 'endereço desconhecido'})` : `Identidade ${d.nodeId} · sem enlace com este nó agora`;
+  } else if (!d.self) {
+    base.model = cls === 'Ponto de Acesso'
+      ? 'Sem software do Piu · só registro neste nó, sem enlace nem estatísticas'
+      : 'Registrado sem identidade técnica · sem enlace nem estatísticas neste nó';
   }
   if (!d.self) return base;
   const r = relayOn(live), h = historyOn(live), rc = receiptsOn(live);

@@ -51,6 +51,8 @@ export interface RelayNode {
   signed?: boolean;
   /** Regras deste equipamento (assistente, passo "Regras"); ausente = só os limites globais. */
   limits?: { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy };
+  /** Com piu-node e identidade técnica: enlace LNNP real com este nó (conectado agora, visto por último). */
+  link?: { online: boolean; lastSeen: number | null; address: string | null };
 }
 
 export interface WalletTx {

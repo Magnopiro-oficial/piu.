@@ -11,6 +11,15 @@ import type { HoursPolicy, Policies } from '../types';
 
 const segProps = { gap: 4, radius: 12, btnRadius: 9 } as const;
 
+/**
+ * Com o piu-node: o que vale nesta versão. O nome público fica só registrado neste nó (a assinatura
+ * pela chave de operador e o anúncio pela malha ainda não existem), então as regras da demonstração não se aplicam.
+ */
+const PUB_RULES_NODE = [
+  { icon: 'badge', title: 'Nome registrado neste nó', desc: 'O nome público fica guardado aqui, ligado ao equipamento. A assinatura pela sua chave de operador e o anúncio pela malha ainda não existem nesta versão.' },
+  { icon: 'shield_person', title: 'Sem dados pessoais', desc: 'Evite nome, sobrenome ou endereço. Prefira o bairro, um ponto de referência ou um apelido.' },
+];
+
 export function Settings() {
   const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api } = useStore();
   const [pairing, setPairing] = useState<{ id: string; qr: string } | null>(null);
@@ -33,11 +42,11 @@ export function Settings() {
     catch (e) { showToast({ icon: 'error', title: 'Não foi possível remover', body: e instanceof ApiError ? e.message : 'Tente de novo.' }); }
   };
   const [stepUpOpen, setStepUpOpen] = useState(false);
-  // Com o piu-node: acessos reais; na demonstração, os do exemplo.
+  // Com o piu-node: acessos reais (vazio enquanto carrega); na demonstração, os do exemplo.
   const rows: [string, string, string, string][] = sessions
     ? sessions.map(x => [x.label.startsWith('App') ? 'desktop_windows' : 'computer', x.current ? 'Este acesso' : x.label, `${x.current ? x.label + ' · ' : ''}desde ${when(x.createdAt)}`, x.current ? 'agora' : `visto ${when(x.lastSeen)}`])
-    : SESSIONS;
-  const others = sessions ? sessions.filter(x => !x.current).length : 1;
+    : api ? [] : SESSIONS;
+  const others = sessions ? sessions.filter(x => !x.current).length : api ? 0 : 1;
   const endOthers = async () => {
     const r = await revokeOtherSessions();
     if (r === 'reauth') { setStepUpOpen(true); return; }
@@ -157,7 +166,7 @@ export function Settings() {
         </div>
         <div className="col" style={{ gap: 12 }}>
           <div style={{ fontSize: 14, fontWeight: 650 }}>Como o Piu evita imitações</div>
-          {PUB_RULES.map(r => (
+          {(api ? PUB_RULES_NODE : PUB_RULES).map(r => (
             <div key={r.title} style={{ display: 'flex', gap: 12 }}>
               <Icon name={r.icon} size={20} wght={300} />
               <div className="col" style={{ flex: 1, gap: 2 }}>

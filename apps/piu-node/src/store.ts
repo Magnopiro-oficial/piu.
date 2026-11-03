@@ -50,9 +50,11 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[] }
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[];
+  /** Vizinhos fixos do enlace LNNP adicionados pelo painel (`host:porta`), somados aos de `PIU_LNNP_PEERS`. */
+  relayPeers: string[] }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [] });
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [] });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -130,6 +132,10 @@ export class Store {
   deviceByNodePk(nodePk: string) { return this.s.devices.find(d => d.nodePk === nodePk) ?? null; }
   /** Dono do equipamento (o primeiro operador pareado). */
   owner() { return this.s.operators[0] ?? null; }
+
+  relayPeers() { return [...this.s.relayPeers]; }
+  addRelayPeer(address: string) { if (!this.s.relayPeers.includes(address)) { this.s.relayPeers.push(address); this.save(); } }
+  removeRelayPeer(address: string) { const before = this.s.relayPeers.length; this.s.relayPeers = this.s.relayPeers.filter(a => a !== address); if (this.s.relayPeers.length !== before) this.save(); return before !== this.s.relayPeers.length; }
 
   claims() { return [...this.s.claims]; }
   /** Uma carteira por época: declarar de novo troca a anterior. */

@@ -47,8 +47,8 @@ const NAV: [PageId, string, string][] = [
 
 export function Sidebar() {
   const { page, navigate, devices, theme, setTheme, operatorName, nodeMode } = useStore();
-  // Com o piu-node, o nome do operador pareado; na demonstração, o do exemplo.
-  const opName = operatorName ?? OPERATOR.name;
+  // Com o piu-node, o nome do operador pareado; na demonstração, o do exemplo (nunca o de exemplo com nó).
+  const opName = nodeMode === 'node' ? (operatorName ?? '') : OPERATOR.name;
   return (
     <nav aria-label="Painel" className="sidebar" style={{ width: 232, flex: 'none', background: 'var(--side)', borderRight: '1px solid var(--line)', display: 'flex', flexDirection: 'column', padding: '22px 14px 16px', gap: 22 }}>
       <div className="side-brand" style={{ display: 'flex', alignItems: 'baseline', gap: 8, padding: '0 8px' }}>
