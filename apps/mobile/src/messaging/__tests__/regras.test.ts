@@ -366,3 +366,38 @@ test('2.4 temporária: o prazo vai junto e o envelope não vive mais que ele', (
   net.clock += 3601; a.m.tick();
   assert.ok(!a.m.pendingFor(b.ids.public.id).includes('m4'));
 });
+
+// ── 11.4 chave técnica do nó gira por dia ────────────────────────────
+
+test('11.4 chave do nó gira na virada do dia; recibos e créditos antigos continuam válidos', async () => {
+  const { verifyRelayReceipt } = await import('../../protocol/receipts');
+  const { toHex } = await import('../../protocol/bytes');
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto');
+  const seed = newSeed();
+  const ids = { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') };
+  const mk = (state?: string) => new Messenger({ identities: ids, node: deriveNodeKey(seed), nodeKeyFor: d => deriveNodeKey(seed, d), relay: true, now: () => net.clock, transmit: net.transmit('Relay'), events: {}, state });
+  const relay = mk();
+  net.nodes.set('Relay', relay);
+  know(a, b); know(b, a);
+  const day0 = Math.floor(net.clock / 86400);
+  assert.equal(toHex(relay.nodePk), toHex(deriveNodeKey(seed, day0).pk), 'chave do dia');
+  // Dia 1: repassa uma mensagem e a entrega é comprovada.
+  a.m.sendText(b.ids.public.id, 'm1', 'Hoje');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay'); net.link('Relay', 'Beto'); net.unlink('Relay', 'Beto');
+  // Dia seguinte: a chave troca sozinha.
+  net.clock += 86400; relay.tick();
+  assert.equal(toHex(relay.nodePk), toHex(deriveNodeKey(seed, day0 + 1).pk));
+  a.m.sendText(b.ids.public.id, 'm2', 'Amanhã');
+  net.link('Ana', 'Relay'); net.unlink('Ana', 'Relay'); net.link('Relay', 'Beto');
+  // Mensagens e confirmações repassadas: recibos dos dois dias, cada um com a chave do seu dia.
+  const list = relay.credits.list();
+  const k0 = b64url(deriveNodeKey(seed, day0).pk), k1 = b64url(deriveNodeKey(seed, day0 + 1).pk);
+  assert.deepEqual(new Set(list.map(c => c.receipt.nodePk)), new Set([k0, k1]));
+  for (const c of list) assert.ok(verifyRelayReceipt(relay.credits.receiptOf(c)), 'recibo antigo e novo conferem');
+  for (const k of [k0, k1]) assert.ok(list.some(c => c.receipt.nodePk === k && c.state === 'validado'), 'prova de entrega aplicada nos dois dias');
+  // Depois de reabrir o app, o crédito do dia anterior continua lá e válido.
+  const again = mk(relay.export());
+  assert.equal(again.credits.list().length, list.length);
+  assert.ok(again.credits.list().every(c => verifyRelayReceipt(again.credits.receiptOf(c))));
+});

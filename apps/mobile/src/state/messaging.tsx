@@ -109,7 +109,7 @@ const Ctx = createContext<Messaging | null>(null);
  * mensagem nunca é reutilizada.
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
-  const { identities, node } = useKeys();
+  const { identities, node, nodeKeyFor } = useKeys();
   const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
@@ -167,7 +167,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     if (restored) importRestored.current(restored);
     const m = new Messenger({
       // Rotação pendente (migração/revogação) descarta as sessões; dados de um backup restaurado entram aqui.
-      identities, node, relay, now, state: applySessionRotation(readPersisted<string>(STATE_KEY) ?? restoredState),
+      // Chave técnica do nó gira por dia (LNNP §12.1); recibos já emitidos guardam a chave deles.
+      identities, node, nodeKeyFor: nodeKeyFor ?? undefined, relay, now, state: applySessionRotation(readPersisted<string>(STATE_KEY) ?? restoredState),
       randomDelay: () => privRef.current.delay,
       pad: () => privRef.current.pad,
       transmit: async (peerId, bytes) => {

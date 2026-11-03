@@ -122,6 +122,12 @@ export interface NodePolicy {
 export interface MessengerOptions {
   identities: Record<IdentityKind, Identity>;
   node: KeyPair;
+  /**
+   * Chave técnica do nó por dia (LNNP §12.1: no celular, o índice de `deriveNodeKey` gira). Com isto,
+   * `node` é ignorado e a chave troca na virada do dia (UTC). Recibos já assinados guardam a chave
+   * deles e continuam válidos.
+   */
+  nodeKeyFor?: (day: number) => KeyPair;
   relay: boolean;
   /** Relógio em segundos. */
   now: () => number;
@@ -275,14 +281,16 @@ export class Messenger {
     this.wantRelay = o.relay;
     this.credits = new CreditBook(st?.cr);
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
-    this.router = new Router({
-      node: o.node,
+    this.nodeDay = Math.floor(o.now() / 86400);
+    this.routerOpts = {
+      node: o.nodeKeyFor ? o.nodeKeyFor(this.nodeDay) : o.node,
       identities: [o.identities.public, o.identities.anon],
       relay: o.relay,
       acceptDest: (d, e) => this.managers.public.acceptsDest(d, e) || this.managers.anon.acceptsDest(d, e),
       // Grupo: só abre mensagem de quem ainda é membro e pode publicar (canal e comunidade: só admins).
       isMember: (fromId, gid) => { const g = this.groups.get(gid); return !!g && canPost(g, fromId); },
-    });
+    };
+    this.router = new Router(this.routerOpts);
     if (!st) return;
     for (const t of (st.g ?? []) as string[]) {
       const via = (JSON.parse(t) as { via?: IdentityKind }).via === 'anon' ? 'anon' : 'public';
@@ -313,6 +321,20 @@ export class Messenger {
       for (const [id, at] of nb.ks ?? []) this.nearSent.set(id, at);
       for (const id of nb.h ?? []) this.nearHidden.add(id);
     }
+  }
+
+  /** Opções do roteador (a chave do nó troca aqui, sem refazer o roteador e a fila). */
+  private routerOpts: ConstructorParameters<typeof Router>[0];
+  private nodeDay: number;
+  /** Chave técnica do nó em uso (pública), para o diagnóstico. */
+  get nodePk() { return this.routerOpts.node.pk; }
+
+  /** Virada do dia: chave técnica nova (só com `nodeKeyFor`). */
+  private rotateNodeKey() {
+    const day = Math.floor(this.o.now() / 86400);
+    if (!this.o.nodeKeyFor || day === this.nodeDay) return;
+    this.nodeDay = day;
+    this.routerOpts.node = this.o.nodeKeyFor(day);
   }
 
   set relay(v: boolean) { this.wantRelay = v; this.applyRelay(); }
@@ -1300,6 +1322,7 @@ export class Messenger {
 
   /** Chamar de tempos em tempos: libera envios com atraso aleatório e apaga o que venceu. */
   tick() {
+    this.rotateNodeKey();
     this.applyRelay();
     this.nearTick();
     const ct = this.credits.tick(this.o.now());
@@ -1323,6 +1346,7 @@ export class Messenger {
   private flush(peerId: string) {
     const via = this.peers.get(peerId);
     if (!via) return;
+    this.rotateNodeKey(); // recibo assinado sempre com a chave do dia
     const now = this.o.now();
     // Banda e tráfego diário só limitam mensagens de terceiros.
     let budget = Infinity;
