@@ -155,11 +155,14 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           </View>
         )}
 
-        {admin && (
+        {(admin || groupOps.canInvite(g.id)) && (
           <View style={{ paddingTop: 12, paddingHorizontal: 20, gap: 8 }}>
             {adding ? (
               candidates.length ? candidates.map(x => (
-                <Pressable key={x.id} onPress={() => run(() => groupOps.addMembers(g.id, [x.id]), `${x.name} adicionado`)} accessibilityRole="button" accessibilityLabel={`Adicionar ${x.name}`}
+                <Pressable key={x.id} onPress={() => admin
+                  ? run(() => groupOps.addMembers(g.id, [x.id]), `${x.name} adicionado`)
+                  // Membro com "Todos os membros": a indicação vai aos admins, que adicionam (ou aprovam).
+                  : run(() => { groupOps.addMembers(g.id, [x.id]); showToast({ icon: 'schedule_send', title: `Convite de ${x.name} enviado`, body: g.approve ? 'Um admin aprova a entrada quando receber.' : 'A pessoa entra quando um admin receber o convite.' }); })} accessibilityRole="button" accessibilityLabel={`Adicionar ${x.name}`}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 8 }}>
                   <Avatar initials={initialsOf(x.name)} size={36} />
                   <T size={15} w={550} style={{ flex: 1 }}>{x.name}</T>

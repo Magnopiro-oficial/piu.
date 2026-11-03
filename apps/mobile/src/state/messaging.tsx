@@ -63,6 +63,8 @@ interface Messaging {
     pending: (gid: string) => { id: string; name: string }[];
     joinChild: (communityId: string, childId: string) => void;
     isMember: (gid: string) => boolean;
+    /** Posso convidar? (admin, ou membro com "Quem pode convidar: Todos os membros"). */
+    canInvite: (gid: string) => boolean;
     /** Link/QR do convite do grupo (7 dias, até 50 usos). */
     inviteLink: (gid: string, fresh?: boolean) => string;
   } | null;
@@ -370,6 +372,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       pending: gid => messenger.pendingJoinsOf(gid),
       joinChild: (comId, childId) => messenger.requestJoinChild(comId, childId),
       isMember: gid => !!messenger.getGroup(gid),
+      canInvite: gid => messenger.canInvite(gid),
       inviteLink: (gid, fresh) => {
         const g = messenger.getGroup(gid)!;
         const inv = messenger.groupInvite(gid, fresh);

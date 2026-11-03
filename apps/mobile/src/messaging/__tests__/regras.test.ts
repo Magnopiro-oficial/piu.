@@ -125,3 +125,70 @@ test('3.1 inscrito não aceita estado forjado por outro inscrito', () => {
   net.run();
   assert.equal(c.m.getGroup(ch.id)!.name, 'Brigada');
 });
+
+// ── 3.3 "Quem pode convidar: Todos os membros" ───────────────────────
+
+/** Ana (admin) e Beto se conhecem; Caio só conhece Beto. Malha Ana – Beto – Caio. */
+function chain() {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio');
+  know(a, b); know(b, a); know(b, c); know(c, b);
+  const all = () => { net.link('Ana', 'Beto'); net.link('Beto', 'Caio'); };
+  return { net, a, b, c, all };
+}
+type Internals = { o: { events: Record<string, unknown> }; distribute: (x: unknown) => void; enqueue: (ct: unknown, p: unknown, i: null, pr: number) => void; inviteAsMember: (g: unknown, ids: string[]) => void };
+const inner = (m: Messenger) => m as unknown as Internals;
+
+test('3.3 membro convida com "Todos os membros": o admin confere e o convidado entra, mesmo sem conhecer o admin', () => {
+  const { net, a, b, c, all } = chain();
+  const g = a.m.createGroup({ kind: 'group', name: 'Mutirão', via: 'public', memberIds: [b.ids.public.id], inv: 'all', approve: false });
+  all();
+  assert.ok(b.m.canInvite(g.id));
+  b.m.addMembers(g.id, [c.ids.public.id]);
+  net.run();
+  assert.ok(a.m.getGroup(g.id)!.members.some(m => m.id === c.ids.public.id), 'o admin adicionou');
+  assert.equal(c.m.getGroup(g.id)?.name, 'Mutirão', 'Caio aceitou o estado do admin indicado por Beto');
+  a.m.sendGroupText(g.id, 'g1', 'Bem-vindo, Caio');
+  net.run();
+  assert.ok(c.log.group.some(([, t]) => t === 'Bem-vindo, Caio'));
+});
+
+test('3.3 com "Admins", o membro não convida; com "Aprovar quem entra", o pedido aguarda o admin', () => {
+  const { net, a, b, c, all } = chain();
+  const g = a.m.createGroup({ kind: 'group', name: 'Feira', via: 'public', memberIds: [b.ids.public.id], inv: 'admins' });
+  all();
+  assert.equal(b.m.canInvite(g.id), false);
+  assert.throws(() => b.m.addMembers(g.id, [c.ids.public.id]), /permissão/);
+  // Beto forja a indicação mesmo assim: o admin confere a regra e ignora.
+  inner(b.m).inviteAsMember(b.m.getGroup(g.id)!, [c.ids.public.id]);
+  net.run();
+  assert.ok(!a.m.getGroup(g.id)!.members.some(m => m.id === c.ids.public.id));
+  assert.equal(c.m.getGroup(g.id), undefined);
+  // Agora "Todos os membros" + aprovação.
+  const asked: string[] = [];
+  inner(a.m).o.events.joinRequest = (_g: string, w: { name: string }) => asked.push(w.name);
+  a.m.updateGroup(g.id, { inv: 'all', approve: true });
+  net.run();
+  b.m.addMembers(g.id, [c.ids.public.id]);
+  net.run();
+  assert.deepEqual(asked, ['Caio']);
+  assert.equal(c.m.getGroup(g.id), undefined, 'aguardando o admin');
+  a.m.answerJoin(g.id, c.ids.public.id, true);
+  net.run();
+  assert.equal(c.m.getGroup(g.id)?.name, 'Feira');
+});
+
+test('3.3 canal não aceita convite de inscrito; indicação de quem não é contato não vale', () => {
+  const { net, a, b, c, all } = chain();
+  const ch = a.m.createGroup({ kind: 'channel', name: 'Avisos', via: 'public', memberIds: [b.ids.public.id], inv: 'all', visibility: 'public' });
+  all();
+  assert.equal(b.m.canInvite(ch.id), false);
+  // Davi (Caio não o conhece) se indica como admin de um grupo e manda o estado: Caio recusa.
+  const d = device(net, 'Davi');
+  know(d, c);
+  const g2 = d.m.createGroup({ kind: 'group', name: 'Golpe', via: 'public', memberIds: [c.ids.public.id] });
+  inner(d.m).enqueue(d.m.getContact(c.ids.public.id), { t: 'gv', g: g2.id, a: [{ id: d.ids.public.id, n: 'Davi', s: b64url(d.ids.public.signPk), a: b64url(d.ids.public.agreePk), b: b64url(d.ids.public.binding) }] }, null, 2);
+  inner(d.m).distribute({ ...d.m.getGroup(g2.id)!, rev: 2 });
+  net.link('Davi', 'Caio');
+  assert.equal(c.m.getGroup(g2.id), undefined);
+});
