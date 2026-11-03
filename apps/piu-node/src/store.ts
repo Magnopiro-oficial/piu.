@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { CertJson } from './relay/operator-frames.js';
 
 export interface Operator { id: string; name: string; createdAt: number }
 export interface Session {
@@ -16,7 +17,19 @@ export type DeviceStatus = 'active' | 'paused';
  * os outros são registros feitos pelo assistente e ainda não mandam estatísticas a este nó.
  * `today` é legado (versões antigas guardavam um valor de referência) e não sai mais pela API.
  */
-export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today?: number; family?: string; pub?: string; createdAt?: number; self?: boolean }
+export interface Device {
+  id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today?: number; family?: string; pub?: string; createdAt?: number; self?: boolean;
+  /** Identidade técnica do nó (chave LNNP em hex). O próprio nó sempre tem; os outros, quando vinculados a um vizinho. */
+  nodePk?: string;
+  /** Certificado da identidade técnica, assinado pela chave de operador (ver relay/operator-frames.ts). */
+  cert?: CertJson;
+  /** Regras do equipamento (assistente, passo "Regras"). Ausente: só os limites globais. */
+  limits?: DeviceLimits;
+}
+/** Regras de um equipamento: banda (Mbps), armazenamento para terceiros (GB) e horário. */
+export interface DeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy }
+/** Carteira declarada para um lote, assinada pela chave do nó (`PayoutClaim`, binários em hex). */
+export interface PayoutClaimRecord { epoch: string; address: string; nodePk: string; sig: string; at: number }
 /**
  * Movimentação da carteira. Saída (`out`, ou sem `kind` nas versões antigas): para a carteira pessoal
  * ou outro endereço `lunes:…`. Entrada (`in`): liquidação recebida, com a referência do lote em `from`.
@@ -37,9 +50,9 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[] }
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[] }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [] });
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [] });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -107,6 +120,20 @@ export class Store {
     return dev;
   }
   removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+  /** Muda campos de um equipamento (identidade técnica, certificado, regras). */
+  updateDevice(id: string, p: Partial<Pick<Device, 'nodePk' | 'cert' | 'limits'>>) {
+    const d = this.s.devices.find(x => x.id === id);
+    if (d) { Object.assign(d, p); for (const k of Object.keys(p) as (keyof typeof p)[]) if (p[k] === undefined) delete d[k]; this.save(); }
+    return d ?? null;
+  }
+  /** Algum equipamento (de qualquer operador) já tem esta identidade técnica? */
+  deviceByNodePk(nodePk: string) { return this.s.devices.find(d => d.nodePk === nodePk) ?? null; }
+  /** Dono do equipamento (o primeiro operador pareado). */
+  owner() { return this.s.operators[0] ?? null; }
+
+  claims() { return [...this.s.claims]; }
+  /** Uma carteira por época: declarar de novo troca a anterior. */
+  setClaim(c: PayoutClaimRecord) { this.s.claims = [...this.s.claims.filter(x => x.epoch !== c.epoch), c].sort((a, b) => a.epoch.localeCompare(b.epoch)); this.save(); return c; }
   /** O equipamento que serve o painel, se já tem dono. */
   selfDevice() { return this.s.devices.find(d => d.self) ?? null; }
   /**

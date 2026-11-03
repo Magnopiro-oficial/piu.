@@ -72,8 +72,10 @@ export function PairScreen() {
   );
 }
 
-/** Confirmação com um código novo do equipamento antes de uma operação sensível (transferir LUNES). */
-export function StepUpDialog({ onConfirm, onClose }: { onConfirm: (code: string) => Promise<string | null>; onClose: () => void }) {
+/** Confirmação com um código novo do equipamento antes de uma operação sensível (transferir LUNES, backup e rotação da chave). */
+export function StepUpDialog({ onConfirm, onClose, reason = 'Transferências exigem uma confirmação recente.', confirmLabel = 'Confirmar e transferir' }: {
+  onConfirm: (code: string) => Promise<string | null>; onClose: () => void; reason?: string; confirmLabel?: string;
+}) {
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -91,13 +93,48 @@ export function StepUpDialog({ onConfirm, onClose }: { onConfirm: (code: string)
       <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="stepup-title" className="col dlg"
         style={{ position: 'fixed', left: '50%', top: '50%', width: 400, marginLeft: -200, transform: 'translateY(-50%)', zIndex: 46, borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '26px 24px 20px', gap: 14 }}>
         <div className="row" style={{ gap: 10 }}><Icon name="lock_clock" size={26} wght={300} /><h2 id="stepup-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Confirme no equipamento</h2></div>
-        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>Transferências exigem uma confirmação recente. Digite o código novo que aparece na tela do equipamento.</p>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>{reason} Digite o código novo que aparece na tela do equipamento.</p>
         <input value={code} onChange={e => setCode(onlyDigits(e.target.value))} inputMode="numeric" autoComplete="one-time-code" aria-label="Código do equipamento" placeholder="0000 0000"
           className="mono" style={{ ...field, fontSize: 22, letterSpacing: '.18em', textAlign: 'center' }} autoFocus />
         {err && <div role="alert" style={{ fontSize: 13, padding: '8px 12px', borderRadius: 12, border: '1px dashed var(--line2)' }}>{err}</div>}
         <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
           <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 40, padding: '0 16px', borderRadius: 20 }}>Cancelar</button>
-          <button type="submit" className="btn btn-primary" disabled={code.length !== 8 || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: code.length === 8 ? 1 : 0.4 }}>{busy ? 'Conferindo…' : 'Confirmar e transferir'}</button>
+          <button type="submit" className="btn btn-primary" disabled={code.length !== 8 || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: code.length === 8 ? 1 : 0.4 }}>{busy ? 'Conferindo…' : confirmLabel}</button>
+        </div>
+      </form>
+    </>,
+    document.body,
+  );
+}
+
+/** Senha do backup cifrado da chave de operador (escolhida aqui; o nó cifra com ela e não guarda). */
+export function PasswordDialog({ onConfirm, onClose }: { onConfirm: (password: string) => Promise<string | null>; onClose: () => void }) {
+  const [pw, setPw] = useState('');
+  const [again, setAgain] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const problem = pw.length < 10 ? 'Use pelo menos 10 caracteres.' : new Set(pw).size < 5 ? 'Senha repetitiva demais.' : pw !== again ? 'As duas senhas não conferem.' : null;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (problem || busy) return;
+    setBusy(true);
+    const p = await onConfirm(pw);
+    setBusy(false);
+    if (p) setErr(p);
+  };
+  return createPortal(
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45 }} />
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="pw-title" className="col dlg"
+        style={{ position: 'fixed', left: '50%', top: '50%', width: 400, marginLeft: -200, transform: 'translateY(-50%)', zIndex: 46, borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '26px 24px 20px', gap: 12 }}>
+        <div className="row" style={{ gap: 10 }}><Icon name="key" size={26} wght={300} /><h2 id="pw-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Exportar backup cifrado</h2></div>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>Escolha uma senha para proteger o arquivo. Sem ela, ninguém abre o backup, nem você: guarde-a separada do arquivo.</p>
+        <input type="password" value={pw} onChange={e => { setPw(e.target.value); setErr(null); }} autoComplete="new-password" aria-label="Senha do backup" placeholder="Senha (10 caracteres ou mais)" style={field} autoFocus />
+        <input type="password" value={again} onChange={e => { setAgain(e.target.value); setErr(null); }} autoComplete="new-password" aria-label="Repita a senha" placeholder="Repita a senha" style={field} />
+        <div aria-live="polite" style={{ fontSize: 12.5, color: 'var(--ink2)', minHeight: 17 }}>{err ?? (pw ? problem ?? 'Senha boa.' : '')}</div>
+        <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 40, padding: '0 16px', borderRadius: 20 }}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={!!problem || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: problem ? 0.4 : 1 }}>{busy ? 'Cifrando…' : 'Exportar'}</button>
         </div>
       </form>
     </>,

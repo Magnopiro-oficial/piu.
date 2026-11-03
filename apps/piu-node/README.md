@@ -21,6 +21,7 @@ O que acontece quando o nó sobe:
 3. **Handshake LNNP**: HELLO/AUTH assinados, negociação da maior versão comum e das capacidades (MTU, meios, relay, armazenamento, suítes, formatos de envelope). Depois, todo quadro vai cifrado. Conexão que não fala LNNP, nó fora de `PIU_LNNP_ALLOW` ou assinatura errada: recusados e contados.
 4. **Encaminhamento**: cada envelope recebido entra no `Router` do protocolo, que guarda o que é de terceiros, descarta duplicatas pelo id, respeita TTL, saltos e cópias, e repassa a todos os outros vizinhos (e aos que aparecerem depois, até vencer). Envelope maior que a MTU do vizinho vai em fragmentos. O nó **nunca decifra** nada (INF-011): não tem chave social.
 5. **Recibos**: na primeira cópia de cada envelope de terceiro, o nó assina um recibo de retransmissão (guardados os 1.000 mais recentes, para o validador).
+6. **Reinício sem perder mensagens** (design "Reiniciar: mensagens guardadas continuam no armazenamento local"; NFR-002, FUN-012): os envelopes guardados, os ids já vistos e os recibos vão para `<data>/lnnp/relay-store.bin` a cada 30 s quando mudam (`PIU_RELAY_PERSIST_MS`) e ao desligar (`SIGINT`/`SIGTERM`, app desktop). Ao subir, voltam antes do primeiro vizinho conectar e passam de novo pelas regras do roteador (`Router.importStored`/`importSeen`): vencido por TTL ou retenção é descartado, o que não cabe no limite de armazenamento atual fica de fora (o de menor prioridade primeiro), e o mesmo envelope chegando de novo continua sendo duplicata (sem segunda entrega). Também volta a quem cada envelope já foi e quantas cópias saíram, para não repetir envio nem recibo. O arquivo é cifrado e autenticado (AES-256-GCM, chave derivada da semente do nó), 0600 numa pasta 0700, com gravação atômica; corrompido ou de outro nó, é posto de lado (`relay-store.bin.corrompido`) e o nó sobe vazio.
 
 ### Rádio LoRa e cabo USB (porta serial)
 `PIU_SERIAL` liga portas seriais ao mesmo motor, além do LAN. Exemplo: `PIU_SERIAL=lora:/dev/ttyUSB0@115200,usb:/dev/ttyACM0@115200`. O protocolo no meio está descrito na seção 3.1 da especificação.
@@ -51,9 +52,20 @@ Os ajustes do **dono do equipamento** (o primeiro operador pareado) em `PUT /api
 | Ajuste do painel | No motor |
 |---|---|
 | Banda (20/50/100 Mbps) | balde de fichas em bytes/s para envelopes de terceiros (rajada de 1 s); o que não cabe fica para a próxima rodada |
-| Armazenamento (4/8/16 GB) | `maxBytes` do roteador, limitado pelo teto de memória `PIU_LNNP_MEMORY_MB` (os envelopes ficam em memória nesta versão) |
+| Armazenamento (4/8/16 GB) | `maxBytes` do roteador, limitado pelo teto de memória `PIU_LNNP_MEMORY_MB` (os envelopes ficam em memória enquanto o nó roda e são gravados em disco para o reinício) |
 | Horário (sempre / 22h–7h / 8h–18h, hora local) | fora do horário o nó não guarda nem repassa terceiros; os vizinhos ficam sabendo por `CAPS_UPDATE` |
 | Política "mídia" desligada | envelope de terceiro marcado como mídia é recusado sem guardar |
+
+### Regras por equipamento (assistente, passo "Regras")
+Cada equipamento pode ter regras próprias de banda (5/20/50 Mbps), armazenamento para terceiros (1/4/8 GB) e horário, enviadas pelo assistente em `POST /api/devices` (`limits`) ou mudadas em `PUT /api/devices/:id/limits` (`{ "clear": true }` volta só aos globais). No **próprio nó**, valem no motor na hora, junto com os limites globais ("Os limites globais de Configurações continuam valendo"): banda e armazenamento ficam com o menor dos dois e os dois horários valem ao mesmo tempo. `GET /api/relay` mostra os globais, as regras do equipamento (`limits.device`) e o que está em vigor (`limits.effective`). Nos outros equipamentos as regras ficam registradas: valem quando o Piu Node deles ler este nó (ainda não lê).
+
+### Chave de operador, revogação e carteira do lote
+- **Chave de operador** (design: "Assina seus equipamentos. Separada da sua identidade de conversa"): uma chave Ed25519 por operador, criada no primeiro pareamento e guardada em `<data>/operator/keys.json` (0600, pasta 0700, gravação atômica), fora do `state.json`. Não tem relação com a identidade de conversa, a carteira ou a chave técnica do nó. Ela assina a identidade técnica do próprio nó e a dos equipamentos vinculados a um vizinho LNNP (certificado `OPERATOR_CERT`), e a lista de revogação. `GET /api/operator` mostra a impressão digital (8 grupos de 4), quando foi criada, rotações e o último backup. Arquivo de chaves ilegível: o nó sobe mesmo assim e guarda o arquivo de lado (`keys.json.corrompido-…`), sem sobrescrever; restaure o backup cifrado.
+- **Backup cifrado** (`POST /api/operator/backup`, com step-up): arquivo `piu-operador.backup`, protegido por uma senha de pelo menos 10 caracteres, com scrypt (N = 2^16) e XChaCha20-Poly1305, o cabeçalho como dado associado (o mesmo esquema do `.piu` do app). `POST /api/operator/restore` (com step-up) restaura num segundo nó: os dois passam a ser do mesmo operador e se reconhecem na malha.
+- **Rotação** (`POST /api/operator/rotate`, com step-up): chave nova, assinada pela antiga. O nó assina de novo o próprio certificado, os dos equipamentos e a lista de revogação. Os outros nós do operador recebem a chave nova na próxima sincronização (o certificado leva os passos de rotação; quem confia na chave atual segue para a nova; um ramo a partir de uma chave antiga não vale). No nó que recebeu a rotação de outro, `GET /api/operator` traz `rotatedElsewhere: true`: restaure nele o backup novo.
+- **Revogar** (`DELETE /api/devices/:id` de um equipamento com identidade técnica): a chave do nó entra na lista de revogação assinada pela chave de operador. No nó do dono vale na hora (o enlace com ele fecha e o handshake passa a ser recusado com `UNAUTHORIZED`, contado em `revokedRefused`), e a lista vai para os vizinhos do mesmo operador, que fazem o mesmo e repassam. Responde `{ revoked: true, appliedHere }`; sem identidade técnica, o registro só sai do painel (`204`). O que o nó aprende da malha (rotações, a lista, o próprio certificado) fica em `<data>/lnnp/operator-trust.json`. Formato e regras: `docs/lnnp/especificacao-v1.md`, seção 8.1. Limite: só alcança nós do mesmo operador; um equipamento revogado que tinha cópia da chave de operador exige rotação.
+- **Evidências para o validador** (`GET /api/relay/evidence`, só o dono): os recibos guardados no formato `EvidenceFile` de `apps/settlement` (`v: 1`, binários em hex), para baixar e levar ao validador. Provas de entrega (`ackSecret`) só existem no destino; o piu-node não decifra nada, então `proofs` vem vazio.
+- **Carteira do lote** (`POST /api/payout-claims`, só o dono, com step-up): o nó assina com a chave técnica dele a carteira que recebe o lote desta semana ou da próxima (`PayoutClaim`; época = semana ISO em UTC, `AAAA-Snn`). O endereço LUNES é conferido por inteiro (base58, prefixo SS58 42 ou 57, chave de 32 bytes e soma de verificação BLAKE2b), sem dependência pesada. Declarar de novo a mesma época troca a carteira aqui; se o arquivo anterior já foi entregue, o validador vê duas carteiras e não paga nenhuma naquele lote. `GET /api/payout-claims/file` baixa as declarações no formato `ClaimFile`.
 
 ### `GET /api/relay` (com sessão)
 Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retransmitindo agora), versão LNNP, id do nó, `neighbors` (id, endereço, versão, meios, relay, MTU, desde quando), `store` (envelopes e bytes guardados, teto), `counters` (`received`, `stored`, `forwarded`, `delivered`, `duplicates`, `rejected`, `relayOff`, `full`, `expired`, `receipts`, `receiptsReceived`, `handshakesOk`, `handshakesFailed`) e os limites em vigor. Com o motor desligado: `{ "enabled": false }`.
@@ -83,7 +95,11 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `POST /api/pair`, `POST /api/reauth`, `GET /api/session`, `POST /api/logout` | pareamento, step-up e sessão |
 | `GET /api/sessions`, `POST /api/sessions/revoke-others` | acessos abertos do operador (rótulo "Firefox · Linux", sem token) e encerrar os outros (exige step-up) |
 | `GET`/`PUT /api/settings` | limites globais (banda, armazenamento, horário) e política de tráfego, por operador |
-| `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`; o próprio nó vem com `self: true`) |
+| `GET /api/devices`, `POST /api/devices`, `POST /api/devices/:id/pause`, `DELETE /api/devices/:id` | equipamentos (o assistente do painel cria com `POST`, opcionalmente com a identidade técnica `nodePk` de um vizinho e as regras `limits`; o próprio nó vem com `self: true`). `DELETE` de um equipamento com identidade técnica revoga a chave dele na malha do operador |
+| `PUT /api/devices/:id/limits` | regras do equipamento (banda, armazenamento, horário); no próprio nó valem no motor |
+| `GET /api/operator`, `POST /api/operator/backup`, `POST /api/operator/rotate`, `POST /api/operator/restore` | chave de operador: impressão digital, backup cifrado, rotação e restauração (as três últimas exigem step-up) |
+| `GET /api/relay/evidence` | recibos no formato `EvidenceFile` do validador (só o dono) |
+| `GET`/`POST /api/payout-claims`, `GET /api/payout-claims/file` | carteira do lote assinada pelo nó (`PayoutClaim`; declarar exige step-up) e o arquivo `ClaimFile` |
 | `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up). Com celular pareado, devolve `202` com o pedido a aprovar |
 | `POST /api/wallet/transfer/:id/approve` | conclui o pedido com o código de aprovação que o celular mostrou (uso único, 5 tentativas a cada 10 min) |
 | `GET /api/phones`, `POST /api/phones`, `POST /api/phones/:id/confirm`, `DELETE /api/phones/:id` | celulares que aprovam transferências: listar (sem o segredo), parear (exige step-up; devolve o QR), confirmar com os 6 dígitos e remover |
@@ -161,6 +177,7 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LORA_MAX_ENVELOPE` | `1536` | maior envelope enviado pelo rádio (bytes) |
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
+| `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 
@@ -168,6 +185,7 @@ Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede lo
 - Passkeys (WebAuthn) depois do primeiro pareamento, para não depender do código a cada novo navegador.
 - Ligar a carteira à liquidação real (Mainnet) e os recibos ao validador; até lá o saldo só muda com transferências e créditos locais.
 - Estatísticas dos outros equipamentos do operador (hoje só o nó que serve o painel tem dados reais).
-- Guardar os envelopes em disco (hoje ficam em memória, até `PIU_LNNP_MEMORY_MB`) e salvar os ids vistos entre reinícios (`Router.exportSeen`).
+- Envelopes guardados direto em disco, além do teto de memória `PIU_LNNP_MEMORY_MB` (hoje o disco serve ao reinício; o teto em uso continua sendo o da memória).
 - Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.
-- Enviar os recibos ao validador quando houver rota (`RelayEngine.sendReceipts`).
+- Enviar os recibos ao validador pela malha quando houver rota (`RelayEngine.sendReceipts`); hoje o operador baixa as evidências no painel e leva ao validador.
+- Revogação na rede inteira (chave da Lunes) e certificação de equipamentos por pareamento real no assistente (hoje o vínculo é com um vizinho LNNP escolhido pelo operador).

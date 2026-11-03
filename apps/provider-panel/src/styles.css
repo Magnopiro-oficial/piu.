@@ -186,6 +186,7 @@ a:hover { opacity: .7; }
   .span3, .span4, .span5, .span6, .span7, .span8 { grid-column: span 12; }
   .settings-grid { grid-template-columns: minmax(0, 1fr) !important; }
   .settings-wide { grid-column: auto !important; grid-template-columns: minmax(0, 1fr) !important; }
+  .lot-wallet { grid-template-columns: minmax(0, 1fr) !important; }
   .dev-row { grid-template-columns: minmax(0, 1fr) auto auto !important; gap: 10px !important; padding: 12px 14px !important; }
   .dev-table { grid-template-columns: minmax(0, 1fr) auto auto !important; gap: 10px !important; padding-left: 14px !important; padding-right: 14px !important; }
   .dev-filters > button { min-height: 44px; }

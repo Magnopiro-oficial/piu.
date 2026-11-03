@@ -17,6 +17,11 @@ import {
 import { type RelayReceipt, verifyRelayReceipt } from '../protocol/receipts.js';
 import { type IngestResult, Router, type TransportClass } from '../protocol/router.js';
 import type { HoursPolicy, Settings } from '../store.js';
+import {
+  decodeCert, decodeRevocationList, encodeCert, encodeRevocationList, FRAME_OPERATOR_CERT, FRAME_REVOCATION_LIST, type OperatorCert,
+  type RevocationList, type RotationStep, samePk, trustPath, verifyCert, verifyRevocationList,
+} from './operator-frames.js';
+import type { RelaySnapshot } from './persist.js';
 
 /** Um enlace autenticado, visto pelo motor. O adapter cuida do meio físico. */
 export interface LinkPort {
@@ -54,7 +59,24 @@ export interface EngineOptions {
   /** Relógio em ms (testes). */
   now?: () => number;
   log?: (msg: string) => void;
+  /** A confiança no operador mudou (rotação aprendida, lista nova, certificado novo): salvar. */
+  onOperatorChange?: (s: OperatorTrustState) => void;
 }
+
+/**
+ * O que este nó sabe do operador dono dele (ver operator-frames.ts):
+ * - `lineage`: chaves do operador, da primeira à atual (a atual é a última). Reconhece vizinhos do
+ *   mesmo operador; só a atual assina listas de revogação aceitas.
+ * - `cert`: o certificado deste nó (assinado pelo operador).
+ * - `deviceCerts`: certificados de outros equipamentos do operador, entregues a eles quando conectam.
+ * - `list`: a lista de revogação em vigor (a de número maior).
+ */
+export interface OperatorTrust { lineage: string[]; cert: OperatorCert | null; deviceCerts: OperatorCert[]; list: RevocationList | null }
+/** O que o motor aprende da malha e precisa sobreviver ao reinício. */
+export interface OperatorTrustState { learned: RotationStep[]; cert: OperatorCert | null; list: RevocationList | null }
+
+/** Regras de um equipamento (assistente, passo "Regras"): banda (Mbps), armazenamento (GB) e horário. */
+export interface DeviceLimits { bw: number; sto: number; hours: HoursPolicy }
 
 export interface Counters {
   /** Envelopes recebidos de vizinhos. */
@@ -79,6 +101,8 @@ export interface Counters {
   receiptsReceived: number;
   handshakesOk: number;
   handshakesFailed: number;
+  /** Handshakes recusados e enlaces fechados por chave revogada pelo operador. */
+  revokedRefused: number;
 }
 
 const GiB = 1024 ** 3;
@@ -98,12 +122,14 @@ export class RelayEngine {
   readonly node: KeyPair;
   readonly tag: Uint8Array;
   readonly replay = new ReplayGuard();
-  readonly counters: Counters = { received: 0, stored: 0, forwarded: 0, delivered: 0, duplicates: 0, rejected: 0, relayOff: 0, full: 0, expired: 0, receipts: 0, receiptsReceived: 0, handshakesOk: 0, handshakesFailed: 0 };
+  readonly counters: Counters = { received: 0, stored: 0, forwarded: 0, delivered: 0, duplicates: 0, rejected: 0, relayOff: 0, full: 0, expired: 0, receipts: 0, receiptsReceived: 0, handshakesOk: 0, handshakesFailed: 0, revokedRefused: 0 };
   /** Recibos mais recentes (deste nó e recebidos), para entregar ao validador quando houver rota. */
   readonly receiptLog: RelayReceipt[] = [];
   private links = new Map<string, LinkPort>();
   private reassembly = new Map<string, Reassembler>();
   private settings: Settings['limits'] & { media: boolean } = { bw: 50, sto: 8, hours: 'always', media: true };
+  /** Regras deste equipamento (assistente, passo "Regras"); valem junto com os limites globais. */
+  private device: DeviceLimits | null = null;
   private bucket = { tokens: 0, at: 0 };
   private now: () => number;
   private log: (msg: string) => void;
@@ -112,6 +138,17 @@ export class RelayEngine {
   private paused = false;
   /** Quando o motor subiu (ms), para o painel mostrar há quanto tempo o nó está ligado. */
   readonly startedAt: number;
+  /** Cresce a cada mudança no que é salvo em disco (envelopes, ids vistos, recibos). */
+  changes = 0;
+  /** Envelopes e recibos que voltaram do disco ao subir (para o log e o painel). */
+  restored = { envelopes: 0, seen: 0, receipts: 0 };
+  /** Operador dono deste nó (linhagem de chaves, certificados, revogação). */
+  private op: OperatorTrust = { lineage: [], cert: null, deviceCerts: [], list: null };
+  /** Passos de rotação aprendidos de vizinhos (além dos que o operador tem aqui). */
+  private learned: RotationStep[] = [];
+  private revoked = new Set<string>();
+  /** Enlaces cujo vizinho mostrou certificado do mesmo operador (id do enlace → chave do operador). */
+  private sameOperator = new Map<string, string>();
 
   constructor(private o: EngineOptions) {
     this.node = o.node;
@@ -127,22 +164,36 @@ export class RelayEngine {
   private sec() { return Math.floor(this.now() / 1000); }
 
   /** Limites do operador (`/api/settings`) aplicados ao roteador: banda, armazenamento, horário, mídia. */
-  applySettings(s: Settings | null) {
+  applySettings(s: Settings | null, device?: DeviceLimits | null) {
     const before = this.relaying;
     if (s) this.settings = { ...s.limits, media: s.policies.media };
-    this.router.limits.maxBytes = Math.min(this.settings.sto * GiB, this.o.memoryBytes);
+    if (device !== undefined) this.device = device;
+    this.router.limits.maxBytes = Math.min(this.effective.sto * GiB, this.o.memoryBytes);
     this.bucket = { tokens: this.rate(), at: this.now() };
     this.updateRelay();
     if (this.relaying !== before) this.announceCaps();
   }
 
   /** Banda para terceiros, em bytes por segundo (o painel fala em Mbps). */
-  private rate() { return (this.settings.bw * 1_000_000) / 8; }
+  private rate() { return (this.effective.bw * 1_000_000) / 8; }
+
+  /**
+   * Limites em vigor: o menor entre o global e o do equipamento (banda e armazenamento) e os dois
+   * horários ao mesmo tempo ("Os limites globais de Configurações continuam valendo").
+   */
+  get effective() {
+    const d = this.device;
+    return {
+      bw: d ? Math.min(this.settings.bw, d.bw) : this.settings.bw,
+      sto: d ? Math.min(this.settings.sto, d.sto) : this.settings.sto,
+      hours: d ? [this.settings.hours, d.hours] : [this.settings.hours],
+    };
+  }
 
   /** Retransmite agora? Modo nó ligado E dentro do horário do operador. */
   get relaying() { return this.router.relay; }
 
-  private updateRelay() { this.router.relay = this.o.relay && !this.paused && inWindow(this.settings.hours, this.now()); }
+  private updateRelay() { this.router.relay = this.o.relay && !this.paused && this.effective.hours.every(h => inWindow(h, this.now())); }
 
   /** Pausa (ou retoma) a retransmissão de terceiros; os enlaces continuam abertos e os vizinhos ficam sabendo. */
   setPaused(paused: boolean) {
@@ -164,7 +215,12 @@ export class RelayEngine {
     return {
       node: this.node, caps: this.caps(caps), now: this.sec(), replay: this.replay,
       versions: { min: LNNP_MIN_VERSION, max: LNNP_VERSION },
-      authorize: this.allow ? pk => this.allow!.has(toHex(pk)) : undefined,
+      // Lista de permitidos (configuração) e lista de revogação do operador.
+      authorize: pk => {
+        const h = toHex(pk);
+        if (this.revoked.has(h)) { this.counters.revokedRefused++; return false; }
+        return this.allow ? this.allow.has(h) : true;
+      },
     };
   }
 
@@ -195,6 +251,7 @@ export class RelayEngine {
     this.links.set(link.id, link);
     this.log(`LNNP: vizinho ${link.session.peerId} conectado (${link.address}, v${link.session.version})`);
     this.flush(link);
+    this.syncOperator(link);
     return true;
   }
 
@@ -203,6 +260,7 @@ export class RelayEngine {
     if (!l) return;
     this.links.delete(id);
     this.reassembly.delete(id);
+    this.sameOperator.delete(id);
     this.log(`LNNP: vizinho ${l.session.peerId} desconectado`);
   }
 
@@ -232,6 +290,8 @@ export class RelayEngine {
         } catch { this.counters.rejected++; }
         break;
       }
+      case FRAME_OPERATOR_CERT: { let c: OperatorCert; try { c = decodeCert(f.body); } catch { this.counters.rejected++; break; } this.onCert(link, c); break; }
+      case FRAME_REVOCATION_LIST: { let l: RevocationList; try { l = decodeRevocationList(f.body); } catch { this.counters.rejected++; break; } this.onList(link, l); break; }
       case FrameType.Ping: link.send(link.session.seal(FrameType.Pong, f.body.slice(0, 8))); break;
       case FrameType.Close: case FrameType.Error: link.close(); break;
       default: break; // Pong, CapsUpdate (a sessão já atualizou) e tipos de versões futuras
@@ -240,6 +300,7 @@ export class RelayEngine {
 
   private ingest(link: LinkPort, bytes: Uint8Array) {
     this.counters.received++;
+    this.changes++;
     let bulk = false;
     try { bulk = parseHeader(bytes).bulk; } catch { /* o roteador recusa e conta abaixo */ }
     // Política do operador: sem mídia de terceiros (o roteador ainda deixaria passar).
@@ -250,6 +311,7 @@ export class RelayEngine {
   /** Envelope criado aqui (nó com identidade local, ou API local). Sai mesmo com a retransmissão desligada. */
   send(bytes: Uint8Array): IngestResult {
     const r = this.router.send(bytes, this.sec());
+    this.changes++;
     if (r.status === 'stored') this.flushAll();
     return r;
   }
@@ -285,6 +347,7 @@ export class RelayEngine {
     const out = this.router.outgoing(link.session.peerId, link.medium, this.sec(), { thirdPartyBudget: Math.min(this.budget(), room), maxBytes: link.maxEnvelope });
     const max = link.session.maxFrame - 1;
     const canFragment = (link.session.negotiated.features & Feature.Fragments) !== 0;
+    if (out.length) this.changes++;
     for (const env of out) {
       const id = envelopeId(env);
       const own = this.router.isOwn(id);
@@ -303,7 +366,7 @@ export class RelayEngine {
    * O envelope não chegou ao vizinho (enlace caiu, rádio desistiu): volta a poder ir para ele, por
    * este ou outro enlace. Sem isto, ele ficaria marcado como entregue a quem nunca recebeu.
    */
-  undelivered(peerId: string, envelope: string) { this.router.unsent(peerId, envelope); }
+  undelivered(peerId: string, envelope: string) { this.router.unsent(peerId, envelope); this.changes++; }
 
   /** Manda os recibos guardados a um vizinho (ex.: um gateway com rota até o validador). */
   sendReceipts(linkId: string) {
@@ -314,6 +377,7 @@ export class RelayEngine {
   }
 
   private keepReceipt(r: RelayReceipt) {
+    this.changes++;
     this.receiptLog.push(r);
     if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
   }
@@ -329,8 +393,170 @@ export class RelayEngine {
     const before = this.relaying;
     this.updateRelay();
     if (this.relaying !== before) { this.log(`LNNP: retransmissão ${this.relaying ? 'ligada' : 'desligada'} pelo horário`); this.announceCaps(); }
+    const before2 = this.router.stats();
     this.router.purge(this.sec());
+    const after = this.router.stats();
+    if (after.stored !== before2.stored || after.seen !== before2.seen) this.changes++;
     this.flushAll();
+  }
+
+  // ── operador: certificados, rotação e revogação (operator-frames.ts) ──
+
+  /** Linhagem em vigor: a do operador aqui, estendida pelos passos aprendidos de vizinhos. */
+  get lineage(): string[] {
+    const out = [...this.op.lineage];
+    let grew = out.length > 0;
+    while (grew) {
+      grew = false;
+      for (const s of this.learned) if (toHex(s.prevPk) === out.at(-1) && !out.includes(toHex(s.nextPk))) { out.push(toHex(s.nextPk)); grew = true; }
+    }
+    return out;
+  }
+
+  /** Chaves de nó revogadas pelo operador (hex). */
+  get revokedKeys(): string[] { return [...this.revoked]; }
+  get operatorList() { return this.op.list; }
+  get operatorCert() { return this.op.cert; }
+
+  /**
+   * O operador mudou aqui (chave criada, rotação, equipamento certificado, revogação): aplica e manda
+   * aos vizinhos. Lista de número menor que a em vigor não volta atrás.
+   */
+  setOperator(t: Partial<OperatorTrust>) {
+    const list = t.list !== undefined ? this.newer(t.list) : this.op.list;
+    const prevCert = this.op.cert;
+    this.op = { ...this.op, ...t, list };
+    // Certificado recebido da chave mais nova (rotação feita em outro equipamento) vale mais que um
+    // assinado aqui com uma chave que já foi substituída.
+    const head = this.lineage.at(-1);
+    if (prevCert && head && toHex(prevCert.operatorPk) === head && this.op.cert && toHex(this.op.cert.operatorPk) !== head) this.op.cert = prevCert;
+    // Passo aprendido que a linhagem local já tem não serve mais.
+    this.learned = this.learned.filter(s => !this.op.lineage.includes(toHex(s.nextPk)));
+    this.applyRevocation();
+    for (const l of [...this.links.values()]) this.syncOperator(l);
+  }
+
+  /** Restaura o que foi aprendido antes do reinício (ver `OperatorTrustState`). */
+  loadOperatorState(s: OperatorTrustState) {
+    this.learned = s.learned;
+    if (s.cert && !this.op.cert) this.op.cert = s.cert;
+    if (s.list) this.op.list = this.newer(s.list);
+    this.applyRevocation();
+  }
+
+  operatorState(): OperatorTrustState { return { learned: this.learned, cert: this.op.cert, list: this.op.list }; }
+
+  private newer(l: RevocationList | null): RevocationList | null {
+    const cur = this.op.list;
+    if (!l) return cur;
+    return !cur || l.seq > cur.seq ? l : cur;
+  }
+
+  private applyRevocation() {
+    const head = this.lineage.at(-1);
+    const l = this.op.list;
+    // Só vale a lista assinada pela chave atual do operador (uma chave aposentada não revoga mais).
+    this.revoked = new Set(l && head && toHex(l.operatorPk) === head ? l.revoked.map(toHex) : []);
+    for (const link of [...this.links.values()]) {
+      if (this.revoked.has(toHex(link.session.peerPk))) {
+        this.counters.revokedRefused++;
+        this.log(`LNNP: vizinho ${link.session.peerId} revogado pelo operador; enlace fechado`);
+        link.close();
+        this.detach(link.id);
+      }
+    }
+  }
+
+  private changed() { this.o.onOperatorChange?.(this.operatorState()); }
+
+  /** Depois do handshake: meu certificado, o do vizinho (se ele é equipamento do operador) e a lista. */
+  private syncOperator(link: LinkPort) {
+    if (!this.links.has(link.id)) return;
+    if (this.op.cert) link.send(link.session.seal(FRAME_OPERATOR_CERT, encodeCert(this.op.cert)));
+    const forPeer = this.op.deviceCerts.find(c => samePk(c.nodePk, link.session.peerPk));
+    if (forPeer) link.send(link.session.seal(FRAME_OPERATOR_CERT, encodeCert(forPeer)));
+    if (this.sameOperator.has(link.id) && this.op.list) link.send(link.session.seal(FRAME_REVOCATION_LIST, encodeRevocationList(this.op.list)));
+  }
+
+  /** O certificado se liga à linhagem? `null`: não (outro operador); `true`: aprendeu chave nova. */
+  private learn(c: OperatorCert): boolean | null {
+    const lineage = this.lineage;
+    if (!lineage.length) return null;
+    const path = trustPath(c, new Set(lineage));
+    if (path === null) return null;
+    if (!path.length) return false;
+    for (const s of c.chain) if (path.includes(toHex(s.nextPk)) && !this.learned.some(x => samePk(x.nextPk, s.nextPk))) this.learned.push(s);
+    // Só conta o que estende a linhagem a partir da chave atual: um ramo aberto a partir de uma chave
+    // antiga (talvez vazada) não vale, e o certificado assinado nesse ramo também não.
+    const now = this.lineage;
+    this.learned = this.learned.filter(s => now.includes(toHex(s.nextPk)));
+    if (!now.includes(toHex(c.operatorPk))) return null;
+    if (now.length === lineage.length) return false;
+    this.log(`LNNP: chave de operador nova recebida na sincronização (${this.lineage.at(-1)!.slice(0, 16)})`);
+    this.applyRevocation();
+    return true;
+  }
+
+  private onCert(link: LinkPort, c: OperatorCert) {
+    if (!verifyCert(c)) { this.counters.rejected++; return; }
+    const learned = this.learn(c);
+    if (learned === null) return; // outro operador (ou este nó ainda não tem operador): só ignora
+    if (samePk(c.nodePk, link.session.peerPk)) {
+      const fresh = !this.sameOperator.has(link.id);
+      this.sameOperator.set(link.id, toHex(c.operatorPk));
+      if (fresh) {
+        // O vizinho acabou de se mostrar do mesmo operador (talvez porque restaurou a chave agora):
+        // devolve o meu certificado, para ele também me reconhecer, e a lista em vigor.
+        if (this.op.cert) link.send(link.session.seal(FRAME_OPERATOR_CERT, encodeCert(this.op.cert)));
+        if (this.op.list) link.send(link.session.seal(FRAME_REVOCATION_LIST, encodeRevocationList(this.op.list)));
+      }
+    } else if (samePk(c.nodePk, this.node.pk)) {
+      // Certificado deste nó, assinado pela chave mais nova do operador (rotação feita em outro equipamento).
+      const head = this.lineage.at(-1);
+      if (toHex(c.operatorPk) === head && (!this.op.cert || toHex(this.op.cert.operatorPk) !== head || c.issuedAt > this.op.cert.issuedAt)) {
+        this.op.cert = c;
+        for (const l of this.links.values()) if (l.id !== link.id) l.send(l.session.seal(FRAME_OPERATOR_CERT, encodeCert(c)));
+        this.changed();
+        return;
+      }
+    }
+    if (learned) {
+      // Chave nova: os outros vizinhos do operador também ficam sabendo.
+      for (const l of this.links.values()) if (l.id !== link.id && this.sameOperator.has(l.id)) l.send(l.session.seal(FRAME_OPERATOR_CERT, encodeCert(c)));
+      this.changed();
+    }
+  }
+
+  private onList(link: LinkPort, l: RevocationList) {
+    // Só de um vizinho do mesmo operador, assinada pela chave atual, e mais nova que a em vigor.
+    if (!this.sameOperator.has(link.id)) return;
+    if (toHex(l.operatorPk) !== this.lineage.at(-1) || !verifyRevocationList(l)) { this.counters.rejected++; return; }
+    if (this.op.list && l.seq <= this.op.list.seq) return;
+    this.op.list = l;
+    this.log(`LNNP: lista de revogação nº ${l.seq} recebida (${l.revoked.length} ${l.revoked.length === 1 ? 'chave' : 'chaves'})`);
+    this.applyRevocation();
+    for (const x of this.links.values()) if (x.id !== link.id && this.sameOperator.has(x.id)) x.send(x.session.seal(FRAME_REVOCATION_LIST, encodeRevocationList(l)));
+    this.changed();
+  }
+
+  /** O que vai para o disco: envelopes guardados, ids vistos e recibos (ver persist.ts). */
+  exportState(): RelaySnapshot {
+    return { envelopes: this.router.exportStored(), seen: this.router.exportSeen(), receipts: [...this.receiptLog] };
+  }
+
+  /**
+   * Restaura o que foi salvo antes do reinício. Tudo passa pelas regras de agora: TTL, retenção,
+   * espaço (o limite pode ter mudado) e assinatura dos recibos.
+   */
+  importState(s: RelaySnapshot) {
+    const now = this.sec();
+    this.router.importSeen(s.seen, now);
+    const envelopes = this.router.importStored(s.envelopes, now);
+    let receipts = 0;
+    for (const r of s.receipts) if (verifyRelayReceipt(r)) { this.receiptLog.push(r); receipts++; }
+    if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
+    this.restored = { envelopes, seen: this.router.stats().seen, receipts };
+    return this.restored;
   }
 
   get inbox() { return this.router.inbox; }
@@ -360,13 +586,18 @@ export class RelayEngine {
       lnnp: { version: LNNP_VERSION, minVersion: LNNP_MIN_VERSION },
       node: toHex(this.node.pk).slice(0, 16),
       neighbors: [...this.links.values()].map(l => ({
-        id: l.session.peerId, address: l.address, link: l.medium, inbound: l.inbound, since: l.since, version: l.session.version,
+        id: l.session.peerId, pk: toHex(l.session.peerPk), sameOperator: this.sameOperator.has(l.id),
+        address: l.address, link: l.medium, inbound: l.inbound, since: l.since, version: l.session.version,
         relay: l.session.peerCaps.relay, mtu: l.session.negotiated.mtu,
         media: mediaNames.filter(([m]) => l.session.peerCaps.media & m).map(([, n]) => n),
       })),
-      store: { envelopes: r.stored, bytes: r.bytes, maxBytes: this.router.limits.maxBytes, seen: r.seen },
+      store: { envelopes: r.stored, bytes: r.bytes, maxBytes: this.router.limits.maxBytes, seen: r.seen, restored: this.restored },
       counters: { ...this.counters },
-      limits: { bwMbps: this.settings.bw, stoGB: this.settings.sto, hours: this.settings.hours, media: this.settings.media },
+      operator: { signed: !!this.op.cert && toHex(this.op.cert.operatorPk) === this.lineage.at(-1), revoked: this.revoked.size, listSeq: this.op.list?.seq ?? 0 },
+      limits: {
+        bwMbps: this.settings.bw, stoGB: this.settings.sto, hours: this.settings.hours, media: this.settings.media,
+        device: this.device, effective: { bwMbps: this.effective.bw, stoGB: this.effective.sto, hours: this.effective.hours },
+      },
     };
   }
 }

@@ -39,6 +39,8 @@ export interface LnnpConfig {
   beaconMs: number;
   /** Intervalo das amostras do histórico de retransmissão (ms): `PIU_RELAY_SAMPLE_MS`. */
   sampleMs?: number;
+  /** Intervalo para gravar as mensagens guardadas quando mudam (ms): `PIU_RELAY_PERSIST_MS`. */
+  persistMs?: number;
   /** Portas seriais (rádio LoRa ou cabo USB): `PIU_SERIAL`. */
   serial?: { kind: 'lora' | 'usb'; path: string; baud: number }[];
   /** Rádio LoRa: parâmetros (para o tempo no ar), ocupação do canal, maior envelope e anúncio. */
@@ -78,6 +80,7 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     allow: allow.length ? allow : null,
     beaconMs: Number(env.PIU_LNNP_BEACON_MS ?? 5000),
     sampleMs: num('PIU_RELAY_SAMPLE_MS', 300_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
+    persistMs: num('PIU_RELAY_PERSIST_MS', 30_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
   };
 }
 

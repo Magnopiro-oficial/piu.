@@ -27,3 +27,13 @@ process.stdout.write(
     : '  Retransmissão LNNP desligada.\n',
 );
 show('Para entrar no painel, use este código:', node.issueCode());
+
+// Parar o serviço (systemd, Ctrl+C): grava as mensagens guardadas e o histórico antes de sair.
+let stopping = false;
+for (const sig of ['SIGINT', 'SIGTERM'] as const) {
+  process.on(sig, () => {
+    if (stopping) process.exit(1);
+    stopping = true;
+    void node.close().catch(() => {}).finally(() => process.exit(0));
+  });
+}

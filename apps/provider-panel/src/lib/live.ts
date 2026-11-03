@@ -94,7 +94,13 @@ export function liveDevice(d: ApiDevice, live: Live | null): RelayNode {
     id: d.id, name: d.name, cls, short: '', pub: d.pub ?? '', icon: CLASS_ICON[cls], status: d.status,
     model: 'Registrado pelo assistente · ainda não manda estatísticas a este nó',
     pph: 0, today: 0, month: 0, neighbors: 0, storage: null, uptime: '—', ifaces: [], receipts: [], passive: cls === 'Ponto de Acesso', telemetry: 'none',
+    ...(d.nodeId ? { nodeId: d.nodeId, signed: !!d.signed } : {}), ...(d.limits ? { limits: d.limits } : {}),
   };
+  if (!d.self && d.nodeId) {
+    // Vinculado a um vizinho: se ele está conectado agora, o painel diz isso (as estatísticas dele ainda não chegam aqui).
+    const on = relayOn(live)?.neighbors.find(n => n.id === d.nodeId);
+    base.model = on ? `Identidade ${d.nodeId} · conectado a este nó agora (${on.address})` : `Identidade ${d.nodeId} · não está conectado a este nó agora`;
+  }
   if (!d.self) return base;
   const r = relayOn(live), h = historyOn(live), rc = receiptsOn(live);
   const ifaces: Iface[] = [];

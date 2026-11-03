@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import { DeviceStatusCell } from '../components/DeviceBits';
 import { Dialog } from '../components/Overlays';
-import { Bar, Icon, Toggle, growX, pressable } from '../components/ui';
+import { Bar, Icon, Segmented, Toggle, growX, pressable } from '../components/ui';
+import { HOURS } from './Settings';
 import { fmt, fmtInt } from '../lib/format';
 import { deviceLabels, parentName } from '../lib/devices';
 import { useStore } from '../state/store';
-import type { DeviceFilter, RelayNode } from '../types';
+import type { DeviceFilter, HoursPolicy, RelayNode } from '../types';
 
 const COLS = 'minmax(0,2.3fr) minmax(0,1.1fr) 76px minmax(0,1.1fr) 80px';
 const FILTERS: [DeviceFilter, string][] = [['all', 'Todos'], ['active', 'Ativos'], ['paused', 'Pausados'], ['warming', 'Aquecendo']];
@@ -82,7 +83,7 @@ export function Devices() {
 }
 
 function DeviceDetail({ d }: { d: RelayNode }) {
-  const { devices, navigate, togglePause, revokeDevice, showToast, nodeMode } = useStore();
+  const { devices, navigate, togglePause, revokeDevice, showToast, nodeMode, setDeviceLimits } = useStore();
   const real = nodeMode === 'node';
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const paused = d.status === 'paused';
@@ -99,9 +100,10 @@ function DeviceDetail({ d }: { d: RelayNode }) {
 
   const revoke = async () => {
     setConfirmRevoke(false);
-    if (!(await revokeDevice(d.id))) return; // o erro já foi mostrado
+    const r = await revokeDevice(d.id);
+    if (!r) return; // o erro já foi mostrado
     navigate('devices');
-    showToast(real ? { icon: 'delete', title: 'Registro removido', body: d.name + ' saiu deste painel.' } : { icon: 'key_off', title: 'Credencial revogada', body: d.name + ' saiu da sua operação.' });
+    showToast(r === 'removed' ? { icon: 'delete', title: 'Registro removido', body: d.name + ' saiu deste painel.' } : { icon: 'key_off', title: 'Credencial revogada', body: d.name + ' saiu da sua operação.' });
   };
 
   const rowStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderTop: '1px solid var(--line)', cursor: 'pointer', fontSize: 13.5, fontWeight: 550 } as const;
@@ -135,6 +137,17 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         <div style={{ padding: '10px 12px', borderRadius: 12, border: '1px dashed var(--line2)', fontSize: 12.5, color: 'var(--ink2)' }}>Sem nome público. {d.telemetry === 'live' ? 'Este nó anuncia só a identidade técnica na malha.' : ''}</div>
       )}
 
+      {real && d.nodeId && (
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)' }}>
+          <Icon name="fingerprint" size={17} wght={300} />
+          <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+            <span className="mono ellipsis" style={{ fontSize: 12.5, fontWeight: 500 }}>{d.nodeId}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--ink2)' }}>identidade técnica do nó</span>
+          </div>
+          <span className="row" style={{ gap: 4, fontSize: 12, fontWeight: 600, flex: 'none' }}><Icon name={d.signed ? 'verified' : 'pending'} size={15} fill={1} />{d.signed ? 'assinada por você' : 'assinando…'}</span>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
         {metrics.map(([v, l]) => (
           <div key={l} className="col" style={{ padding: 12, borderRadius: 14, background: 'var(--bg2)', gap: 3 }}>
@@ -154,6 +167,8 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         ))}
         {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Este equipamento ainda não manda estatísticas a este nó. Quando o Piu Node dele se conectar, ele aparece como vizinho na Malha.</div>}
       </div>
+
+      {real && !d.passive && <DeviceRules d={d} onSave={l => setDeviceLimits(d.id, l)} />}
 
       <div className="col" style={{ gap: 8 }}>
         <div className="label">RECIBOS RECENTES</div>
@@ -209,17 +224,51 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         {!real && <div {...pressable(() => showToast({ icon: 'restart_alt', title: 'Reiniciando ' + d.name, body: 'Mensagens guardadas continuam no armazenamento local.' }))} style={rowStyle}>Reiniciar</div>}
         {d.telemetry === 'live'
           ? <div style={{ ...rowStyle, cursor: 'default', fontSize: 12, fontWeight: 400, color: 'var(--ink2)' }}>Este é o equipamento que serve o painel: para tirá-lo da malha, pause a retransmissão.</div>
-          : <div {...pressable(() => setConfirmRevoke(true))} style={{ ...rowStyle, fontWeight: 650 }}>{d.passive ? 'Revogar nome público e remover' : real ? 'Remover deste painel' : 'Revogar credencial e remover'}</div>}
+          : <div {...pressable(() => setConfirmRevoke(true))} style={{ ...rowStyle, fontWeight: 650 }}>{d.passive ? 'Revogar nome público e remover' : real && !d.nodeId ? 'Remover deste painel' : 'Revogar credencial e remover'}</div>}
       </div>
 
       {confirmRevoke && (
-        <Dialog icon="key_off" title={real ? `Remover ${d.name}?` : `Revogar ${d.name}?`}
+        <Dialog icon="key_off" title={real && !d.nodeId ? `Remover ${d.name}?` : `Revogar ${d.name}?`}
           body={d.passive
             ? `O nome ${d.pub} deixa de ser reconhecido como seu. O roteador continua funcionando como Wi-Fi comum.`
-            : real ? 'O registro sai deste nó. A revogação na malha inteira ainda não existe: se o Piu Node continuar instalado nele, desinstale no próprio equipamento.'
+            : real && !d.nodeId ? 'O registro sai deste nó. Ele não tem identidade técnica vinculada, então não há credencial para revogar na malha: se o Piu Node continuar instalado nele, desinstale no próprio equipamento.'
+            : real ? 'A credencial é revogada nos seus nós da malha (os que têm a sua chave de operador): eles recusam a conexão dele, e ele deixa de retransmitir como seu. Créditos pendentes dele continuam sendo validados.'
             : 'A credencial é revogada em toda a malha e o equipamento deixa de retransmitir como seu. Créditos pendentes dele continuam sendo validados.'}
-          primaryLabel={real ? 'Remover' : 'Revogar e remover'} onPrimary={revoke} onClose={() => setConfirmRevoke(false)} />
+          primaryLabel={real && !d.nodeId ? 'Remover' : 'Revogar e remover'} onPrimary={revoke} onClose={() => setConfirmRevoke(false)} />
       )}
     </aside>
+  );
+}
+
+type Limits = NonNullable<RelayNode['limits']>;
+const RULE_DEFAULT: Limits = { bw: 20, sto: 4, hours: 'always' };
+
+/**
+ * Regras do equipamento (as mesmas do assistente, passo "Regras"). No nó que serve o painel, valem
+ * no motor na hora, junto com os limites globais; nos outros, ficam registradas.
+ */
+function DeviceRules({ d, onSave }: { d: RelayNode; onSave: (l: Limits | null) => Promise<boolean> }) {
+  const on = !!d.limits;
+  const v = d.limits ?? RULE_DEFAULT;
+  const set = (p: Partial<Limits>) => void onSave({ ...v, ...p });
+  return (
+    <div className="col" style={{ gap: 10 }}>
+      <div className="row" style={{ gap: 12 }}>
+        <div className="label grow">REGRAS DESTE EQUIPAMENTO</div>
+        <Toggle on={on} label="Regras próprias deste equipamento" onChange={() => void onSave(on ? null : RULE_DEFAULT)} />
+      </div>
+      {on ? (
+        <>
+          <Segmented variant="bg2" label="Banda" value={v.bw} onChange={bw => set({ bw })} options={([5, 20, 50] as const).map(x => ({ value: x, label: `${x} Mbps` }))} />
+          <Segmented variant="bg2" label="Armazenamento" value={v.sto} onChange={sto => set({ sto })} options={([1, 4, 8] as const).map(x => ({ value: x, label: `${x} GB` }))} />
+          <Segmented<HoursPolicy> variant="bg2" label="Horário" value={v.hours} onChange={hours => set({ hours })} options={HOURS} />
+        </>
+      ) : null}
+      <div style={{ fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>
+        {!on ? 'Sem regras próprias: valem só os limites globais de Configurações.'
+          : d.telemetry === 'live' ? 'Valem neste nó agora. Os limites globais de Configurações continuam valendo: fica o mais restrito.'
+          : 'Ficam registradas neste painel. O equipamento ainda não as recebe deste nó.'}
+      </div>
+    </div>
   );
 }
