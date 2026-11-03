@@ -54,7 +54,7 @@ export function Devices() {
                   </div>
                   <div className="col" style={{ minWidth: 0, gap: 2 }}>
                     <div className="ellipsis" style={{ fontSize: 14.5, fontWeight: 600 }}>{d.name}</div>
-                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls} · {d.pub}</div>
+                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.pub ? ` · ${d.pub}` : d.telemetry === 'live' ? ' · este nó' : ''}</div>
                   </div>
                 </div>
                 <DeviceStatusCell d={d} />
@@ -121,7 +121,7 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         <div className="row" style={{ gap: 7, padding: '6px 11px', borderRadius: 99, background: d.status === 'active' ? 'var(--ink)' : 'var(--bg2)', color: d.status === 'active' ? 'var(--invink)' : 'var(--ink)', fontSize: 12.5, fontWeight: 600, transition: 'background .2s,color .2s' }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', animation: paused ? 'none' : 'piuBreath 1.6s ease-in-out infinite' }} />{statusLabel}
         </div>
-        <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.uptime !== '—' ? ` · ligado há ${d.uptime}` : ''}</div>
+        <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.uptime === '—' ? '' : d.uptime === 'agora' ? ' · ligado agora' : ` · ligado há ${d.uptime}`}</div>
       </div>
 
       {d.pub ? (
