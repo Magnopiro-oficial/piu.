@@ -28,8 +28,12 @@ export const pairCode = (secret: Buffer) => {
 };
 
 /** QR do pareamento (o segredo vai só no QR, mostrado na tela do painel). */
-export function pairPayload(o: { phoneId: string; secret: Buffer; node: string; operator: string }) {
-  return 'piup:' + b64url(Buffer.from(JSON.stringify({ v: 1, i: o.phoneId, s: b64url(o.secret), n: o.node.slice(0, 40), o: o.operator.slice(0, 40) })));
+export function pairPayload(o: { phoneId: string; secret: Buffer; node: string; operator: string; fingerprint?: string; url?: string }) {
+  return 'piup:' + b64url(Buffer.from(JSON.stringify({
+    v: 1, i: o.phoneId, s: b64url(o.secret), n: o.node.slice(0, 40), o: o.operator.slice(0, 40),
+    // Para o app falar com este nó pela API: impressão digital SHA-256 do certificado (pinning) e endereço.
+    ...(o.fingerprint ? { f: o.fingerprint } : {}), ...(o.url ? { u: o.url } : {}),
+  })));
 }
 
 /** QR do pedido de transferência. */

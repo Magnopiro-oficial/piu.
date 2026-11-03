@@ -2,7 +2,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual, X509Certificate } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from './config.js';
@@ -68,6 +68,8 @@ const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 const fail = (reply: FastifyReply, code: number, error: string, extra: Record<string, unknown> = {}) => reply.code(code).send({ error, ...extra });
 
 export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
+  // Impressão digital SHA-256 do certificado TLS (a mesma do console), para o QR de pareamento do celular.
+  const tlsFingerprint = o.https ? new X509Certificate(o.https.cert).fingerprint256 : undefined;
   const now = o.now ?? Date.now;
   const { store, pairing } = o;
   const vault = o.vault ?? new OperatorVault(null);
@@ -499,7 +501,11 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     const secret = newSecret();
     const p = store.addPhone({ id: randomUUID(), operatorId: s.operatorId, name: req.body.name.trim(), secret: secret.toString('base64url'), addedAt: now(), confirmed: false });
     const op = store.operator(s.operatorId);
-    return reply.code(201).send({ id: p.id, qr: pairPayload({ phoneId: p.id, secret, node: o.config.allowedHosts[0] ?? 'piu-node', operator: op?.name ?? '' }), expiresAt: now() + PAIR_TTL_MS });
+    // O QR leva a impressão digital do certificado (o app só aceita este certificado) e o endereço
+    // pelo qual o painel foi aberto (o Host já passou pela lista de nomes permitidos).
+    const host = req.headers.host ?? '';
+    const url = /^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:]+\](:\d{1,5})?$/.test(host) ? `https://${host}` : undefined;
+    return reply.code(201).send({ id: p.id, qr: pairPayload({ phoneId: p.id, secret, node: o.config.allowedHosts[0] ?? 'piu-node', operator: op?.name ?? '', fingerprint: tlsFingerprint, url }), expiresAt: now() + PAIR_TTL_MS });
   });
 
   /** O operador digita o código de 6 dígitos que o celular mostrou ao ler o QR. */
