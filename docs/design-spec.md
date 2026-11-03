@@ -112,7 +112,7 @@ Saldo, Enviar (assinar com biometria, liquida quando houver Mainnet), Receber (Q
 QR de convite assinado (uso único, 24h), envio do APK por Wi-Fi Direct ou Bluetooth com **código de segurança de 4 palavras**, página local servida pelo celular de quem convida, verificação da cópia em 5 checagens na primeira abertura. Aviso: no iPhone só pela App Store.
 
 ### Alertas e notificações
-Banner in-app (7 tipos), **alerta de emergência em tela cheia** com assinatura oficial verificada, diálogos (segurar 1.2s para apagar dados; bateria baixa; lembrete de backup), **tela bloqueada** com prévia configurável (Sempre/Desbloqueado/Nunca), **notifSettings** (“sem servidor de notificações”).
+Banner in-app (7 tipos), **alerta de emergência em tela cheia** (no design, com assinatura oficial verificada; no app, por decisão do dono, são **alertas da comunidade**, publicados e classificados pelos membros e marcados como “não é aviso oficial”), diálogos (segurar 1.2s para apagar dados; bateria baixa; lembrete de backup), **tela bloqueada** com prévia configurável (Sempre/Desbloqueado/Nunca), **notifSettings** (“sem servidor de notificações”).
 
 ### Segurança e ajustes
 - **backup**: frase de 12 palavras borrada até tocar → quiz de 3 palavras → onde guardar.
