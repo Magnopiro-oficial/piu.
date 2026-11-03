@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
-import { TRANSPORTS, type TxKey } from '../../data/network';
+import { TRANSPORTS, type TxKey, UNAVAILABLE_TX } from '../../data/network';
 import { useProvNodes } from '../../lib/approvalNodes';
 import { meshStatus, radarPos, relayCard, VIA_ICON, VIA_LABEL, VIA_TX } from '../../lib/networkCore';
 import { useStats } from '../../state/messaging';
@@ -95,9 +95,12 @@ export default function Network() {
               <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={20} w={300} /></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <T size={15} w={550}>{name}</T>
-                <T size={12.5} lh={1.3} color={c.ink2}>{txDesc(k, desc)}</T>
+                <T size={12.5} lh={1.3} color={c.ink2}>{UNAVAILABLE_TX[k] ?? txDesc(k, desc)}</T>
               </View>
-              <Toggle on={n.tx[k]} onChange={() => n.toggleTx(k)} label={name} />
+              {/* Meio que nenhum transporte usa nesta versão: sem chave, para não parecer que liga algo. */}
+              {UNAVAILABLE_TX[k]
+                ? <T size={12} w={600} color={c.ink2} accessibilityLabel={`${name}: indisponível nesta versão`}>indisponível</T>
+                : <Toggle on={n.tx[k]} onChange={() => n.toggleTx(k)} label={name} />}
             </View>
           ))}
         </View>

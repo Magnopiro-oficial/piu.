@@ -17,6 +17,14 @@ export const TRANSPORTS: [TxKey, IconName, string, string][] = [
 ];
 
 /**
+ * Meios que aparecem na lista mas que nenhum transporte deste app usa ainda: sem chave de ligar, com
+ * o motivo. O Wi-Fi Mesh (pela rede local, até um roteador com Piu Node) não existe nesta versão.
+ */
+export const UNAVAILABLE_TX: Partial<Record<TxKey, string>> = {
+  mesh: 'Indisponível nesta versão: o celular ainda não leva mensagens pela rede Wi-Fi local',
+};
+
+/**
  * Vizinhos do transporte SIMULADO (Expo Go e navegador, ferramenta de teste em `transport/simulated.ts`):
  * só o transporte simulado lê esta lista. As telas mostram o que o transporte anunciar, marcado como
  * simulado; nenhuma tela usa esta lista diretamente.
