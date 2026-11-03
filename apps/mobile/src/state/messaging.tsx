@@ -94,10 +94,12 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
-  const { priv, sto, bat } = useSettings();
+  const { priv, sto, bat, preview } = useSettings();
+  // Pré-visualização "Nunca" também nos banners dentro do app (store.tsx, showToast).
+  useEffect(() => { setPreviewMode(preview); }, [preview, setPreviewMode]);
   const transport = useMemo(getTransport, []);
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
@@ -199,7 +201,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         },
         joinRequest: (gid, who) => {
           setGroupEpoch(e => e + 1);
-          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver', go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
+          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver',
+            hidden: { title: 'Pedido para entrar', body: 'Abra os dados do grupo para aprovar ou recusar.' }, go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
         },
         // Arquivos: progresso por bloco, entrega conferida e recebimento.
         fileProgress: (msgId, done, total, dir) => {

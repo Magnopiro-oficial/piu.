@@ -1,9 +1,11 @@
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../data/types';
+import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
 import { notify } from '../lib/notifications';
+import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { nowHM } from '../lib/text';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
@@ -63,6 +65,8 @@ interface Store {
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
   /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
   setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
+  /** Pré-visualização escolhida em Notificações (MessagingProvider lê os ajustes e repassa aqui). */
+  setPreviewMode: (p: Preview) => void;
   patchChat: (chatId: string, p: Partial<Chat>) => void;
   removeChat: (chatId: string) => void;
   toggleFilePause: (chatId: string, msgId: string) => void;
@@ -107,6 +111,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const viewing = useRef<string | null>(null);
   const retryRef = useRef<(cid: string, mid: string) => void>(() => {});
   const notifyFilter = useRef<((t: ToastData) => boolean) | null>(null);
+  const previewMode = useRef<Preview>('always');
   const fileOps = useRef<FileOps | null>(null);
   const outbound = useRef<((chatId: string, peer: string, msgId: string, text: string) => boolean) | null>(null);
   const chatsRef = useRef(chats);
@@ -125,11 +130,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const patchFile = useCallback((cid: string, mid: string, p: Partial<FileXfer>) =>
     patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {})), [patchMsg]);
 
+  /** Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). */
   const showToast = useCallback((t: ToastData) => {
     if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
-    setToast({ ...t, seq: toastSeq.current });
+    setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });
     toastTimer.current = setTimeout(() => leave(), TOAST_MS);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /** Sai em 300 ms (sobe e some), como no design. */
@@ -146,7 +152,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const c = chatsRef.current.find(x => x.id === cid);
       // Com o app em segundo plano, vira notificação do sistema (respeita prévia, tipos e silêncio).
       if (c && !c.muted) notify({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' || c.kind === 'community' ? 'channel' : 'msg', title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''), data: { href: `/chat/${cid}` } });
-      if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+      if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''),
+        hidden: { title: 'Piu', body: c.kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
       ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, fresh: true }],
@@ -228,14 +235,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (st === 'entregue' && m.at && Date.now() - m.at > 60_000) {
         const min = Math.round((Date.now() - m.at) / 60_000);
         const wait = min >= 120 ? `${Math.round(min / 60)} h` : `${min} min`;
-        showToast({ kind: 'msg', icon: 'done_all', title: `Entregue a ${c.name}`, body: `Uma rota surgiu depois de ${wait} na fila.`, go: open });
+        showToast({ kind: 'msg', icon: 'done_all', title: `Entregue a ${c.name}`, body: `Uma rota surgiu depois de ${wait} na fila.`, hidden: { title: 'Mensagem entregue', body: `Uma rota surgiu depois de ${wait} na fila.` }, go: open });
       }
       if (st === 'expirada') {
         showToast({ kind: 'msg', icon: 'timer_off', title: 'Mensagem expirou', body: `“${quote}” não encontrou rota em ${MESSAGE_TTL_SEC / 3600} h.`, action: 'Reenviar',
+          hidden: { title: 'Mensagem expirou', body: `Uma mensagem não encontrou rota em ${MESSAGE_TTL_SEC / 3600} h.` },
           go: () => { open(); retryRef.current(cid, mid); } });
       }
     },
     setNotifyFilter: fn => { notifyFilter.current = fn; },
+    setPreviewMode: p => { previewMode.current = p; },
     patchChat: (cid, p) => setChats(cs => cs.map(c => (c.id === cid ? { ...c, ...p } : c))),
     removeChat: cid => setChats(cs => cs.filter(c => c.id !== cid)),
     toast,
