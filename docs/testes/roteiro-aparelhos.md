@@ -101,3 +101,16 @@ Endereços de produção: `wss://ws.lunes.io`, `wss://ws-lunes-main-01.lunes.io`
   - no passo 1, todos os itens `[ok]`;
   - no passo 2, o lote finalizado e marcado como pago;
   - no passo 3, o lote aparece no explorador com o remark `piu/lote/v1`.
+
+### 11.1 Leitura do saldo no app e no painel (sem chave, sem envio)
+Use um endereço Lunes seu, com algum saldo, e confira o valor no explorador (https://blockexplorer.lunes.io/).
+1. **App:** Carteira → Receber → cole o endereço → Salvar. Volte à Carteira e puxe a tela para baixo.
+2. **App sem rede:** modo avião, abra a Carteira de novo.
+3. **Painel (piu-node):** Carteira → Receber → cole o mesmo endereço → Salvar (pede o código novo do equipamento se a última confirmação tiver mais de 15 min). No Node 20 (OpenWrt 24.10), suba o piu-node com `NODE_OPTIONS=--experimental-websocket`.
+4. **Troca de endereço WebSocket:** no piu-node, `PIU_LUNES_ENDPOINTS=wss://nao-existe.invalid,wss://ws.lunes.io` e recarregue a Carteira.
+- **Esperado:**
+  - nos passos 1 e 3, o mesmo saldo do explorador (saldo livre, 8 casas), o número do bloco finalizado, o endereço que respondeu e o horário;
+  - no passo 2, o último valor com "Sem conexão agora · … atualizado às …", sem zerar;
+  - no passo 4, o saldo aparece e o endereço que respondeu é `ws.lunes.io`;
+  - endereço com uma letra trocada é recusado ("soma de verificação"), nos dois.
+- **Anote:** o endereço WebSocket que respondeu e o tempo até o saldo aparecer. Se o saldo divergir do explorador, anote o valor dos dois e o número do bloco.
