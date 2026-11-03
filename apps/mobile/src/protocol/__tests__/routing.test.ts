@@ -191,3 +191,46 @@ test('créditos: só com entrega comprovada, sem duplicar, recibo falso rejeitad
   assert.deepEqual(ledger.summary(R1.router['o'].node.pk), { pendente: 0, validado: 1, rejeitado: 0 });
   assert.equal(ledger.confirmDelivery(got.id, new Uint8Array(16), parseHeader(m.bytes).ackHash), false, 'segredo errado não comprova');
 });
+
+test('reinício: envelopes guardados e ids vistos voltam do disco, sem entrega nem recibo duplicados', () => {
+  const A = node('A'), B = node('B');
+  const seed = newSeed();
+  const relay = () => new Router({ node: deriveNodeKey(seed), identities: [], relay: true });
+  const R = relay();
+  const m = msg(A.id, B.id, 'guardada');
+  const curta = msg(A.id, B.id, 'vence logo', { ttlSec: 120 });
+  R.ingest(m.bytes, 'A', NOW);
+  R.ingest(curta.bytes, 'A', NOW);
+  // Uma cópia de cada já saiu para C antes de desligar: gerou o único recibo de cada.
+  assert.equal(R.outgoing('C', 'eth', NOW + 1).length, 2);
+  assert.equal(R.receipts.length, 2);
+  const saved = { stored: R.exportStored(), seen: R.exportSeen() };
+
+  // "Reinicia" depois de a curta vencer.
+  const R2 = relay();
+  R2.importSeen(saved.seen, NOW + 200);
+  assert.equal(R2.importStored(saved.stored, NOW + 200), 1);
+  assert.ok(R2.has(m.id) && !R2.has(curta.id));
+  // O mesmo envelope chegando de novo é duplicata (não vira segunda entrega).
+  assert.equal(R2.ingest(m.bytes, 'A', NOW + 201).status, 'duplicate');
+  // Não volta para C (já foi) nem gera recibo novo; segue para B, que recebe uma vez.
+  assert.equal(R2.outgoing('C', 'eth', NOW + 202).length, 0);
+  for (const x of R2.outgoing('B', 'eth', NOW + 202)) B.router.ingest(x, 'R', NOW + 202);
+  assert.equal(R2.receipts.length, 0);
+  assert.equal(B.router.inbox.length, 1);
+});
+
+test('reinício: a restauração respeita espaço e retenção e descarta lixo', () => {
+  const A = node('A'), B = node('B');
+  const R = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true });
+  const ms = [msg(A.id, B.id, 'um'), msg(A.id, B.id, 'dois'), msg(A.id, B.id, 'três', { priority: Priority.Critical })];
+  for (const m of ms) R.ingest(m.bytes, 'A', NOW);
+  const saved = R.exportStored();
+  const lixo = { ...saved[0], bytes: utf8('não é envelope') };
+  const R2 = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true, limits: { maxCount: 2 } });
+  assert.equal(R2.importStored([lixo, ...saved], NOW + 10), 2);
+  assert.ok(R2.has(ms[2].id), 'o de prioridade maior fica');
+  // A retenção máxima de terceiros conta desde que o envelope chegou, não desde o reinício.
+  const R3 = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true, limits: { maxRetentionSec: 3600 } });
+  assert.equal(R3.importStored(saved, NOW + 3601), 0);
+});

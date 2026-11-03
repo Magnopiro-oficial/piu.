@@ -21,6 +21,7 @@ O que acontece quando o nó sobe:
 3. **Handshake LNNP**: HELLO/AUTH assinados, negociação da maior versão comum e das capacidades (MTU, meios, relay, armazenamento, suítes, formatos de envelope). Depois, todo quadro vai cifrado. Conexão que não fala LNNP, nó fora de `PIU_LNNP_ALLOW` ou assinatura errada: recusados e contados.
 4. **Encaminhamento**: cada envelope recebido entra no `Router` do protocolo, que guarda o que é de terceiros, descarta duplicatas pelo id, respeita TTL, saltos e cópias, e repassa a todos os outros vizinhos (e aos que aparecerem depois, até vencer). Envelope maior que a MTU do vizinho vai em fragmentos. O nó **nunca decifra** nada (INF-011): não tem chave social.
 5. **Recibos**: na primeira cópia de cada envelope de terceiro, o nó assina um recibo de retransmissão (guardados os 1.000 mais recentes, para o validador).
+6. **Reinício sem perder mensagens** (design "Reiniciar: mensagens guardadas continuam no armazenamento local"; NFR-002, FUN-012): os envelopes guardados, os ids já vistos e os recibos vão para `<data>/lnnp/relay-store.bin` a cada 30 s quando mudam (`PIU_RELAY_PERSIST_MS`) e ao desligar (`SIGINT`/`SIGTERM`, app desktop). Ao subir, voltam antes do primeiro vizinho conectar e passam de novo pelas regras do roteador (`Router.importStored`/`importSeen`): vencido por TTL ou retenção é descartado, o que não cabe no limite de armazenamento atual fica de fora (o de menor prioridade primeiro), e o mesmo envelope chegando de novo continua sendo duplicata (sem segunda entrega). Também volta a quem cada envelope já foi e quantas cópias saíram, para não repetir envio nem recibo. O arquivo é cifrado e autenticado (AES-256-GCM, chave derivada da semente do nó), 0600 numa pasta 0700, com gravação atômica; corrompido ou de outro nó, é posto de lado (`relay-store.bin.corrompido`) e o nó sobe vazio.
 
 ### Rádio LoRa e cabo USB (porta serial)
 `PIU_SERIAL` liga portas seriais ao mesmo motor, além do LAN. Exemplo: `PIU_SERIAL=lora:/dev/ttyUSB0@115200,usb:/dev/ttyACM0@115200`. O protocolo no meio está descrito na seção 3.1 da especificação.
@@ -51,7 +52,7 @@ Os ajustes do **dono do equipamento** (o primeiro operador pareado) em `PUT /api
 | Ajuste do painel | No motor |
 |---|---|
 | Banda (20/50/100 Mbps) | balde de fichas em bytes/s para envelopes de terceiros (rajada de 1 s); o que não cabe fica para a próxima rodada |
-| Armazenamento (4/8/16 GB) | `maxBytes` do roteador, limitado pelo teto de memória `PIU_LNNP_MEMORY_MB` (os envelopes ficam em memória nesta versão) |
+| Armazenamento (4/8/16 GB) | `maxBytes` do roteador, limitado pelo teto de memória `PIU_LNNP_MEMORY_MB` (os envelopes ficam em memória enquanto o nó roda e são gravados em disco para o reinício) |
 | Horário (sempre / 22h–7h / 8h–18h, hora local) | fora do horário o nó não guarda nem repassa terceiros; os vizinhos ficam sabendo por `CAPS_UPDATE` |
 | Política "mídia" desligada | envelope de terceiro marcado como mídia é recusado sem guardar |
 
@@ -161,6 +162,7 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LORA_MAX_ENVELOPE` | `1536` | maior envelope enviado pelo rádio (bytes) |
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
+| `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 
@@ -168,6 +170,6 @@ Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede lo
 - Passkeys (WebAuthn) depois do primeiro pareamento, para não depender do código a cada novo navegador.
 - Ligar a carteira à liquidação real (Mainnet) e os recibos ao validador; até lá o saldo só muda com transferências e créditos locais.
 - Estatísticas dos outros equipamentos do operador (hoje só o nó que serve o painel tem dados reais).
-- Guardar os envelopes em disco (hoje ficam em memória, até `PIU_LNNP_MEMORY_MB`) e salvar os ids vistos entre reinícios (`Router.exportSeen`).
+- Envelopes guardados direto em disco, além do teto de memória `PIU_LNNP_MEMORY_MB` (hoje o disco serve ao reinício; o teto em uso continua sendo o da memória).
 - Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.
 - Enviar os recibos ao validador quando houver rota (`RelayEngine.sendReceipts`).

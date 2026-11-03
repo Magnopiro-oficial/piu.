@@ -77,7 +77,9 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   let relay: RelayHandle | null = null;
   if (config.lnnp?.enabled) {
     try {
-      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), { log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json') });
+      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), {
+        log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json'), storeFile: join(config.dataDir, 'lnnp', 'relay-store.bin'),
+      });
     } catch (e) {
       o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
     }

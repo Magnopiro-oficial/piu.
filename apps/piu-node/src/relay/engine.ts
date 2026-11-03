@@ -17,6 +17,7 @@ import {
 import { type RelayReceipt, verifyRelayReceipt } from '../protocol/receipts.js';
 import { type IngestResult, Router, type TransportClass } from '../protocol/router.js';
 import type { HoursPolicy, Settings } from '../store.js';
+import type { RelaySnapshot } from './persist.js';
 
 /** Um enlace autenticado, visto pelo motor. O adapter cuida do meio físico. */
 export interface LinkPort {
@@ -112,6 +113,10 @@ export class RelayEngine {
   private paused = false;
   /** Quando o motor subiu (ms), para o painel mostrar há quanto tempo o nó está ligado. */
   readonly startedAt: number;
+  /** Cresce a cada mudança no que é salvo em disco (envelopes, ids vistos, recibos). */
+  changes = 0;
+  /** Envelopes e recibos que voltaram do disco ao subir (para o log e o painel). */
+  restored = { envelopes: 0, seen: 0, receipts: 0 };
 
   constructor(private o: EngineOptions) {
     this.node = o.node;
@@ -240,6 +245,7 @@ export class RelayEngine {
 
   private ingest(link: LinkPort, bytes: Uint8Array) {
     this.counters.received++;
+    this.changes++;
     let bulk = false;
     try { bulk = parseHeader(bytes).bulk; } catch { /* o roteador recusa e conta abaixo */ }
     // Política do operador: sem mídia de terceiros (o roteador ainda deixaria passar).
@@ -250,6 +256,7 @@ export class RelayEngine {
   /** Envelope criado aqui (nó com identidade local, ou API local). Sai mesmo com a retransmissão desligada. */
   send(bytes: Uint8Array): IngestResult {
     const r = this.router.send(bytes, this.sec());
+    this.changes++;
     if (r.status === 'stored') this.flushAll();
     return r;
   }
@@ -285,6 +292,7 @@ export class RelayEngine {
     const out = this.router.outgoing(link.session.peerId, link.medium, this.sec(), { thirdPartyBudget: Math.min(this.budget(), room), maxBytes: link.maxEnvelope });
     const max = link.session.maxFrame - 1;
     const canFragment = (link.session.negotiated.features & Feature.Fragments) !== 0;
+    if (out.length) this.changes++;
     for (const env of out) {
       const id = envelopeId(env);
       const own = this.router.isOwn(id);
@@ -303,7 +311,7 @@ export class RelayEngine {
    * O envelope não chegou ao vizinho (enlace caiu, rádio desistiu): volta a poder ir para ele, por
    * este ou outro enlace. Sem isto, ele ficaria marcado como entregue a quem nunca recebeu.
    */
-  undelivered(peerId: string, envelope: string) { this.router.unsent(peerId, envelope); }
+  undelivered(peerId: string, envelope: string) { this.router.unsent(peerId, envelope); this.changes++; }
 
   /** Manda os recibos guardados a um vizinho (ex.: um gateway com rota até o validador). */
   sendReceipts(linkId: string) {
@@ -314,6 +322,7 @@ export class RelayEngine {
   }
 
   private keepReceipt(r: RelayReceipt) {
+    this.changes++;
     this.receiptLog.push(r);
     if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
   }
@@ -329,8 +338,31 @@ export class RelayEngine {
     const before = this.relaying;
     this.updateRelay();
     if (this.relaying !== before) { this.log(`LNNP: retransmissão ${this.relaying ? 'ligada' : 'desligada'} pelo horário`); this.announceCaps(); }
+    const before2 = this.router.stats();
     this.router.purge(this.sec());
+    const after = this.router.stats();
+    if (after.stored !== before2.stored || after.seen !== before2.seen) this.changes++;
     this.flushAll();
+  }
+
+  /** O que vai para o disco: envelopes guardados, ids vistos e recibos (ver persist.ts). */
+  exportState(): RelaySnapshot {
+    return { envelopes: this.router.exportStored(), seen: this.router.exportSeen(), receipts: [...this.receiptLog] };
+  }
+
+  /**
+   * Restaura o que foi salvo antes do reinício. Tudo passa pelas regras de agora: TTL, retenção,
+   * espaço (o limite pode ter mudado) e assinatura dos recibos.
+   */
+  importState(s: RelaySnapshot) {
+    const now = this.sec();
+    this.router.importSeen(s.seen, now);
+    const envelopes = this.router.importStored(s.envelopes, now);
+    let receipts = 0;
+    for (const r of s.receipts) if (verifyRelayReceipt(r)) { this.receiptLog.push(r); receipts++; }
+    if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
+    this.restored = { envelopes, seen: this.router.stats().seen, receipts };
+    return this.restored;
   }
 
   get inbox() { return this.router.inbox; }
@@ -364,7 +396,7 @@ export class RelayEngine {
         relay: l.session.peerCaps.relay, mtu: l.session.negotiated.mtu,
         media: mediaNames.filter(([m]) => l.session.peerCaps.media & m).map(([, n]) => n),
       })),
-      store: { envelopes: r.stored, bytes: r.bytes, maxBytes: this.router.limits.maxBytes, seen: r.seen },
+      store: { envelopes: r.stored, bytes: r.bytes, maxBytes: this.router.limits.maxBytes, seen: r.seen, restored: this.restored },
       counters: { ...this.counters },
       limits: { bwMbps: this.settings.bw, stoGB: this.settings.sto, hours: this.settings.hours, media: this.settings.media },
     };

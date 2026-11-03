@@ -4,6 +4,7 @@ import type { Settings } from '../store.js';
 import { type EngineOptions, RelayEngine } from './engine.js';
 import { RelayHistory, SAMPLE_MS } from './history.js';
 import { LanAdapter, type LanOptions } from './lan.js';
+import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
 import { type Modem, openSerialModem, SerialAdapter, type SerialStats } from './serial.js';
 
 export { inWindow, type LinkPort, RelayEngine, type RelayStats } from './engine.js';
@@ -31,6 +32,8 @@ export interface RelayHandle {
   receipts(): ReturnType<RelayEngine['receiptsView']>;
   /** Fecha uma rodada do histórico agora (também roda sozinho a cada `sampleMs`). */
   sample(): void;
+  /** Grava agora o armazenamento de mensagens, se mudou (também roda sozinho e ao desligar). */
+  persist(): void;
   stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null }; serial: SerialStats[] };
   close(): Promise<void>;
 }
@@ -43,10 +46,30 @@ export async function startRelay(
     openModem?: (path: string, baud: number) => Promise<Modem>;
     /** Arquivo do histórico (`<data>/relay-history.json`). Ausente: só em memória (testes). */
     historyFile?: string | null;
+    /** Envelopes guardados, ids vistos e recibos (`<data>/lnnp/relay-store.bin`). Ausente: só em memória. */
+    storeFile?: string | null;
+    /** Intervalo para salvar o armazenamento quando algo mudou (ms). Padrão: 30 s. */
+    persistMs?: number;
   } = {},
 ): Promise<RelayHandle> {
   const engine = new RelayEngine({ node, relay: c.relay, memoryBytes: c.memoryMB * 1024 ** 2, allow: c.allow, identities: extra.identities, now: extra.now, log: extra.log });
   engine.applySettings(settings);
+  // Mensagens guardadas antes do reinício voltam antes de o primeiro vizinho conectar.
+  const storeFile = extra.storeFile ?? null;
+  const key = storeKey(node);
+  if (storeFile) {
+    const snap = loadSnapshot(storeFile, key, engine.router.limits.maxBytes, extra.log);
+    if (snap) {
+      const r = engine.importState(snap);
+      extra.log?.(`LNNP: ${r.envelopes} mensagens guardadas e ${r.receipts} recibos restaurados do armazenamento local`);
+    }
+  }
+  let savedAt = engine.changes;
+  const persist = () => {
+    if (!storeFile || engine.changes === savedAt) return;
+    try { const c = engine.changes; saveSnapshot(storeFile, engine.exportState(), key, Date.now()); savedAt = c; }
+    catch (e) { extra.log?.(`LNNP: armazenamento de mensagens não gravado (${e instanceof Error ? e.message : e})`); }
+  };
   const lan = new LanAdapter(engine, {
     listen: c.listen, port: c.port, discoveryPort: c.discoveryPort, broadcast: c.broadcast, peers: c.peers, beaconMs: c.beaconMs,
     tickMs: extra.tickMs, handshakeTimeoutMs: extra.handshakeTimeoutMs,
@@ -80,15 +103,18 @@ export async function startRelay(
   };
   const timer = setInterval(sample, sampleMs);
   timer.unref();
+  const persistTimer = setInterval(persist, extra.persistMs ?? c.persistMs ?? 30_000);
+  persistTimer.unref();
   return {
     engine, lan, serial, port, discoveryPort,
     applySettings: s => engine.applySettings(s),
     setPaused: p => engine.setPaused(p),
     history: () => history.view(sampleMs, engine.counters),
     receipts: () => engine.receiptsView(),
-    sample,
+    sample, persist,
     stats: () => ({ ...engine.stats(), lan: { port, discoveryPort }, serial: serial.map(a => a.stats()) }),
     // Última rodada ao desligar: o que aconteceu desde a anterior não se perde.
-    close: async () => { clearInterval(timer); sample(); await Promise.all(serial.map(a => a.stop())); await lan.stop(); },
+    // e o armazenamento é gravado de novo (o que chegou depois da última gravação também volta).
+    close: async () => { clearInterval(timer); clearInterval(persistTimer); sample(); await Promise.all(serial.map(a => a.stop())); await lan.stop(); persist(); },
   };
 }
