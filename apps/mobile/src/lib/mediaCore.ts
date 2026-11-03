@@ -38,3 +38,22 @@ export function shouldAutoDownload(auto: AutoDownload, links: Iterable<Transport
   for (const l of links) if (WIFI_OR_CABLE.has(l)) return true;
   return false;
 }
+
+const EXT: Record<string, string> = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'image/gif': 'gif', 'application/pdf': 'pdf', 'text/plain': 'txt' };
+
+/**
+ * Nome seguro para gravar um arquivo recebido num arquivo temporário (Abrir/Compartilhar): sem
+ * barras, caracteres de controle nem nome vazio ou oculto; mantém a extensão (ou deduz uma pelo tipo)
+ * e corta em 80 caracteres.
+ */
+export function safeFileName(name: string, mime = ''): string {
+  let n = name.replace(/[\u0000-\u001f\u007f/\\:*?"<>|]/g, '_').replace(/\s+/g, ' ').trim().replace(/^\.+/, '');
+  if (!n) n = 'arquivo';
+  if (!/\.[A-Za-z0-9]{1,8}$/.test(n) && EXT[mime.toLowerCase()]) n += '.' + EXT[mime.toLowerCase()];
+  if (n.length > 80) {
+    const dot = n.lastIndexOf('.');
+    const ext = dot > 0 && n.length - dot <= 9 ? n.slice(dot) : '';
+    n = n.slice(0, 80 - ext.length) + ext;
+  }
+  return n;
+}

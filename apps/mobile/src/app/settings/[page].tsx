@@ -4,6 +4,7 @@ import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
 import { confirmDevice } from '../../lib/deviceAuth';
 import { fmtBytes } from '../../lib/networkCore';
 import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
+import { previewBytes } from '../../lib/storageCore';
 import { useStats } from '../../state/messaging';
 import { useResetApp } from '../../state/reset';
 import { useBattery } from '../../lib/battery';
@@ -82,7 +83,7 @@ function Storage() {
   const { c, reduceMotion } = useTheme();
   const { sto, setSto } = useSettings();
   const { storage, setStorage } = useNetwork();
-  const { showToast } = useStore();
+  const { showToast, chats, purgeMediaPreviews } = useStore();
   const reset = useResetApp();
   const [del, setDel] = useState(false);
   const st = useStats(10_000);
@@ -90,7 +91,9 @@ function Storage() {
   const thirdPartyBytes = st?.metrics.thirdPartyBytes ?? 0;
   const creditsBytes = st ? JSON.stringify(st.credits.list).length + JSON.stringify(st.credits.lots).length : 0;
   const [use, refresh] = useStorageUsage({ thirdPartyBytes, creditsBytes });
-  const [cache, setCache] = useState(receivedCacheBytes);
+  // Cache de mídia: arquivos recebidos na memória + prévias de fotos embutidas nas conversas.
+  const [, setCleared] = useState(0);
+  const cache = receivedCacheBytes() + previewBytes(chats);
   const parts = (use?.parts ?? []).filter(([l, n]) => n > 0 || l !== 'Ajustes e registros');
   const total = use?.total ?? 0;
   const OP = [1, 0.55, 0.3, 0.15, 0.08];
@@ -128,13 +131,15 @@ function Storage() {
       </SetGroup>
       <SetGroup title="LIMPEZA">
         <LockedRow name="Armazenamento cifrado" desc="Sempre ativo · chave protegida pelo aparelho" />
-        {/* Arquivos recebidos ficam só na memória nesta execução; limpar é o mesmo que fechar o app. */}
+        {/* Arquivos recebidos (memória) e prévias embutidas nas conversas (disco): o balão passa a dizer que a mídia foi apagada. */}
         <ActionRow name="Limpar cache de mídia" value={fmtBytes(cache)} onPress={() => {
-          const freed = clearReceivedCache();
-          setCache(0); refresh();
+          const freed = clearReceivedCache() + purgeMediaPreviews();
+          setCleared(n => n + 1);
+          // Mede de novo depois que as conversas forem regravadas (persist.ts grava em ~250 ms).
+          setTimeout(refresh, 700);
           showToast(freed
-            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. Conversas continuam intactas.` }
-            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Arquivos recebidos ficam só na memória e já somem ao fechar o app.' });
+            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. As mensagens continuam nas conversas.` }
+            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Nenhuma foto ou arquivo recebido guardado neste aparelho.' });
         }} />
         <ActionRow name="Apagar dados locais" strong onPress={() => setDel(true)} />
       </SetGroup>

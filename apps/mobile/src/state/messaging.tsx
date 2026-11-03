@@ -1,7 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
-import { persistNow, readPersisted } from '../lib/persist';
+import { forgetPersisted, persistNow, readPersisted } from '../lib/persist';
+import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
+import { placeFromText } from '../lib/locationCore';
+import { Priority } from '../protocol/envelope';
+import type { Medium } from '../transport/types';
 import { initialsOf, nowHM } from '../lib/text';
 import { fmtLunes } from '../data/wallet';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
@@ -23,7 +27,7 @@ import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
 import type { ProfilePhoto } from '../lib/avatar';
-import type { IncomingFile } from '../messaging/messenger';
+import type { IncomingFile, RouteInfo } from '../messaging/messenger';
 import { attachVirtualPeer } from '../transport/simulated';
 import { useKeys } from './keys';
 import { useNetwork } from './network';
@@ -38,6 +42,9 @@ const CHANGES_SEEN = 'dev.changeSeen';
 /** Mensagem de sistema do contato que trocou de aparelho. A identidade é a mesma: o código de segurança não muda. */
 export const deviceChangeText = (who: string, reason: 'phrase' | 'file') =>
   `${who} trocou de aparelho (restaurou ${reason === 'phrase' ? 'pela frase' : 'de um arquivo de backup'}). Aviso assinado pela chave da identidade: as chaves de sessão foram renovadas e o código de segurança continua o mesmo. Se você não esperava, confirme com a pessoa.`;
+
+/** Rotas das conversas (lib/routeCore.ts); só gravadas com "Não guardar rotas no aparelho" desligado. */
+const ROUTES_KEY = 'routes';
 /** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
 export const receivedFiles = new Map<string, IncomingFile>();
 const SAVE_DELAY = 300;
@@ -89,6 +96,17 @@ interface Messaging {
   evidence: () => EvidenceFile | null;
   /** Troca (ou remove) a foto do perfil público e manda a versão pequena aos contatos públicos. */
   setProfilePhoto: (p: ProfilePhoto | null) => void;
+  /** Rota real de uma mensagem (meio, envelope, blocos, prioridade), se houver registro. */
+  routeFor: (chatId: string, msgId: string) => RouteRec | undefined;
+  /** Última rota da conversa (rodapé e "Última rota" do contato). */
+  lastRouteOf: (chatId: string) => RouteRec | undefined;
+  /** Prioridade com que a conversa envia (canal com "Prioridade Alta" definida pelo admin). */
+  chatPriority: (chatId: string) => Priority;
+  /**
+   * Apaga a conversa deste aparelho. Conversa direta: o contato sai do mensageiro e a fila para ele é
+   * descartada. Grupo ou canal em que ainda participo: sai antes (os admins trocam a chave).
+   */
+  deleteChat: (chatId: string) => void;
   /**
    * Por perto pela malha: perfis visíveis (só enquanto eu estou visível), pedidos recebidos, convite
    * pago e respostas. `null` antes das chaves.
@@ -123,13 +141,14 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node, nodeKeyFor } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping, removeChat } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
   const { priv, sto, bat, preview } = useSettings();
   // Pré-visualização "Nunca" também nos banners dentro do app (store.tsx, showToast).
   useEffect(() => { setPreviewMode(preview); }, [preview, setPreviewMode]);
   const transport = useMemo(getTransport, []);
+  const transportKindRef = useRef(transport.kind);
   const [messenger, setMessenger] = useState<Messenger | null>(null);
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
   const [inviteEpoch, setInviteEpoch] = useState(0);
@@ -151,6 +170,29 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const privRef = useRef(priv); privRef.current = priv;
   const msgToChat = useRef(new Map<string, string>());
   const groupRate = useRef(new GroupRate());
+
+  // Rotas reais: com "Não guardar rotas no aparelho" ligado, só a última de cada conversa, na memória.
+  const keepRoutes = !priv.noRoutes;
+  const [routes, setRoutes] = useState<RouteBook>(() => (priv.noRoutes ? {} : cleanBook(readPersisted(ROUTES_KEY))));
+  /** Meio de cada vizinho, como o transporte informa (`via` nos eventos). */
+  const peerMedium = useRef(new Map<string, Medium>());
+  const recordRoute = useCallback((chatId: string, msgId: string, dir: 'out' | 'in', r: RouteInfo) => {
+    const medium = peerMedium.current.get(r.peer) ?? (r.via === 'direct' ? 'nearby' : transportKindRef.current === 'sim' ? 'sim' : 'ble');
+    const rec = makeRoute({ msgId, dir, medium, bytes: r.bytes, hops: r.hops, priority: r.priority, at: Date.now() });
+    setRoutes(b => addRoute(b, chatId, rec, !privRef.current.noRoutes));
+  }, []);
+  const routeRef = useRef(recordRoute); routeRef.current = recordRoute;
+  useEffect(() => {
+    if (keepRoutes) return;
+    // Ligou "Não guardar rotas": o histórico sai do disco e da memória (fica a última, só na memória).
+    setRoutes(b => trimBook(b, false));
+    void forgetPersisted(ROUTES_KEY);
+  }, [keepRoutes]);
+  useEffect(() => {
+    if (!keepRoutes) return;
+    const t = setTimeout(() => { void persistNow(ROUTES_KEY, routes).catch(() => {}); }, 400);
+    return () => clearTimeout(t);
+  }, [routes, keepRoutes]);
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mRef = useRef<Messenger | null>(null);
@@ -260,7 +302,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           // Grupos: "Só menções acima de 20 mensagens/h" (conta por grupo, na última hora).
           const perHour = groupRate.current.hit(gid, now());
           const quiet = mRef.current?.getGroup(gid)?.kind === 'group' && !groupShouldNotify(perHour, !!x.mentioned);
-          handlers.current.receive(cid, { id: 'in-' + gid.slice(0, 6) + '-' + x.msgId, from: 'them', sender: fromName, text: x.text, time: nowHM() }, { quiet });
+          const id = 'in-' + gid.slice(0, 6) + '-' + x.msgId;
+          if (x.route) routeRef.current(cid, id, 'in', x.route);
+          handlers.current.receive(cid, { id, from: 'them', sender: fromName, ...textOf(x), time: nowHM() }, { quiet });
         },
         joinRequest: (gid, who) => {
           setGroupEpoch(e => e + 1);
@@ -282,6 +326,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
           msgToChat.current.set('in-' + f.msgId, cid);
+          if (f.route) routeRef.current(cid, 'in-' + f.msgId, 'in', f.route);
           const expiresAt = expiryOf({ sentAt: f.sentAt ?? now(), expireSec: f.expireSec });
           handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
             file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true, ...(f.held ? { held: true } : {}) } });
@@ -302,23 +347,27 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.setTyping(cid);
         },
-        status: (msgId, st) => {
-          const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => c.peer && c.msgs?.some(x => x.id === msgId))?.id;
-          if (cid) handlers.current.setMsgStatus(cid, msgId, st);
+        status: (msgId, st, route) => {
+          const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => (c.peer || c.group) && c.msgs?.some(x => x.id === msgId))?.id;
+          if (!cid) return;
+          if (route) routeRef.current(cid, msgId, 'out', route);
+          handlers.current.setMsgStatus(cid, msgId, st);
         },
         message: (contactId, x) => {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
           const expiresAt = expiryOf(x);
           if (expiresAt && expiresAt <= Date.now()) return; // temporária que já venceu no caminho
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
+          if (x.route) routeRef.current(cid, 'in-' + x.msgId, 'in', x.route);
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', ...textOf(x), time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
         newContact: (c, x) => {
           const cid = chatIdFor(c.id);
           handlers.current.addChat(chatFor(c, true, privRef.current.temp));
           const expiresAt = expiryOf(x);
           if (expiresAt && expiresAt <= Date.now()) return;
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
+          if (x.route) routeRef.current(cid, 'in-' + x.msgId, 'in', x.route);
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', ...textOf(x), time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
       },
     });
@@ -402,9 +451,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     if (!messenger) return;
     const off = transport.subscribe(e => {
       // Classe do enlace pelo meio real do vizinho (Nearby/Wi-Fi Direct ou BLE).
-      if (e.type === 'connected') messenger.peerConnected(e.id, (e.via ?? transport.kind) === 'nearby' ? 'direct' : 'ble');
-      else if (e.type === 'disconnected' || e.type === 'peerLost') messenger.peerDisconnected(e.id);
-      else if (e.type === 'envelope') messenger.receive(e.from, e.data);
+      if (e.type === 'connected') {
+        const md = e.via ?? transport.kind;
+        peerMedium.current.set(e.id, md);
+        messenger.peerConnected(e.id, md === 'nearby' ? 'direct' : 'ble');
+      } else if (e.type === 'disconnected' || e.type === 'peerLost') { messenger.peerDisconnected(e.id); peerMedium.current.delete(e.id); }
+      else if (e.type === 'envelope') {
+        // Meio por onde este envelope chegou (pode ser outro enlace do mesmo vizinho).
+        if (e.via) peerMedium.current.set(e.from, e.via);
+        messenger.receive(e.from, e.data);
+      }
       else if (e.type === 'state' && e.state === 'off') messenger.clearPeers(); // vizinhos somem com o transporte
     });
     const tick = setInterval(() => messenger.tick(), 5000);
@@ -427,14 +483,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Store → mensageiro (envio real).
   useEffect(() => {
     if (!messenger) { setOutbound(null); return; }
-    setOutbound((chatId, peer, msgId, text, expireSec) => {
+    setOutbound((chatId, peer, msgId, text, expireSec, loc) => {
       try {
         // Responder aceita o pedido de conversa.
         const ct = messenger.getContact(peer);
         if (ct?.request) messenger.addContact(ct);
         msgToChat.current.set(msgId, chatId);
-        if (peer.startsWith('group:')) messenger.sendGroupText(peer.slice(6), msgId, text);
-        else messenger.sendText(peer, msgId, text, expireSec);
+        if (peer.startsWith('group:')) messenger.sendGroupText(peer.slice(6), msgId, text, loc);
+        else messenger.sendText(peer, msgId, text, expireSec, loc);
         return true;
       } catch { return false; }
     });
@@ -456,6 +512,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     if (!receivedFiles.size) return;
     const alive = new Set(chats.flatMap(c => (c.msgs ?? []).map(m => m.id)));
     for (const k of [...receivedFiles.keys()]) if (!alive.has(k)) receivedFiles.delete(k);
+  }, [chats]);
+  // Rotas de mensagens que sumiram (temporárias, conversa apagada) saem também; fica a última de cada conversa.
+  useEffect(() => {
+    const alive = new Set(chats.flatMap(c => (c.msgs ?? []).map(m => m.id)));
+    setRoutes(b => pruneRoutes(b, alive, new Set(chats.map(c => c.id))));
   }, [chats]);
 
   // Aparelho de teste: só no transporte simulado (navegador / Expo Go).
@@ -564,12 +625,27 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
       hide: id => messenger.hideNear(id),
     } : null,
+    routeFor: (chatId, msgId) => routeOf(routes, chatId, msgId),
+    lastRouteOf: chatId => lastRoute(routes, chatId),
+    chatPriority: chatId => {
+      const gid = chats.find(c => c.id === chatId)?.group;
+      return gid && messenger ? messenger.groupPriority(gid) : Priority.Normal;
+    },
+    deleteChat: chatId => {
+      const ch = chats.find(c => c.id === chatId);
+      if (!ch) return;
+      if (ch.peer) messenger?.removeContact(ch.peer);
+      if (ch.group && messenger?.getGroup(ch.group)) { messenger.leaveGroup(ch.group); setGroupEpoch(e => e + 1); }
+      for (const [k, v] of msgToChat.current) if (v === chatId) msgToChat.current.delete(k);
+      setRoutes(b => dropChatRoutes(b, chatId));
+      removeChat(chatId);
+    },
     stats: () => (messenger ? {
       metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus(),
       usage: { activeDays: messenger.deliveryDays.activeDays(), accepted: messenger.acceptedInvites() },
     } : null),
     evidence: () => (messenger ? messenger.evidence() : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, patchChat, setIdentity, priv.temp, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -587,10 +663,13 @@ function chatForGroup(g: GroupState, myId: string): Chat {
   return {
     id: chatIdForGroup(g.id), group: g.id, ident: g.via, kind: g.kind === 'community' ? 'community' : g.kind, name: g.name, initials: initialsOf(g.name),
     time: nowHM(), unread: 0, owner: canPost(g, myId) || undefined,
-    sub: groupSub(g), via: 'Por perto', viaIcon: 'hub',
+    sub: groupSub(g),
     msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${g.kind === 'community' ? 'Comunidade cifrada' : g.kind === 'channel' ? 'Canal cifrado' : 'Grupo cifrado'} de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
   };
 }
+
+/** Texto e localização de uma mensagem recebida (com localização, `text` é o nome do lugar). */
+const textOf = (x: { text: string; loc?: { lat: number; lon: number } }) => (x.loc ? { text: placeFromText(x.loc, x.text), loc: x.loc } : { text: x.text });
 
 /** Fim de uma mensagem temporária recebida (ms): prazo contado do envio (sem passar de agora). */
 const expiryOf = (x: { sentAt: number; expireSec?: number }) => (x.expireSec ? (Math.min(x.sentAt, now()) + x.expireSec) * 1000 : undefined);
@@ -600,7 +679,7 @@ function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
   const name = c.name || (c.via === 'anon' ? 'Anônimo · ' + c.id.slice(4, 8).toUpperCase() : 'Contato · ' + c.id.slice(4, 8).toUpperCase());
   return {
     id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0, temp,
-    sub: request ? 'pedido de conversa · confira o código' : 'cifrada de ponta a ponta', via: 'Por perto', viaIcon: 'bluetooth',
+    sub: request ? 'pedido de conversa · confira o código' : 'cifrada de ponta a ponta',
     msgs: [{ id: 'sys-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: request
       ? 'Esta pessoa escreveu primeiro. Confira o código de segurança pessoalmente antes de confiar.'
       : 'Chaves trocadas. As mensagens são cifradas neste aparelho e só o contato consegue ler.' }],
@@ -611,7 +690,7 @@ function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
 function nearChat(c: Contact, temp: TempMode, note: string, first?: string): Chat {
   const base = chatFor(c, false, temp);
   return {
-    ...base, sub: 'Por perto · cifrada de ponta a ponta', viaIcon: 'radar',
+    ...base, sub: 'Por perto · cifrada de ponta a ponta',
     msgs: [{ id: 'sys-near-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: note },
       ...(first ? [{ id: 'in-near-' + c.id.slice(4, 12), from: 'them' as const, time: nowHM(), text: first }] : [])],
   };

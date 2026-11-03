@@ -13,7 +13,7 @@
  *   um admin confirma cada pedido.
  */
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
-import type { GroupKey } from '../protocol/envelope';
+import { type GroupKey, Priority } from '../protocol/envelope';
 import type { IdentityKind, PublicIdentity } from '../protocol/keys';
 import { random } from '../protocol/suite';
 import { b64url, unb64url } from './card';
@@ -58,7 +58,16 @@ export interface GroupState {
    * recebe só admins, moderadores e a si mesmo). Ausente: `members.length`.
    */
   count?: number;
+  /**
+   * Prioridade das publicações (canal de alerta, design: "Prioridade Alta"). Definida pelo admin na
+   * criação; ausente = Normal. Vai no cabeçalho de cada envelope do canal.
+   */
+  prio?: GroupPriority;
 }
+
+/** Opções de prioridade do design: Normal (padrão) e Alta. */
+export type GroupPriority = 'high';
+export const groupPriority = (g: Pick<GroupState, 'kind' | 'prio'>): Priority => (g.kind === 'channel' && g.prio === 'high' ? Priority.High : Priority.Normal);
 
 export const GROUP_INVITE_TTL_SEC = 7 * 24 * 3600;
 export const GROUP_INVITE_MAX_USES = 50;
@@ -129,6 +138,7 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
       children, parent: typeof j.parent === 'string' && /^[0-9a-f]{32}$/.test(j.parent) ? j.parent : undefined,
       invite: j.invite && typeof j.invite.code === 'string' ? { code: j.invite.code, expiresAt: Number(j.invite.expiresAt), uses: Number(j.invite.uses) || 0 } : undefined,
       count: Number.isInteger(j.count) && j.count > members.length && j.count <= MAX_GROUP_MEMBERS ? j.count : undefined,
+      ...(j.kind === 'channel' && j.prio === 'high' ? { prio: 'high' as const } : {}),
     };
   } catch {
     return null;
@@ -136,12 +146,14 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
 }
 
 /** Conteúdo de uma mensagem de grupo (dentro do envelope de grupo). `m`: ids mencionados com `@Nome` (messaging/mentions.ts). */
-export const encodeGroupText = (msgId: string, text: string, mentions?: string[]) => utf8(JSON.stringify({ i: msgId, x: text, ...(mentions?.length ? { m: mentions } : {}) }));
-export function decodeGroupText(b: Uint8Array): { i: string; x: string; m?: string[] } | null {
+/** `l`: localização em texto curto ([lat, lon]), conferida por quem recebe. */
+export const encodeGroupText = (msgId: string, text: string, mentions?: string[], l?: [number, number]) =>
+  utf8(JSON.stringify({ i: msgId, x: text, ...(mentions?.length ? { m: mentions } : {}), ...(l ? { l } : {}) }));
+export function decodeGroupText(b: Uint8Array): { i: string; x: string; m?: string[]; l?: unknown } | null {
   try {
     const j = JSON.parse(fromUtf8(b));
     if (typeof j.i !== 'string' || j.i.length > 64 || typeof j.x !== 'string') return null;
     const m = cleanMentions(j.m);
-    return { i: j.i, x: j.x.slice(0, 4000), ...(m ? { m } : {}) };
+    return { i: j.i, x: j.x.slice(0, 4000), ...(m ? { m } : {}), ...(j.l !== undefined ? { l: j.l } : {}) };
   } catch { return null; }
 }

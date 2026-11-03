@@ -22,7 +22,7 @@ export function mediaBytes(v: unknown): number {
 }
 
 /** Campos de conversa (o resto, como ajustes e registros, vai para "Ajustes e registros"). */
-const CHAT_KEYS = new Set(['chats', 'group', 'blocked', 'profile', 'verified', 'msg.state', 'msg.testDevice', 'identity']);
+const CHAT_KEYS = new Set(['chats', 'routes', 'group', 'blocked', 'profile', 'verified', 'msg.state', 'msg.testDevice', 'identity']);
 
 /**
  * `thirdPartyBytes` e `creditsBytes` (tamanho aberto) ficam dentro de `msg.state`: são convertidos
@@ -45,4 +45,36 @@ export function storageBreakdown(entries: StoredEntry[], o: { thirdPartyBytes?: 
   }
   const parts: [string, number][] = [['Conversas', chats], ['Mídia', media], ['De terceiros', third], ['Recibos e créditos', credits], ['Ajustes e registros', other]];
   return { total: chats + media + third + credits + other, parts };
+}
+
+/** Mensagens com prévia embutida (data: URI) de foto recebida ou enviada. */
+interface MediaMsg { file?: { preview?: string; purged?: boolean } }
+interface MediaChat { msgs?: MediaMsg[] }
+
+/** Bytes das prévias embutidas nas conversas (o que "Limpar cache de mídia" consegue apagar). */
+export function previewBytes(chats: MediaChat[]): number {
+  let n = 0;
+  for (const c of chats) for (const m of c.msgs ?? []) if (m.file?.preview) n += mediaBytes(m.file.preview);
+  return n;
+}
+
+/**
+ * "Limpar cache de mídia": tira as prévias embutidas das conversas (o balão passa a dizer que a mídia
+ * foi apagada deste aparelho). O resto da conversa fica igual. Devolve as conversas e os bytes liberados.
+ */
+export function stripPreviews<C extends MediaChat>(chats: C[]): { chats: C[]; freed: number } {
+  let freed = 0;
+  const out = chats.map(c => {
+    if (!c.msgs?.some(m => m.file?.preview)) return c;
+    return {
+      ...c,
+      msgs: c.msgs.map(m => {
+        if (!m.file?.preview) return m;
+        freed += mediaBytes(m.file.preview);
+        const { preview: _p, ...file } = m.file;
+        return { ...m, file: { ...file, purged: true } };
+      }),
+    };
+  });
+  return { chats: out, freed };
 }

@@ -33,6 +33,8 @@ export default function NewChannel() {
   const [desc, setDesc] = useState('');
   const [type, setType] = useState<ChannelType>('public');
   const [post, setPost] = useState<'admins' | 'mods'>('admins');
+  // Prioridade das publicações (design: canal de alerta com "Prioridade Alta"; o padrão é Normal).
+  const [prio, setPrio] = useState<'normal' | 'high'>('normal');
   const [ident, setIdent] = useState<IdentityKind>(identity);
   // Só pelo protocolo: sem as chaves carregadas, espera (não cria canal de mentira).
   const ok = ready && name.trim().length > 0;
@@ -44,7 +46,7 @@ export default function NewChannel() {
     // Canal real pelo protocolo: os inscritos entram pelo convite do canal.
     let id: string;
     try {
-      id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent });
+      id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent, ...(prio === 'high' ? { prio: 'high' as const } : {}) });
     } catch (e) { showToast({ icon: 'error', title: 'Não foi possível criar', body: (e as Error).message }); return; }
     router.dismissTo('/(tabs)');
     router.push({ pathname: '/chat/[id]', params: { id } });
@@ -84,6 +86,14 @@ export default function NewChannel() {
         <SectionLabel>QUEM PUBLICA</SectionLabel>
         <View style={{ paddingHorizontal: 20 }}>
           <Segmented label="Quem publica" value={post} onChange={setPost} options={[['admins', 'Só admins'], ['mods', 'Admins e moderadores']]} />
+        </View>
+
+        <SectionLabel>PRIORIDADE</SectionLabel>
+        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+          <Segmented label="Prioridade" value={prio} onChange={setPrio} options={[['normal', 'Normal'], ['high', 'Alta']]} />
+          <T size={12.5} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>
+            {prio === 'high' ? 'Para alertas: as publicações passam à frente na fila de cada nó. Não dá para mudar depois.' : 'As publicações seguem na fila como as outras mensagens.'}
+          </T>
         </View>
 
         <SectionLabel>PUBLICAR COMO</SectionLabel>
