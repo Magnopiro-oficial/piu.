@@ -13,8 +13,9 @@ export interface Session {
 }
 export type DeviceStatus = 'active' | 'paused';
 /**
- * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais);
- * os outros são registros feitos pelo assistente e ainda não mandam estatísticas a este nó.
+ * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais).
+ * Os outros são registros do assistente; com identidade técnica, recebem pausa e regras pela malha
+ * (`DEVICE_POLICY`) e mandam um resumo assinado (`DEVICE_REPORT`) quando estão ligados a este nó.
  * `today` é legado (versões antigas guardavam um valor de referência) e não sai mais pela API.
  */
 export interface Device {
@@ -25,6 +26,8 @@ export interface Device {
   cert?: CertJson;
   /** Regras do equipamento (assistente, passo "Regras"). Ausente: só os limites globais. */
   limits?: DeviceLimits;
+  /** Ponto de Acesso: id do equipamento (do mesmo operador) que é o nó pai dele. */
+  parent?: string;
 }
 /** Regras de um equipamento: banda (Mbps), armazenamento para terceiros (GB) e horário. */
 export interface DeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy }
@@ -124,7 +127,12 @@ export class Store {
     this.save();
     return dev;
   }
-  removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+  /** Tira o equipamento; pontos de acesso ligados a ele ficam sem nó pai. */
+  removeDevice(id: string) {
+    this.s.devices = this.s.devices.filter(d => d.id !== id);
+    for (const d of this.s.devices) if (d.parent === id) delete d.parent;
+    this.save();
+  }
   /** Muda campos de um equipamento (identidade técnica, certificado, regras). */
   updateDevice(id: string, p: Partial<Pick<Device, 'nodePk' | 'cert' | 'limits'>>) {
     const d = this.s.devices.find(x => x.id === id);

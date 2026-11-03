@@ -10,6 +10,10 @@ import type { Config } from '../src/config.js';
 import { loadPackages, releaseKey, signedPayload } from '../src/packages.js';
 import { Pairing } from '../src/security/pairing.js';
 import { Store } from '../src/store.js';
+import { encodeSs58 } from '../src/lunes/ss58.js';
+
+/** Chave pública de teste conhecida (Alice do Substrate): `5GrwvaEF…` com o prefixo 42. */
+const ALICE = Uint8Array.from(Buffer.from('d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d', 'hex'));
 
 const HOST = 'piu-node.local:8420';
 const ORIGIN = `https://${HOST}`;
@@ -321,8 +325,14 @@ test('ajustes: validação estrita, persistem por operador', async () => {
     { ...good, policies: { ...good.policies, alerts: false } },
   ]) assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: bad })).statusCode, 400, JSON.stringify(bad));
   assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: good })).statusCode, 200);
-  assert.deepEqual((await t.req('GET', '/api/settings', { cookie: a.cookie })).json(), good);
-  assert.notDeepEqual((await t.req('GET', '/api/settings', { cookie: b.cookie })).json(), good, 'outro operador não é afetado');
+  assert.deepEqual((await t.req('GET', '/api/settings', { cookie: a.cookie })).json(), { ...good, owner: true });
+  const other = (await t.req('GET', '/api/settings', { cookie: b.cookie })).json() as { owner: boolean };
+  assert.equal(other.owner, false);
+  assert.notDeepEqual({ limits: (other as unknown as typeof good).limits, policies: (other as unknown as typeof good).policies }, good, 'outro operador não é afetado');
+  // Quem não é o dono do equipamento: recusado com o motivo (o motor só usa os ajustes do dono).
+  const refused = await t.req('PUT', '/api/settings', { cookie: b.cookie, csrf: b.csrf, body: good });
+  assert.equal(refused.statusCode, 403);
+  assert.match((refused.json() as { error: string }).error, /Só o dono/);
   t.cleanup();
 });
 
@@ -342,16 +352,24 @@ test('novo equipamento: campos validados, fica com o operador que criou', async 
   t.cleanup();
 });
 
-test('transferência para outro endereço: formato LUNES validado', async () => {
+test('transferência para outro endereço: SS58 da Lunes conferido por inteiro (como em /api/wallet/lunes)', async () => {
   const t = await setup();
   const a = await t.pair('Ana');
   t.fund(a, 10);
   const send = (to: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1, to } });
-  for (const bad of ['lunes:0OIl', 'lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 'lunes:3P8xK2mVt9abcdefghijkmnopqr<script>', 42])
+  const alice42 = encodeSs58(ALICE, 42), alice57 = encodeSs58(ALICE, 57);
+  assert.equal(alice42, '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
+  assert.ok(alice42.length >= 47 && alice57.length >= 47, 'endereços reais têm 47–48 caracteres');
+  // Soma de verificação trocada (última letra), outra rede (prefixo 0), formato antigo de 26–44 caracteres.
+  const broken = alice42.slice(0, -1) + (alice42.endsWith('Y') ? 'Z' : 'Y');
+  // (10 pedidos por minuto nesta rota: a lista cabe no limite junto com os válidos.)
+  for (const bad of ['lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 42, 'lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM', `lunes:${broken}`, `lunes:${encodeSs58(ALICE, 0)}`, alice42])
     assert.equal((await send(bad)).statusCode, 400, String(bad));
-  const ok = await send('lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
-  assert.equal(ok.statusCode, 200);
-  assert.equal((ok.json() as { to: string }).to, 'lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
+  for (const addr of [alice42, alice57]) {
+    const ok = await send(`lunes:${addr}`);
+    assert.equal(ok.statusCode, 200, ok.body);
+    assert.equal((ok.json() as { to: string }).to, `lunes:${addr}`);
+  }
   assert.equal((await send('personal')).statusCode, 200);
   t.cleanup();
 });

@@ -41,7 +41,7 @@ export interface RelayNode {
   fresh?: boolean;
   /**
    * Com piu-node: `live` = o nó que serve o painel (estatísticas reais do motor); `none` = registro
-   * do assistente, que ainda não manda estatísticas a este nó. Ausente: dados de demonstração.
+   * do assistente (sem estatísticas do motor aqui; um resumo assinado dele pode vir em `report`). Ausente: dados de demonstração.
    */
   telemetry?: 'live' | 'none';
   /** Recibos assinados hoje (só `live`). */
@@ -53,6 +53,13 @@ export interface RelayNode {
   limits?: { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy };
   /** Com piu-node e identidade técnica: enlace LNNP real com este nó (conectado agora, visto por último). */
   link?: { online: boolean; lastSeen: number | null; address: string | null };
+  /**
+   * Com piu-node: último resumo assinado pelo próprio equipamento (outro nó do mesmo operador),
+   * com contadores desde que ele ligou. Ausente: ele ainda não mandou nenhum a este nó.
+   */
+  report?: { at: number; receivedAt: number; startedAt: number; forwarded: number; stored: number; receipts: number; neighbors: number; paused: boolean; relaying: boolean };
+  /** Com piu-node: pausa e regras emitidas para ele pela sua chave de operador e se ele já aplicou. */
+  policy?: { seq: number; issuedAt: number; applied: boolean };
 }
 
 export interface WalletTx {

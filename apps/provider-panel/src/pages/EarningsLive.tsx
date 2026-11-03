@@ -74,7 +74,7 @@ export function EarningsLive() {
         ))}
         {!ws.length && <div style={{ fontSize: 13, color: 'var(--ink2)' }}>Sem semanas registradas ainda.</div>}
         <div style={{ flex: 1 }} />
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>Só o nó que serve este painel tem recibos aqui. Os outros equipamentos ainda não mandam estatísticas a ele.</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>Só o nó que serve este painel tem recibos aqui. Os outros equipamentos seus mandam só um resumo assinado (em Equipamentos); os recibos deles ficam neles.</div>
       </section>
 
       <section className="span12 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>

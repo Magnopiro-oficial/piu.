@@ -5,7 +5,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { writeFileAtomic } from '../fsutil.js';
 import { toHex } from '../protocol/bytes.js';
 import { type DeviceLimits, type EngineOptions, type OperatorTrust, type OperatorTrustState, RelayEngine } from './engine.js';
-import { type CertJson, certFromJson, certToJson, type ListJson, listFromJson, listToJson, unhex } from './operator-frames.js';
+import { type CertJson, certFromJson, certToJson, type ListJson, listFromJson, listToJson, type PolicyJson, policyFromJson, policyToJson, unhex } from './operator-frames.js';
 import { RelayHistory, SAMPLE_MS } from './history.js';
 import { LanAdapter, type LanOptions, type PeerStatus } from './lan.js';
 import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
@@ -59,7 +59,7 @@ export interface RelayHandle {
 /** Sobe o motor de retransmissão com o adapter LAN. */
 export async function startRelay(
   node: KeyPair, c: LnnpConfig, settings: Settings,
-  extra: Partial<Pick<EngineOptions, 'identities' | 'now' | 'log'>> & Partial<Pick<LanOptions, 'tickMs' | 'handshakeTimeoutMs'>> & {
+  extra: Partial<Pick<EngineOptions, 'identities' | 'now' | 'log' | 'reportMs'>> & Partial<Pick<LanOptions, 'tickMs' | 'handshakeTimeoutMs'>> & {
     /** Abre a porta serial (testes: rádio simulado). Padrão: a porta de verdade, por `stty`. */
     openModem?: (path: string, baud: number) => Promise<Modem>;
     /** Arquivo do histórico (`<data>/relay-history.json`). Ausente: só em memória (testes). */
@@ -74,7 +74,7 @@ export async function startRelay(
 ): Promise<RelayHandle> {
   const trustFile = extra.trustFile ?? null;
   const engine = new RelayEngine({
-    node, relay: c.relay, memoryBytes: c.memoryMB * 1024 ** 2, allow: c.allow, identities: extra.identities, now: extra.now, log: extra.log,
+    node, relay: c.relay, memoryBytes: c.memoryMB * 1024 ** 2, allow: c.allow, identities: extra.identities, now: extra.now, log: extra.log, reportMs: extra.reportMs,
     onOperatorChange: st => { if (trustFile) { try { saveTrust(trustFile, st); } catch (e) { extra.log?.(`LNNP: confiança do operador não gravada (${e instanceof Error ? e.message : e})`); } } },
   });
   if (trustFile) { const st = loadTrust(trustFile, extra.log); if (st) engine.loadOperatorState(st); }
@@ -150,12 +150,13 @@ export async function startRelay(
   };
 }
 
-interface TrustJson { v: 1; learned: { prevPk: string; nextPk: string; at: number; sig: string }[]; cert: CertJson | null; list: ListJson | null }
+interface TrustJson { v: 1; learned: { prevPk: string; nextPk: string; at: number; sig: string }[]; cert: CertJson | null; list: ListJson | null; policies?: PolicyJson[] }
 
 function saveTrust(file: string, st: OperatorTrustState) {
   const j: TrustJson = {
     v: 1, cert: st.cert ? certToJson(st.cert) : null, list: st.list ? listToJson(st.list) : null,
     learned: st.learned.map(s => ({ prevPk: toHex(s.prevPk), nextPk: toHex(s.nextPk), at: s.at, sig: toHex(s.sig) })),
+    policies: (st.policies ?? []).map(policyToJson),
   };
   writeFileAtomic(file, JSON.stringify(j));
 }
@@ -169,6 +170,7 @@ function loadTrust(file: string, log?: (m: string) => void): OperatorTrustState 
     return {
       cert: j.cert ? certFromJson(j.cert) : null, list: j.list ? listFromJson(j.list) : null,
       learned: (j.learned ?? []).map(s => ({ prevPk: unhex(s.prevPk), nextPk: unhex(s.nextPk), at: s.at, sig: unhex(s.sig) })),
+      policies: (j.policies ?? []).map(policyFromJson),
     };
   } catch {
     log?.('LNNP: confiança do operador ilegível; ignorada até a próxima sincronização');
