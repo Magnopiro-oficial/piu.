@@ -55,12 +55,14 @@ export function walletSummary(o: { onchain?: number; totals: CreditTotals; reser
 }
 
 /** Movimentações reais, da mais recente para a mais antiga. */
-export function activityRows(o: { lots: LotInfo[]; reserved: InviteMove[]; refunded: InviteMove[]; earned: EarnedMove[]; now: number }): ActivityRow[] {
+export function activityRows(o: { lots: LotInfo[]; reserved: InviteMove[]; refunded: InviteMove[]; earned: EarnedMove[]; spent?: InviteMove[]; now: number }): ActivityRow[] {
   const rows: ActivityRow[] = [
     ...o.lots.map(l => ({ icon: 'swap_vert' as IconName, title: `Créditos de rede · lote ${l.id.replace(/^lote-/, '')}`, at: l.closedAt * 1000, status: 'a liberar · liquidação simulada', value: `+${lunes2(l.lunes)}` })),
     ...o.reserved.map(r => ({ icon: 'waving_hand' as IconName, title: `Convite para ${r.to}`, at: r.at, status: 'reservado por 24 h', value: `−${lunes2(r.amt)}` })),
     ...o.refunded.map(r => ({ icon: 'undo' as IconName, title: `Convite devolvido · ${r.to}`, at: r.at, status: 'sem resposta em 24 h', value: `+${lunes2(r.amt)}` })),
     ...o.earned.map(e => ({ icon: 'waving_hand' as IconName, title: `Convite aceito · ${e.from}`, at: e.at, status: 'a receber', value: `+${lunes2(e.amt)}` })),
+    // Aceito por quem eu convidei: o valor é dela. Só registro local enquanto não há liquidação na Mainnet.
+    ...(o.spent ?? []).map(r => ({ icon: 'waving_hand' as IconName, title: `${r.to} aceitou seu convite`, at: r.at, status: 'pago · registro local', value: `−${lunes2(r.amt)}` })),
   ];
   return rows.sort((a, b) => b.at - a.at);
 }

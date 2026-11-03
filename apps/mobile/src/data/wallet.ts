@@ -21,11 +21,13 @@ export const REFERRAL_MONTHLY_CAP = 20;
 export const MAINNET_PENDING = 'liquidação ainda não conectada à Mainnet';
 
 // ── Por perto ────────────────────────────────────────────
-export type Prox = 'muito perto' | 'perto' | 'mais longe';
-/** Perfil público anunciado por alguém por perto (chega pelo protocolo de Por perto). */
-export interface NearProfile { id: string; name: string; age: number; bio: string; tags: string[]; prox: Prox; via: string; fee: number; common: string }
-/** Pedido de conversa recebido por Por perto (convite pago de outra pessoa). */
-export interface ChatRequest { id: string; name: string; age: number; initials: string; fee: number; prox: Prox; time: string; msg: string }
+/**
+ * Perfil público anunciado por alguém por perto e pedido de conversa recebido: chegam pelo anúncio de
+ * presença e pelo convite pago (messaging/nearby.ts, Messenger). Nome, foto e taxa vêm do perfil
+ * público da pessoa; idade, bio e interesses ainda não têm tela de edição (regra 5.2) e não vão.
+ */
+export type { NearPeer as NearProfile, NearRequest as ChatRequest } from '../messaging/messenger';
+export type { NearProx as Prox } from '../messaging/nearby';
 
 /** Taxa definida por quem recebe o convite. */
 export const FEE_OPTIONS = [1, 3, 5, 10] as const;

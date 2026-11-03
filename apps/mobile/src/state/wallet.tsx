@@ -1,12 +1,8 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import type { ChatRequest, NearProfile } from '../data/wallet';
 import { pruneLegacyData } from '../lib/legacyData';
 import { readPersisted, usePersisted } from '../lib/persist';
-import { nowHM } from '../lib/text';
 import type { EarnedMove, InviteMove } from '../lib/walletCore';
 import { useStore } from './store';
-
-type ReqStatus = 'accepted' | 'declined' | 'blocked';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
 /** Visibilidade em Por perto desliga sozinha (design: 1 h). */
@@ -20,48 +16,46 @@ export type InviteState = { kind: 'none' } | { kind: 'pending'; hoursLeft: numbe
 interface Wallet {
   /** Saldo on-chain: 0 enquanto a liquidação não está conectada à Lunes Mainnet (nada inventado). */
   onchain: number;
-  /** Convites pagos reservados (24 h), devolvidos e taxas de pedidos aceitos (a receber). */
+  /**
+   * Convites pagos reservados (24 h), devolvidos, aceitos por quem eu convidei (pagos) e taxas de
+   * pedidos que eu aceitei (a receber). Tudo é registro local: a reserva assinada em LUNES depende da
+   * liquidação na Lunes Mainnet, que ainda não está conectada.
+   */
   reserved: InviteMove[];
   refunded: InviteMove[];
+  spent: InviteMove[];
   earned: EarnedMove[];
   /** Quando este aparelho começou a usar a carteira (ms), para os 7 dias do bônus. */
   since: number | null;
-  // Por perto
+  // Por perto (perfis e pedidos vêm da malha: state/messaging.tsx, `nearby`)
   visible: boolean; setVisible: (v: boolean) => void;
+  /** Fim da visibilidade (ms), para o anúncio de presença; null = invisível. */
+  visibleUntil: number | null;
   /** Minutos até a visibilidade desligar sozinha (null se invisível). */
   visibleMinutesLeft: number | null;
-  /**
-   * Perfis públicos e pedidos de conversa recebidos pela malha. Ainda não existe o anúncio de perfil
-   * de Por perto no protocolo: as listas ficam vazias até ele existir (sem perfis de exemplo).
-   */
-  profiles: NearProfile[];
-  requests: ChatRequest[];
   /** Pendente (24 h), em espera de 30 dias, ou livre para convidar. */
   inviteState: (id: string) => InviteState;
-  /** Convite pago para alguém por perto: o valor fica reservado por 24 h. */
+  /** Convite pago enviado pela malha: o valor fica reservado por 24 h (registro local). */
   invite: (id: string, name: string, fee: number) => void;
-  /** Taxa que eu cobro para abrir conversa (escolha salva no aparelho). */
+  /** Quem eu convidei aceitou: o valor reservado sai da carteira (vai para a pessoa). */
+  settleInvite: (id: string) => void;
+  /** Aceitei um pedido: a taxa fica a receber. */
+  recordEarned: (from: string, fee: number) => void;
+  /** Taxa que eu cobro para abrir conversa (escolha salva no aparelho e anunciada em Por perto). */
   myFee: number; setMyFee: (n: number) => void;
-  reqStatus: Record<string, ReqStatus>;
-  /** Aceita o pedido: abre a conversa e a taxa fica a receber. */
-  accept: (id: string) => void;
-  decline: (id: string) => void;
-  block: (id: string) => void;
 }
 
 const Ctx = createContext<Wallet | null>(null);
-const NO_PROFILES: NearProfile[] = [];
-const NO_REQUESTS: ChatRequest[] = [];
 
 export function WalletProvider({ children }: { children: ReactNode }) {
-  const { addChat, setIdentity, onboarded, showToast } = useStore();
+  const { onboarded, showToast } = useStore();
   // Campos novos (os antigos, `wallet.*` e `nearby.invited/reqStatus`, só tinham dados de exemplo e
   // são apagados por `pruneLegacyData`).
   const [invites, setInvites] = usePersisted<Record<string, number>>('nearby.invites', {});
   const [reserved, setReserved] = usePersisted<InviteMove[]>('nearby.reserved', []);
   const [refunded, setRefunded] = usePersisted<InviteMove[]>('nearby.refunded', []);
+  const [spent, setSpent] = usePersisted<InviteMove[]>('nearby.spent', []);
   const [earned, setEarned] = usePersisted<EarnedMove[]>('nearby.earned', []);
-  const [reqStatus, setReqStatus] = usePersisted<Record<string, ReqStatus>>('nearby.answers', {});
   const [since, setSince] = usePersisted<number | null>('wallet.since', null);
   const [myFee, setMyFee] = usePersisted('nearby.myFee', 3);
   // Visível até este instante (ms). Liga por 1 h; desliga sozinha, mesmo com o app fechado.
@@ -70,7 +64,6 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     () => (readPersisted<{ near?: string }>('set.priv')?.near === '1h' ? Date.now() + NEARBY_VISIBLE_MS : null));
   const [now, setNow] = useState(Date.now);
   const visible = visibleUntil != null && visibleUntil > now;
-  const requests = NO_REQUESTS;
 
   // Uma vez por abertura: tira do disco o que versões antigas salvaram como exemplo.
   useEffect(() => { void pruneLegacyData(); }, []);
@@ -97,17 +90,18 @@ export function WalletProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<Wallet>(() => ({
     onchain: 0,
-    reserved, refunded, earned, since,
+    reserved, refunded, spent, earned, since,
     visible,
     setVisible: v => { setVisibleUntil(v ? Date.now() + NEARBY_VISIBLE_MS : null); setNow(Date.now()); },
+    visibleUntil: visible ? visibleUntil : null,
     visibleMinutesLeft: visible ? Math.max(1, Math.ceil((visibleUntil! - now) / 60_000)) : null,
-    profiles: NO_PROFILES,
-    requests,
     inviteState: id => {
       const at = invites[id];
       if (at == null || now - at >= INVITE_COOLDOWN_MS) return { kind: 'none' };
-      if (reserved.some(r => r.id === id)) return { kind: 'pending', hoursLeft: Math.max(1, Math.ceil((at + INVITE_HOLD_MS - now) / HOUR)) };
-      return { kind: 'cooldown', daysLeft: Math.max(1, Math.ceil((at + INVITE_COOLDOWN_MS - now) / DAY)) };
+      // O relógio da tela anda a cada 30 s: nunca mostra mais que 24 h / 30 dias.
+      const t = Math.max(now, at);
+      if (reserved.some(r => r.id === id)) return { kind: 'pending', hoursLeft: Math.max(1, Math.ceil((at + INVITE_HOLD_MS - t) / HOUR)) };
+      return { kind: 'cooldown', daysLeft: Math.max(1, Math.ceil((at + INVITE_COOLDOWN_MS - t) / DAY)) };
     },
     invite: (id, name, fee) => {
       const at = invites[id];
@@ -115,24 +109,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       setInvites(m => ({ ...m, [id]: Date.now() }));
       setReserved(r => [{ id, to: name, amt: fee, at: Date.now() }, ...r]);
     },
-    myFee, setMyFee,
-    reqStatus,
-    accept: id => {
-      const r = requests.find(x => x.id === id);
-      if (!r || reqStatus[id] === 'accepted') return;
-      setReqStatus(m => ({ ...m, [id]: 'accepted' }));
-      setEarned(e => [{ from: r.name, amt: r.fee, at: Date.now() }, ...e]);
-      setIdentity('public');
-      addChat({
-        id: 'near-' + id, ident: 'public', kind: 'direct', name: r.name, initials: r.initials, time: 'agora', unread: 0,
-        sub: `${r.prox} · direto`, via: 'Bluetooth LE · direto', viaIcon: 'bluetooth',
-        route: { nodes: [{ n: 'Você', k: 'Este aparelho' }, { n: r.name, k: 'Destino' }], vias: ['Bluetooth LE'] },
-        msgs: [{ id: 'nm-' + id, from: 'them', text: r.msg, time: nowHM() }],
-      });
+    settleInvite: id => {
+      // Aceito dentro das 24 h (reservado) ou chegando depois da devolução local (devolvido): vira pago.
+      const r = reserved.find(x => x.id === id) ?? refunded.find(x => x.id === id);
+      if (!r) return;
+      setReserved(rs => rs.filter(x => x.id !== id));
+      setRefunded(rf => rf.filter(x => x.id !== id));
+      setSpent(sp => [{ ...r, at: Date.now() }, ...sp]);
     },
-    decline: id => setReqStatus(m => ({ ...m, [id]: 'declined' })),
-    block: id => setReqStatus(m => ({ ...m, [id]: 'blocked' })),
-  }), [reserved, refunded, earned, since, visible, visibleUntil, now, requests, invites, myFee, reqStatus, setVisibleUntil, setInvites, setReserved, setMyFee, setReqStatus, setEarned, setIdentity, addChat]);
+    recordEarned: (from, fee) => setEarned(e => [{ from, amt: fee, at: Date.now() }, ...e]),
+    myFee, setMyFee,
+  }), [reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

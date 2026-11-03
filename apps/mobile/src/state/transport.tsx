@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
-import { getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
+import { DISCOVERY_INTERVAL_SEC, getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
 import { useBattery } from '../lib/battery';
 import { useNetwork } from './network';
 import { useSettings } from './settings';
@@ -37,6 +37,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const enabled = onboarded && (tx.ble || tx.direct);
 
+  // "Procurar vizinhos" (Bateria e limites → DESCOBERTA): intervalo de varredura no transporte (NFR-004).
+  useEffect(() => { transport.setDiscoveryInterval?.(DISCOVERY_INTERVAL_SEC[bat.disc]); }, [transport, bat.disc]);
   // Meios ligados na aba Rede (BLE e Wi-Fi Direct/Nearby).
   useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble, nearby: tx.direct }); }, [transport, tx.ble, tx.direct]);
   // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando

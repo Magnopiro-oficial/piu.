@@ -15,6 +15,8 @@ import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 export interface FileOps {
   send: (chatId: string, peer: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }, expireSec?: number) => { blocks: number } | null;
   setPaused: (msgId: string, paused: boolean) => boolean;
+  /** Arquivo recebido que esperava "Baixar": pede os blocos ao contato. */
+  download: (peer: string, msgId: string) => boolean;
 }
 
 interface Profile {
@@ -281,8 +283,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setFileOps: ops => { fileOps.current = ops; },
     patchFile,
     toggleFilePause: (cid, mid) => {
-      const f = chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file;
+      const chat = chats.find(c => c.id === cid);
+      const f = chat?.msgs?.find(m => m.id === mid)?.file;
       if (!f) return;
+      if (f.incoming) {
+        if (f.held && chat?.peer && fileOps.current?.download(chat.peer, mid.replace(/^in-/, ''))) patchFile(cid, mid, { held: false });
+        return;
+      }
       const pause = f.state !== 'userPaused';
       if (fileOps.current?.setPaused(mid, pause)) patchFile(cid, mid, { state: pause ? 'userPaused' : 'resuming' });
       else patchFile(cid, mid, { lost: true });

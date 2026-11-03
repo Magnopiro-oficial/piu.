@@ -3,9 +3,10 @@ import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
+import { fmtLunes } from '../data/wallet';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
-import { type Contact, Messenger } from '../messaging/messenger';
+import { type Contact, Messenger, type NearPeer, type NearRequest } from '../messaging/messenger';
 import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import { b64url, unb64url } from '../messaging/card';
@@ -25,6 +26,7 @@ import { useKeys } from './keys';
 import { useNetwork } from './network';
 import { useSettings } from './settings';
 import { useStore } from './store';
+import { useWallet } from './wallet';
 
 const STATE_KEY = 'msg.state';
 /** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
@@ -76,6 +78,20 @@ interface Messaging {
   stats: () => Stats | null;
   /** Troca (ou remove) a foto do perfil público e manda a versão pequena aos contatos públicos. */
   setProfilePhoto: (p: ProfilePhoto | null) => void;
+  /**
+   * Por perto pela malha: perfis visíveis (só enquanto eu estou visível), pedidos recebidos, convite
+   * pago e respostas. `null` antes das chaves.
+   */
+  nearby: {
+    profiles: NearPeer[];
+    requests: NearRequest[];
+    /** Envia o convite com o texto. Lança erro em português (fora de alcance, 30 dias, texto). */
+    invite: (profileId: string, text: string) => { fee: number; name: string };
+    /** Aceitar devolve o id da conversa aberta; recusar e bloquear devolvem null. */
+    answer: (id: string, a: 'accept' | 'decline' | 'block') => string | null;
+    /** Denunciar perfil: some da lista de Por perto neste aparelho. */
+    hide: (profileId: string) => void;
+  } | null;
 }
 
 export interface Stats {
@@ -93,7 +109,7 @@ const Ctx = createContext<Messaging | null>(null);
  * mensagem nunca é reutilizada.
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
-  const { identities, node } = useKeys();
+  const { identities, node, nodeKeyFor } = useKeys();
   const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
@@ -105,6 +121,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [testDevice, setTestDevice] = useState<TestDevice | null>(null);
   const [inviteEpoch, setInviteEpoch] = useState(0);
   const [groupEpoch, setGroupEpoch] = useState(0);
+  const [nearEpoch, setNearEpoch] = useState(0);
+  const wallet = useWallet();
+  const walletRef = useRef(wallet); walletRef.current = wallet;
   const rotationEpoch = useSessionRotationEpoch();
   const { setProfile, setVerified, addChat: addChatRestore } = useStore();
   const importRestored = useRef((d: Record<string, unknown>) => {
@@ -148,7 +167,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     if (restored) importRestored.current(restored);
     const m = new Messenger({
       // Rotação pendente (migração/revogação) descarta as sessões; dados de um backup restaurado entram aqui.
-      identities, node, relay, now, state: applySessionRotation(readPersisted<string>(STATE_KEY) ?? restoredState),
+      // Chave técnica do nó gira por dia (LNNP §12.1); recibos já emitidos guardam a chave deles.
+      identities, node, nodeKeyFor: nodeKeyFor ?? undefined, relay, now, state: applySessionRotation(readPersisted<string>(STATE_KEY) ?? restoredState),
       randomDelay: () => privRef.current.delay,
       pad: () => privRef.current.pad,
       transmit: async (peerId, bytes) => {
@@ -181,6 +201,17 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { photo: b64 ? `data:image/jpeg;base64,${b64}` : undefined });
         },
         lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
+        // Por perto: perfis, pedidos recebidos e convite meu aceito.
+        nearbyChanged: () => setNearEpoch(e => e + 1),
+        nearRequest: r => handlers.current.showToast({ kind: 'nearby', icon: 'waving_hand', title: `${r.name} quer conversar`, body: `+${fmtLunes(r.fee)} LUNES se você aceitar · expira em 24 h`, action: 'Ver',
+          hidden: { title: 'Pedido de conversa', body: 'Abra Por perto para ver.' }, go: () => router.push('/nearby/requests') }),
+        nearAccepted: (c, fee) => {
+          walletRef.current.settleInvite(c.id);
+          const cid = chatIdFor(c.id);
+          if (!chatsRef.current.some(x => x.id === cid)) handlers.current.addChat(nearChat(c, privRef.current.temp, `${c.name || 'A pessoa'} aceitou seu convite de Por perto. A conversa é cifrada de ponta a ponta.`));
+          handlers.current.showToast({ kind: 'nearby', icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
+            hidden: { title: 'Convite aceito', body: 'Abra Por perto para ver.' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+        },
         // Grupos: entrar, mudanças, remoção e mensagens.
         groupUpdated: (g, change) => {
           setGroupEpoch(e => e + 1);
@@ -221,7 +252,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           msgToChat.current.set('in-' + f.msgId, cid);
           const expiresAt = expiryOf({ sentAt: f.sentAt ?? now(), expireSec: f.expireSec });
           handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
-            file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true } });
+            file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true, ...(f.held ? { held: true } : {}) } });
         },
         fileReceived: (contactId, f) => {
           const cid = msgToChat.current.get('in-' + f.msgId) ?? chatIdFor(contactId);
@@ -301,7 +332,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       hours: bat.hours === 'night' ? 'night' : 'always',
     });
   }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours]);
+  // Armazenamento → "Baixar mídia automaticamente".
+  useEffect(() => { messenger?.setAutoDownload(sto.auto); }, [messenger, sto.auto]);
   useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
+  // Por perto: anúncio de presença só enquanto visível (até o fim da 1 h), com o perfil PÚBLICO
+  // (nome e foto pequena) e a minha taxa. Invisível = retirada do anúncio.
+  const { visibleUntil, myFee } = wallet;
+  useEffect(() => {
+    messenger?.setNearby({ until: visibleUntil ? Math.floor(visibleUntil / 1000) : null, fee: myFee, name: profile.name.trim(), photo: profile.photoSmall });
+    setNearEpoch(e => e + 1);
+  }, [messenger, visibleUntil, myFee, profile.name, profile.photoSmall]);
 
   // Transporte → mensageiro.
   useEffect(() => {
@@ -325,6 +365,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f, expireSec); } catch { return null; }
       },
       setPaused: (msgId, paused) => messenger.setFilePaused(msgId, paused),
+      download: (peer, msgId) => messenger.downloadFile(peer, msgId),
     });
     return () => setFileOps(null);
   }, [messenger, setFileOps]);
@@ -373,7 +414,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       receive: (data, reply) => { td.setReply(reply); td.messenger.receive('app', data); },
     });
     setTestDevice(td);
-    return () => { detach(); setTestDevice(null); };
+    return () => { detach(); td.stop(); setTestDevice(null); };
   }, [transport, messenger]);
 
   const value = useMemo<Messaging>(() => ({
@@ -448,8 +489,29 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return String(j.n ?? 'grupo').slice(0, 60);
     },
     groupEpoch,
+    nearby: messenger ? {
+      profiles: messenger.nearbyProfiles(),
+      requests: messenger.nearRequests(),
+      invite: (profileId, text) => {
+        const r = messenger.sendNearInvite(profileId, text);
+        setNearEpoch(e => e + 1);
+        return { fee: r.fee, name: r.name };
+      },
+      answer: (id, a) => {
+        const r = messenger.answerNear(id, a);
+        setNearEpoch(e => e + 1);
+        if (!r) return null;
+        const cid = chatIdFor(r.contact.id);
+        if (!chats.some(x => x.id === cid)) addChat(nearChat(r.contact, priv.temp, 'Você aceitou o pedido de Por perto. A conversa é cifrada de ponta a ponta.', r.request.msg));
+        setIdentity('public');
+        wallet.recordEarned(r.request.name, r.request.fee);
+        if (profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, r.contact.id);
+        return cid;
+      },
+      hide: id => messenger.hideNear(id),
+    } : null,
     stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity, priv.temp]);
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, patchChat, setIdentity, priv.temp, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -484,6 +546,16 @@ function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
     msgs: [{ id: 'sys-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: request
       ? 'Esta pessoa escreveu primeiro. Confira o código de segurança pessoalmente antes de confiar.'
       : 'Chaves trocadas. As mensagens são cifradas neste aparelho e só o contato consegue ler.' }],
+  };
+}
+
+/** Conversa aberta por Por perto (sempre pela identidade pública). `first`: o texto do convite. */
+function nearChat(c: Contact, temp: TempMode, note: string, first?: string): Chat {
+  const base = chatFor(c, false, temp);
+  return {
+    ...base, sub: 'Por perto · cifrada de ponta a ponta', viaIcon: 'radar',
+    msgs: [{ id: 'sys-near-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: note },
+      ...(first ? [{ id: 'in-near-' + c.id.slice(4, 12), from: 'them' as const, time: nowHM(), text: first }] : [])],
   };
 }
 

@@ -24,6 +24,8 @@ export interface LinkSource {
   stop(): Promise<void>;
   sendVia(medium: Medium, id: string, data: Uint8Array): Promise<void>;
   subscribe(fn: (e: LinkEvent) => void): () => void;
+  /** Intervalo de descoberta (s), repassado ao módulo nativo. */
+  setDiscoveryInterval?(seconds: number): void;
 }
 
 export interface MultiOptions {
@@ -187,6 +189,7 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
     },
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setPowerHint: low => { powerHint = low; },
+    setDiscoveryInterval: sec => { if (Number.isFinite(sec) && sec > 0) source.setDiscoveryInterval?.(sec); },
     setMediaEnabled: m => {
       for (const [k, on] of Object.entries(m) as [Medium, boolean | undefined][]) {
         if (on === false) disabled.add(k); else if (on === true) disabled.delete(k);

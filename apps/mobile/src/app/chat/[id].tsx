@@ -6,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import type { Chat, Msg } from '../../data/types';
 import { STATUS_ICON, STATUS_LABEL } from '../../lib/status';
+import { useSettings } from '../../state/settings';
 import { useStore, useViewingChat } from '../../state/store';
 import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -24,6 +25,7 @@ export default function ChatScreen() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { chats, send, retry, verified, sendRealFile, toggleFilePause, showToast, patchChat, typing, notifyTyping } = useStore();
+  const { sto } = useSettings();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
@@ -58,7 +60,7 @@ export default function ChatScreen() {
     else if (!chat.peer) showToast({ icon: k === 'image' ? 'image' : 'description', title: 'Arquivos em grupos e canais', body: 'Por enquanto, fotos e documentos vão só nas conversas com uma pessoa.' });
     else {
       // Conversa real: escolhe a foto ou o documento e envia em blocos pelo protocolo.
-      void (k === 'image' ? pickImage() : pickDocument()).then(f => {
+      void (k === 'image' ? pickImage(sto.quality) : pickDocument()).then(f => {
         if (!f) return;
         if (f.data.length > MAX_FILE_BYTES) { showToast({ icon: 'error', title: 'Arquivo grande demais', body: 'O limite por arquivo é 50 MB.' }); return; }
         sendRealFile(chat.id, f); toEnd();

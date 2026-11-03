@@ -62,5 +62,7 @@ export function createSimulatedTransport(): Transport {
       later(400, () => emit({ type: 'envelope', from: peerId, data }));
     },
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    // Sem rádio no simulado: o intervalo só fica registrado.
+    setDiscoveryInterval: () => {},
   };
 }

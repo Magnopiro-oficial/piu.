@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { FRAME_HEADER_BYTES, frameHeader, helloFrame, MAX_PARTIAL_MESSAGES, nextMessageId, PARTIAL_TIMEOUT_MS, Reassembler, toFrames } from '../frames';
 import { createMultiTransport, type LinkEvent, type LinkSource } from '../multi';
 import { FAILURE_COOLDOWN_MS, MEDIA, rankLinks, SMALL_ENVELOPE_BYTES, type LinkInfo } from '../select';
-import type { Medium, TransportEvent } from '../types';
+import { DISCOVERY_INTERVAL_SEC, type Medium, type TransportEvent } from '../types';
 
 const bytes = (n: number, seed = 1) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 0xff);
 const L = (medium: Medium, extra: Partial<LinkInfo> = {}): LinkInfo => ({ medium, up: true, failures: 0, ...extra });
@@ -235,4 +235,17 @@ test('remontagem tem teto de memória: bloco inválido, envelope > 32 KB, prazo 
   clock = PARTIAL_TIMEOUT_MS;
   r.push('B', toFrames(bytes(100), 23, 1)[0]);
   assert.equal(r.open, 1);
+});
+
+// ---------- descoberta (NFR-004) ----------
+
+test('8.1 "Procurar vizinhos" chega ao módulo nativo: Econômica 60 s, Normal 20 s, Rápida 5 s', () => {
+  const f = fakeSource();
+  const got: number[] = [];
+  f.source.setDiscoveryInterval = s => got.push(s);
+  const t = createMultiTransport(f.source);
+  for (const m of ['eco', 'normal', 'fast'] as const) t.setDiscoveryInterval?.(DISCOVERY_INTERVAL_SEC[m]);
+  t.setDiscoveryInterval?.(Number.NaN);
+  t.setDiscoveryInterval?.(0);
+  assert.deepEqual(got, [60, 20, 5], 'valores inválidos não chegam ao rádio');
 });

@@ -46,12 +46,12 @@ export default function WalletTab() {
 
 function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const { c } = useTheme();
-  const { onchain, reserved, refunded, earned, since } = useWallet();
+  const { onchain, reserved, refunded, spent, earned, since } = useWallet();
   const { onboarded, verified, chats } = useStore();
   const st = useStats(5000);
   const now = Date.now();
   const sum = walletSummary({ onchain, totals: st?.credits.totals ?? NO_TOTALS, reserved, perLunes: CREDIT_PARAMS.creditsPerLunes });
-  const activity = activityRows({ lots: st?.credits.lots ?? [], reserved, refunded, earned, now });
+  const activity = activityRows({ lots: st?.credits.lots ?? [], reserved, refunded, spent, earned, now });
   // Só contatos reais (pelo QR) contam para "Confirmada por 1 contato".
   const verifiedContact = chats.some(ch => ch.peer && verified[ch.id]);
   const steps = bonusSteps({ onboarded, verifiedContact, since, now });
@@ -151,8 +151,9 @@ function Rewards() {
     ...(st?.credits.list ?? []).slice(0, 12).map(x => [
       x.state === 'rejeitado' ? 'block' : x.state === 'pendente' ? 'hourglass_top' : 'verified',
       `Entrega de terceiro · ${Math.round(x.bytes / 100) / 10} KB`,
-      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${x.state}${x.reason ? ` (${x.reason})` : ''}`,
-      `${x.state === 'rejeitado' ? '' : '+'}${fmt(x.credits)}`,
+      // Regra 7.6: o valor é estimado, dividido entre os relays que este aparelho conhece até ele.
+      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${x.state}${x.reason ? ` (${x.reason})` : ''} · estimativa${(x.relays ?? 1) > 1 ? ` ÷ ${x.relays} relays` : ''}`,
+      `${x.state === 'rejeitado' ? '' : '≈ +'}${fmt(x.credits)}`,
     ] as [IconName, string, string, string]),
   ];
   return (
@@ -191,7 +192,8 @@ function Rewards() {
         {history.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>Nenhum crédito ainda. Com o Modo nó ligado, cada mensagem de outra pessoa que você levar até o destino gera créditos depois que a entrega for comprovada.</T>}
         {history.map(([icon, title, d, v], i) => <Row key={`${title}-${i}`} icon={icon} t={title} d={d} v={v} />)}
       </View>
-      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Os valores são estimativa: a recompensa de cada entrega é dividida entre os relays do caminho, e o validador confere a divisão e o teto por nó antes de pagar.</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 8, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
     </>
   );
 }

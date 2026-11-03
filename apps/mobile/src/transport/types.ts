@@ -56,7 +56,16 @@ export interface Transport {
    * "Piu retransmitindo mensagens". iPhone: sem efeito (só com o app aberto, por decisão de design).
    */
   setBackgroundRelay?(on: boolean): Promise<void>;
+  /** "Procurar vizinhos" (NFR-004): intervalo entre varreduras de descoberta, em segundos. */
+  setDiscoveryInterval?(seconds: number): void;
 }
+
+/**
+ * Ajustes → Bateria e limites → "Procurar vizinhos" (design: Bluetooth a cada 60 s / 20 s / 5 s).
+ * O iPhone limita a varredura em segundo plano: lá o intervalo vale com o app aberto.
+ */
+export const DISCOVERY_INTERVAL_SEC = { eco: 60, normal: 20, fast: 5 } as const;
+export type DiscoveryMode = keyof typeof DISCOVERY_INTERVAL_SEC;
 
 /** Identificador do serviço LNNP v1 (anúncio e descoberta). */
 export const SERVICE_ID = 'net.piu.lnnp.v1';

@@ -70,6 +70,8 @@ internal class BleEngine(
     private const val MAX_CLIENTS = 6
     private const val OP_TIMEOUT_MS = 10_000L
     private const val RETRY_MS = 10_000L
+    /** Cada varredura dura isto; depois o rádio descansa até a próxima (NFR-004). */
+    private const val SCAN_WINDOW_MS = 4_000L
   }
 
   private val thread = HandlerThread("piu-ble").apply { start() }
@@ -81,6 +83,21 @@ internal class BleEngine(
   private var server: BluetoothGattServer? = null
   private var outbox: BluetoothGattCharacteristic? = null
   private var stopped = false
+  /** "Procurar vizinhos": intervalo entre varreduras. Até a janela + 2 s, a varredura é contínua. */
+  private var scanIntervalMs = 20_000L
+  private var scanning = false
+  private val scanCycle = object : Runnable {
+    override fun run() {
+      if (stopped) return
+      if (scanning) {
+        stopScan()
+        handler.postDelayed(this, scanIntervalMs - SCAN_WINDOW_MS)
+      } else {
+        startScan()
+        if (scanIntervalMs > SCAN_WINDOW_MS + 2_000L) handler.postDelayed(this, SCAN_WINDOW_MS)
+      }
+    }
+  }
 
   /** Um envio em andamento (vários blocos): avisa uma vez, no fim ou na primeira falha. */
   private class Pending(var remaining: Int, val done: ((Throwable?) -> Unit)?) {
@@ -132,20 +149,46 @@ internal class BleEngine(
     try {
       openServer()
       scanner = adapter.bluetoothLeScanner
-      scanner?.startScan(
-        listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()),
-        ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build(),
-        scanCallback,
-      )
+      restartScanCycle()
       listener.onBleState(true, null)
     } catch (e: SecurityException) {
       listener.onBleState(false, "Permissão de Bluetooth negada.")
     }
   }
 
+  /** Muda o ciclo de varredura. Conexões já abertas não são afetadas. */
+  fun setScanInterval(ms: Long) = handler.post {
+    scanIntervalMs = ms.coerceAtLeast(1_000L)
+    if (scanner != null) restartScanCycle()
+  }
+
+  /** Roda na thread `piu-ble`. */
+  private fun restartScanCycle() {
+    handler.removeCallbacks(scanCycle)
+    if (scanning) stopScan()
+    scanCycle.run()
+  }
+
+  private fun startScan() {
+    try {
+      scanner?.startScan(
+        listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()),
+        ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build(),
+        scanCallback,
+      )
+      scanning = true
+    } catch (_: Exception) { scanning = false }
+  }
+
+  private fun stopScan() {
+    try { scanner?.stopScan(scanCallback) } catch (_: Exception) {}
+    scanning = false
+  }
+
   fun stop() {
     handler.post {
       stopped = true
+      handler.removeCallbacks(scanCycle)
       try { scanner?.stopScan(scanCallback) } catch (_: Exception) {}
       try { advertiser?.stopAdvertising(advertiseCallback) } catch (_: Exception) {}
       clients.values.forEach { c -> try { c.gatt?.disconnect(); c.gatt?.close() } catch (_: Exception) {} }
