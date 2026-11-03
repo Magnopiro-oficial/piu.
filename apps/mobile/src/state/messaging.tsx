@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { Chat } from '../data/types';
+import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
@@ -94,7 +94,7 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
   const { priv, sto, bat, preview } = useSettings();
@@ -130,8 +130,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => { void saveNow().catch(() => {}); }, SAVE_DELAY);
   }, [saveNow]);
 
-  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat });
-  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat };
+  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping });
+  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping };
 
   // Cria o mensageiro quando as chaves existem.
   useEffect(() => {
@@ -219,7 +219,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
           msgToChat.current.set('in-' + f.msgId, cid);
-          handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(),
+          const expiresAt = expiryOf({ sentAt: f.sentAt ?? now(), expireSec: f.expireSec });
+          handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
             file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true } });
         },
         fileReceived: (contactId, f) => {
@@ -228,6 +229,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           receivedFiles.set('in-' + f.msgId, f);
           handlers.current.patchFile(cid, 'in-' + f.msgId, { state: 'verified', done: f.blocks, preview });
         },
+        // Confirmação de leitura do contato: só mensagens minhas daquela conversa.
+        read: (contactId, ids) => {
+          const cid = chatIdFor(contactId);
+          const chat = chatsRef.current.find(c => c.id === cid);
+          for (const id of ids) if (chat?.msgs?.some(x => x.id === id && x.from === 'me')) handlers.current.setMsgStatus(cid, id, 'lida');
+        },
+        typing: contactId => {
+          const cid = chatIdFor(contactId);
+          if (chatsRef.current.some(c => c.id === cid)) handlers.current.setTyping(cid);
+        },
         status: (msgId, st) => {
           const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => c.peer && c.msgs?.some(x => x.id === msgId))?.id;
           if (cid) handlers.current.setMsgStatus(cid, msgId, st);
@@ -235,12 +246,16 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         message: (contactId, x) => {
           const cid = chatIdFor(contactId);
           if (!chatsRef.current.some(c => c.id === cid)) return;
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM() });
+          const expiresAt = expiryOf(x);
+          if (expiresAt && expiresAt <= Date.now()) return; // temporária que já venceu no caminho
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
         newContact: (c, x) => {
           const cid = chatIdFor(c.id);
-          handlers.current.addChat(chatFor(c, true));
-          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM() });
+          handlers.current.addChat(chatFor(c, true, privRef.current.temp));
+          const expiresAt = expiryOf(x);
+          if (expiresAt && expiresAt <= Date.now()) return;
+          handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', text: x.text, time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
         },
       },
     });
@@ -306,8 +321,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!messenger) { setFileOps(null); return; }
     setFileOps({
-      send: (chatId, peer, msgId, f) => {
-        try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f); } catch { return null; }
+      send: (chatId, peer, msgId, f, expireSec) => {
+        try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f, expireSec); } catch { return null; }
       },
       setPaused: (msgId, paused) => messenger.setFilePaused(msgId, paused),
     });
@@ -317,19 +332,36 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Store → mensageiro (envio real).
   useEffect(() => {
     if (!messenger) { setOutbound(null); return; }
-    setOutbound((chatId, peer, msgId, text) => {
+    setOutbound((chatId, peer, msgId, text, expireSec) => {
       try {
         // Responder aceita o pedido de conversa.
         const ct = messenger.getContact(peer);
         if (ct?.request) messenger.addContact(ct);
         msgToChat.current.set(msgId, chatId);
         if (peer.startsWith('group:')) messenger.sendGroupText(peer.slice(6), msgId, text);
-        else messenger.sendText(peer, msgId, text);
+        else messenger.sendText(peer, msgId, text, expireSec);
         return true;
       } catch { return false; }
     });
     return () => setOutbound(null);
   }, [messenger, setOutbound]);
+
+  // Store → mensageiro: confirmação de leitura e "digitando…", só com o ajuste de Privacidade ligado.
+  useEffect(() => {
+    if (!messenger) { setSignals(null); return; }
+    setSignals({
+      read: (_chatId, peer, ids) => { if (privRef.current.read) messenger.sendRead(peer, ids); },
+      typing: (_chatId, peer) => { if (privRef.current.typing) messenger.sendTyping(peer); },
+    });
+    return () => setSignals(null);
+  }, [messenger, setSignals]);
+
+  // Arquivo recebido de mensagem temporária que já sumiu da conversa: o conteúdo sai da memória também.
+  useEffect(() => {
+    if (!receivedFiles.size) return;
+    const alive = new Set(chats.flatMap(c => (c.msgs ?? []).map(m => m.id)));
+    for (const k of [...receivedFiles.keys()]) if (!alive.has(k)) receivedFiles.delete(k);
+  }, [chats]);
 
   // Aparelho de teste: só no transporte simulado (navegador / Expo Go).
   useEffect(() => {
@@ -355,7 +387,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       const contact: Contact = { id: card.id, via, pub: card.pub, name: card.name, invite: card.invite };
       messenger.addContact(contact);
       const cid = chatIdFor(card.id);
-      addChat(chatFor(contact, false));
+      addChat(chatFor(contact, false, priv.temp));
       // Contato público novo: recebe a foto do perfil público (o anônimo nunca recebe foto).
       if (via === 'public' && profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, card.id);
       return cid;
@@ -417,7 +449,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     },
     groupEpoch,
     stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity, priv.temp]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
@@ -440,10 +472,14 @@ function chatForGroup(g: GroupState, myId: string): Chat {
   };
 }
 
-function chatFor(c: Contact, request: boolean): Chat {
+/** Fim de uma mensagem temporária recebida (ms): prazo contado do envio (sem passar de agora). */
+const expiryOf = (x: { sentAt: number; expireSec?: number }) => (x.expireSec ? (Math.min(x.sentAt, now()) + x.expireSec) * 1000 : undefined);
+
+/** Conversa nova com um contato. `temp`: padrão de Privacidade para novas conversas. */
+function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
   const name = c.name || (c.via === 'anon' ? 'Anônimo · ' + c.id.slice(4, 8).toUpperCase() : 'Contato · ' + c.id.slice(4, 8).toUpperCase());
   return {
-    id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0,
+    id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0, temp,
     sub: request ? 'pedido de conversa · confira o código' : 'cifrada de ponta a ponta', via: 'Por perto', viaIcon: 'bluetooth',
     msgs: [{ id: 'sys-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: request
       ? 'Esta pessoa escreveu primeiro. Confira o código de segurança pessoalmente antes de confiar.'

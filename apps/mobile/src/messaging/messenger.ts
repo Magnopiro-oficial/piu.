@@ -40,8 +40,9 @@ export interface Contact {
 /** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
 interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
-export interface IncomingText { msgId: string; text: string; sentAt: number }
-export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array }
+/** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). */
+export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number }
+export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number }
 
 export interface MessengerEvents {
   /** Mensagem nova de um contato conhecido. */
@@ -50,6 +51,10 @@ export interface MessengerEvents {
   newContact(c: Contact, m: IncomingText): void;
   /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
+  /** O contato leu estas mensagens minhas (confirmação de leitura dele). */
+  read(contactId: string, msgIds: string[]): void;
+  /** O contato está digitando (dura alguns segundos). */
+  typing(contactId: string): void;
   /** Arquivo: progresso de envio (blocos confirmados) ou de recebimento. */
   fileProgress(msgId: string, done: number, total: number, dir: 'out' | 'in'): void;
   /** Arquivo recebido inteiro, com integridade conferida (SHA-256). */
@@ -111,10 +116,15 @@ export interface MessengerOptions {
 
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
 type Payload =
-  | { t: 'm'; i: string; x: string; n?: string; k?: string }
+  /** Texto. `e`: mensagem temporária, some `e` segundos depois de enviada (nos dois lados). */
+  | { t: 'm'; i: string; x: string; n?: string; k?: string; e?: number }
+  /** Confirmação de leitura (só se o ajuste de quem leu estiver ligado). */
+  | { t: 'r'; i: string[] }
+  /** "digitando…": sinal efêmero, sem fila, prazo de segundos e sem prova de entrega. */
+  | { t: 'ty' }
   | { t: 'a'; i: string[] }
   /** Oferta de arquivo: nome, tamanho, tipo, total de blocos e SHA-256 do conteúdo. */
-  | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string }
+  | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string; e?: number }
   /** Blocos recebidos (confirmação parcial) e arquivo montado e conferido. */
   | { t: 'fa'; i: string; k: number[] }
   | { t: 'fd'; i: string }
@@ -158,7 +168,7 @@ interface PendingJoin { id: string; name: string; via: IdentityKind; pub: Public
 
 /** Envio de arquivo em andamento (só na memória: o conteúdo não vai para o armazenamento do app). */
 interface FileJob { msgId: string; to: string; data: Uint8Array; total: number; next: number; acked: Set<number>; inFlight: Set<number>; paused: boolean }
-interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number }
+interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number; sentAt?: number; e?: number }
 
 /** Bloco de arquivo: 12 KB de dados por envelope (cabe no preenchimento de 16 KB). */
 export const FILE_BLOCK = 12 * 1024;
@@ -187,6 +197,12 @@ const MAX_SAMPLES = 300;
 export const MESSAGE_TTL_SEC = 48 * 3600;
 const TTL_SEC = MESSAGE_TTL_SEC;
 const MAX_TEXT = 4000;
+/** "digitando…": vale 15 s na malha e sai no máximo a cada 4 s por contato. */
+const TYPING_TTL_SEC = 15;
+const TYPING_EVERY_SEC = 4;
+/** Mensagens temporárias: no máximo o prazo maior do design (7 dias); no mínimo 1 min. */
+const MAX_EXPIRE_SEC = 7 * 86400;
+const validExpire = (e: unknown) => (typeof e === 'number' && Number.isInteger(e) && e >= 60 && e <= MAX_EXPIRE_SEC ? e : undefined);
 const MAX_CONTACTS_FROM_STRANGERS = 50;
 const MAX_DELIVERED_IDS = 5000;
 const INVITE_TTL_SEC = 24 * 3600;
@@ -330,22 +346,56 @@ export class Messenger {
     return { code: inv.code, expiresAt: inv.expiresAt };
   }
 
-  sendText(contactId: string, msgId: string, text: string) {
+  /**
+   * Texto para o contato. `expireSec`: mensagem temporária (o envelope também vence antes, se o prazo
+   * for menor que o da fila).
+   */
+  sendText(contactId: string, msgId: string, text: string, expireSec?: number) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     const x = text.slice(0, MAX_TEXT);
     const mgr = this.managers[c.via];
     const p: Payload = { t: 'm', i: msgId, x };
+    const e = validExpire(expireSec);
+    if (e) p.e = e;
     const firm = mgr.get(contactId)?.established;
     if (!firm && c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
     if (!firm && c.invite) p.k = c.invite; // prova que escaneei o QR (uso único do lado de lá)
-    this.enqueue(c, p, msgId, Priority.Normal);
+    this.enqueue(c, p, msgId, Priority.Normal, false, e ? Math.min(TTL_SEC, e) : TTL_SEC);
   }
 
-  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false) {
+  /**
+   * Confirmação de leitura: quem chama só chama com o ajuste "Confirmação de leitura" ligado. Cada
+   * mensagem é confirmada uma vez. Só para contato aceito.
+   */
+  sendRead(contactId: string, msgIds: string[]) {
+    const c = this.contacts.get(contactId);
+    if (!c || c.request || this.blocked.has(contactId)) return;
+    const fresh = msgIds.filter(i => typeof i === 'string' && i.length <= 64 && !this.deliveredSet.has(`${contactId}|read|${i}`)).slice(0, 64);
+    if (!fresh.length) return;
+    for (const i of fresh) this.markDelivered(`${contactId}|read|${i}`);
+    this.enqueue(c, { t: 'r', i: fresh }, null, Priority.Normal);
+  }
+
+  private typingAt = new Map<string, number>();
+  /**
+   * "digitando…" para o contato (quem chama só chama com o ajuste ligado). Sem fila: sem vizinho por
+   * perto, não sai; com vizinho, vale 15 s na malha e não gera prova de entrega.
+   */
+  sendTyping(contactId: string) {
+    const c = this.contacts.get(contactId);
+    const now = this.o.now();
+    if (!c || c.request || !this.peers.size || !this.managers[c.via].get(contactId)?.established) return false;
+    if (now - (this.typingAt.get(contactId) ?? -Infinity) < TYPING_EVERY_SEC) return false;
+    this.typingAt.set(contactId, now);
+    this.enqueue(c, { t: 'ty' }, null, Priority.Low, false, TYPING_TTL_SEC);
+    return true;
+  }
+
+  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false, ttlSec = TTL_SEC) {
     const now = this.o.now();
     const body = p instanceof Uint8Array ? p : utf8(JSON.stringify(p));
-    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec: TTL_SEC, priority, bulk, pad: this.o.pad?.() ?? true });
+    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec, priority, bulk, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (msgId && r.status === 'stored') { this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false, at: now }); if (!(p instanceof Uint8Array) && p.t === 'm') this.day().sent++; }
@@ -356,14 +406,15 @@ export class Messenger {
   // ── arquivos (FUN-009): oferta, blocos com confirmação, pausa/retomada e SHA-256 no fim ──
 
   /** Começa a enviar um arquivo para o contato. `msgId` é o id do balão na conversa. */
-  sendFile(contactId: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }) {
+  sendFile(contactId: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }, expireSec?: number) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     if (f.data.length === 0 || f.data.length > MAX_FILE_BYTES) throw new Error('Arquivo vazio ou maior que 50 MB.');
     const total = Math.ceil(f.data.length / FILE_BLOCK);
     const job: FileJob = { msgId, to: contactId, data: f.data, total, next: 0, acked: new Set(), inFlight: new Set(), paused: false };
     this.fileJobs.set(msgId, job);
-    this.enqueue(c, { t: 'f', i: msgId, n: f.name.slice(0, 120), s: f.data.length, m: f.mime.slice(0, 80), c: total, h: toHex(sha256(f.data)) }, null, Priority.Normal);
+    const e = validExpire(expireSec);
+    this.enqueue(c, { t: 'f', i: msgId, n: f.name.slice(0, 120), s: f.data.length, m: f.mime.slice(0, 80), c: total, h: toHex(sha256(f.data)), ...(e ? { e } : {}) }, null, Priority.Normal);
     this.pumpFile(job);
     return { blocks: total };
   }
@@ -423,10 +474,10 @@ export class Messenger {
     this.fileRx.delete(`${from}|${msgId}`);
     if (o !== rx.size || toHex(sha256(whole)) !== rx.hash) return; // integridade não confere: descarta
     this.enqueue(c, { t: 'fd', i: msgId }, null, Priority.High);
-    this.o.events.fileReceived?.(from, { msgId, name: rx.name, size: rx.size, mime: rx.mime, blocks: rx.total, data: whole });
+    this.o.events.fileReceived?.(from, { msgId, name: rx.name, size: rx.size, mime: rx.mime, blocks: rx.total, data: whole, sentAt: rx.sentAt, expireSec: rx.e });
   }
 
-  private onFileControl(from: string, p: Payload) {
+  private onFileControl(from: string, p: Payload, sentAt?: number) {
     const c = this.contacts.get(from);
     if (!c) return; // arquivo só de contato já aceito
     if (p.t === 'f') {
@@ -434,9 +485,10 @@ export class Messenger {
       const key = `${from}|${p.i}`;
       if (this.fileRx.has(key) || this.deliveredSet.has(`${from}|file|${p.i}`)) return;
       if (this.fileRx.size >= 8) return; // poucos recebimentos simultâneos (memória)
-      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now() });
+      const e = validExpire(p.e);
+      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e });
       this.markDelivered(`${from}|file|${p.i}`);
-      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c });
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e });
       return;
     }
     if (p.t !== 'fa' && p.t !== 'fd') return;
@@ -1025,8 +1077,7 @@ export class Messenger {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     const r = this.router.ingest(bytes, peerId, this.o.now());
     if (r.status === 'delivered') {
-      // Sou o destino: publico a prova de entrega (segredo que só quem decifrou conhece) e conto os saltos.
-      this.addProof(r.message.id, r.message.ackSecret);
+      // Sou o destino: conto os saltos (a prova de entrega sai depois de abrir, ver abaixo).
       const hopsUsed = Math.max(1, DEFAULT_HOPS - r.hopsLeft);
       const k = hopsUsed >= 4 ? '4+' : String(hopsUsed);
       this.day().hops[k] = (this.day().hops[k] ?? 0) + 1;
@@ -1035,36 +1086,55 @@ export class Messenger {
     if (r.status !== 'delivered') return r;
     const m = r.message;
     if (m.kind === EnvelopeKind.Group) {
+      // Prova de entrega: segredo que só quem decifrou conhece (vira crédito para os relays).
+      this.addProof(m.id, m.ackSecret);
       if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m);
       if (r.stored) this.flushAll(); // os outros membros ainda precisam receber
       return r;
     }
+    // Sinal efêmero ("digitando…") não publica prova: não gera crédito para quem repassou.
+    if (!this.onDirect(m)) this.addProof(m.id, m.ackSecret);
+    return r;
+  }
+
+  /** Conteúdo de uma mensagem direta para mim. `true` = sinal efêmero (sem prova de entrega). */
+  private onDirect(m: Opened): boolean {
     // Bloqueado: descarta antes de abrir a sessão (sem confirmação de entrega nem pedido de conversa).
-    if (this.blocked.has(m.fromId)) return r;
+    if (this.blocked.has(m.fromId)) return false;
     const via: IdentityKind = this.contacts.get(m.fromId)?.via ?? (this.managers.anon.get(m.fromId) ? 'anon' : 'public');
     // Abre na sessão da identidade que recebeu; tenta a outra se não abrir (primeira mensagem).
     let pt = this.managers[via].open(m), used: IdentityKind = via;
     if (!pt) { used = via === 'public' ? 'anon' : 'public'; pt = this.managers[used].open(m); }
     this.o.events.changed?.();
-    if (!pt) return r;
-    if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return r; }
+    if (!pt) return false;
+    if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return false; }
     let p: Payload;
-    try { p = JSON.parse(fromUtf8(pt)); } catch { return r; }
-    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p); return r; }
-    if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return r; }
-    if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
-    if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return r; }
-    if (p?.t === 'gv') { this.onVouch(m.fromId, p); return r; }
+    try { p = JSON.parse(fromUtf8(pt)); } catch { return false; }
+    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p, m.sentAt); return false; }
+    if (p?.t === 'ty') {
+      const c = this.contacts.get(m.fromId);
+      if (c && !c.request) this.o.events.typing?.(m.fromId);
+      return true;
+    }
+    if (p?.t === 'r') {
+      // Só confirma leitura de mensagem que eu mandei a este contato.
+      if (this.contacts.has(m.fromId) && Array.isArray(p.i)) this.o.events.read?.(m.fromId, p.i.filter(x => typeof x === 'string' && x.length <= 64).slice(0, 64));
+      return false;
+    }
+    if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return false; }
+    if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return false; }
+    if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return false; }
+    if (p?.t === 'gv') { this.onVouch(m.fromId, p); return false; }
     if (p?.t === 'rv') {
       // De contato, ou de membro de um grupo em que sou admin (admin promovido pode não ser contato dele).
       const known = this.contacts.has(m.fromId) || [...this.groups.values()].some(g => isAdmin(g, this.myId(g.via)) && isMemberOf(g, m.fromId));
       if (known && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n, m.from);
-      return r;
+      return false;
     }
     if (p?.t === 'pp') {
       const c = this.contacts.get(m.fromId);
       if (c && c.via === 'public' && !c.request && used === 'public' && typeof p.p === 'string') this.o.events.peerPhoto?.(m.fromId, p.p === '' ? null : isJpegBase64(p.p) ? p.p : null);
-      return r;
+      return false;
     }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
@@ -1077,18 +1147,18 @@ export class Messenger {
         }
       }
       this.o.events.changed?.();
-      return r;
+      return false;
     }
-    if (p?.t !== 'm' || typeof p.i !== 'string' || typeof p.x !== 'string' || p.i.length > 64) return r;
+    if (p?.t !== 'm' || typeof p.i !== 'string' || typeof p.x !== 'string' || p.i.length > 64) return false;
     let c = this.contacts.get(m.fromId);
     // Sempre confirma (mesmo repetida: o recibo anterior pode ter se perdido).
     const isNew = !c;
     if (!c) {
       // Contato novo só com convite válido, emitido por mim para a identidade que recebeu, e ainda não usado.
       const inv = typeof p.k === 'string' ? this.invites.get(p.k) : undefined;
-      if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return r; }
+      if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return false; }
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
-      if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return r; // contra enxurrada de pedidos
+      if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return false; // contra enxurrada de pedidos
       this.invites.delete(inv.code); // uso único
       this.o.events.inviteUsed?.();
       const name = typeof p.n === 'string' && used === 'public' ? p.n.slice(0, 40) : '';
@@ -1097,12 +1167,12 @@ export class Messenger {
     }
     this.enqueue(c, { t: 'a', i: [p.i] }, null, Priority.High);
     const key = `${m.fromId}|${p.i}`;
-    if (this.deliveredSet.has(key)) return r; // já mostrada
+    if (this.deliveredSet.has(key)) return false; // já mostrada
     this.markDelivered(key);
-    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt };
+    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt, expireSec: validExpire(p.e) };
     if (isNew) this.o.events.newContact?.(c, msg); else this.o.events.message?.(c.id, msg);
     this.o.events.changed?.();
-    return r;
+    return false;
   }
 
   private markDelivered(key: string) {

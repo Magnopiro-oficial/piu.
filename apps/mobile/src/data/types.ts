@@ -1,5 +1,8 @@
 export type Kind = 'direct' | 'group' | 'channel' | 'community';
-export type Status = 'criada' | 'aguardando' | 'encaminhada' | 'entregue' | 'expirada' | 'falha';
+/** Estados da seção 3.1 do documento, mais `lida` (confirmação de leitura, quando o contato a envia). */
+export type Status = 'criada' | 'aguardando' | 'encaminhada' | 'entregue' | 'lida' | 'expirada' | 'falha';
+/** Mensagens temporárias (Privacidade e contato): desligado, 7 dias ou 24 h. */
+export type TempMode = 'off' | '7d' | '24h';
 export type IdentityKind = 'public' | 'anon';
 
 /** Arquivo enviado em blocos (FUN-009): pausa quando a rota vira LoRa e retoma depois. */
@@ -16,7 +19,11 @@ export interface FileXfer {
   lost?: boolean;
 }
 
-export interface Msg { id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; /** Quando foi criada (ms), para o banner de entrega. */ at?: number; sender?: string; fresh?: boolean; file?: FileXfer }
+export interface Msg {
+  id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; /** Quando foi criada (ms), para o banner de entrega. */ at?: number; sender?: string; fresh?: boolean; file?: FileXfer;
+  /** Mensagem temporária: some deste aparelho neste instante (ms). */
+  expiresAt?: number;
+}
 export interface RouteNode { n: string; k: string }
 /** Conversa (Conversation/Group/Channel/Community no modelo da seção 12). */
 export interface Chat {
@@ -33,6 +40,8 @@ export interface Chat {
   group?: string;
   /** Silenciado: sem banners desta conversa. */
   muted?: boolean;
+  /** Mensagens temporárias desta conversa (começa com o padrão de Privacidade). */
+  temp?: TempMode;
   msgs?: Msg[];
 }
 

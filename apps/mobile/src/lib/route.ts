@@ -33,7 +33,8 @@ export function buildRoute(chat: Chat, msg: Msg): RouteView {
       i === 0 ? { n: msg.sender ?? x.n, k: chat.kind === 'group' ? 'Membro do grupo' : x.k === 'Destino' ? 'Origem' : x.k } : i === a.length - 1 ? { n: 'Você', k: 'Destino' } : x);
     vias = [...vias].reverse();
   }
-  const st = mine ? msg.status ?? 'entregue' : 'entregue';
+  // Lida também é entregue (a rota é a mesma).
+  const st = mine ? (msg.status === 'lida' ? 'entregue' : msg.status ?? 'entregue') : 'entregue';
   const bad = st === 'expirada' || st === 'falha';
   const si = bad ? 3 : ORDER.indexOf(st);
   let reached = nodes.length;

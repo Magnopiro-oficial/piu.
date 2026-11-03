@@ -305,3 +305,64 @@ test('7.7 validado e não liquidado expira em 180 dias (não some em 90) e conti
   b2.tick(T0 + 2 * 86400);
   assert.equal(new CreditBook(b2.export(T0 + 91 * 86400)).list().length, 0);
 });
+
+// ── 2.2 / 2.3 / 2.4 leitura, "digitando…" e temporárias ─────────────
+
+test('2.2 confirmação de leitura: vai cifrada, uma vez por mensagem, e só de contato', () => {
+  const net = new Net();
+  const reads: [string, string[]][] = [];
+  const a = device(net, 'Ana', { events: { read: (c, ids) => reads.push([c, ids]) } });
+  const b = device(net, 'Beto');
+  know(a, b); know(b, a);
+  net.link('Ana', 'Beto');
+  a.m.sendText(b.ids.public.id, 'm1', 'Oi');
+  net.run();
+  b.m.sendRead(a.ids.public.id, ['m1']);
+  b.m.sendRead(a.ids.public.id, ['m1']); // de novo: não sai outra vez
+  net.run();
+  assert.deepEqual(reads, [[b.ids.public.id, ['m1']]]);
+  for (const w of net.wire) assert.ok(!Buffer.from(w).includes(Buffer.from('"r"')), 'o relay não sabe que é leitura');
+});
+
+test('2.3 "digitando…": efêmero, sem fila sem vizinho, no máximo a cada 4 s, e sem crédito para quem repassa', () => {
+  const net = new Net();
+  const typing: string[] = [];
+  const a = device(net, 'Ana'), r = device(net, 'Relay'), b = device(net, 'Beto', { events: { typing: c => typing.push(c) } });
+  know(a, b); know(b, a);
+  // Sem vizinho: não entra na fila.
+  a.m.sendText(b.ids.public.id, 'm0', 'firmar a sessão');
+  net.link('Ana', 'Beto'); net.run(); // sessão estabelecida nos dois lados
+  b.m.sendText(a.ids.public.id, 'r0', 'ok'); net.run();
+  net.unlink('Ana', 'Beto');
+  assert.equal(a.m.sendTyping(b.ids.public.id), false, 'sem ninguém por perto, não sai');
+  // Pelo relay: chega, mas o destino não publica prova (o relay não ganha crédito).
+  net.link('Ana', 'Relay'); net.link('Relay', 'Beto');
+  const before = new Set(r.m.credits.list().map(c => c.envelopeId));
+  assert.equal(a.m.sendTyping(b.ids.public.id), true);
+  assert.equal(a.m.sendTyping(b.ids.public.id), false, 'repetido em menos de 4 s');
+  net.run();
+  assert.deepEqual(typing, [a.ids.public.id]);
+  const fresh = r.m.credits.list().filter(c => !before.has(c.envelopeId));
+  assert.equal(fresh.length, 1, 'o relay assinou o recibo ao repassar');
+  assert.equal(fresh[0].state, 'pendente', 'sem prova de entrega: nunca valida');
+  // Vence em segundos: depois de 20 s, não está mais em nenhuma fila.
+  net.clock += 20; r.m.tick(); a.m.tick();
+  assert.equal(r.m.router.has(fresh[0].envelopeId), false);
+});
+
+test('2.4 temporária: o prazo vai junto e o envelope não vive mais que ele', () => {
+  const net = new Net();
+  const got: { text: string; e?: number; sentAt: number }[] = [];
+  const a = device(net, 'Ana'), b = device(net, 'Beto', { events: { message: (_c, x) => got.push({ text: x.text, e: x.expireSec, sentAt: x.sentAt }) } });
+  know(a, b); know(b, a);
+  a.m.sendText(b.ids.public.id, 'm1', 'Some em 24 h', 24 * 3600);
+  a.m.sendText(b.ids.public.id, 'm2', 'Normal');
+  a.m.sendText(b.ids.public.id, 'm3', 'Prazo inválido', 5);
+  net.link('Ana', 'Beto');
+  assert.deepEqual(got.map(x => [x.text, x.e]), [['Some em 24 h', 86400], ['Normal', undefined], ['Prazo inválido', undefined]]);
+  // Sem rota: a temporária de 1 h vence na fila em 1 h (não em 48 h).
+  net.unlink('Ana', 'Beto');
+  a.m.sendText(b.ids.public.id, 'm4', 'Some em 1 h', 3600);
+  net.clock += 3601; a.m.tick();
+  assert.ok(!a.m.pendingFor(b.ids.public.id).includes('m4'));
+});
