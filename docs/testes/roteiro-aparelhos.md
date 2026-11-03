@@ -89,7 +89,7 @@ O LoRa é a ponte entre malhas distantes: só mensagens pequenas, nunca mídia.
 - **Ajuste se precisar:** perdas altas → SF maior (alcança mais, transmite mais devagar).
 
 ## 11. Lunes: conferência da Mainnet e pagamento de teste
-Endereços de produção: `wss://ws.lunes.com`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io` e `wss://ws-archive.lunes.io`.
+Endereços de produção: `wss://ws.lunes.io`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io` e `wss://ws-archive.lunes.io`.
 1. **Mainnet, só leitura:** `cd apps/settlement && npm ci && npm run mainnet:check`. Não usa chave nem envia nada.
 2. **Pagamento de teste numa chain local** (sem dinheiro real):
    - no repositório `lunes-platform/lunes-nightly`, rode `./artefacts/lunes-node --dev --tmp`; a chain fica em `ws://127.0.0.1:9944`;

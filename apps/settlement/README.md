@@ -62,7 +62,7 @@ Fontes: `lunes-platform/lunes-nightly` (nó e runtime) e `lunes-platform/blockex
 | | |
 |---|---|
 | Base | Substrate (Aura produz os blocos, GRANDPA finaliza), runtime `lunes-nightly` v107 no repositório |
-| Endereços WebSocket (produção, informados pela Lunes) | `wss://ws.lunes.com`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io`, `wss://ws-archive.lunes.io` (nó de arquivo). O `.env` do explorador no GitHub cita outros, que não são usados aqui |
+| Endereços WebSocket (produção, informados pela Lunes) | `wss://ws.lunes.io`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io`, `wss://ws-archive.lunes.io` (nó de arquivo). O `.env` do explorador no GitHub cita outros, que não são usados aqui |
 | Moeda | LUNES, **8 casas** (1 LUNES = 100.000.000 planck) |
 | Bloco | 6 s |
 | Taxa | só por tamanho: 1.000 planck (0,00001 LUNES) por byte. A parte por peso é zero no runtime (`coeff_integer: 1 / 100`, divisão inteira). Distribuição: 75% para quem produz o bloco, e o resto para o tesouro e a queima (enquanto o total em circulação passar de 50 milhões) |
