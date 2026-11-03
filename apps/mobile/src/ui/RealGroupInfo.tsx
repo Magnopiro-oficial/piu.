@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { fontFamily } from '../theme/fonts';
 import type { Chat } from '../data/types';
 import { initialsOf } from '../lib/text';
 import { hidesSubscribers, isAdmin, memberCount } from '../messaging/groups';
@@ -25,17 +26,36 @@ const ROLE = { admin: 'Admin', mod: 'Moderador', member: 'Membro' } as const;
  */
 export function RealGroupInfo({ chat }: { chat: Chat }) {
   const { c } = useTheme();
-  const { showToast } = useStore();
-  const { groupOf, groupOps, myIdIn, contactsFor, groupEpoch } = useMessaging();
+  const { showToast, patchChat } = useStore();
+  const { groupOf, groupOps, myIdIn, contactsFor, groupEpoch, deleteChat } = useMessaging();
   const g = groupOf(chat.id);
   const [target, setTarget] = useState<string | null>(null);
   const [leaving, setLeaving] = useState(false);
   const [adding, setAdding] = useState(false);
   const [linkSeq, setLinkSeq] = useState(0);
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState('');
+  const [desc, setDesc] = useState('');
+  const [deleting, setDeleting] = useState(false);
   const me = g ? myIdIn(g.via) : '';
   const admin = !!g && isAdmin(g, me);
   const link = useMemo(() => (g && admin && groupOps ? groupOps.inviteLink(g.id, linkSeq > 0) : ''), [g?.id, admin, linkSeq]); // eslint-disable-line react-hooks/exhaustive-deps
-  if (!g || !groupOps) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Você não participa mais deste grupo.</T></Screen>;
+  const delDialog = deleting && (
+    <Dialog icon="delete" title="Apagar conversa?" primary="Apagar" primaryIcon="delete"
+      body={g ? 'Você sai e a conversa some deste aparelho. Os admins são avisados e trocam a chave.' : 'As mensagens desta conversa saem deste aparelho.'}
+      onClose={() => setDeleting(false)}
+      onPrimary={() => { setDeleting(false); deleteChat(chat.id); showToast({ icon: 'delete', title: 'Conversa apagada', body: '' }); router.dismissTo('/(tabs)'); }} />
+  );
+  if (!g || !groupOps) return (
+    <Screen>
+      <BackHeader />
+      <View style={{ paddingHorizontal: 20, gap: 16 }}>
+        <T size={15} color={c.ink2} align="center">Você não participa mais deste grupo.</T>
+        <Button label="Apagar conversa" variant="outline" height={48} onPress={() => setDeleting(true)} />
+      </View>
+      {delDialog}
+    </Screen>
+  );
 
   const channel = g.kind === 'channel';
   const total = memberCount(g);
@@ -47,6 +67,15 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
   const who = g.members.find(m => m.id === target);
   const run = (fn: () => void, ok?: string) => { try { fn(); if (ok) showToast({ icon: 'check', title: ok, body: '' }); } catch (e) { showToast({ icon: 'error', title: 'Não foi possível', body: (e as Error).message }); } };
   void groupEpoch;
+  const input = { borderRadius: 16, backgroundColor: c.bg2, paddingHorizontal: 16, color: c.ink } as const;
+  const startEdit = () => { setName(g.name); setDesc(g.desc); setEditing(true); };
+  const saveEdit = () => run(() => { groupOps.update(g.id, { name, desc }); setEditing(false); }, channel ? 'Canal atualizado' : 'Grupo atualizado');
+  const toggleMute = () => {
+    patchChat(chat.id, { muted: !chat.muted });
+    showToast(chat.muted
+      ? { icon: 'notifications', title: channel ? 'Canal com notificações' : 'Grupo com notificações', body: 'Novas mensagens voltam a aparecer como banner.' }
+      : { icon: 'notifications_off', title: channel ? 'Canal silenciado' : 'Grupo silenciado', body: 'As mensagens continuam chegando, sem banner.' });
+  };
 
   return (
     <Screen>
@@ -62,6 +91,36 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
             </View>
           </View>
           {!!g.desc && <T size={13.5} color={c.ink2} align="center">{g.desc}</T>}
+          {admin && !editing && (
+            <Pressable onPress={startEdit} accessibilityRole="button" accessibilityLabel={channel ? 'Editar nome e descrição do canal' : 'Editar nome e descrição do grupo'}
+              style={{ marginTop: 2, height: 32, paddingHorizontal: 12, borderRadius: 16, borderWidth: 1, borderColor: c.line2, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Icon name="edit" size={15} />
+              <T size={12.5} w={550}>Editar</T>
+            </Pressable>
+          )}
+        </View>
+
+        {admin && editing && (
+          <View style={{ marginTop: 10, marginHorizontal: 20, gap: 8 }}>
+            <TextInput value={name} onChangeText={setName} placeholder={channel ? 'Nome do canal' : 'Nome do grupo'} placeholderTextColor={c.ink3} accessibilityLabel="Nome" maxLength={60}
+              style={{ ...input, height: 52, fontSize: 16, fontFamily: fontFamily(600) }} />
+            <TextInput value={desc} onChangeText={setDesc} placeholder="Descrição (opcional)" placeholderTextColor={c.ink3} accessibilityLabel="Descrição (opcional)" maxLength={200}
+              style={{ ...input, height: 48, fontSize: 15, fontFamily: fontFamily(400) }} />
+            <T size={12} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>{channel ? 'Os inscritos recebem o nome novo pela malha.' : 'Os membros recebem o nome novo pela malha.'}</T>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <Button label="Cancelar" variant="soft" height={44} fontSize={14} style={{ flex: 1 }} onPress={() => setEditing(false)} />
+              <Button label="Salvar" height={44} fontSize={14} style={{ flex: 1 }} disabled={!name.trim() || (name.trim() === g.name && desc.trim() === g.desc)} onPress={saveEdit} />
+            </View>
+          </View>
+        )}
+
+        <View style={{ marginTop: 14, marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
+          <Pressable onPress={toggleMute} accessibilityRole="button" accessibilityState={{ selected: !!chat.muted }}
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, opacity: pressed ? 0.6 : 1 })}>
+            <Icon name={chat.muted ? 'notifications_off' : 'notifications'} size={21} w={300} />
+            <T size={15} w={450} style={{ flex: 1 }}>{chat.muted ? 'Reativar notificações' : channel ? 'Silenciar canal' : 'Silenciar grupo'}</T>
+            <T size={12.5} color={c.ink2}>{chat.muted ? 'Silenciado' : ''}</T>
+          </Pressable>
         </View>
 
         {admin && (
@@ -182,6 +241,9 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
         <View style={{ paddingTop: 18, paddingHorizontal: 20 }}>
           <Button label={channel ? 'Sair do canal' : 'Sair do grupo'} variant="outline" height={48} onPress={() => setLeaving(true)} />
         </View>
+        <View style={{ paddingTop: 8, paddingHorizontal: 20 }}>
+          <Button label="Sair e apagar conversa" variant="soft" height={48} onPress={() => setDeleting(true)} />
+        </View>
       </ScrollView>
 
       {who && (
@@ -194,6 +256,7 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           body="Os admins são avisados e trocam a chave. Você não recebe mais nada daqui."
           onPrimary={() => { setLeaving(false); run(() => groupOps.leave(g.id)); router.dismissTo('/(tabs)'); }} onClose={() => setLeaving(false)} />
       )}
+      {delDialog}
     </Screen>
   );
 }

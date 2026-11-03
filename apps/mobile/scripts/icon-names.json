@@ -158,5 +158,7 @@
   "wifi",
   "wifi_off",
   "wifi_tethering",
-  "workspaces"
+  "workspaces",
+  "map",
+  "ios_share"
 ]

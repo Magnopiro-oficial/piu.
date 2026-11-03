@@ -19,19 +19,21 @@ export interface FileXfer {
   lost?: boolean;
   /** Recebido esperando "Baixar" (ajuste "Baixar mídia automaticamente"). */
   held?: boolean;
+  /** "Limpar cache de mídia": a prévia embutida foi apagada deste aparelho. */
+  purged?: boolean;
 }
 
 export interface Msg {
   id: string; from: 'me' | 'them' | 'sys'; text: string; time: string; status?: Status; /** Quando foi criada (ms), para o banner de entrega. */ at?: number; sender?: string; fresh?: boolean; file?: FileXfer;
   /** Mensagem temporária: some deste aparelho neste instante (ms). */
   expiresAt?: number;
+  /** Localização em texto curto (lib/locationCore.ts); `text` é o nome do lugar (pode ser vazio). */
+  loc?: { lat: number; lon: number };
 }
-export interface RouteNode { n: string; k: string }
 /** Conversa (Conversation/Group/Channel/Community no modelo da seção 12). */
 export interface Chat {
   id: string; ident: IdentityKind; kind: Kind; name: string; initials: string; time: string; unread: number;
-  inv?: boolean; sub?: string; via?: string; viaIcon?: string; preview?: string; offline?: boolean; priority?: string; owner?: boolean;
-  route?: { nodes: RouteNode[]; vias: string[] };
+  inv?: boolean; sub?: string; preview?: string; offline?: boolean; owner?: boolean;
   /** Contato real (`piu:…`): as mensagens vão cifradas pelo transporte, não pela simulação. */
   peer?: string;
   /** Foto do perfil público que o contato mandou (data URI JPEG de 96 px). */

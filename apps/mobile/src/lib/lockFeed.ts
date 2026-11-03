@@ -13,6 +13,7 @@
 import type { NotifKey, Preview } from '../data/settings';
 import type { Chat } from '../data/types';
 import { alertTitle, areaLine, type AlertRegion, isUrgent, type OfficialAlert, visibleAlerts } from './alertsCore';
+import { msgSummary } from './chatCore';
 
 export interface LockItem {
   id: string;
@@ -52,7 +53,7 @@ export function lockItems(o: {
     const last = unread.at(-1);
     if (!last) continue;
     const kind = notifKindOf(c);
-    const text = last.text || (last.file ? `Arquivo: ${last.file.name}` : '');
+    const text = msgSummary(last);
     const body = kind === 'group' && last.sender ? `${last.sender}: ${text}` : text;
     const neutral = kind === 'channel' ? 'Nova publicação' : unread.length > 1 ? 'Novas mensagens' : 'Nova mensagem';
     msgs.push({
