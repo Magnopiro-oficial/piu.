@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { loadConfig } from './config.js';
-import { startNode } from './server.js';
+import { type NodeServer, RESTART_EXIT_CODE, startNode } from './server.js';
 
 const config = loadConfig();
 
@@ -8,11 +8,27 @@ const config = loadConfig();
 const show = (reason: string, code: string) =>
   process.stdout.write(`\n  ${reason}\n  Código de pareamento: ${code.slice(0, 4)} ${code.slice(4)}  (vale 10 min, uso único)\n\n`);
 
+// Parar o serviço (systemd, Ctrl+C) ou reiniciar pelo painel: grava as mensagens guardadas e o
+// histórico antes de sair. No reinício, sai com RESTART_EXIT_CODE: o supervisor (procd com respawn,
+// systemd com Restart=on-failure) sobe o nó de novo. Sem supervisor, o nó só para.
+let stopping = false;
+let running: NodeServer | null = null;
+const stop = (code: number) => {
+  if (stopping) process.exit(1);
+  stopping = true;
+  void (running?.close() ?? Promise.resolve()).catch(() => {}).finally(() => process.exit(code));
+};
+
 const node = await startNode(config, {
   logger: true,
   log: msg => process.stdout.write(`  ${msg}\n`),
   onCode: (code, reason) => show(reason === 'locked' ? 'Código anterior bloqueado por tentativas erradas.' : 'Código usado. Novo código para o próximo pareamento:', code),
+  onRestart: () => {
+    process.stdout.write(`  Reinício pedido pelo painel: gravando o estado e saindo (código ${RESTART_EXIT_CODE}) para o supervisor subir de novo.\n`);
+    stop(RESTART_EXIT_CODE);
+  },
 });
+running = node;
 
 process.stdout.write(`\n  piu-node · painel em ${node.url}\n`);
 process.stdout.write(`  Certificado TLS (SHA-256): ${node.fingerprint}\n  Confira esta impressão digital no navegador antes de aceitar o certificado.\n`);
@@ -33,12 +49,4 @@ process.stdout.write(
 );
 show('Para entrar no painel, use este código:', node.issueCode());
 
-// Parar o serviço (systemd, Ctrl+C): grava as mensagens guardadas e o histórico antes de sair.
-let stopping = false;
-for (const sig of ['SIGINT', 'SIGTERM'] as const) {
-  process.on(sig, () => {
-    if (stopping) process.exit(1);
-    stopping = true;
-    void node.close().catch(() => {}).finally(() => process.exit(0));
-  });
-}
+for (const sig of ['SIGINT', 'SIGTERM'] as const) process.on(sig, () => stop(0));

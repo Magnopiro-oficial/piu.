@@ -198,6 +198,8 @@ contador u32 · XChaCha20-Poly1305(chave do sentido, nonce = prefixo (20) ‖ co
 | `0x7f` | `ERROR` | igual ao da seção 10 |
 | `0x40` | `OPERATOR_CERT` | certificado do nó assinado pelo operador (seção 8.1) |
 | `0x41` | `REVOCATION_LIST` | lista de revogação assinada pelo operador (seção 8.1) |
+| `0x42` | `DEVICE_POLICY` | pausa e regras de um equipamento, assinadas pelo operador (seção 8.2) |
+| `0x43` | `DEVICE_REPORT` | resumo das estatísticas de um nó, assinado por ele (seção 8.2) |
 
 ### 8.1 Extensão de operador: certificado, rotação e revogação
 
@@ -233,6 +235,30 @@ Regras:
 - O nó guarda o que aprendeu (passos de rotação, o próprio certificado, a lista) para valer depois de reiniciar.
 
 Limites desta extensão: ela só alcança os nós do **mesmo operador** que estão conectados (direta ou indiretamente, por nós do mesmo operador). Um nó de outro operador continua aceitando a chave revogada, e um equipamento revogado que tinha uma cópia da chave de operador continua podendo assinar: nesse caso o operador DEVE rotacionar a chave. Revogar na rede inteira depende de uma autoridade comum (a Lunes) e fica para a especificação de atualização.
+
+### 8.2 Ajustes e resumo dos equipamentos do operador
+
+Também extensão compatível (sem bit em `FEATURES`; quem não conhece ignora), só entre vizinhos que se reconheceram como do **mesmo operador** (seção 8.1). Implementação de referência: `apps/piu-node/src/relay/operator-frames.ts` e `engine.ts`.
+
+Mensagens assinadas:
+
+```
+ajustes = H("piu/lnnp/v1/device-policy" ‖ corpo sem a assinatura)   assinada pela chave de operador
+resumo  = H("piu/lnnp/v1/device-report" ‖ corpo sem a assinatura)   assinada pela chave do nó que resume
+```
+
+| Tipo | Corpo |
+|---|---|
+| `0x42` `DEVICE_POLICY` | `chave do operador (32) · chave do nó (32) · número u32 · emitido u32 · sinais u8 · banda u8 · armazenamento u8 · horário u8 · assinatura (64)`; sinais: bit 0 = pausado, bit 1 = tem regras. Com regras: banda 5, 20 ou 50 (Mbps), armazenamento 1, 4 ou 8 (GB), horário 0 = sempre, 1 = 22h–7h, 2 = 8h–18h; outro valor é malformado. Sem regras, os três bytes vão em zero |
+| `0x43` `DEVICE_REPORT` | `chave do nó (32) · horário u32 · sequência u32 · ligado desde u32 · encaminhados u32 · guardados u32 · recibos u32 · vizinhos u16 · sinais u8 · ajuste em vigor u32 · assinatura (64)`; sinais: bit 0 = pausado, bit 1 = retransmitindo. Contadores desde que o nó ligou, saturados em 2^32−1 |
+
+Regras:
+
+- **Ajustes**: um por equipamento (chave do nó), numerados por quem emite; o de número maior substitui o anterior. Só é aceito de um vizinho do mesmo operador, assinado pela **chave atual** da linhagem, com número **maior** que o conhecido para aquele equipamento (anti-replay) e `emitido` não mais que a tolerância do relógio (5 min) no futuro. Aceito, é guardado (para valer depois de reiniciar), repassado aos outros vizinhos do mesmo operador e, se a chave do nó é a do próprio nó, aplicado: pausado não guarda nem repassa terceiros; as regras valem junto com os limites locais (fica o mais restrito; todos os horários ao mesmo tempo). Depois de reconhecer um vizinho do mesmo operador, o nó DEVE mandar os ajustes que conhece. Um nó guarda no máximo 256.
+- **Resumo**: cada nó manda o seu periodicamente (a referência usa 30 s) e quando a pausa muda, só a vizinhos do mesmo operador. Só é aceito se a chave que assina é a do vizinho autenticado no handshake ou a de um equipamento que o nó certificou, se `(horário, sequência)` é maior que o do último resumo daquela chave (a sequência recomeça quando o nó liga; o horário não volta) e se o horário não está mais que 5 min no futuro. Pode ser repassado aos outros vizinhos do mesmo operador. Não leva conteúdo, destino, ids de envelope nem chave secreta.
+- O número do ajuste em vigor no resumo permite ao operador ver que o equipamento aplicou o que foi emitido.
+
+Limites: alcança só equipamentos ligados (direta ou indiretamente) a nós do mesmo operador; um equipamento desligado recebe os ajustes quando voltar. O resumo é o último estado, não um histórico.
 
 ## 9. Encaminhamento, deduplicação e recibos
 
@@ -297,3 +323,4 @@ Antes do handshake terminar, o erro vai **em claro**: `0x7f · código u8 · tam
 | 1 | Primeira versão: HELLO/AUTH simétricos, capacidades TLV, registros XChaCha20-Poly1305, `ENVELOPE`, `FRAGMENT`, `RELAY_RECEIPT`, `PING`/`PONG`, `CAPS_UPDATE`, `CLOSE`, `ERROR`; descoberta LAN por UDP |
 | 1 (adapter) | Adapter serial (LoRa e USB): KISS, pacote com endereço curto e confirmação, handshake em sequência (seção 3.1). Não muda o protocolo LNNP. |
 | 1 (extensão de operador) | `OPERATOR_CERT` (`0x40`) e `REVOCATION_LIST` (`0x41`): certificado do nó, rotação e revogação pelo operador (seção 8.1). Compatível: quem não conhece ignora. |
+| 1 (ajustes e resumo) | `DEVICE_POLICY` (`0x42`) e `DEVICE_REPORT` (`0x43`): pausa e regras de cada equipamento assinadas pelo operador e resumo assinado de cada nó, entre nós do mesmo operador (seção 8.2). Compatível: quem não conhece ignora. |

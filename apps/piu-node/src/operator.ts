@@ -23,8 +23,8 @@ import { writeFileAtomic } from './fsutil.js';
 import { toHex, utf8 } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
 import {
-  type CertJson, fingerprint, type ListJson, listFromJson, listToJson, makeCert, makeRevocationList, makeRotation, type OperatorCert,
-  operatorKeyPair, type RevocationList, type RotationStep, unhex,
+  type CertJson, type DevicePolicy, fingerprint, type ListJson, listFromJson, listToJson, makeCert, makeDevicePolicy, makeRevocationList, makeRotation,
+  type OperatorCert, operatorKeyPair, type PolicyLimits, type RevocationList, type RotationStep, unhex,
 } from './relay/operator-frames.js';
 
 interface StepJson { prevPk: string; nextPk: string; at: number; sig: string }
@@ -36,6 +36,8 @@ interface KeyRecord {
   chain: StepJson[];
   revocation: ListJson | null;
   lastBackupAt?: number;
+  /** Último número usado nos ajustes de equipamento (`DEVICE_POLICY`) emitidos aqui. Só cresce. */
+  policySeq?: number;
 }
 interface FileShape { v: 1; keys: Record<string, KeyRecord> }
 
@@ -145,6 +147,19 @@ export class OperatorVault {
     return list;
   }
 
+  /**
+   * Ajustes de um equipamento (pausa e regras), assinados pela chave atual, com um número maior que
+   * qualquer outro emitido aqui e que `atLeast` (o maior que o motor já conhece para ele).
+   */
+  devicePolicy(operatorId: string, nodePk: Uint8Array, v: { paused: boolean; limits: PolicyLimits | null }, now: number, atLeast = 0): DevicePolicy {
+    const op = this.ensure(operatorId, now);
+    const k = this.s.keys[operatorId]!;
+    const seq = Math.max(k.policySeq ?? 0, atLeast) + 1;
+    k.policySeq = seq;
+    this.save();
+    return makeDevicePolicy(op, nodePk, seq, Math.floor(now / 1000), v);
+  }
+
   /** Rotação: chave nova assinada pela antiga; a lista de revogação passa para a nova (número maior). */
   rotate(operatorId: string, now: number): { previous: string; current: string } {
     const old = this.ensure(operatorId, now);
@@ -197,7 +212,9 @@ export class OperatorVault {
       content = JSON.parse(new TextDecoder().decode(pt));
     } catch { throw new OperatorKeyError('AUTH', 'Senha errada ou arquivo adulterado.'); } finally { key.fill(0); }
     if (typeof content.seed !== 'string' || !/^[0-9a-f]{64}$/.test(content.seed) || !Array.isArray(content.chain)) throw new OperatorKeyError('FORMAT', 'Backup incompleto.');
-    this.s.keys[operatorId] = { seed: content.seed, createdAt: Number(content.createdAt) || 0, chain: content.chain, revocation: content.revocation ?? null };
+    // O número dos ajustes emitidos aqui não volta atrás (os equipamentos recusariam os próximos).
+    const policySeq = this.s.keys[operatorId]?.policySeq;
+    this.s.keys[operatorId] = { seed: content.seed, createdAt: Number(content.createdAt) || 0, chain: content.chain, revocation: content.revocation ?? null, ...(policySeq ? { policySeq } : {}) };
     this.save();
   }
 }
