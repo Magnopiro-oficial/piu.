@@ -77,8 +77,9 @@ export function Sidebar() {
       </div>
       <div className="side-hide" style={{ flex: 1 }} />
       <div className="col side-hide" style={{ padding: 12, borderRadius: 14, border: '1px dashed var(--line2)', gap: 6 }}>
-        <div className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600 }}><Icon name="cloud_off" size={17} />Mainnet fora de alcance</div>
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{nodeMode === 'node' ? 'Este nó ainda não sincronizou. Recibos ficam guardados aqui até lá.' : `Última sincronização ${PERIOD.lastSync}. Créditos ficam guardados aqui até lá.`}</div>
+        {/* Com piu-node: o nó lê a Mainnet (Carteira), mas os recibos ainda não vão ao validador nem há lote pago. */}
+        <div className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600 }}><Icon name="cloud_off" size={17} />{nodeMode === 'node' ? 'Lotes ainda não pagos' : 'Mainnet fora de alcance'}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{nodeMode === 'node' ? 'O saldo da carteira de provider é lido na Lunes Mainnet. Os recibos ficam guardados aqui até o validador e a liquidação pagarem o lote.' : `Última sincronização ${PERIOD.lastSync}. Créditos ficam guardados aqui até lá.`}</div>
       </div>
       <div className="side-hide">
         <Segmented label="Tema" value={theme} onChange={setTheme} height={30} fontSize={12.5}

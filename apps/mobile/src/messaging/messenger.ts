@@ -80,7 +80,7 @@ export interface MessengerEvents {
   notice(contactId: string, notice: string, pub: PublicIdentity): void;
   /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
   peerPhoto(contactId: string, jpegBase64: string | null): void;
-  /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
+  /** Lote de créditos fechado (só registro local: o pagamento depende da liquidação, ainda não ligada). */
   lotClosed(lot: Lot): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
   inviteUsed(): void;

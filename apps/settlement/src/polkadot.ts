@@ -3,7 +3,8 @@
  * (lunes-platform/blockexplorer-ui). As chamadas e os índices vêm dos metadados do próprio nó, não
  * estão fixos aqui.
  *
- * Endereços de produção informados pela Lunes. Outros endereços: `--ws` ou PIU_SETTLEMENT_WS.
+ * Endereços de produção informados pela Lunes, nesta ordem (o WsProvider passa ao seguinte quando um
+ * falha). Explorador: https://blockexplorer.lunes.io/. Outros endereços: `--ws` ou PIU_SETTLEMENT_WS.
  */
 import '@polkadot/api-augment';
 import { ApiPromise, WsProvider } from '@polkadot/api';
@@ -14,7 +15,7 @@ import { TxRejected } from './chain.js';
 import type { PlannedLot } from './lot.js';
 
 export const MAINNET_ENDPOINTS = [
-  'wss://ws.lunes.com',
+  'wss://ws.lunes.io',
   'wss://ws-lunes-main-01.lunes.io',
   'wss://ws-lunes-main-02.lunes.io',
   // Nó de arquivo: guarda o estado de blocos antigos (útil para conferir um lote pago há tempo).

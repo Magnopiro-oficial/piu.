@@ -77,6 +77,14 @@ Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retra
 - **O próprio nó é um equipamento do dono**: no primeiro pareamento (ou ao subir, se já há dono), o nó se registra com o nome da máquina (`hostname`) e a classe Home Node (Gateway Local com `PIU_SERIAL`). `GET /api/devices` marca com `self: true`. Pausar esse equipamento pausa a retransmissão de terceiros no motor na hora (e continua pausado depois de reiniciar); removê-lo pelo painel não pode (`409`). Os outros equipamentos são registros do assistente: ainda não mandam estatísticas a este nó.
 - **Carteira sem valor de exemplo**: operador novo começa com saldo 0 e sem movimentações. `GET /api/wallet` traz as movimentações reais (`kind: 'out'` para transferências; `kind: 'in'` para liquidação recebida, com a referência do lote em `from`). Não há rota que credite: só a liquidação de verdade (ferramenta local) chama `Store.credit`.
 
+### Carteira de provider na Lunes Mainnet (só leitura)
+- O operador configura o endereço Lunes (SS58) da carteira de provider dele no painel (`PUT /api/wallet/lunes`, com step-up; `DELETE` tira). O endereço é conferido no servidor (base58, prefixo 57 ou 42, chave de 32 bytes, soma de verificação BLAKE2b) e guardado no `state.json`, por operador. O nó **não tem a chave** dessa carteira: não assina nem envia nada.
+- `GET /api/wallet/lunes` devolve `{ address, setAt, explorer, endpoints, onchain, error, cached }`. `onchain` é o saldo lido na Lunes Mainnet no último bloco finalizado (`free`, `reserved`, `frozen` em planck como texto, 1 LUNES = 10^8 planck; `block`, `blockHash`, `endpoint` que respondeu e `at`). Sem endereço, não consulta a rede.
+- A leitura usa o cliente leve de `src/lunes/` (JSON-RPC sobre WebSocket, `state_getStorage` de System.Account, sem @polkadot/api), com troca automática entre os endereços de `PIU_LUNES_ENDPOINTS` (padrão: `wss://ws.lunes.io`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io`, `wss://ws-archive.lunes.io`, nesta ordem), tempo limite de 5 s por endereço e cache de 30 s por endereço. Sem rede: volta a última leitura, com o horário dela, e o motivo em `error`; depois de uma falha, espera 10 s antes de tentar de novo.
+- WebSocket: o global do Node 22. No Node 20 (OpenWrt 24.10) ele só existe com `NODE_OPTIONS=--experimental-websocket`; sem isso, `error` diz que falta WebSocket e o resto do nó funciona normalmente.
+- Libere no firewall de saída do equipamento os domínios acima (TCP 443).
+- `src/lunes/xxhash.ts`, `ss58.ts` e `lunesRpc.ts` são **cópia gerada** de `apps/mobile/src/lib/` (`npm run lunes:sync`); `test/lunes.test.ts` falha se a cópia ficar diferente. `src/lunes/reader.ts` (cache) é só daqui.
+
 ### Código do protocolo
 `src/protocol/` é uma **cópia gerada** de `apps/mobile/src/protocol/` (`npm run protocol:sync`), não um import relativo: o piu-node é ESM com `moduleResolution: nodenext` (exige `.js` nos imports, que o app não usa), compila com `noUncheckedIndexedAccess` e precisa rodar sozinho em Linux/OpenWrt, sem o projeto Expo e o `node_modules` dele. O teste `test/protocol-sync.test.ts` falha se a cópia ficar diferente da fonte. O app desktop continua empacotando com esbuild normalmente (as dependências `@noble/*` estão no `package.json` daqui).
 
@@ -100,6 +108,7 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `GET /api/operator`, `POST /api/operator/backup`, `POST /api/operator/rotate`, `POST /api/operator/restore` | chave de operador: impressão digital, backup cifrado, rotação e restauração (as três últimas exigem step-up) |
 | `GET /api/relay/evidence` | recibos no formato `EvidenceFile` do validador (só o dono) |
 | `GET`/`POST /api/payout-claims`, `GET /api/payout-claims/file` | carteira do lote assinada pelo nó (`PayoutClaim`; declarar exige step-up) e o arquivo `ClaimFile` |
+| `GET`/`PUT`/`DELETE /api/wallet/lunes` | endereço Lunes da carteira de provider (configurar e tirar exigem step-up; SS58 conferido no servidor) e o saldo on-chain lido na Mainnet, com bloco e endereço que respondeu |
 | `GET /api/wallet`, `POST /api/wallet/transfer` | saldo e transferência para a carteira pessoal ou um endereço `lunes:…` (exige step-up). Com celular pareado, devolve `202` com o pedido a aprovar |
 | `POST /api/wallet/transfer/:id/approve` | conclui o pedido com o código de aprovação que o celular mostrou (uso único, 5 tentativas a cada 10 min) |
 | `GET /api/phones`, `POST /api/phones`, `POST /api/phones/:id/confirm`, `DELETE /api/phones/:id` | celulares que aprovam transferências: listar (sem o segredo), parear (exige step-up; devolve o QR), confirmar com os 6 dígitos e remover |
@@ -181,12 +190,13 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
 | `PIU_ALERT_FEEDS` | `http://alert-as.inmet.gov.br/cap_12/rss/alert-as.rss` | feeds de alertas CAP 1.2 (RSS/Atom, ou URL que devolve um `<alert>`), separados por vírgula; vazio desliga. Alternativo do INMET: `https://alerts.inmet.gov.br/cap_12/rss/alert-as.rss`. A IDAP da Defesa Civil guarda alertas em CAP, mas sem endpoint documentado: inclua aqui quando houver. Os vigentes ficam em `<data>/alerts/alerts.json` (vencem pelo `expires`; sem ele, 24 h depois do `sent`) |
 | `PIU_ALERT_POLL_MS` | `600000` | intervalo entre as leituras dos feeds (1 min a 24 h) |
+| `PIU_LUNES_ENDPOINTS` | os 4 de produção | endereços WebSocket da Lunes Mainnet para ler o saldo da carteira de provider (`wss://…`, separados por vírgula, na ordem de tentativa) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 
 ## Próximos passos
 - Passkeys (WebAuthn) depois do primeiro pareamento, para não depender do código a cada novo navegador.
-- Ligar a carteira à liquidação real (Mainnet) e os recibos ao validador; até lá o saldo só muda com transferências e créditos locais.
+- Ligar a carteira à liquidação real (item 7: pagar os lotes na Mainnet) e os recibos ao validador; o saldo on-chain da carteira de provider já é lido (`GET /api/wallet/lunes`), mas o saldo do nó (`GET /api/wallet`) só muda com transferências e créditos locais.
 - Estatísticas dos outros equipamentos do operador (hoje só o nó que serve o painel tem dados reais).
 - Envelopes guardados direto em disco, além do teto de memória `PIU_LNNP_MEMORY_MB` (hoje o disco serve ao reinício; o teto em uso continua sendo o da memória).
 - Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.

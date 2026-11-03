@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { LEGACY_KEYS, legacyKeysIn } from '../legacyCore';
 import { fmtBytes, meshStatus, radarPos, relayCard } from '../networkCore';
 import { mediaBytes, storageBreakdown } from '../storageCore';
-import { activityRows, bonusSteps, dayLabel, walletSummary } from '../walletCore';
+import { activityRows, blockLabel, bonusSteps, dayLabel, onchainView, walletSummary, whenLabel } from '../walletCore';
 
 const DAY = 86_400_000;
 const zero = { pendente: 0, validado: 0, rejeitado: 0, pago: 0 };
@@ -83,4 +83,26 @@ test('migração: só os campos de exemplo saem; ajustes reais ficam', () => {
   for (const keep of ['nearby.myFee', 'nearby.visibleUntil', 'nearby.invites', 'nearby.reserved', 'nearby.answers', 'wallet.since', 'dev.list', 'dev.self', 'msg.state', 'set.priv']) {
     assert.ok(!(LEGACY_KEYS as readonly string[]).includes(keep), keep);
   }
+});
+
+test('carteira: leitura da Mainnet dita como é (sem endereço, consultando, lida, sem rede)', () => {
+  const now = new Date(2026, 10, 3, 15, 0).getTime();
+  const addr = '6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr';
+  const snap = { address: addr, exists: true, free: '255000000', reserved: '0', frozen: '0', block: 4_200_000, blockHash: '0x' + '11'.repeat(32), endpoint: 'wss://ws-lunes-main-01.lunes.io', at: new Date(2026, 10, 3, 14, 32).getTime() };
+  const none = onchainView({ address: null, snap: null, status: { state: 'idle' }, now });
+  assert.equal(none.has, false);
+  assert.match(none.line, /Informe o endereço/);
+  assert.equal(onchainView({ address: addr, snap: null, status: { state: 'loading' }, now }).pill, 'Mainnet: consultando…');
+  const offFirst = onchainView({ address: addr, snap: null, status: { state: 'error', error: 'Nenhum endereço da Lunes respondeu.' }, now });
+  assert.equal(offFirst.has, false, 'sem leitura, nada de saldo');
+  const ok = onchainView({ address: addr, snap, status: { state: 'ok' }, now });
+  assert.equal(ok.pill, 'Mainnet · bloco #4.200.000');
+  assert.equal(ok.line, 'Saldo na Lunes Mainnet · bloco #4.200.000 · ws-lunes-main-01.lunes.io · atualizado às 14:32');
+  const off = onchainView({ address: addr, snap, status: { state: 'error', error: 'x' }, now: now + DAY });
+  assert.equal(off.stale, true);
+  assert.equal(off.line, 'Sem conexão agora · último saldo lido no bloco #4.200.000 · ws-lunes-main-01.lunes.io · atualizado em ontem, 14:32');
+  // Leitura guardada de outro endereço não vale para o atual.
+  assert.equal(onchainView({ address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', snap, status: { state: 'ok' }, now }).has, false);
+  assert.equal(whenLabel(new Date(2026, 9, 28, 9, 5).getTime(), now), 'em 28 out, 09:05');
+  assert.equal(blockLabel(12), '#12');
 });

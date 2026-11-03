@@ -17,8 +17,11 @@ export const WELCOME_BONUS = 10;
 export const REFERRAL_REWARD = 25;
 export const REFERRAL_MONTHLY_CAP = 20;
 
-/** Texto padrão enquanto não há liquidação real (a Lunes Mainnet ainda não está conectada). */
-export const MAINNET_PENDING = 'liquidação ainda não conectada à Mainnet';
+/**
+ * Texto padrão para o pagamento dos créditos: a leitura da Lunes Mainnet existe (lib/lunesRpc.ts),
+ * mas pagar em LUNES (lotes semanais, convites) depende da liquidação (apps/settlement), ainda não ligada ao app.
+ */
+export const MAINNET_PENDING = 'pagamento em LUNES pendente da liquidação';
 
 // ── Por perto ────────────────────────────────────────────
 /**

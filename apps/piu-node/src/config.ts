@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { DEFAULT_ALERT_FEEDS, DEFAULT_ALERT_POLL_MS } from './alerts/collector.js';
+import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
@@ -17,6 +18,11 @@ export interface Config {
   releasePubKey: string | null;
   /** Motor de retransmissão LNNP (adapter LAN). Ausente: o nó sobe sem retransmitir. */
   lnnp?: LnnpConfig;
+  /**
+   * Endereços WebSocket da Lunes Mainnet para ler o saldo da carteira de provider (`PIU_LUNES_ENDPOINTS`).
+   * Ausente: os de produção, na ordem confirmada (src/lunes/lunesRpc.ts).
+   */
+  lunesEndpoints?: string[];
   /** Alertas oficiais em CAP 1.2 (feeds RSS/Atom). Ausente ou sem feeds: desligado. */
   alerts?: AlertsConfig;
 }
@@ -119,5 +125,6 @@ export function loadConfig(env = process.env): Config {
     releasePubKey: env.PIU_RELEASE_PUBKEY?.trim() || null,
     lnnp: loadLnnpConfig(env),
     alerts: loadAlertsConfig(env),
+    lunesEndpoints: parseLunesEndpoints(env.PIU_LUNES_ENDPOINTS),
   };
 }

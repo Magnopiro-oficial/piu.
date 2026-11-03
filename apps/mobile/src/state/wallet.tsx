@@ -1,7 +1,9 @@
-import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pruneLegacyData } from '../lib/legacyData';
+import { accountBalance, LunesRpc, planckToLunes } from '../lib/lunesRpc';
 import { readPersisted, usePersisted } from '../lib/persist';
-import type { EarnedMove, InviteMove } from '../lib/walletCore';
+import { decodeSs58 } from '../lib/ss58';
+import type { EarnedMove, InviteMove, OnchainSnapshot, OnchainStatus } from '../lib/walletCore';
 import { useStore } from './store';
 
 const HOUR = 3_600_000, DAY = 24 * HOUR;
@@ -14,12 +16,24 @@ export const INVITE_COOLDOWN_MS = 30 * DAY;
 export type InviteState = { kind: 'none' } | { kind: 'pending'; hoursLeft: number } | { kind: 'cooldown'; daysLeft: number };
 
 interface Wallet {
-  /** Saldo on-chain: 0 enquanto a liquidação não está conectada à Lunes Mainnet (nada inventado). */
+  /**
+   * Saldo livre (`free`) em LUNES da conta Lunes informada, lido na Lunes Mainnet. 0 sem endereço ou
+   * antes da primeira leitura (nada inventado). O Piu não gera nem guarda chave Lunes: só lê.
+   */
   onchain: number;
+  /** Endereço Lunes (SS58) da pessoa, salvo cifrado no aparelho. */
+  lunesAddress: string | null;
+  /** Salva o endereço (conferido: base58, prefixo 57 ou 42, soma de verificação). Devolve o erro, ou null. null apaga. */
+  setLunesAddress: (a: string | null) => string | null;
+  /** Última leitura (guardada para mostrar sem rede) e o estado da consulta. */
+  onchainSnap: OnchainSnapshot | null;
+  onchainStatus: OnchainStatus;
+  /** Lê o saldo de novo na Mainnet (ao abrir a carteira e ao puxar a tela). */
+  refreshOnchain: () => Promise<void>;
   /**
    * Convites pagos reservados (24 h), devolvidos, aceitos por quem eu convidei (pagos) e taxas de
    * pedidos que eu aceitei (a receber). Tudo é registro local: a reserva assinada em LUNES depende da
-   * liquidação na Lunes Mainnet, que ainda não está conectada.
+   * liquidação na Lunes Mainnet, que ainda não está ligada ao app.
    */
   reserved: InviteMove[];
   refunded: InviteMove[];
@@ -62,6 +76,13 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Na primeira vez segue Privacidade → "Por perto começa" (padrão: invisível).
   const [visibleUntil, setVisibleUntil] = usePersisted<number | null>('nearby.visibleUntil',
     () => (readPersisted<{ near?: string }>('set.priv')?.near === '1h' ? Date.now() + NEARBY_VISIBLE_MS : null));
+  const [lunesAddress, setLunesAddressRaw] = usePersisted<string | null>('wallet.lunesAddress', null);
+  const [onchainSnap, setOnchainSnap] = usePersisted<OnchainSnapshot | null>('wallet.onchain', null);
+  const [onchainStatus, setOnchainStatus] = useState<OnchainStatus>({ state: 'idle' });
+  // Endereço sendo lido agora e o endereço atual: leitura de um endereço trocado no meio é descartada.
+  const reading = useRef<string | null>(null);
+  const latest = useRef(lunesAddress);
+  latest.current = lunesAddress;
   const [now, setNow] = useState(Date.now);
   const visible = visibleUntil != null && visibleUntil > now;
 
@@ -88,8 +109,40 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     showToast({ kind: 'wallet', icon: 'undo', title: due.length === 1 ? 'Convite devolvido' : `${due.length} convites devolvidos`, body: `${due.map(d => d.to).join(', ')} não respondeu em 24 h. O valor voltou para a sua carteira.` });
   }, [now, reserved, setReserved, setRefunded, showToast]);
 
+  /** Uma leitura por vez; o resultado só vale para o endereço que foi consultado. */
+  const refreshOnchain = useCallback(async () => {
+    const address = lunesAddress;
+    if (!address || reading.current === address) return;
+    reading.current = address;
+    setOnchainStatus({ state: 'loading' });
+    const rpc = new LunesRpc();
+    try {
+      const b = await accountBalance(rpc, address);
+      if (latest.current !== address) return;
+      setOnchainSnap({ address, exists: b.exists, free: b.free.toString(), reserved: b.reserved.toString(), frozen: b.frozen.toString(), block: b.block, blockHash: b.blockHash, endpoint: b.endpoint, at: Date.now() });
+      setOnchainStatus({ state: 'ok' });
+    } catch (e) {
+      if (latest.current === address) setOnchainStatus({ state: 'error', error: e instanceof Error ? e.message : 'Falha na consulta.' });
+    } finally {
+      rpc.close();
+      if (reading.current === address) reading.current = null;
+    }
+  }, [lunesAddress, setOnchainSnap]);
+
+  const setLunesAddress = useCallback((a: string | null) => {
+    if (a == null) { setLunesAddressRaw(null); setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); return null; }
+    const d = decodeSs58(a);
+    if (!d.ok) return d.error;
+    const next = a.trim();
+    if (next !== lunesAddress) { setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); }
+    setLunesAddressRaw(next);
+    return null;
+  }, [lunesAddress, setLunesAddressRaw, setOnchainSnap]);
+
+  const onchain = onchainSnap && lunesAddress && onchainSnap.address === lunesAddress ? planckToLunes(BigInt(onchainSnap.free)) : 0;
+
   const value = useMemo<Wallet>(() => ({
-    onchain: 0,
+    onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain,
     reserved, refunded, spent, earned, since,
     visible,
     setVisible: v => { setVisibleUntil(v ? Date.now() + NEARBY_VISIBLE_MS : null); setNow(Date.now()); },
@@ -119,7 +172,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     },
     recordEarned: (from, fee) => setEarned(e => [{ from, amt: fee, at: Date.now() }, ...e]),
     myFee, setMyFee,
-  }), [reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
+  }), [onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
