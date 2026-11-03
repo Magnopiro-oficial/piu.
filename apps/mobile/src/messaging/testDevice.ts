@@ -12,7 +12,7 @@ import { Messenger } from './messenger';
 export const TEST_DEVICE_PEER = 'sim-test-device';
 export const TEST_DEVICE_NAME = 'Aparelho de teste';
 
-export interface TestDevice { card: () => string; messenger: Messenger; setReply: (fn: (data: Uint8Array) => void) => void }
+export interface TestDevice { card: () => string; messenger: Messenger; setReply: (fn: (data: Uint8Array) => void) => void; stop: () => void }
 
 /** `saved`/`save`: o aparelho de teste guarda chaves e sessões, para continuar depois de reabrir o app. */
 export function createTestDevice(now: () => number, saved?: string, save?: (state: string) => void): TestDevice {
@@ -29,11 +29,28 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
       message: (cid, msg) => answer(cid, msg.msgId, msg.text),
       // Grupo: responde no próprio grupo (quando pode publicar).
       groupMessage: (gid, _from, who, msg) => setTimeout(() => { try { m.sendGroupText(gid, `tg${Date.now()}-${n++}`, `${who}, recebi no grupo: “${msg.text.slice(0, 120)}”`); } catch { /* só admins publicam */ } }, 600),
+      // Por perto: aceita convites pagos e convida o app uma vez (são regras reais do protocolo).
+      nearRequest: r => setTimeout(() => {
+        const ok = m.answerNear(r.id, 'accept');
+        if (ok) setTimeout(() => m.sendText(ok.contact.id, `t${Date.now()}-${n++}`, `Aceitei seu convite: “${r.msg.slice(0, 120)}”`), 800);
+      }, 1500),
+      nearbyChanged: () => {
+        for (const p of m.nearbyProfiles()) {
+          if (invited.has(p.id) || m.getContact(p.id) || m.nearInviteBlockedUntil(p.id) != null) continue;
+          invited.add(p.id);
+          setTimeout(() => { try { m.sendNearInvite(p.id, 'Convite de teste por Por perto: aceite para ver a conversa abrir.'); } catch { /* saiu do alcance */ } }, 4000);
+        }
+      },
       fileReceived: (cid, f) => setTimeout(() => m.sendText(cid, `t${Date.now()}-${n++}`, `Recebi o arquivo “${f.name}” (${Math.round(f.size / 1024)} KB, ${f.blocks} blocos). SHA-256 conferido.`), 600),
     },
   });
   m.displayName = TEST_DEVICE_NAME;
   let n = 0;
+  const invited = new Set<string>();
+  // Sempre visível em Por perto (é um aparelho de teste, não uma pessoa), com a menor taxa.
+  const visible = () => { m.setNearby({ until: now() + 3600, fee: 1, name: TEST_DEVICE_NAME }); m.tick(); };
+  visible();
+  const timer = setInterval(visible, 30_000);
   // Lê (confirmação de leitura), "digita" e responde, como uma pessoa com os ajustes padrão.
   const answer = (cid: string, msgId: string, text: string) => {
     setTimeout(() => { m.sendRead(cid, [msgId]); m.sendTyping(cid); }, 300);
@@ -43,5 +60,6 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
     card: () => encodeCard(ids.public, TEST_DEVICE_NAME, m.issueInvite('public')),
     messenger: m,
     setReply: fn => { reply = fn; },
+    stop: () => clearInterval(timer),
   };
 }

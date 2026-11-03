@@ -46,12 +46,12 @@ export default function WalletTab() {
 
 function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const { c } = useTheme();
-  const { onchain, reserved, refunded, earned, since } = useWallet();
+  const { onchain, reserved, refunded, spent, earned, since } = useWallet();
   const { onboarded, verified, chats } = useStore();
   const st = useStats(5000);
   const now = Date.now();
   const sum = walletSummary({ onchain, totals: st?.credits.totals ?? NO_TOTALS, reserved, perLunes: CREDIT_PARAMS.creditsPerLunes });
-  const activity = activityRows({ lots: st?.credits.lots ?? [], reserved, refunded, earned, now });
+  const activity = activityRows({ lots: st?.credits.lots ?? [], reserved, refunded, spent, earned, now });
   // Só contatos reais (pelo QR) contam para "Confirmada por 1 contato".
   const verifiedContact = chats.some(ch => ch.peer && verified[ch.id]);
   const steps = bonusSteps({ onboarded, verifiedContact, since, now });
