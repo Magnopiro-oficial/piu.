@@ -23,6 +23,7 @@ import { CreditBook, type Lot } from './credits';
 import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
 import { EnvelopeKind, MsgType, type Opened, sealGroup } from '../protocol/envelope';
 import { toPublic } from '../protocol/keys';
+import { decodePresence, encodePresence, isPresenceFrame, makePresence, NEAR_COOLDOWN_SEC, NEAR_FEES, NEAR_INVITE_MAX, NEAR_INVITE_TTL_SEC, type NearProx, type Presence, type PresenceBody, PRESENCE_EVERY_SEC, PRESENCE_HOPS, proxOf } from './nearby';
 
 export interface Contact {
   /** `piu:…` da identidade do contato. */
@@ -80,9 +81,26 @@ export interface MessengerEvents {
   lotClosed(lot: Lot): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
   inviteUsed(): void;
+  /** Por perto: perfis visíveis mudaram (chegou, saiu, venceu). */
+  nearbyChanged(): void;
+  /** Por perto: pedido de conversa pago recebido (convite de alguém que me viu visível). */
+  nearRequest(r: NearRequest): void;
+  /** Por perto: quem eu convidei aceitou. A pessoa vira contato público e a conversa abre. */
+  nearAccepted(c: Contact, fee: number): void;
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
+
+/** Perfil de Por perto visível agora (só enquanto eu também estou visível). */
+export interface NearPeer { id: string; name: string; fee: number; photo?: string; prox: NearProx; via: string; common: string; at: number }
+/** Pedido de conversa recebido por Por perto. `status`: o que eu respondi (nada sai do aparelho ao recusar). */
+export interface NearRequest { id: string; from: string; name: string; fee: number; msg: string; prox: NearProx; at: number; sentAt: number; status: 'pending' | 'accepted' | 'declined' | 'blocked' }
+interface NearIn extends NearRequest { pub: PublicIdentity }
+interface NearOut { to: string; pub: PublicIdentity; name: string; fee: number; at: number }
+interface NearEntry { p: Presence; traveled: number; via?: TransportClass }
+const wirePub = (p: PublicIdentity) => ({ s: b64url(p.signPk), a: b64url(p.agreePk), b: b64url(p.binding) });
+const unwirePub = (w: { s: string; a: string; b: string }): PublicIdentity => ({ signPk: unb64url(w.s), agreePk: unb64url(w.a), binding: unb64url(w.b) });
+const MAX_NEAR_PENDING = 50;
 
 /**
  * Limites do nó escolhidos pela pessoa (FUN-017). Valem para mensagens de TERCEIROS: as próprias
@@ -144,7 +162,10 @@ type Payload =
   /** Aviso assinado de aparelho revogado (lib/devicesCore.ts), para os contatos. */
   | { t: 'rv'; n: string }
   /** Foto do perfil público (JPEG de 96 px em base64; vazio = removida). Só entre contatos públicos. */
-  | { t: 'pp'; p: string };
+  | { t: 'pp'; p: string }
+  /** Por perto: convite pago (id, texto até 140, taxa) e aceite de quem recebeu. Recusa não manda nada. */
+  | { t: 'ni'; i: string; x: string; f: number; n?: string }
+  | { t: 'na'; i: string };
 
 /** Membro em trânsito: id, nome e chaves públicas em base64url. */
 interface WireMember { id: string; n: string; s: string; a: string; b: string }
@@ -277,6 +298,16 @@ export class Messenger {
     }
     this.router.importSeen(st.seen ?? [], o.now());
     for (const d of st.d ?? []) this.markDelivered(d);
+    // Por perto: até quando fiquei visível, pedidos, convites feitos e a regra dos 30 dias.
+    const nb = st.nb as { u?: number; i?: (Omit<NearIn, 'pub'> & { k: { s: string; a: string; b: string } })[]; o?: [string, Omit<NearOut, 'pub'> & { k: { s: string; a: string; b: string } }][]; ka?: [string, number][]; ks?: [string, number][]; h?: string[] } | undefined;
+    if (nb) {
+      this.shownUntil = nb.u ?? 0;
+      for (const r of nb.i ?? []) { const { k, ...rest } = r; this.nearIn.set(r.id, { ...rest, pub: unwirePub(k) }); }
+      for (const [id, x] of nb.o ?? []) { const { k, ...rest } = x; this.nearOut.set(id, { ...rest, pub: unwirePub(k) }); }
+      for (const [id, at] of nb.ka ?? []) this.nearAsked.set(id, at);
+      for (const [id, at] of nb.ks ?? []) this.nearSent.set(id, at);
+      for (const id of nb.h ?? []) this.nearHidden.add(id);
+    }
   }
 
   set relay(v: boolean) { this.wantRelay = v; this.applyRelay(); }
@@ -502,6 +533,245 @@ export class Messenger {
       this.fileJobs.delete(job.msgId);
       this.o.events.fileDelivered?.(job.msgId);
     }
+  }
+
+  // ── Por perto (DS Por perto; ECO §5): presença, convite pago e pedidos ──
+
+  /** Visível até (s), taxa, nome e foto do perfil público. `until` 0 ou passado = invisível. */
+  private near: { until: number; fee: number; name: string; photo?: string | null } = { until: 0, fee: 3, name: '' };
+  /** Fim do último anúncio que saiu daqui (s): só aceito convite enviado enquanto eu estava visível. */
+  private shownUntil = 0;
+  private lastAnnounce = -Infinity;
+  private presences = new Map<string, NearEntry>();
+  private presenceSeen = new Set<string>();
+  /** Hash da minha foto já enviada a cada vizinho (a foto vai uma vez; o resto do anúncio é pequeno). */
+  private photoSent = new Map<string, string>();
+  private nearIn = new Map<string, NearIn>();
+  private nearOut = new Map<string, NearOut>();
+  /** Quem me convidou e quando / quem eu convidei e quando (30 dias sem insistência, nos dois lados). */
+  private nearAsked = new Map<string, number>();
+  private nearSent = new Map<string, number>();
+  /** Perfis denunciados: não aparecem mais para mim em Por perto (só neste aparelho). */
+  private nearHidden = new Set<string>();
+
+  private nearVisible() { return this.near.until > this.o.now(); }
+
+  /**
+   * Visibilidade de Por perto (desliga sozinha em 1 h: quem chama passa o fim, em segundos). Ao ficar
+   * invisível, sai a retirada do anúncio e a lista de perfis some (é recíproco: invisível não vê ninguém).
+   */
+  setNearby(o: { until: number | null; fee: number; name: string; photo?: string | null }) {
+    const was = this.nearVisible();
+    const fee = (NEAR_FEES as readonly number[]).includes(o.fee) ? o.fee : 3;
+    const changed = fee !== this.near.fee || o.name !== this.near.name || (o.photo ?? '') !== (this.near.photo ?? '');
+    this.near = { until: o.until ?? 0, fee, name: o.name, photo: o.photo };
+    const now = this.nearVisible();
+    if (was && !now) {
+      this.withdraw();
+      if (this.presences.size) { this.presences.clear(); this.o.events.nearbyChanged?.(); }
+    } else if (now && (!was || changed)) this.announce();
+  }
+
+  private presenceBody(until: number): PresenceBody {
+    return makePresence(this.o.identities.public, { name: this.near.name, fee: this.near.fee, photo: this.near.photo, now: this.o.now(), until, withPhoto: true });
+  }
+
+  /** Anuncia a presença a um vizinho (ou a todos). Só enquanto visível. */
+  private announce(peerId?: string) {
+    if (!this.nearVisible()) return;
+    const body = this.presenceBody(this.near.until);
+    this.shownUntil = Math.max(this.shownUntil, body.x);
+    if (!peerId) this.lastAnnounce = this.o.now();
+    for (const p of peerId ? [peerId] : [...this.peers.keys()]) {
+      const withPhoto = !!body.photo && this.photoSent.get(p) !== body.ph;
+      if (withPhoto) this.photoSent.set(p, body.ph);
+      this.o.transmit(p, encodePresence(body, PRESENCE_HOPS, withPhoto)).catch(() => {});
+    }
+    this.o.events.changed?.();
+  }
+
+  /** Retirada: anúncio que vence na hora. Quem recebe apaga o perfil. */
+  private withdraw() {
+    const now = this.o.now();
+    const body = this.presenceBody(now);
+    this.shownUntil = Math.min(this.shownUntil, now);
+    for (const p of this.peers.keys()) this.o.transmit(p, encodePresence(body, PRESENCE_HOPS, false)).catch(() => {});
+    this.o.events.changed?.();
+  }
+
+  private onPresence(from: string, b: Uint8Array) {
+    const now = this.o.now();
+    const p = decodePresence(b, now);
+    if (!p || p.id === this.o.identities.public.id || p.id === this.o.identities.anon.id) return;
+    const traveled = PRESENCE_HOPS - p.hops;
+    const key = `${p.id}|${p.at}|${p.until}`;
+    const cur = this.presences.get(p.id);
+    if (this.presenceSeen.has(key)) {
+      // Mesmo anúncio por outro caminho: fica a menor distância.
+      if (cur && cur.p.at === p.at && traveled < cur.traveled) { cur.traveled = traveled; cur.via = this.peers.get(from); this.o.events.nearbyChanged?.(); }
+      return;
+    }
+    this.presenceSeen.add(key);
+    while (this.presenceSeen.size > 2000) this.presenceSeen.delete(this.presenceSeen.values().next().value!);
+    // Recíproco: só guardo perfis enquanto eu também estou visível.
+    if (this.nearVisible() && !this.blocked.has(p.id) && (!cur || cur.p.at <= p.at)) {
+      if (p.until <= now) this.presences.delete(p.id);
+      else {
+        const photo = p.photo ?? (cur && cur.p.photoHash === p.photoHash ? cur.p.photo : undefined);
+        this.presences.set(p.id, { p: { ...p, photo }, traveled, via: this.peers.get(from) });
+        while (this.presences.size > 200) this.presences.delete(this.presences.keys().next().value!);
+      }
+      this.o.events.nearbyChanged?.();
+    }
+    // Repasse (Modo nó): poucos saltos, nunca de volta a quem mandou.
+    if (p.hops > 0 && this.router.relay) {
+      const out = encodePresence(p.body, p.hops - 1, !!p.photo);
+      for (const peer of this.peers.keys()) if (peer !== from) this.o.transmit(peer, out).catch(() => {});
+    }
+  }
+
+  private nearTick() {
+    const now = this.o.now();
+    if (this.nearVisible() && now - this.lastAnnounce >= PRESENCE_EVERY_SEC) this.announce();
+    let changed = false;
+    for (const [id, e] of this.presences) if (e.p.until <= now || !this.nearVisible()) { this.presences.delete(id); changed = true; }
+    if (changed) this.o.events.nearbyChanged?.();
+    let saved = false;
+    for (const [id, r] of this.nearIn) if (now - r.sentAt > NEAR_INVITE_TTL_SEC) { this.nearIn.delete(id); saved = true; }
+    for (const [id, x] of this.nearOut) if (now - x.at > NEAR_INVITE_TTL_SEC + 3600) { this.nearOut.delete(id); saved = true; }
+    for (const m of [this.nearAsked, this.nearSent]) for (const [id, at] of m) if (now - at >= NEAR_COOLDOWN_SEC) { m.delete(id); saved = true; }
+    if (saved) { this.o.events.nearbyChanged?.(); this.o.events.changed?.(); }
+  }
+
+  /** Perfis visíveis agora, do mais perto ao mais longe. Vazio enquanto eu estiver invisível. */
+  nearbyProfiles(): NearPeer[] {
+    if (!this.nearVisible()) return [];
+    const now = this.o.now();
+    const medium = (v?: TransportClass) => (v === 'direct' ? 'Wi-Fi Direct' : v === 'ble' ? 'Bluetooth' : 'por perto');
+    return [...this.presences.values()]
+      .filter(e => e.p.until > now && !this.blocked.has(e.p.id) && !this.nearHidden.has(e.p.id))
+      .sort((a, b) => a.traveled - b.traveled || b.p.at - a.p.at)
+      .map(e => ({
+        id: e.p.id, name: e.p.name, fee: e.p.fee, photo: e.p.photo, prox: proxOf(e.traveled), at: e.p.at,
+        via: e.traveled === 0 ? `${medium(e.via)} · direto` : e.traveled === 1 ? '1 salto' : `${e.traveled} saltos`,
+        common: this.inCommon(e.p.id),
+      }));
+  }
+
+  /**
+   * Denunciar perfil: some da minha lista de Por perto (só neste aparelho). Para onde vai a denúncia
+   * depende da política de moderação da Lunes, ainda não definida: nada sai do aparelho.
+   */
+  hideNear(id: string) {
+    this.nearHidden.add(id);
+    while (this.nearHidden.size > 500) this.nearHidden.delete(this.nearHidden.values().next().value!);
+    this.o.events.nearbyChanged?.();
+    this.o.events.changed?.();
+  }
+
+  /** "Em comum": só o que este aparelho sabe (grupos públicos com a pessoa, ou se já é contato). */
+  private inCommon(id: string) {
+    const groups = [...this.groups.values()].filter(g => g.via === 'public' && isMemberOf(g, id)).map(g => g.name);
+    const known = this.contacts.get(id);
+    const parts = [
+      ...(known && !known.request ? ['já é seu contato'] : []),
+      ...(groups.length === 1 ? [groups[0]!] : groups.length > 1 ? [`${groups.length} grupos`] : []),
+    ];
+    return parts.length ? parts.join(' · ') : 'Nenhum';
+  }
+
+  /** Fim da espera (s) para convidar de novo a mesma pessoa (30 dias), ou `null` se pode convidar. */
+  nearInviteBlockedUntil(profileId: string) {
+    const at = this.nearSent.get(profileId);
+    return at != null && this.o.now() - at < NEAR_COOLDOWN_SEC ? at + NEAR_COOLDOWN_SEC : null;
+  }
+
+  /**
+   * Convite pago pela malha: envelope para a identidade pública anunciada, com o texto e a taxa que a
+   * pessoa anunciou. A reserva do valor fica com quem chama (registro local até a Mainnet).
+   */
+  sendNearInvite(profileId: string, text: string) {
+    const now = this.o.now();
+    if (!this.nearVisible()) throw new Error('Fique visível em Por perto para convidar.');
+    const e = this.presences.get(profileId);
+    if (!e || e.p.until <= now) throw new Error('Esta pessoa não está mais por perto.');
+    const x = text.trim();
+    if (!x || [...x].length > NEAR_INVITE_MAX) throw new Error(`Escreva de 1 a ${NEAR_INVITE_MAX} caracteres.`);
+    if (this.nearInviteBlockedUntil(profileId) != null) throw new Error('Sem insistência: um convite por pessoa a cada 30 dias.');
+    const id = randomHex(8);
+    const c: Contact = { id: profileId, via: 'public', pub: e.p.pub, name: e.p.name };
+    this.nearOut.set(id, { to: profileId, pub: e.p.pub, name: e.p.name, fee: e.p.fee, at: now });
+    this.nearSent.set(profileId, now);
+    this.enqueue(c, { t: 'ni', i: id, x, f: e.p.fee, ...(this.near.name ? { n: this.near.name.slice(0, 40) } : {}) }, null, Priority.Normal, false, NEAR_INVITE_TTL_SEC);
+    return { id, fee: e.p.fee, name: e.p.name };
+  }
+
+  private onNearInvite(m: Opened, used: IdentityKind, p: Extract<Payload, { t: 'ni' }>) {
+    const now = this.o.now(), from = m.fromId;
+    if (used !== 'public' || this.blocked.has(from)) return; // a anônima nunca recebe pedido de Por perto
+    const known = this.contacts.get(from);
+    if (known && !known.request) return;
+    // Só convite enviado enquanto eu estava visível, e ainda dentro das 24 h.
+    if (!this.shownUntil || m.sentAt > this.shownUntil + 60 || now - m.sentAt > NEAR_INVITE_TTL_SEC) return;
+    // A taxa é de quem recebe: convite abaixo da taxa vigente não entra.
+    if (!(NEAR_FEES as readonly number[]).includes(p.f) || p.f < this.near.fee) return;
+    const x = typeof p.x === 'string' ? p.x.trim() : '';
+    if (typeof p.i !== 'string' || !/^[0-9a-f]{16}$/.test(p.i) || !x || [...x].length > NEAR_INVITE_MAX || this.nearIn.has(p.i)) return;
+    const asked = this.nearAsked.get(from);
+    if (asked != null && now - asked < NEAR_COOLDOWN_SEC) return; // sem insistência
+    if ([...this.nearIn.values()].filter(r => r.status === 'pending').length >= MAX_NEAR_PENDING) return;
+    const seen = this.presences.get(from);
+    const r: NearIn = {
+      id: p.i, from, pub: m.from, name: typeof p.n === 'string' && p.n.trim() ? p.n.trim().slice(0, 40) : seen?.p.name || 'Alguém por perto',
+      fee: p.f, msg: x, prox: seen ? proxOf(seen.traveled) : 'mais longe', at: now, sentAt: m.sentAt, status: 'pending',
+    };
+    this.nearAsked.set(from, now);
+    this.nearIn.set(r.id, r);
+    const { pub: _pub, ...pub } = r;
+    this.o.events.nearRequest?.(pub);
+    this.o.events.nearbyChanged?.();
+    this.o.events.changed?.();
+  }
+
+  /** Pedidos recebidos (pendentes e respondidos), do mais novo ao mais antigo. Somem 24 h depois do envio. */
+  nearRequests(): NearRequest[] {
+    return [...this.nearIn.values()].sort((a, b) => b.at - a.at).map(({ pub: _p, ...r }) => ({ ...r }));
+  }
+
+  /**
+   * Responde um pedido. Aceitar: a pessoa vira contato público e recebe o aceite (o valor é de quem
+   * aceitou). Recusar: nada sai daqui (o convite só expira). Bloquear: como recusar, e novos pedidos e
+   * mensagens dessa identidade são descartados.
+   */
+  answerNear(id: string, answer: 'accept' | 'decline' | 'block'): { contact: Contact; request: NearRequest } | null {
+    const r = this.nearIn.get(id);
+    if (!r || r.status !== 'pending') return null;
+    if (this.o.now() - r.sentAt > NEAR_INVITE_TTL_SEC) { this.nearIn.delete(id); this.o.events.changed?.(); throw new Error('Este pedido expirou.'); }
+    let contact: Contact | null = null;
+    if (answer === 'accept') {
+      contact = { id: r.from, via: 'public', pub: r.pub, name: r.name };
+      this.addContact(contact);
+      this.enqueue(contact, { t: 'na', i: r.id }, null, Priority.High);
+      r.status = 'accepted';
+    } else if (answer === 'block') {
+      r.status = 'blocked';
+      this.blocked.add(r.from);
+      this.presences.delete(r.from);
+    } else r.status = 'declined';
+    this.o.events.nearbyChanged?.();
+    this.o.events.changed?.();
+    const { pub: _p, ...req } = r;
+    return contact ? { contact, request: req } : null;
+  }
+
+  private onNearAccept(from: string, sentAt: number, p: Extract<Payload, { t: 'na' }>) {
+    const o = typeof p.i === 'string' ? this.nearOut.get(p.i) : undefined;
+    if (!o || o.to !== from || sentAt - o.at > NEAR_INVITE_TTL_SEC + 60) return;
+    this.nearOut.delete(p.i);
+    const contact: Contact = { id: from, via: 'public', pub: o.pub, name: o.name };
+    this.addContact(contact);
+    this.o.events.nearAccepted?.(contact, o.fee);
+    this.o.events.changed?.();
   }
 
   // ── grupos, canais e comunidades (FUN-006/007/008) ─────────────────────
@@ -998,13 +1268,14 @@ export class Messenger {
     for (const p of this.peers.keys()) if (p !== from) this.sendProofs(p);
   }
 
-  peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); }
-  peerDisconnected(peerId: string) { this.peers.delete(peerId); }
+  peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); this.announce(peerId); }
+  peerDisconnected(peerId: string) { this.peers.delete(peerId); this.photoSent.delete(peerId); }
   clearPeers() { this.peers.clear(); }
 
   /** Chamar de tempos em tempos: libera envios com atraso aleatório e apaga o que venceu. */
   tick() {
     this.applyRelay();
+    this.nearTick();
     const ct = this.credits.tick(this.o.now());
     if (ct.lot) this.o.events.lotClosed?.(ct.lot);
     if (ct.changed) this.o.events.changed?.();
@@ -1075,6 +1346,7 @@ export class Messenger {
   /** Bytes que chegaram de um vizinho. */
   receive(peerId: string, bytes: Uint8Array) {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
+    if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }
     const r = this.router.ingest(bytes, peerId, this.o.now());
     if (r.status === 'delivered') {
       // Sou o destino: conto os saltos (a prova de entrega sai depois de abrir, ver abaixo).
@@ -1122,6 +1394,8 @@ export class Messenger {
       return false;
     }
     if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return false; }
+    if (p?.t === 'ni') { this.onNearInvite(m, used, p); return false; }
+    if (p?.t === 'na') { this.onNearAccept(m.fromId, m.sentAt, p); return false; }
     if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return false; }
     if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return false; }
     if (p?.t === 'gv') { this.onVouch(m.fromId, p); return false; }
@@ -1198,6 +1472,12 @@ export class Messenger {
       q: [...this.outbox.values()],
       seen: this.router.exportSeen(),
       d: this.delivered,
+      nb: {
+        u: this.shownUntil,
+        i: [...this.nearIn.values()].map(({ pub, ...r }) => ({ ...r, k: wirePub(pub) })),
+        o: [...this.nearOut].map(([id, { pub, ...x }]) => [id, { ...x, k: wirePub(pub) }]),
+        ka: [...this.nearAsked], ks: [...this.nearSent], h: [...this.nearHidden],
+      },
     });
   }
 }
