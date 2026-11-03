@@ -28,13 +28,6 @@ export interface ApiDevice {
 export interface ApiDeviceReport {
   at: number; receivedAt: number; startedAt: number; forwarded: number; stored: number; receipts: number; neighbors: number; paused: boolean; relaying: boolean;
 }
-/** `GET /api/alerts`: alertas oficiais (CAP) vigentes lidos dos feeds configurados neste nó. */
-export interface ApiAlert {
-  id: string; sender: string; sent: string; msgType: 'Alert' | 'Update' | 'Cancel';
-  info: { senderName: string; event: string; severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown'; urgency: string; headline: string; description: string; instruction: string; web: string; expires: string; areas: { areaDesc: string }[] };
-  source: { feed: string; url: string }; receivedAt: number;
-}
-export interface ApiAlerts { enabled: boolean; feeds: { url: string; lastOkAt: number | null; lastError: string | null; items: number }[]; alerts: ApiAlert[] }
 /** `kind` ausente (versões antigas) = saída. Entrada (`in`) é liquidação recebida, com o lote em `from`. */
 export interface ApiWalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
 export interface ApiWallet { balance: number; txs: ApiWalletTx[] }
@@ -181,7 +174,6 @@ export class NodeApi {
    * ApiError 403 ("Senha errada ou arquivo adulterado."); arquivo que não é backup: ApiError 400.
    */
   restoreOperatorKey = (backup: string, password: string) => this.call<ApiOperatorKey>('POST', '/api/operator/restore', { backup, password });
-  alerts = () => this.call<ApiAlerts>('GET', '/api/alerts');
   /** Arquivo de evidências (`EvidenceFile` do validador), como o nó devolveu. */
   evidence = () => this.call<{ v: 1; receipts: unknown[]; proofs: unknown[] }>('GET', '/api/relay/evidence');
   claims = () => this.call<ApiClaims>('GET', '/api/payout-claims');

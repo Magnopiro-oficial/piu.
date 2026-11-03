@@ -158,8 +158,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     let alive = true;
     const read = () => Promise.all([
       node.guard(api.relay()).catch(() => null), node.guard(api.history()).catch(() => null), node.guard(api.receipts()).catch(() => null),
-      node.guard(api.devices()).catch(() => null), node.guard(api.alerts()).catch(() => null),
-    ]).then(([relay, history, receipts, devs, alerts]) => { if (!alive) return; setLive({ relay, history, receipts, alerts }); if (devs) setApiDevices(devs); });
+      node.guard(api.devices()).catch(() => null),
+    ]).then(([relay, history, receipts, devs]) => { if (!alive) return; setLive({ relay, history, receipts }); if (devs) setApiDevices(devs); });
     readLive.current = read;
     void read();
     const t = window.setInterval(() => { if (document.visibilityState !== 'hidden') void read(); }, LIVE_MS);

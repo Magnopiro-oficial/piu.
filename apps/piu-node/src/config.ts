@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import { DEFAULT_ALERT_FEEDS, DEFAULT_ALERT_POLL_MS } from './alerts/collector.js';
 import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
 
@@ -23,15 +22,6 @@ export interface Config {
    * Ausente: os de produção, na ordem confirmada (src/lunes/lunesRpc.ts).
    */
   lunesEndpoints?: string[];
-  /** Alertas oficiais em CAP 1.2 (feeds RSS/Atom). Ausente ou sem feeds: desligado. */
-  alerts?: AlertsConfig;
-}
-
-export interface AlertsConfig {
-  /** `PIU_ALERT_FEEDS`: URLs separadas por vírgula. Padrão: o feed CAP do INMET; vazio desliga. */
-  feeds: string[];
-  /** `PIU_ALERT_POLL_MS`: intervalo entre as leituras (padrão 10 min). */
-  pollMs: number;
 }
 
 export interface LnnpConfig {
@@ -100,19 +90,6 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
   };
 }
 
-export function loadAlertsConfig(env = process.env): AlertsConfig {
-  const feeds = env.PIU_ALERT_FEEDS === undefined ? DEFAULT_ALERT_FEEDS : list(env.PIU_ALERT_FEEDS);
-  for (const f of feeds) {
-    let ok = false;
-    try { const u = new URL(f); ok = u.protocol === 'http:' || u.protocol === 'https:'; } catch { /* inválida */ }
-    if (!ok) throw new Error(`PIU_ALERT_FEEDS: URL inválida (${f}). Use http(s)://…, separadas por vírgula.`);
-  }
-  const raw = env.PIU_ALERT_POLL_MS;
-  const pollMs = raw === undefined || raw === '' ? DEFAULT_ALERT_POLL_MS : Number(raw);
-  if (!Number.isInteger(pollMs) || pollMs < 60_000 || pollMs > 24 * 3600_000) throw new Error(`PIU_ALERT_POLL_MS: valor inválido (${raw}). Entre 60000 (1 min) e 86400000 (24 h).`);
-  return { feeds, pollMs };
-}
-
 export function loadConfig(env = process.env): Config {
   const port = Number(env.PIU_NODE_PORT ?? 8420);
   const hosts = (env.PIU_NODE_HOSTS ?? 'piu-node.local,localhost,127.0.0.1').split(',').map(h => h.trim()).filter(Boolean);
@@ -124,7 +101,6 @@ export function loadConfig(env = process.env): Config {
     panelDir: resolve(env.PIU_NODE_PANEL ?? '../provider-panel/dist'),
     releasePubKey: env.PIU_RELEASE_PUBKEY?.trim() || null,
     lnnp: loadLnnpConfig(env),
-    alerts: loadAlertsConfig(env),
     lunesEndpoints: parseLunesEndpoints(env.PIU_LUNES_ENDPOINTS),
   };
 }
