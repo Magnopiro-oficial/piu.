@@ -15,11 +15,13 @@ import { Dialog } from '../../../ui/Dialog';
 import { Icon } from '../../../ui/Icon';
 import { Screen } from '../../../ui/Screen';
 import { T } from '../../../ui/T';
+import { DevicesSection, PeersSection } from '../../../ui/ProviderDevice';
 
 /**
  * Equipamento pareado: o que este celular sabe dele (nome, operador, quando pareou), o estado real
  * lido da API local do piu-node (HTTPS com o certificado fixado, lib/nodeLink.ts), pausar a
- * retransmissão e desfazer o pareamento. Atualizar, reiniciar e revogar ficam no painel.
+ * retransmissão, regras e revogação dos equipamentos da conta, vizinhos por endereço e desfazer o
+ * pareamento. Atualizar e reiniciar ficam no painel.
  */
 export default function ProvDeviceScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -91,7 +93,7 @@ function NodeLive({ d }: { d: ProvNode }) {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string | null>(null);
-  const [live, setLive] = useState<{ relay: RelayView; receipts: ReceiptsView; self: DeviceView | null } | null>(null);
+  const [live, setLive] = useState<{ relay: RelayView; receipts: ReceiptsView; self: DeviceView | null; devices: DeviceView[] } | null>(null);
   const [connected, setConnected] = useState(!!api?.session);
 
   const load = useCallback(async () => {
@@ -99,7 +101,7 @@ function NodeLive({ d }: { d: ProvNode }) {
     setBusy(true); setErr(null);
     try {
       const [relay, receipts, devices] = await Promise.all([api.relay(), api.receipts(), api.devices()]);
-      setLive({ relay, receipts, self: devices.find(x => x.self) ?? null });
+      setLive({ relay, receipts, self: devices.find(x => x.self) ?? null, devices });
     } catch (e) {
       if (e instanceof NodeApiError && e.status === 401) { await saveNodeSession(d.phoneId, null); setConnected(false); }
       setErr((e as Error).message);
@@ -146,6 +148,7 @@ function NodeLive({ d }: { d: ProvNode }) {
     ['Recibos', live.receipts.enabled ? `${live.receipts.keptOwn ?? 0} deste nó · ${live.receipts.kept ?? 0} guardados para o validador` : 'motor desligado'],
   ] : [];
   return (
+    <>
     <View style={{ marginHorizontal: 20, gap: 10 }}>
       <View accessibilityLiveRegion="polite" style={{ borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
         {!live && <T size={13} color={c.ink2} style={{ padding: 16 }}>{busy ? 'Lendo o equipamento…' : err ?? '—'}</T>}
@@ -175,5 +178,8 @@ function NodeLive({ d }: { d: ProvNode }) {
         )}
       </View>
     </View>
+    {live && <DevicesSection api={api} devices={live.devices} onChanged={() => void load()} />}
+    {live && <PeersSection api={api} relay={live.relay} />}
+    </>
   );
 }
