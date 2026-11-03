@@ -30,7 +30,7 @@ export default function NewChat() {
     ['workspaces', 'Nova comunidade', 'Reúna grupos e canais', () => router.push({ pathname: '/new-group', params: { kind: 'community' } })],
     ['qr_code_scanner', 'Escanear código', 'Adicione alguém pessoalmente', () => router.push('/scan')],
     ['qr_code_2', 'Meu código', 'Mostre para a pessoa escanear', () => router.push('/my-code')],
-    ['person_add', 'Convidar para o Piu', 'Envie o app sem internet, de celular para celular', () => router.push('/invite')],
+    ['person_add', 'Convidar para o Piu', 'Envie um convite com o seu contato', () => router.push('/invite')],
   ];
   const term = q.trim().toLowerCase();
   const found = term ? chats.filter(x => x.ident === identity && x.name.toLowerCase().includes(term)) : [];

@@ -64,6 +64,12 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "storeLinks": {
+        "ios": "",
+        "android": ""
+      }
     }
   }
 }
