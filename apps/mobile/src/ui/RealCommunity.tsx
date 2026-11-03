@@ -13,18 +13,20 @@ import { Screen } from './Screen';
 import { T } from './T';
 
 /**
- * Comunidade REAL (FUN-008), no layout da tela do protótipo: avisos (só admins publicam) e os grupos
- * e canais que ela reúne. Membro da comunidade pede para entrar num grupo; admins criam grupos e canais nela.
+ * Comunidade REAL (FUN-008), no layout da tela do protótipo: avisos (só admins publicam), alertas da
+ * comunidade (qualquer membro publica e classifica) e os grupos e canais que ela reúne. Membro da comunidade pede para entrar num grupo; admins criam grupos e canais nela.
  */
 export function RealCommunity({ chat }: { chat: Chat }) {
   const { c } = useTheme();
   const { showToast } = useStore();
-  const { groupOf, groupOps, myIdIn, groupEpoch } = useMessaging();
+  const { groupOf, groupOps, myIdIn, groupEpoch, alerts, alertEpoch } = useMessaging();
+  void alertEpoch;
   const g = groupOf(chat.id);
   void groupEpoch;
   if (!g || !groupOps) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Você não participa mais desta comunidade.</T></Screen>;
   const admin = isAdmin(g, myIdIn(g.via));
   const kids = g.children ?? [];
+  const activeAlerts = (alerts?.list(g.id) ?? []).filter(a => a.active).length;
   const sections: [string, typeof kids][] = [['GRUPOS', kids.filter(k => k.kind === 'group')], ['CANAIS', kids.filter(k => k.kind === 'channel')]];
   const open = (k: { id: string; name: string }) => {
     if (groupOps.isMember(k.id)) { router.push({ pathname: '/chat/[id]', params: { id: chatIdForGroup(k.id) } }); return; }
@@ -44,7 +46,10 @@ export function RealCommunity({ chat }: { chat: Chat }) {
         </View>
         <View style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>
           <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingHorizontal: 4, paddingBottom: 4 }}>AVISOS</T>
-          <Row icon="campaign" name="Avisos da comunidade" meta={admin ? 'Só admins publicam · você é admin' : 'Só admins publicam'} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })} first />
+          <View style={{ borderRadius: 18, backgroundColor: c.bg2, overflow: 'hidden' }}>
+            <Row icon="campaign" name="Avisos da comunidade" meta={admin ? 'Só admins publicam · você é admin' : 'Só admins publicam'} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })} first />
+            <Row icon="warning" name="Alertas" meta={`${activeAlerts ? `${activeAlerts} ${activeAlerts === 1 ? 'vigente' : 'vigentes'}` : 'Nenhum vigente'} · qualquer membro publica`} onPress={() => router.push({ pathname: '/alerts/[id]', params: { id: g.id } })} />
+          </View>
         </View>
         {sections.map(([title, items]) => (
           <View key={title} style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>

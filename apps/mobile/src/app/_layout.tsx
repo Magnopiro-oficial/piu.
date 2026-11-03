@@ -5,7 +5,6 @@ import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { AlertsBridge } from '../lib/alerts';
 import { NotificationBridge } from '../lib/notifications';
 import { cardFromText } from '../lib/inviteLink';
 import { forgetPersisted, loadPersisted, persistNow, readPersisted } from '../lib/persist';
@@ -95,7 +94,6 @@ function Navigator() {
       <OnboardingGuard />
       <Toast />
       <NotificationBridge />
-      <AlertsBridge />
       <SystemPrompts />
       <AppLock />
     </>

@@ -64,7 +64,7 @@ export function Settings() {
   const NO_EFFECT = 'Ainda sem efeito nesta versão';
   const policyRows: [keyof Policies | 'alerts', string, string, boolean][] = [
     ['media', 'Aceitar arquivos e mídia', 'Só por Wi-Fi e cabo; nunca por LoRa', false],
-    ['alerts', 'Priorizar alertas oficiais', 'Sempre ativo para alertas assinados', false],
+    ['alerts', 'Priorizar alertas', 'Sempre ativo para envelopes de prioridade alta', false],
     ['unknown', 'Limitar remetentes desconhecidos', api ? NO_EFFECT : 'Contra spam e tráfego artificial', !!api],
     ['community', 'Só comunidades que sigo', api ? NO_EFFECT : 'Reduz alcance e ganhos', !!api],
   ];

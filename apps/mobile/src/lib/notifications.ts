@@ -3,7 +3,7 @@
  * pelo próprio app quando algo chega pela malha. Nenhum token de push é pedido nem enviado.
  *
  * - `notify()` respeita Ajustes → Notificações: tipos ligados, pré-visualização (Sempre /
- *   Desbloqueado / Nunca), modo noturno (22h–7h, só alertas críticos tocam) e vibração discreta.
+ *   Desbloqueado / Nunca), modo noturno (22h–7h, só alertas Graves da comunidade tocam) e vibração discreta.
  * - Só dispara com o app fora do primeiro plano: em primeiro plano o app já mostra o banner in-app.
  * - `NotificationBridge` (montado uma vez, dentro dos provedores) liga os ajustes, abre a tela certa
  *   ao tocar na notificação e pede a permissão na hora certa. Os banners in-app com tipo chamam
@@ -18,13 +18,16 @@ import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { persistNow, readPersisted } from './persist';
 
-export type NotifyKind = NotifKey | 'alert';
+export type NotifyKind = NotifKey;
 
 export interface NotifyInput {
   kind: NotifyKind;
   title: string;
   body: string;
-  /** Alerta crítico (alerta oficial severo ou extremo, lib/alerts.ts): sempre avisa, mostra o conteúdo e toca até no modo noturno. */
+  /**
+   * Alerta crítico (alerta Grave da comunidade, messaging/communityAlerts.ts): canal de importância
+   * máxima, toca até no modo noturno. Segue o tipo ligado e a pré-visualização como os demais.
+   */
   critical?: boolean;
   /** `href`: rota a abrir ao tocar (ex.: `/chat/abc`). O resto vai junto na notificação. */
   data?: { href?: string } & Record<string, unknown>;
@@ -37,7 +40,7 @@ interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: bool
 /** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"). */
 const HIDDEN_BODY: Record<NotifyKind, string> = {
   msg: 'Nova mensagem', group: 'Nova mensagem', channel: 'Nova publicação', nearby: 'Novo pedido de conversa',
-  wallet: 'Movimentação na carteira', network: 'Aviso da rede', alert: 'Alerta oficial',
+  wallet: 'Movimentação na carteira', network: 'Aviso da rede', alert: 'Alerta da comunidade',
 };
 
 /** Canais do Android (importância e som são fixos depois de criados, por isso um canal por modo). */
@@ -46,9 +49,10 @@ const CHANNELS: Record<Mode, Notifications.NotificationChannelInput> = {
   normal: { name: 'Mensagens e avisos', importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   discreet: { name: 'Avisos discretos', description: 'Sem som; um toque curto', importance: Notifications.AndroidImportance.HIGH, sound: null, enableVibrate: true, vibrationPattern: [0, 90], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   quiet: { name: 'Modo noturno', description: 'Entre 22h e 7h: sem som nem vibração', importance: Notifications.AndroidImportance.LOW, sound: null, enableVibrate: false, vibrationPattern: null, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  critical: { name: 'Alertas oficiais', description: 'Severos e extremos (CAP), retransmitidos pelo seu Piu Node', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], bypassDnd: true, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC },
+  critical: { name: 'Alertas graves da comunidade', description: 'Publicados por membros das suas comunidades. Não são avisos oficiais.', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
 };
-const channelId = (m: Mode) => `piu-${m}`;
+/** `critical-c`: canal novo (o antigo `piu-critical` era dos alertas oficiais, visível na tela bloqueada). */
+const channelId = (m: Mode) => (m === 'critical' ? 'piu-critical-c' : `piu-${m}`);
 
 let cfg: Cfg | null = null;
 let active = AppState.currentState === 'active';
@@ -71,6 +75,8 @@ export const isQuietHour = (d = new Date()) => d.getHours() >= 22 || d.getHours(
 
 function ensureChannels() {
   if (Platform.OS !== 'android') return Promise.resolve();
+  // O canal antigo dos alertas oficiais (CAP) sai: os alertas agora são da comunidade.
+  void Notifications.deleteNotificationChannelAsync('piu-critical').catch(() => {});
   channelsReady ??= Promise.all((Object.keys(CHANNELS) as Mode[]).map(m => Notifications.setNotificationChannelAsync(channelId(m), CHANNELS[m]))).then(() => {}).catch(() => { channelsReady = null; });
   return channelsReady;
 }
@@ -102,9 +108,9 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return p.granted;
 }
 
-/** Conteúdo final conforme a pré-visualização. Críticos sempre mostram o conteúdo. */
+/** Conteúdo final conforme a pré-visualização (vale também para os alertas da comunidade). */
 function present(n: NotifyInput, preview: Preview): { title: string; body: string } {
-  if (n.critical || preview === 'always') return { title: n.title, body: n.body };
+  if (preview === 'always') return { title: n.title, body: n.body };
   // "Desbloqueado": o sistema esconde o conteúdo na tela bloqueada (Android: canal PRIVATE;
   // iPhone: só se as prévias do sistema estiverem em "Quando desbloqueado"). Onde não dá para
   // garantir (web, iPhone com prévias sempre), vai o texto genérico.
@@ -128,8 +134,8 @@ export const sendTestNotification = () =>
 async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
   const c = cfg;
   if (!c || !c.onboarded || (active && !delaySec)) return false;
-  const critical = !!n.critical || n.kind === 'alert';
-  if (!critical && !c.notifs[n.kind as NotifKey]) return false;
+  const critical = !!n.critical;
+  if (c.notifs[n.kind] === false) return false;
   const key = `${n.kind}|${n.title}|${n.body}`;
   if (key === last.key && Date.now() - last.at < 3000) return false;
   last = { key, at: Date.now() };

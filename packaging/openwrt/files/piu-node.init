@@ -44,9 +44,6 @@ piu_env_map() {
 	piu_env opt  serial lora_cr         PIU_LORA_CR
 	piu_env opt  serial lora_duty       PIU_LORA_DUTY
 	piu_env opt  serial max_envelope    PIU_LORA_MAX_ENVELOPE
-	# Alertas oficiais em CAP 1.2 (seção `alerts`). Sem `feed`: o padrão do piu-node (INMET).
-	piu_env list alerts feed            PIU_ALERT_FEEDS
-	piu_env opt  alerts poll_ms         PIU_ALERT_POLL_MS
 	# Leitura da Lunes Mainnet (seção `lunes`). Sem `endpoint`: os 4 de produção.
 	piu_env list lunes  endpoint        PIU_LUNES_ENDPOINTS
 }
@@ -111,7 +108,7 @@ piu_check_node() {
 start_service() {
 	config_load "$NAME"
 
-	local enabled user data heap node_args log_stdout lan_host hosts ip alerts ws_flag
+	local enabled user data heap node_args log_stdout lan_host hosts ip ws_flag
 	config_get_bool enabled main enabled 1
 	[ "$enabled" = 1 ] || return 0
 	config_get user main user "$NAME"
@@ -120,7 +117,6 @@ start_service() {
 	config_get node_args main node_args
 	config_get_bool log_stdout main log_stdout 1
 	config_get_bool lan_host main lan_host 1
-	config_get_bool alerts alerts enabled 1
 
 	piu_check_node || return 1
 
@@ -158,8 +154,6 @@ start_service() {
 	procd_set_param env PIU_NODE_DATA="$data" PIU_NODE_PANEL="$PANEL"
 	[ -n "$hosts" ] && procd_append_param env PIU_NODE_HOSTS="$hosts"
 	piu_env_map
-	# alerts.enabled=0 desliga a coleta (lista vazia), mesmo com feeds na config.
-	[ "$alerts" = 1 ] || procd_append_param env PIU_ALERT_FEEDS=
 	procd_set_param user "$user"
 	procd_set_param no_new_privs 1
 	procd_set_param respawn

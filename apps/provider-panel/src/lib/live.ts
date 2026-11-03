@@ -3,11 +3,11 @@
  * Nada aqui inventa número: o que o nó não mede vira `null`/"—" e a tela diz por quê.
  */
 import { CLASS_ICON } from '../data/seed';
-import type { ApiAlerts, ApiDay, ApiDevice, ApiHistory, ApiReceipts, ApiRelay, ApiTotals, ApiWalletTx } from './api';
+import type { ApiDay, ApiDevice, ApiHistory, ApiReceipts, ApiRelay, ApiTotals, ApiWalletTx } from './api';
 import { fmt, fmtInt } from './format';
 import type { Iface, NodeClass, RelayNode, WalletTx } from '../types';
 
-export interface Live { relay: ApiRelay | null; history: ApiHistory | null; receipts: ApiReceipts | null; alerts?: ApiAlerts | null }
+export interface Live { relay: ApiRelay | null; history: ApiHistory | null; receipts: ApiReceipts | null }
 export type RelayOn = Extract<ApiRelay, { enabled: true }>;
 export type HistoryOn = Extract<ApiHistory, { enabled: true }>;
 export type ReceiptsOn = Extract<ApiReceipts, { enabled: true }>;

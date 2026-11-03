@@ -54,20 +54,6 @@ export interface RelayView {
   counters?: { received: number; stored: number; forwarded: number; delivered: number; duplicates: number; rejected: number; receipts: number };
 }
 export interface ReceiptsView { enabled: boolean; kept?: number; keptOwn?: number; recent?: { at: number; own: boolean }[] }
-/** Alerta oficial CAP 1.2 como o nó devolve em `GET /api/alerts` (apps/piu-node/src/alerts). */
-export interface NodeAlert {
-  id: string; identifier: string; sender: string; sent: string; msgType: 'Alert' | 'Update' | 'Cancel';
-  info: {
-    language: string; senderName: string; event: string; severity: 'Extreme' | 'Severe' | 'Moderate' | 'Minor' | 'Unknown';
-    urgency: string; certainty: string; headline: string; description: string; instruction: string; web: string;
-    effective: string; onset: string; expires: string;
-    areas: { areaDesc: string; geocodes: { valueName: string; value: string }[] }[];
-  };
-  /** De onde o nó leu: o feed configurado e o link do documento CAP. */
-  source: { feed: string; url: string };
-  receivedAt: number;
-}
-export interface AlertsResponse { enabled: boolean; feeds?: { url: string; lastOkAt: number | null; lastError: string | null }[]; alerts?: NodeAlert[] }
 /** Regras do equipamento (as mesmas opções do assistente do painel): banda, armazenamento e horário. */
 export interface DeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: 'always' | 'night' | 'day' }
 /**
@@ -137,8 +123,6 @@ export class NodeApi {
   relay() { return this.call<RelayView>('GET', '/api/relay'); }
   receipts() { return this.call<ReceiptsView>('GET', '/api/relay/receipts'); }
   devices() { return this.call<DeviceView[]>('GET', '/api/devices'); }
-  /** Alertas oficiais vigentes que o nó leu dos feeds CAP (retransmitidos, sem assinatura do órgão). */
-  alerts() { return this.call<AlertsResponse>('GET', '/api/alerts'); }
   /** Pausa ou retoma a retransmissão do equipamento (o nó alterna). */
   togglePause(deviceId: string) { return this.call<{ id: string; status: string }>('POST', `/api/devices/${encodeURIComponent(deviceId)}/pause`, {}); }
   /**

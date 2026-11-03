@@ -37,11 +37,12 @@ export interface MyDevice { id: string; icon: IconName; name: string; desc: stri
 export const MY_DEVICES: MyDevice[] = [{ id: 'this', icon: 'smartphone', name: 'Este aparelho', desc: '', tag: 'atual', current: true }];
 
 // ── notificações ─────────────────────────────────────────
-export type NotifKey = 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network';
+export type NotifKey = 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network' | 'alert';
 export const NOTIF_TYPES: [NotifKey, IconName, string, string][] = [
   ['msg', 'chat_bubble', 'Conversas', 'Mensagens diretas'], ['group', 'group', 'Grupos', 'Só menções acima de 20 mensagens/h'],
   ['channel', 'campaign', 'Canais', 'Publicações dos canais que você segue'], ['nearby', 'radar', 'Pedidos de conversa', 'Convites de Por perto'],
   ['wallet', 'account_balance_wallet', 'Carteira', 'LUNES recebidos e bônus liberados'], ['network', 'hub', 'Rede e nós', 'Novos nós, saída da malha, modo nó pausado'],
+  ['alert', 'warning', 'Alertas da comunidade', 'Grave toca alto; Atenção avisa normal; Informativo só na lista'],
 ];
 export type Preview = 'always' | 'unlocked' | 'never';
 export const PREVIEW_HINT: Record<Preview, string> = {
