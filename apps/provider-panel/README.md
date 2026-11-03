@@ -36,9 +36,16 @@ Indisponível com o piu-node (dito na tela, sem simular sucesso): busca e paream
 Sem `piu-node` (site, prévia, selo "demonstração"), tudo funciona com os dados de exemplo de `src/data/`.
 
 ## Diferenças em relação ao protótipo
-- O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Largura mínima: 1180px.
+- O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Abaixo de 1180 px o layout se adapta (ver "Responsivo").
 - O mapa da Malha fica centralizado no cartão em telas largas, e os nós de um equipamento revogado somem do mapa.
 - Controles com papéis acessíveis (`switch`, `radio`, `checkbox`, `aria-current`), foco visível, Esc fecha diálogos e o assistente.
+
+## Responsivo
+- **≥ 1180 px**: como o design (barra lateral completa).
+- **760–1179 px** (tablet, janela estreita do app desktop): barra lateral só com ícones (rótulo acessível e dica), cartões em 2 colunas, detalhe do equipamento abaixo da tabela, mapa da Malha acima da lista de vizinhos. O tema troca pelo botão da faixa superior.
+- **< 760 px** (celular no navegador da rede local): marca e operador na faixa superior, navegação embaixo, cartões em 1 coluna, tabelas viram lista (cada valor com o próprio rótulo), colunas secundárias escondidas, diálogos e assistente com 16 px de margem, alvos de toque ≥ 44 px.
+- As regras ficam no fim de `src/styles.css` (os componentes usam estilo inline; as classes trocam só o que muda por largura).
+- Conferência: `npm run build && npm run check:responsive` mede `scrollWidth <= clientWidth` em 360, 390, 768, 1024 e 1280 px, em todas as rotas, nos temas claro e escuro, no painel embutido (iframe) e no assistente, e tira capturas (`responsive-shots/`). Com piu-node: `node scripts/check-responsive.mjs --url https://localhost:8420 --code <código do console> --name <operador>`.
 
 ## Segurança
 - **CSP estrita** em `<meta>` no `index.html` (vale em qualquer servidor, inclusive o `piu-node`) e por header em `public/_headers` (Cloudflare Pages / Netlify): só recursos do próprio painel (`'self'`), sem scripts inline, sem `eval`, sem `data:` para fontes (`build.assetsInlineLimit: 0`). Estilos por atributo (`style=`) são liberados com `style-src-attr`.
