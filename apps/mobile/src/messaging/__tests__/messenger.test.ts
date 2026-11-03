@@ -168,10 +168,10 @@ test('expiração: sem rota até o fim do TTL, a mensagem sai da fila como "expi
   const a = device(net, 'Ana'), b = device(net, 'Beto');
   a.m.addContact(contactOf(b, 'Beto'));
   a.m.sendText(b.ids.public.id, 'm1', 'Ninguém por perto');
-  net.clock += 2 * 24 * 3600;
+  net.clock += 47 * 3600;
   a.m.tick();
-  assert.deepEqual(a.m.pendingFor(b.ids.public.id), ['m1'], 'ainda dentro do TTL de 3 dias');
-  net.clock += 2 * 24 * 3600;
+  assert.deepEqual(a.m.pendingFor(b.ids.public.id), ['m1'], 'ainda dentro do prazo de 48 h');
+  net.clock += 2 * 3600;
   a.m.tick();
   assert.deepEqual(a.m.pendingFor(b.ids.public.id), []);
   assert.deepEqual(a.log.status.at(-1), ['m1', 'expirada']);

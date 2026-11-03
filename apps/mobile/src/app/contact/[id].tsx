@@ -4,7 +4,6 @@ import { Image, Pressable, ScrollView, View } from 'react-native';
 import { useStore } from '../../state/store';
 import { useLayout } from '../../lib/responsive';
 import { useKeys } from '../../state/keys';
-import { useSettings } from '../../state/settings';
 import { useMessaging, useMyCard } from '../../state/messaging';
 import { safetyNumber, toPublic } from '../../protocol';
 import { QrCode } from '../../ui/QrCode';
@@ -20,12 +19,11 @@ export default function Contact() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const { compact } = useLayout();
-  const { chats, verified, setVerified, showToast, block, isBlocked } = useStore();
+  const { chats, verified, setVerified, showToast, block, isBlocked, patchChat } = useStore();
   const { identities } = useKeys();
   const ident = chats.find(x => x.id === id)?.ident ?? 'public';
   const { contactKeys } = useMessaging();
   const [myCard] = useMyCard(ident);
-  const { priv } = useSettings();
   // Chaves do contato: vieram no cartão (QR) ou na primeira mensagem (pedido de conversa).
   const real = id ? contactKeys(id) : null;
   // Código: chaves da identidade usada nesta conversa × chaves do contato.
@@ -54,7 +52,18 @@ export default function Contact() {
       block({ id: blockId, chatId: chat.id, name: chat.name, initials: chat.initials, how: 'pela conversa', reported: false });
       showToast({ icon: 'block', title: `${first} bloqueado(a)`, body: 'Não é avisado(a). Desfaça em Privacidade → Contatos bloqueados.' });
     };
-  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', priv.temp === '24h' ? '24 horas' : priv.temp === '7d' ? '7 dias' : 'Desligado', 450],
+  // Mensagens temporárias desta conversa (começa com o padrão de Privacidade): toque troca
+  // Desligado → 7 dias → 24 h. Vale para as próximas mensagens, nos dois aparelhos.
+  const temp = chat.temp ?? 'off';
+  const tempLabel = { off: 'Desligado', '7d': '7 dias', '24h': '24 h' }[temp];
+  const nextTemp = ({ off: '7d', '7d': '24h', '24h': 'off' } as const)[temp];
+  const tempAct = () => {
+    patchChat(chat.id, { temp: nextTemp });
+    showToast(nextTemp === 'off'
+      ? { icon: 'timer_off', title: 'Mensagens temporárias desligadas', body: 'As próximas mensagens ficam na conversa.' }
+      : { icon: 'timer', title: `Mensagens temporárias · ${nextTemp === '7d' ? '7 dias' : '24 h'}`, body: 'As próximas mensagens somem dos dois aparelhos nesse prazo.' });
+  };
+  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', tempLabel, 450, tempAct],
     [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct]];
 
   return (

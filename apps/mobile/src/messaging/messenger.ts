@@ -14,7 +14,7 @@ import { isJpegBase64 } from './photo';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
-import { DEFAULT_HOPS, envelopeId, Priority } from '../protocol/envelope';
+import { DEFAULT_HOPS, envelopeId, HOP_OFFSET, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
@@ -40,8 +40,9 @@ export interface Contact {
 /** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
 interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
-export interface IncomingText { msgId: string; text: string; sentAt: number }
-export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array }
+/** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). */
+export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number }
+export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number }
 
 export interface MessengerEvents {
   /** Mensagem nova de um contato conhecido. */
@@ -50,6 +51,10 @@ export interface MessengerEvents {
   newContact(c: Contact, m: IncomingText): void;
   /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
+  /** O contato leu estas mensagens minhas (confirmação de leitura dele). */
+  read(contactId: string, msgIds: string[]): void;
+  /** O contato está digitando (dura alguns segundos). */
+  typing(contactId: string): void;
   /** Arquivo: progresso de envio (blocos confirmados) ou de recebimento. */
   fileProgress(msgId: string, done: number, total: number, dir: 'out' | 'in'): void;
   /** Arquivo recebido inteiro, com integridade conferida (SHA-256). */
@@ -64,8 +69,11 @@ export interface MessengerEvents {
   groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
-  /** Um contato avisou que revogou um aparelho (texto do aviso; quem chama confere a assinatura). */
-  notice(contactId: string, notice: string): void;
+  /**
+   * Um contato (ou membro de um grupo meu) avisou que revogou um aparelho: texto do aviso e as chaves
+   * públicas de quem mandou. Quem chama confere a assinatura e, se valer, chama `rotateForRevocation`.
+   */
+  notice(contactId: string, notice: string, pub: PublicIdentity): void;
   /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
   peerPhoto(contactId: string, jpegBase64: string | null): void;
   /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
@@ -108,10 +116,15 @@ export interface MessengerOptions {
 
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
 type Payload =
-  | { t: 'm'; i: string; x: string; n?: string; k?: string }
+  /** Texto. `e`: mensagem temporária, some `e` segundos depois de enviada (nos dois lados). */
+  | { t: 'm'; i: string; x: string; n?: string; k?: string; e?: number }
+  /** Confirmação de leitura (só se o ajuste de quem leu estiver ligado). */
+  | { t: 'r'; i: string[] }
+  /** "digitando…": sinal efêmero, sem fila, prazo de segundos e sem prova de entrega. */
+  | { t: 'ty' }
   | { t: 'a'; i: string[] }
   /** Oferta de arquivo: nome, tamanho, tipo, total de blocos e SHA-256 do conteúdo. */
-  | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string }
+  | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string; e?: number }
   /** Blocos recebidos (confirmação parcial) e arquivo montado e conferido. */
   | { t: 'fa'; i: string; k: number[] }
   | { t: 'fd'; i: string }
@@ -119,6 +132,13 @@ type Payload =
   | { t: 'g'; s: string }
   /** Pedido para entrar (código do convite do grupo) e aviso de saída/remoção. */
   | { t: 'gj'; g: string; c: string; n?: string }
+  /**
+   * "Quem pode convidar: Todos os membros": o membro indica contatos ao admin (`ga`) e avisa cada
+   * convidado de quais admins vão mandar o estado (`gv`), para o convidado aceitar o estado de quem
+   * ainda não é contato dele.
+   */
+  | { t: 'ga'; g: string; m: WireMember[] }
+  | { t: 'gv'; g: string; a: WireMember[] }
   | { t: 'gl'; g: string }
   | { t: 'gr'; g: string }
   /** Aviso assinado de aparelho revogado (lib/devicesCore.ts), para os contatos. */
@@ -126,12 +146,29 @@ type Payload =
   /** Foto do perfil público (JPEG de 96 px em base64; vazio = removida). Só entre contatos públicos. */
   | { t: 'pp'; p: string };
 
+/** Membro em trânsito: id, nome e chaves públicas em base64url. */
+interface WireMember { id: string; n: string; s: string; a: string; b: string }
+const toWire = (id: string, name: string, pub: PublicIdentity): WireMember => ({ id, n: name.slice(0, 40), s: b64url(pub.signPk), a: b64url(pub.agreePk), b: b64url(pub.binding) });
+/** Confere chaves e vínculo; `null` se algo não bate. */
+function fromWire(w: unknown): { id: string; name: string; pub: PublicIdentity } | null {
+  try {
+    const x = w as WireMember;
+    if (typeof x?.id !== 'string' || typeof x.s !== 'string') return null;
+    const pub = { signPk: unb64url(x.s), agreePk: unb64url(x.a), binding: unb64url(x.b) };
+    if (!verifyBinding(pub) || identityId(pub.signPk, pub.agreePk) !== x.id) return null;
+    return { id: x.id, name: String(x.n ?? '').slice(0, 40), pub };
+  } catch { return null; }
+}
+/** Indicação de um membro: vale 7 dias (como o convite do grupo). */
+interface Vouch { via: IdentityKind; admins: string[]; at: number }
+const MAX_INVITE_BATCH = 20;
+
 /** Pedido para entrar aguardando um admin (só no aparelho do admin). */
 interface PendingJoin { id: string; name: string; via: IdentityKind; pub: PublicIdentity; at: number }
 
 /** Envio de arquivo em andamento (só na memória: o conteúdo não vai para o armazenamento do app). */
 interface FileJob { msgId: string; to: string; data: Uint8Array; total: number; next: number; acked: Set<number>; inFlight: Set<number>; paused: boolean }
-interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number }
+interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number; sentAt?: number; e?: number }
 
 /** Bloco de arquivo: 12 KB de dados por envelope (cabe no preenchimento de 16 KB). */
 export const FILE_BLOCK = 12 * 1024;
@@ -145,6 +182,7 @@ interface Outgoing { env: string; msgId: string; to: string; bytes: string; forw
 /** Prova de entrega circulando pela malha (pública: não diz quem é o destino). */
 interface Proof { secret: Uint8Array; at: number; sentTo: Set<string> }
 const PROOF_MAGIC = [0x50, 0x52]; // "PR": quadro de provas (envelopes começam com a versão 0)
+/** A prova circula enquanto a mensagem ainda pode estar na malha. */
 const PROOF_TTL_SEC = 48 * 3600;
 
 /** Métricas locais do diagnóstico (sem telemetria): por dia, só neste aparelho. */
@@ -152,8 +190,19 @@ export interface DayMetrics { sent: number; delivered: number; expired: number; 
 const emptyDay = (): DayMetrics => ({ sent: 0, delivered: 0, expired: 0, lat: [], queue: [], hops: {}, relayed: 0, altRoutes: 0, via: {} });
 const MAX_SAMPLES = 300;
 
-const TTL_SEC = 3 * 24 * 3600;
+/**
+ * Prazo de uma mensagem sem rota (FUN-011): 48 h, como no design ("não encontrou rota em 48 h",
+ * "Expira em 47 h"). Vale para conversa, grupo e arquivo; as telas leem daqui (lib/route.ts).
+ */
+export const MESSAGE_TTL_SEC = 48 * 3600;
+const TTL_SEC = MESSAGE_TTL_SEC;
 const MAX_TEXT = 4000;
+/** "digitando…": vale 15 s na malha e sai no máximo a cada 4 s por contato. */
+const TYPING_TTL_SEC = 15;
+const TYPING_EVERY_SEC = 4;
+/** Mensagens temporárias: no máximo o prazo maior do design (7 dias); no mínimo 1 min. */
+const MAX_EXPIRE_SEC = 7 * 86400;
+const validExpire = (e: unknown) => (typeof e === 'number' && Number.isInteger(e) && e >= 60 && e <= MAX_EXPIRE_SEC ? e : undefined);
 const MAX_CONTACTS_FROM_STRANGERS = 50;
 const MAX_DELIVERED_IDS = 5000;
 const INVITE_TTL_SEC = 24 * 3600;
@@ -174,6 +223,8 @@ export class Messenger {
   /** Chave anterior de cada grupo (mensagens que já estavam na malha quando a chave trocou). */
   private prevKeys = new Map<string, { keyV: number; key: string }>();
   private pendingJoins = new Map<string, PendingJoin[]>();
+  /** Grupos para os quais um contato me indicou (admins de quem aceito o primeiro estado). */
+  private vouched = new Map<string, Vouch>();
   /** Envelopes de grupo meus → id da mensagem (para mostrar "encaminhada"). */
   private groupOut = new Map<string, string>();
   private fileRx = new Map<string, FileRx>();
@@ -215,6 +266,8 @@ export class Messenger {
     for (const [gid, k] of (st.gp ?? []) as [string, { keyV: number; key: string }][]) this.prevKeys.set(gid, k);
     for (const [gid, list] of (st.gq ?? []) as [string, { id: string; name: string; via: IdentityKind; s: string; a: string; b: string; at: number }[]][])
       this.pendingJoins.set(gid, list.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, pub: { signPk: unb64url(p.s), agreePk: unb64url(p.a), binding: unb64url(p.b) } })));
+    this.rotatedFor = Array.isArray(st.rk) ? (st.rk as string[]).slice(-200) : [];
+    for (const [gid, v] of (st.gv ?? []) as [string, Vouch][]) if (v.at + GROUP_INVITE_TTL_SEC > o.now()) this.vouched.set(gid, v);
     this.refreshGroupKeys();
     for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
     for (const i of (st.inv ?? []) as Invite[]) if (i.expiresAt > o.now()) this.invites.set(i.code, i);
@@ -293,22 +346,56 @@ export class Messenger {
     return { code: inv.code, expiresAt: inv.expiresAt };
   }
 
-  sendText(contactId: string, msgId: string, text: string) {
+  /**
+   * Texto para o contato. `expireSec`: mensagem temporária (o envelope também vence antes, se o prazo
+   * for menor que o da fila).
+   */
+  sendText(contactId: string, msgId: string, text: string, expireSec?: number) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     const x = text.slice(0, MAX_TEXT);
     const mgr = this.managers[c.via];
     const p: Payload = { t: 'm', i: msgId, x };
+    const e = validExpire(expireSec);
+    if (e) p.e = e;
     const firm = mgr.get(contactId)?.established;
     if (!firm && c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
     if (!firm && c.invite) p.k = c.invite; // prova que escaneei o QR (uso único do lado de lá)
-    this.enqueue(c, p, msgId, Priority.Normal);
+    this.enqueue(c, p, msgId, Priority.Normal, false, e ? Math.min(TTL_SEC, e) : TTL_SEC);
   }
 
-  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false) {
+  /**
+   * Confirmação de leitura: quem chama só chama com o ajuste "Confirmação de leitura" ligado. Cada
+   * mensagem é confirmada uma vez. Só para contato aceito.
+   */
+  sendRead(contactId: string, msgIds: string[]) {
+    const c = this.contacts.get(contactId);
+    if (!c || c.request || this.blocked.has(contactId)) return;
+    const fresh = msgIds.filter(i => typeof i === 'string' && i.length <= 64 && !this.deliveredSet.has(`${contactId}|read|${i}`)).slice(0, 64);
+    if (!fresh.length) return;
+    for (const i of fresh) this.markDelivered(`${contactId}|read|${i}`);
+    this.enqueue(c, { t: 'r', i: fresh }, null, Priority.Normal);
+  }
+
+  private typingAt = new Map<string, number>();
+  /**
+   * "digitando…" para o contato (quem chama só chama com o ajuste ligado). Sem fila: sem vizinho por
+   * perto, não sai; com vizinho, vale 15 s na malha e não gera prova de entrega.
+   */
+  sendTyping(contactId: string) {
+    const c = this.contacts.get(contactId);
+    const now = this.o.now();
+    if (!c || c.request || !this.peers.size || !this.managers[c.via].get(contactId)?.established) return false;
+    if (now - (this.typingAt.get(contactId) ?? -Infinity) < TYPING_EVERY_SEC) return false;
+    this.typingAt.set(contactId, now);
+    this.enqueue(c, { t: 'ty' }, null, Priority.Low, false, TYPING_TTL_SEC);
+    return true;
+  }
+
+  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false, ttlSec = TTL_SEC) {
     const now = this.o.now();
     const body = p instanceof Uint8Array ? p : utf8(JSON.stringify(p));
-    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec: TTL_SEC, priority, bulk, pad: this.o.pad?.() ?? true });
+    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec, priority, bulk, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (msgId && r.status === 'stored') { this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false, at: now }); if (!(p instanceof Uint8Array) && p.t === 'm') this.day().sent++; }
@@ -319,14 +406,15 @@ export class Messenger {
   // ── arquivos (FUN-009): oferta, blocos com confirmação, pausa/retomada e SHA-256 no fim ──
 
   /** Começa a enviar um arquivo para o contato. `msgId` é o id do balão na conversa. */
-  sendFile(contactId: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }) {
+  sendFile(contactId: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }, expireSec?: number) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     if (f.data.length === 0 || f.data.length > MAX_FILE_BYTES) throw new Error('Arquivo vazio ou maior que 50 MB.');
     const total = Math.ceil(f.data.length / FILE_BLOCK);
     const job: FileJob = { msgId, to: contactId, data: f.data, total, next: 0, acked: new Set(), inFlight: new Set(), paused: false };
     this.fileJobs.set(msgId, job);
-    this.enqueue(c, { t: 'f', i: msgId, n: f.name.slice(0, 120), s: f.data.length, m: f.mime.slice(0, 80), c: total, h: toHex(sha256(f.data)) }, null, Priority.Normal);
+    const e = validExpire(expireSec);
+    this.enqueue(c, { t: 'f', i: msgId, n: f.name.slice(0, 120), s: f.data.length, m: f.mime.slice(0, 80), c: total, h: toHex(sha256(f.data)), ...(e ? { e } : {}) }, null, Priority.Normal);
     this.pumpFile(job);
     return { blocks: total };
   }
@@ -386,10 +474,10 @@ export class Messenger {
     this.fileRx.delete(`${from}|${msgId}`);
     if (o !== rx.size || toHex(sha256(whole)) !== rx.hash) return; // integridade não confere: descarta
     this.enqueue(c, { t: 'fd', i: msgId }, null, Priority.High);
-    this.o.events.fileReceived?.(from, { msgId, name: rx.name, size: rx.size, mime: rx.mime, blocks: rx.total, data: whole });
+    this.o.events.fileReceived?.(from, { msgId, name: rx.name, size: rx.size, mime: rx.mime, blocks: rx.total, data: whole, sentAt: rx.sentAt, expireSec: rx.e });
   }
 
-  private onFileControl(from: string, p: Payload) {
+  private onFileControl(from: string, p: Payload, sentAt?: number) {
     const c = this.contacts.get(from);
     if (!c) return; // arquivo só de contato já aceito
     if (p.t === 'f') {
@@ -397,9 +485,10 @@ export class Messenger {
       const key = `${from}|${p.i}`;
       if (this.fileRx.has(key) || this.deliveredSet.has(`${from}|file|${p.i}`)) return;
       if (this.fileRx.size >= 8) return; // poucos recebimentos simultâneos (memória)
-      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now() });
+      const e = validExpire(p.e);
+      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e });
       this.markDelivered(`${from}|file|${p.i}`);
-      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c });
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e });
       return;
     }
     if (p.t !== 'fa' && p.t !== 'fd') return;
@@ -464,7 +553,7 @@ export class Messenger {
       if (m.id === me) continue;
       let c = this.contacts.get(m.id);
       if (!c) { c = { id: m.id, via: g.via, pub: m.pub, name: m.name }; this.contacts.set(c.id, c); }
-      this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin') }, null, Priority.High);
+      this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin' ? 'admin' : 'member', m.id) }, null, Priority.High);
     }
   }
 
@@ -486,13 +575,26 @@ export class Messenger {
     return next;
   }
 
-  /** Acrescenta contatos ao grupo (admin, ou qualquer membro se `inv` = todos). A chave não muda. */
+  /** Membro comum pode convidar? ("Quem pode convidar: Todos os membros"; só em grupo, nunca em canal.) */
+  canInvite(gid: string) {
+    const g = this.groups.get(gid);
+    if (!g) return false;
+    const me = this.myId(g.via);
+    return isAdmin(g, me) || (g.kind === 'group' && g.inv === 'all' && isMemberOf(g, me));
+  }
+
+  /**
+   * Acrescenta contatos ao grupo. Admin: entra na hora (a chave não muda). Membro, com "Quem pode
+   * convidar: Todos os membros": a indicação vai aos admins (que conferem a regra de novo e, com
+   * "Aprovar quem entra", deixam o pedido aguardando), e cada convidado é avisado de quais admins vão
+   * mandar o estado. Devolve o estado atual (sem mudança, no caso do membro).
+   */
   addMembers(gid: string, ids: string[]) {
     const g = this.groups.get(gid);
     if (!g) throw new Error('Grupo desconhecido.');
     const me = this.myId(g.via);
-    if (!isAdmin(g, me) && !(g.inv === 'all' && isMemberOf(g, me))) throw new Error('Sem permissão para convidar.');
-    if (!isAdmin(g, me)) throw new Error('Peça a um admin para adicionar.');
+    if (!this.canInvite(gid)) throw new Error('Sem permissão para convidar.');
+    if (!isAdmin(g, me)) return this.inviteAsMember(g, ids);
     const members = [...g.members];
     for (const id of ids) {
       const c = this.contacts.get(id);
@@ -505,6 +607,51 @@ export class Messenger {
     this.distribute(next);
     this.o.events.changed?.();
     return next;
+  }
+
+  private inviteAsMember(g: GroupState, ids: string[]) {
+    const picked = ids.slice(0, MAX_INVITE_BATCH).map(id => this.contacts.get(id)).filter((c): c is Contact => !!c && c.via === g.via && !c.request && !isMemberOf(g, c.id));
+    if (!picked.length) return g;
+    const me = this.myId(g.via);
+    const admins = g.members.filter(m => m.role === 'admin' && m.id !== me);
+    const wire = picked.map(c => toWire(c.id, c.name, c.pub));
+    for (const m of admins) this.enqueue(this.contacts.get(m.id) ?? { id: m.id, via: g.via, pub: m.pub, name: m.name }, { t: 'ga', g: g.id, m: wire }, null, Priority.High);
+    const adminWire = admins.map(m => toWire(m.id, m.name, m.pub));
+    for (const c of picked) this.enqueue(c, { t: 'gv', g: g.id, a: adminWire }, null, Priority.High);
+    return g;
+  }
+
+  /** Admin recebe a indicação de um membro: confere a regra e o remetente, e adiciona (ou deixa aguardando). */
+  private onMemberInvite(from: string, p: Extract<Payload, { t: 'ga' }>) {
+    const g = typeof p.g === 'string' ? this.groups.get(p.g) : undefined;
+    if (!g || g.kind !== 'group' || g.inv !== 'all' || !isAdmin(g, this.myId(g.via)) || !isMemberOf(g, from) || !Array.isArray(p.m)) return;
+    const add: string[] = [];
+    for (const w of p.m.slice(0, MAX_INVITE_BATCH)) {
+      const x = fromWire(w);
+      if (!x || isMemberOf(g, x.id) || this.blocked.has(x.id) || x.id === this.myId(g.via)) continue;
+      if (g.approve) {
+        const list = (this.pendingJoins.get(g.id) ?? []).filter(q => q.id !== x.id);
+        if (list.length >= 100) break;
+        this.pendingJoins.set(g.id, [...list, { id: x.id, name: x.name, via: g.via, pub: x.pub, at: this.o.now() }]);
+        this.o.events.joinRequest?.(g.id, { id: x.id, name: x.name });
+        continue;
+      }
+      if (!this.contacts.has(x.id)) this.contacts.set(x.id, { id: x.id, via: g.via, pub: x.pub, name: x.name });
+      add.push(x.id);
+    }
+    if (add.length) this.addMembers(g.id, add);
+    this.o.events.changed?.();
+  }
+
+  /** Convidado: guarda de quais admins aceitar o primeiro estado (só se a indicação veio de contato aceito). */
+  private onVouch(from: string, p: Extract<Payload, { t: 'gv' }>) {
+    const c = this.contacts.get(from);
+    if (!c || c.request || typeof p.g !== 'string' || !/^[0-9a-f]{32}$/.test(p.g) || this.groups.has(p.g) || !Array.isArray(p.a)) return;
+    const admins = p.a.slice(0, 20).map(fromWire).filter(x => !!x).map(x => x!.id);
+    if (!admins.length) return;
+    this.vouched.set(p.g, { via: c.via, admins, at: this.o.now() });
+    while (this.vouched.size > 100) this.vouched.delete(this.vouched.keys().next().value!);
+    this.o.events.changed?.();
   }
 
   /** Remove alguém e troca a chave do grupo (v → v+1): quem saiu não lê nada novo. */
@@ -599,9 +746,64 @@ export class Messenger {
     }
   }
 
-  /** Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via`. */
+  /**
+   * Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via` e aos
+   * admins dos grupos dessa identidade em que não sou admin (mesmo que não sejam contatos): eles trocam
+   * a chave do grupo ao conferir o aviso.
+   */
   broadcastNotice(via: IdentityKind, notice: string) {
-    for (const c of this.contacts.values()) if (c.via === via && !c.request) this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High);
+    const sent = new Set<string>();
+    for (const c of this.contacts.values()) if (c.via === via && !c.request) { sent.add(c.id); this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High); }
+    const me = this.myId(via);
+    for (const g of this.groups.values()) {
+      if (g.via !== via || isAdmin(g, me)) continue;
+      for (const m of g.members) {
+        if (m.role !== 'admin' || sent.has(m.id)) continue;
+        sent.add(m.id);
+        this.enqueue({ id: m.id, via, pub: m.pub, name: m.name }, { t: 'rv', n: notice }, null, Priority.High);
+      }
+    }
+  }
+
+  /** Avisos de revogação já tratados (cada aviso troca a chave uma vez só). */
+  private rotatedFor: string[] = [];
+
+  /** Troca a chave do grupo sem tirar ninguém (v → v+1). Só admin. */
+  rotateKey(gid: string) {
+    const g = this.assertAdmin(gid);
+    this.prevKeys.set(gid, { keyV: g.keyV, key: g.key });
+    const next: GroupState = { ...g, rev: g.rev + 1, keyV: g.keyV + 1, key: newKey() };
+    this.groups.set(gid, next);
+    this.refreshGroupKeys();
+    this.distribute(next);
+    this.o.events.groupUpdated?.(next, 'updated');
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /**
+   * Aparelho revogado (design: "Grupos trocam de chave conforme os nós recebem o aviso"). Troca a
+   * chave de cada grupo em que sou admin e `who` participa; `who` = eu mesmo quando a revogação é
+   * minha (aí valem os grupos da identidade `via`). Uma vez por aviso (`noticeId`). Devolve os grupos.
+   *
+   * Um admin só por grupo troca, para dois admins não publicarem chaves diferentes na mesma revisão:
+   * quem revogou, se for admin; senão, o admin de menor id.
+   */
+  rotateForRevocation(who: string, noticeId: string, via?: IdentityKind): GroupState[] {
+    if (this.rotatedFor.includes(noticeId)) return [];
+    this.rotatedFor.push(noticeId);
+    while (this.rotatedFor.length > 200) this.rotatedFor.shift();
+    const out: GroupState[] = [];
+    for (const g of [...this.groups.values()]) {
+      const me = this.myId(g.via);
+      if (via && g.via !== via) continue;
+      if (!isAdmin(g, me) || !isMemberOf(g, who)) continue;
+      const leader = isAdmin(g, who) ? who : g.members.filter(m => m.role === 'admin').map(m => m.id).sort()[0];
+      if (leader !== me) continue;
+      out.push(this.rotateKey(g.id));
+    }
+    this.o.events.changed?.();
+    return out;
   }
 
   /**
@@ -665,13 +867,18 @@ export class Messenger {
     if (p.t === 'g') {
       const cur0 = (() => { try { return this.groups.get((JSON.parse(p.s) as { id?: string }).id ?? ''); } catch { return undefined; } })();
       const contact = this.contacts.get(from);
-      const via = cur0?.via ?? contact?.via;
+      const gid0 = (() => { try { return String((JSON.parse(p.s) as { id?: string }).id ?? ''); } catch { return ''; } })();
+      // Indicado por um membro: aceita o primeiro estado só dos admins que ele apontou (prazo de 7 dias).
+      const vouch = !cur0 ? this.vouched.get(gid0) : undefined;
+      const vouchOk = !!vouch && vouch.admins.includes(from) && vouch.at + GROUP_INVITE_TTL_SEC > this.o.now();
+      const via = cur0?.via ?? (contact && !contact.request ? contact.via : vouchOk ? vouch!.via : contact?.via);
       if (!via) return;
       const g = decodeState(p.s, via);
       if (!g) return;
       const cur = this.groups.get(g.id);
-      // Só aceita de quem é admin (no estado que eu já tenho; num grupo novo, no próprio estado e sendo contato aceito).
-      if (cur ? !isAdmin(cur, from) : !isAdmin(g, from) || !contact || contact.request) return;
+      // Só aceita de quem é admin (no estado que eu já tenho; num grupo novo, no próprio estado e sendo contato aceito ou indicado).
+      if (cur ? !isAdmin(cur, from) : !isAdmin(g, from) || ((!contact || contact.request) && !vouchOk)) return;
+      if (!cur) this.vouched.delete(g.id);
       if (!isAdmin(g, from)) return;
       if (cur && (g.rev <= cur.rev || g.keyV < cur.keyV)) return; // sem voltar atrás
       const me = this.myId(via);
@@ -835,8 +1042,11 @@ export class Messenger {
     }
     const out = this.router.outgoing(peerId, via, now, { thirdPartyBudget: budget });
     let changed = false;
+    /** Saltos restantes de cada envelope que sai (para contar os relays da entrega até aqui). */
+    const hopsOut = new Map<string, number>();
     for (const bytes of out) {
       const id = envelopeId(bytes);
+      hopsOut.set(id, bytes[HOP_OFFSET]);
       if (!this.router.isOwn(id)) {
         this.relayDay.bytes += bytes.length;
         if (Number.isFinite(this.bw.tokens)) this.bw.tokens = Math.max(0, this.bw.tokens - bytes.length);
@@ -853,7 +1063,9 @@ export class Messenger {
     // Recibos que o roteador acabou de assinar (envelopes de terceiros): viram créditos pendentes.
     for (const rc of this.router.receipts.splice(0)) {
       const info = this.router.infoOf(rc.envelopeId);
-      if (info) { this.credits.addReceipt(rc, info, via); changed = true; }
+      // O remetente põe DEFAULT_HOPS e cada salto tira 1: relays até mim = DEFAULT_HOPS − saltos ao sair.
+      const left = hopsOut.get(rc.envelopeId);
+      if (info) { this.credits.addReceipt(rc, { ...info, relays: left === undefined ? 1 : DEFAULT_HOPS - left - 1 }, via); changed = true; }
     }
     this.sendProofs(peerId);
     if (p && this.relayDay.bytes >= p.dailyBytes) this.applyRelay(); // chegou ao limite do dia
@@ -865,8 +1077,7 @@ export class Messenger {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     const r = this.router.ingest(bytes, peerId, this.o.now());
     if (r.status === 'delivered') {
-      // Sou o destino: publico a prova de entrega (segredo que só quem decifrou conhece) e conto os saltos.
-      this.addProof(r.message.id, r.message.ackSecret);
+      // Sou o destino: conto os saltos (a prova de entrega sai depois de abrir, ver abaixo).
       const hopsUsed = Math.max(1, DEFAULT_HOPS - r.hopsLeft);
       const k = hopsUsed >= 4 ? '4+' : String(hopsUsed);
       this.day().hops[k] = (this.day().hops[k] ?? 0) + 1;
@@ -874,26 +1085,56 @@ export class Messenger {
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
     const m = r.message;
-    if (m.kind === EnvelopeKind.Group) { if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m); return r; }
+    if (m.kind === EnvelopeKind.Group) {
+      // Prova de entrega: segredo que só quem decifrou conhece (vira crédito para os relays).
+      this.addProof(m.id, m.ackSecret);
+      if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m);
+      if (r.stored) this.flushAll(); // os outros membros ainda precisam receber
+      return r;
+    }
+    // Sinal efêmero ("digitando…") não publica prova: não gera crédito para quem repassou.
+    if (!this.onDirect(m)) this.addProof(m.id, m.ackSecret);
+    return r;
+  }
+
+  /** Conteúdo de uma mensagem direta para mim. `true` = sinal efêmero (sem prova de entrega). */
+  private onDirect(m: Opened): boolean {
     // Bloqueado: descarta antes de abrir a sessão (sem confirmação de entrega nem pedido de conversa).
-    if (this.blocked.has(m.fromId)) return r;
+    if (this.blocked.has(m.fromId)) return false;
     const via: IdentityKind = this.contacts.get(m.fromId)?.via ?? (this.managers.anon.get(m.fromId) ? 'anon' : 'public');
     // Abre na sessão da identidade que recebeu; tenta a outra se não abrir (primeira mensagem).
     let pt = this.managers[via].open(m), used: IdentityKind = via;
     if (!pt) { used = via === 'public' ? 'anon' : 'public'; pt = this.managers[used].open(m); }
     this.o.events.changed?.();
-    if (!pt) return r;
-    if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return r; }
+    if (!pt) return false;
+    if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return false; }
     let p: Payload;
-    try { p = JSON.parse(fromUtf8(pt)); } catch { return r; }
-    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p); return r; }
-    if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return r; }
-    if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
-    if (p?.t === 'rv') { if (this.contacts.has(m.fromId) && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n); return r; }
+    try { p = JSON.parse(fromUtf8(pt)); } catch { return false; }
+    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p, m.sentAt); return false; }
+    if (p?.t === 'ty') {
+      const c = this.contacts.get(m.fromId);
+      if (c && !c.request) this.o.events.typing?.(m.fromId);
+      return true;
+    }
+    if (p?.t === 'r') {
+      // Só confirma leitura de mensagem que eu mandei a este contato.
+      if (this.contacts.has(m.fromId) && Array.isArray(p.i)) this.o.events.read?.(m.fromId, p.i.filter(x => typeof x === 'string' && x.length <= 64).slice(0, 64));
+      return false;
+    }
+    if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return false; }
+    if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return false; }
+    if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return false; }
+    if (p?.t === 'gv') { this.onVouch(m.fromId, p); return false; }
+    if (p?.t === 'rv') {
+      // De contato, ou de membro de um grupo em que sou admin (admin promovido pode não ser contato dele).
+      const known = this.contacts.has(m.fromId) || [...this.groups.values()].some(g => isAdmin(g, this.myId(g.via)) && isMemberOf(g, m.fromId));
+      if (known && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n, m.from);
+      return false;
+    }
     if (p?.t === 'pp') {
       const c = this.contacts.get(m.fromId);
       if (c && c.via === 'public' && !c.request && used === 'public' && typeof p.p === 'string') this.o.events.peerPhoto?.(m.fromId, p.p === '' ? null : isJpegBase64(p.p) ? p.p : null);
-      return r;
+      return false;
     }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
@@ -906,18 +1147,18 @@ export class Messenger {
         }
       }
       this.o.events.changed?.();
-      return r;
+      return false;
     }
-    if (p?.t !== 'm' || typeof p.i !== 'string' || typeof p.x !== 'string' || p.i.length > 64) return r;
+    if (p?.t !== 'm' || typeof p.i !== 'string' || typeof p.x !== 'string' || p.i.length > 64) return false;
     let c = this.contacts.get(m.fromId);
     // Sempre confirma (mesmo repetida: o recibo anterior pode ter se perdido).
     const isNew = !c;
     if (!c) {
       // Contato novo só com convite válido, emitido por mim para a identidade que recebeu, e ainda não usado.
       const inv = typeof p.k === 'string' ? this.invites.get(p.k) : undefined;
-      if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return r; }
+      if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return false; }
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
-      if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return r; // contra enxurrada de pedidos
+      if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return false; // contra enxurrada de pedidos
       this.invites.delete(inv.code); // uso único
       this.o.events.inviteUsed?.();
       const name = typeof p.n === 'string' && used === 'public' ? p.n.slice(0, 40) : '';
@@ -926,12 +1167,12 @@ export class Messenger {
     }
     this.enqueue(c, { t: 'a', i: [p.i] }, null, Priority.High);
     const key = `${m.fromId}|${p.i}`;
-    if (this.deliveredSet.has(key)) return r; // já mostrada
+    if (this.deliveredSet.has(key)) return false; // já mostrada
     this.markDelivered(key);
-    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt };
+    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt, expireSec: validExpire(p.e) };
     if (isNew) this.o.events.newContact?.(c, msg); else this.o.events.message?.(c.id, msg);
     this.o.events.changed?.();
-    return r;
+    return false;
   }
 
   private markDelivered(key: string) {
@@ -948,8 +1189,10 @@ export class Messenger {
       inv: [...this.invites.values()],
       cr: this.credits.export(this.o.now()),
       mx: [...this.days],
-      g: [...this.groups.values()].map(g => encodeState(g, true)),
+      g: [...this.groups.values()].map(g => encodeState(g, 'store')),
       gp: [...this.prevKeys],
+      gv: [...this.vouched],
+      rk: this.rotatedFor,
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],
