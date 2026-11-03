@@ -5,6 +5,7 @@ import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest }
 import { randomUUID, timingSafeEqual, X509Certificate } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import type { AlertsView } from './alerts/collector.js';
 import type { Config } from './config.js';
 import { type Manifest, SAFE_FILE } from './packages.js';
 import type { Pairing } from './security/pairing.js';
@@ -52,6 +53,8 @@ export interface AppOptions {
   selfDevice?: { name: string; cls: string };
   /** Chaves de operador (`<data>/operator/keys.json`). Ausente: só em memória (testes). */
   vault?: OperatorVault;
+  /** Coletor de alertas oficiais CAP (ausente: `GET /api/alerts` responde `enabled: false`). */
+  alerts?: { view(): AlertsView } | null;
   /** Custo do scrypt do backup de operador (só os testes baixam). */
   backupN?: number;
 }
@@ -249,6 +252,13 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   app.get('/api/relay/history', authed(), async () => (o.relay?.history ? { enabled: true, ...o.relay.history() } : { enabled: false }));
   /** Recibos de retransmissão guardados para o validador: quantos e os horários dos mais recentes. */
   app.get('/api/relay/receipts', authed(), async () => (o.relay?.receipts ? { enabled: true, ...o.relay.receipts() } : { enabled: false }));
+
+  // ── alertas oficiais (CAP) ────────────────────────────
+  /**
+   * Alertas públicos vigentes lidos dos feeds CAP configurados (`PIU_ALERT_FEEDS`), com a origem de
+   * cada um (feed, link e `sender`). Retransmitidos pelo nó: não há assinatura do órgão para conferir.
+   */
+  app.get('/api/alerts', authed(), async () => (o.alerts ? o.alerts.view() : { enabled: false, feeds: [], alerts: [] }));
 
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */

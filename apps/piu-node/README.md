@@ -107,6 +107,7 @@ Provar o código é provar acesso físico ao equipamento. Quem está só na mesm
 | `GET /api/relay/history` | histórico das estatísticas: amostras de 24 h e totais por dia, guardados no nó |
 | `GET /api/relay/receipts` | recibos guardados para o validador (contagem e horários, sem ids) |
 | `GET /api/packages`, `GET /pkg/:file` | pacotes assinados do instalador |
+| `GET /api/alerts` | alertas oficiais vigentes lidos dos feeds CAP 1.2 (`PIU_ALERT_FEEDS`), com a origem (feed, link, `sender`) e o estado de cada feed. Retransmitidos pelo nó: os órgãos não distribuem chave de assinatura, então nada é "assinado pelo órgão" |
 
 `src/server.ts` (`startNode`) sobe o nó inteiro (TLS, pacotes, motor de retransmissão, API e painel; se o motor não subir, por exemplo com a porta ocupada, o painel sobe mesmo assim e o motivo vai para o log) e é usado pela linha de comando (`src/main.ts`) e pelo app desktop (`apps/provider-desktop`).
 
@@ -178,6 +179,8 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
 | `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
+| `PIU_ALERT_FEEDS` | `http://alert-as.inmet.gov.br/cap_12/rss/alert-as.rss` | feeds de alertas CAP 1.2 (RSS/Atom, ou URL que devolve um `<alert>`), separados por vírgula; vazio desliga. Alternativo do INMET: `https://alerts.inmet.gov.br/cap_12/rss/alert-as.rss`. A IDAP da Defesa Civil guarda alertas em CAP, mas sem endpoint documentado: inclua aqui quando houver. Os vigentes ficam em `<data>/alerts/alerts.json` (vencem pelo `expires`; sem ele, 24 h depois do `sent`) |
+| `PIU_ALERT_POLL_MS` | `600000` | intervalo entre as leituras dos feeds (1 min a 24 h) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.
 

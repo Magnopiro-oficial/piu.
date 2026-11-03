@@ -26,6 +26,11 @@ process.stdout.write(
     ? `  Retransmissão LNNP v1: enlace TCP ${node.relay.port}, descoberta UDP ${node.relay.discoveryPort ?? 'desligada'}, nó ${node.relay.engine.stats().node}${node.relay.engine.relaying ? '' : ' (sem retransmitir agora)'}\n`
     : '  Retransmissão LNNP desligada.\n',
 );
+process.stdout.write(
+  node.alerts
+    ? `  Alertas oficiais (CAP): ${node.alerts.feeds.join(', ')} · a cada ${Math.round(node.alerts.pollMs / 60_000)} min\n`
+    : '  Alertas oficiais desligados (PIU_ALERT_FEEDS vazio).\n',
+);
 show('Para entrar no painel, use este código:', node.issueCode());
 
 // Parar o serviço (systemd, Ctrl+C): grava as mensagens guardadas e o histórico antes de sair.

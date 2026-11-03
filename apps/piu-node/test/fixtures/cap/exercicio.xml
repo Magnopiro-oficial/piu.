@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixture de teste: alerta de exercício (status=Exercise), não pode entrar. -->
+<alert xmlns="urn:oasis:names:tc:emergency:cap:1.2">
+  <identifier>urn:oid:2.49.0.1.76.0.2026.11.3.9.9</identifier>
+  <sender>cap@inmet.gov.br</sender>
+  <sent>2026-11-03T08:00:00-03:00</sent>
+  <status>Exercise</status>
+  <msgType>Alert</msgType>
+  <scope>Public</scope>
+  <info>
+    <event>Exercício</event><urgency>Immediate</urgency><severity>Extreme</severity><certainty>Observed</certainty>
+    <expires>2026-11-05T08:00:00-03:00</expires><headline>Exercício</headline><area><areaDesc>Teste</areaDesc></area>
+  </info>
+</alert>
