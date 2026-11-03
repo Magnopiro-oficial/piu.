@@ -13,6 +13,9 @@ import { cookieOptions, createSession, csrfMatches, endSession, findSession, SES
 import { readPanelFile } from './static.js';
 import { BACKUP_FILENAME, OperatorKeyError, OperatorVault } from './operator.js';
 import { claimableEpochs, isLunesAddress } from './payout.js';
+import { LUNES_EXPLORER } from './lunes/lunesRpc.js';
+import { LunesReader } from './lunes/reader.js';
+import { decodeSs58 } from './lunes/ss58.js';
 import { toHex } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
 import { makePayoutClaim, type RelayReceipt } from './protocol/receipts.js';
@@ -54,6 +57,8 @@ export interface AppOptions {
   vault?: OperatorVault;
   /** Custo do scrypt do backup de operador (só os testes baixam). */
   backupN?: number;
+  /** Leitura do saldo na Lunes Mainnet. Ausente: um leitor com `config.lunesEndpoints` (ou os de produção). */
+  lunes?: LunesReader;
 }
 
 /** CSP igual à do painel (a mesma política vale para o HTML servido aqui). */
@@ -74,6 +79,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   const { store, pairing } = o;
   const vault = o.vault ?? new OperatorVault(null);
   const nodePk = o.relay?.engine ? toHex(o.relay.engine.node.pk) : null;
+  const lunes = o.lunes ?? new LunesReader({ endpoints: o.config.lunesEndpoints });
 
   /**
    * Chave de operador → motor: o dono assina a identidade técnica do próprio nó e dos equipamentos
@@ -444,6 +450,37 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
 
   // ── carteira ───────────────────────────────────────────
   app.get('/api/wallet', authed(), async req => store.wallet(req.piuSession!.operatorId));
+
+  /**
+   * Carteira de provider na Lunes Mainnet: o endereço que o operador configurou e o saldo lido nela
+   * (último bloco finalizado, cache curto). Só leitura: o nó não tem a chave dessa carteira.
+   */
+  app.get('/api/wallet/lunes', authed(), async req => {
+    const saved = store.lunesAddress(req.piuSession!.operatorId);
+    const base = { address: saved?.address ?? null, setAt: saved?.at ?? null, explorer: LUNES_EXPLORER, endpoints: lunes.endpoints };
+    if (!saved) return { ...base, onchain: null, error: null, cached: false };
+    const b = await lunes.balance(saved.address);
+    return { ...base, onchain: b.reading, error: b.error, cached: b.cached };
+  });
+
+  /** Configura o endereço (SS58 conferido aqui: base58, prefixo 57 ou 42, soma de verificação). Exige step-up. */
+  app.put<{ Body: { address: string } }>('/api/wallet/lunes', {
+    ...mutate(), config: strictLimit(10, '10 minutes'),
+    schema: { body: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: { type: 'string', minLength: 1, maxLength: 80 } } } },
+  }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const d = decodeSs58(req.body.address);
+    if (!d.ok) return fail(reply, 400, d.error);
+    const saved = store.setLunesAddress(req.piuSession!.operatorId, req.body.address.trim(), now())!;
+    return { address: saved.address, setAt: saved.at };
+  });
+
+  /** Tira o endereço configurado. Exige step-up. */
+  app.delete('/api/wallet/lunes', { ...mutate(), config: strictLimit(10, '10 minutes') }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    store.setLunesAddress(req.piuSession!.operatorId, null, now());
+    return reply.code(204).send();
+  });
 
   app.post<{ Body: { amount: number; to?: string } }>('/api/wallet/transfer', {
     ...mutate(), config: strictLimit(10, '1 minute'),

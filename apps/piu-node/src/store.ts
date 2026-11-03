@@ -50,9 +50,12 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[] }
+/** Endereço Lunes (SS58) da carteira de provider do operador, configurado no painel. Só leitura do saldo. */
+export interface LunesAddress { address: string; at: number }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [] });
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[]; lunes: Record<string, LunesAddress> }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], lunes: {} });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -167,6 +170,15 @@ export class Store {
   addPendingTx(t: PendingTx, now: number) { this.s.pendingTx = this.s.pendingTx.filter(x => x.expiresAt > now && x.operatorId !== t.operatorId); this.s.pendingTx.push(t); this.save(); return t; }
   pendingTx(id: string, now: number) { return this.s.pendingTx.find(t => t.id === id && t.expiresAt > now) ?? null; }
   removePendingTx(id: string) { this.s.pendingTx = this.s.pendingTx.filter(t => t.id !== id); this.save(); }
+
+  /** Endereço Lunes da carteira de provider do operador (null se ainda não configurado). */
+  lunesAddress(operatorId: string): LunesAddress | null { return this.s.lunes[operatorId] ?? null; }
+  setLunesAddress(operatorId: string, address: string | null, now: number): LunesAddress | null {
+    if (address == null) delete this.s.lunes[operatorId];
+    else this.s.lunes[operatorId] = { address, at: now };
+    this.save();
+    return this.lunesAddress(operatorId);
+  }
 
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {

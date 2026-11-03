@@ -37,7 +37,7 @@ export function base58Encode(b: Uint8Array): string {
   let n = 0n;
   for (const x of b) n = (n << 8n) | BigInt(x);
   let s = '';
-  while (n > 0n) { s = B58[Number(n % 58n)] + s; n /= 58n; }
+  while (n > 0n) { s = B58.charAt(Number(n % 58n)) + s; n /= 58n; }
   for (const x of b) { if (x !== 0) break; s = '1' + s; }
   return s;
 }

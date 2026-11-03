@@ -101,6 +101,7 @@ export class LunesRpc {
 
   /** Chama um método; em falha de transporte, tenta os outros endereços (cada um uma vez). */
   async call<T>(method: string, params: unknown[] = []): Promise<T> {
+    if (!this.factory) defaultConnect(); // sem WebSocket no ambiente: diz isso uma vez, sem tentar endereço por endereço
     const errors: string[] = [];
     for (let attempt = 0; attempt < this.endpoints.length; attempt++) {
       const url = this.endpoints[this.idx]!;
