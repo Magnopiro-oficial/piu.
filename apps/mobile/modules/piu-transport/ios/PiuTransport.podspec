@@ -4,7 +4,7 @@ Pod::Spec.new do |s|
   s.summary        = 'Transporte P2P do Piu (Bluetooth LE)'
   s.description    = 'Descoberta e troca de envelopes cifrados entre aparelhos por perto, sem internet.'
   s.author         = ''
-  s.homepage       = 'https://github.com/lunes-platform/piu.'
+  s.homepage       = 'https://github.com/lunes-platform/piu'
   s.platforms      = { :ios => '16.4' }
   s.source         = { git: '' }
   s.static_framework = true
@@ -13,6 +13,9 @@ Pod::Spec.new do |s|
   s.dependency 'ExpoModulesCore'
   s.frameworks = 'CoreBluetooth'
 
-  s.pod_target_xcconfig = { 'DEFINES_MODULE' => 'YES' }
+  s.pod_target_xcconfig = {
+    'DEFINES_MODULE' => 'YES',
+    'SWIFT_COMPILATION_MODE' => 'wholemodule'
+  }
   s.source_files = "**/*.{h,m,swift}"
 end

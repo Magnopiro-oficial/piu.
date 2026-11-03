@@ -93,6 +93,21 @@ private let maxEnvelopeBytes = 32 * 1024
 private let maxPartialMessages = 64
 private let partialTimeout: TimeInterval = 60
 
+/** Uma remontagem aberta (struct em vez de tupla rotulada: inferência de tipo mais simples para o compilador). */
+private struct Partial {
+  var parts: [Int: Data] = [:]
+  var bytes = 0
+  let count: Int
+  let started: Date
+}
+
+/** Lê um inteiro big-endian de `bytes[offset..<offset+size]`. */
+private func readBigEndian(_ bytes: [UInt8], _ offset: Int, _ size: Int) -> UInt32 {
+  var v: UInt32 = 0
+  for i in 0..<size { v = (v << 8) | UInt32(bytes[offset + i]) }
+  return v
+}
+
 private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralManagerDelegate, CBPeripheralDelegate {
   typealias Emit = (String, [String: Any?]) -> Void
 
@@ -113,7 +128,7 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var nextMessageId: UInt32 = 1
   /** Nome curto do nó de cada vizinho (anúncio ou `hello`). */
   private var names: [UUID: String] = [:]
-  private var partial: [String: (parts: [Int: Data], bytes: Int, count: Int, started: Date)] = [:]
+  private var partial: [String: Partial] = [:]
   /** Intervalo entre varreduras (s). Até `scanWindow + 1` a varredura fica contínua. */
   private var scanInterval: TimeInterval = 20
   private var scanTimer: DispatchSourceTimer?
@@ -179,7 +194,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     guard let id = UUID(uuidString: peerId) else { throw PeerNotConnectedException(peerId) }
     try queue.sync {
       if let p = peripherals[id], let inbox = inboxes[id] {
-        for chunk in frames(data, mtu: p.maximumWriteValueLength(for: .withResponse)) {
+        // O tamanho vem de `.withoutResponse` (MTU − 3): com `.withResponse` o iOS devolve 512 e faria
+        // escritas longas (prepared write), que o Android recusa. A escrita continua com resposta.
+        for chunk in frames(data, mtu: p.maximumWriteValueLength(for: .withoutResponse)) {
           p.writeValue(chunk, for: inbox, type: .withResponse)
         }
       } else if let c = subscribers[id], let out = outbox {
@@ -221,9 +238,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private func receive(_ chunk: Data, from peer: UUID) {
     guard chunk.count >= headerSize else { return }
     let bytes = [UInt8](chunk)
-    let id = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
-    let index = Int(UInt16(bytes[4]) << 8 | UInt16(bytes[5]))
-    let count = Int(UInt16(bytes[6]) << 8 | UInt16(bytes[7]))
+    let id: UInt32 = readBigEndian(bytes, 0, 4)
+    let index = Int(readBigEndian(bytes, 4, 2))
+    let count = Int(readBigEndian(bytes, 6, 2))
     // Um envelope tem no máximo 32 KB: total de blocos acima disso é inválido.
     guard count > 0, index < count, count <= maxEnvelopeBytes else { return }
     let body = chunk.subdata(in: headerSize..<chunk.count)
@@ -240,8 +257,8 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     let now = Date()
     partial = partial.filter { now.timeIntervalSince($0.value.started) < partialTimeout }
     let key = "\(peer.uuidString)-\(id)"
-    var entry = partial[key] ?? (parts: [:], bytes: 0, count: count, started: now)
-    if entry.count != count { entry = (parts: [:], bytes: 0, count: count, started: now) } // total mudou: recomeça
+    var entry = partial[key] ?? Partial(count: count, started: now)
+    if entry.count != count { entry = Partial(count: count, started: now) } // total mudou: recomeça
     if entry.parts.isEmpty && partial[key] == nil && partial.count >= maxPartialMessages {
       // Muitas remontagens abertas: descarta a mais antiga.
       if let oldest = partial.min(by: { $0.value.started < $1.value.started })?.key { partial[oldest] = nil }

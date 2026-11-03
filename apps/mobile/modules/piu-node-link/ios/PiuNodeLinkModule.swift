@@ -37,18 +37,22 @@ public final class PiuNodeLinkModule: Module {
         guard bytes.count <= 1024 * 1024 else { promise.reject("ERR_NODE_LINK", "Resposta grande demais."); return }
         var out: [String: String] = [:]
         for (k, v) in http.allHeaderFields { out[String(describing: k)] = String(describing: v) }
-        promise.resolve(["status": http.statusCode, "headers": out, "body": String(data: bytes, encoding: .utf8) ?? ""])
+        // Tipo explícito: um literal heterogêneo sem anotação não compila ("heterogeneous collection literal").
+        let result: [String: Any] = ["status": http.statusCode, "headers": out, "body": String(data: bytes, encoding: .utf8) ?? ""]
+        promise.resolve(result)
       }.resume()
     }
   }
 }
 
-private final class PinnedDelegate: NSObject, URLSessionTaskDelegate {
+/// `@unchecked Sendable`: os SDKs novos exigem delegados `Sendable`; `mismatch` só é escrito na fila do delegado
+/// antes do fim da tarefa e lido depois, no retorno dela.
+private final class PinnedDelegate: NSObject, URLSessionTaskDelegate, @unchecked Sendable {
   let pin: String
   var mismatch = false
   init(pin: String) { self.pin = pin }
 
-  func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
+  func urlSession(_ session: URLSession, didReceive challenge: URLAuthenticationChallenge, completionHandler: @escaping @Sendable (URLSession.AuthChallengeDisposition, URLCredential?) -> Void) {
     guard challenge.protectionSpace.authenticationMethod == NSURLAuthenticationMethodServerTrust,
           let trust = challenge.protectionSpace.serverTrust,
           let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate],
@@ -66,7 +70,7 @@ private final class PinnedDelegate: NSObject, URLSessionTaskDelegate {
   }
 
   // Sem redirecionamento: a resposta 3xx volta como está.
-  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping (URLRequest?) -> Void) {
+  func urlSession(_ session: URLSession, task: URLSessionTask, willPerformHTTPRedirection response: HTTPURLResponse, newRequest request: URLRequest, completionHandler: @escaping @Sendable (URLRequest?) -> Void) {
     completionHandler(nil)
   }
 }

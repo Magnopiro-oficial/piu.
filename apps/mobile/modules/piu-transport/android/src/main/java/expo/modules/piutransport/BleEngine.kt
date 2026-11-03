@@ -357,7 +357,7 @@ internal class BleEngine(
       gatt.writeCharacteristic(ch, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
     } else {
       ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-      ch.value = value
+      ch.setValue(value) // setter Java devolve Boolean: chamada explícita em vez de `ch.value =`
       gatt.writeCharacteristic(ch)
     }
 
@@ -366,7 +366,7 @@ internal class BleEngine(
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       gatt.writeDescriptor(d, value) == BluetoothStatusCodes.SUCCESS
     } else {
-      d.value = value
+      d.setValue(value)
       gatt.writeDescriptor(d)
     }
 
@@ -477,13 +477,13 @@ internal class BleEngine(
   }
 
   @Suppress("DEPRECATION")
-  private fun notify(device: BluetoothDevice, value: ByteArray): Boolean {
+  private fun notifyPeer(device: BluetoothDevice, value: ByteArray): Boolean {
     val s = server ?: return false
     val ch = outbox ?: return false
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       s.notifyCharacteristicChanged(device, ch, false, value) == BluetoothStatusCodes.SUCCESS
     } else {
-      ch.value = value
+      ch.setValue(value)
       s.notifyCharacteristicChanged(device, ch, false)
     }
   }
@@ -496,7 +496,7 @@ internal class BleEngine(
       if (n.pending.finished) continue
       if (!subscribers.containsKey(n.device.address)) { n.pending.step(IllegalStateException("Vizinho saiu.")); continue }
       notifying = n
-      if (notify(n.device, n.value)) {
+      if (notifyPeer(n.device, n.value)) {
         handler.postDelayed({ if (notifying === n) onNotified(n.device, false) }, OP_TIMEOUT_MS)
         return
       }
