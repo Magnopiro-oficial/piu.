@@ -1,8 +1,7 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand/icon-1024.png">
-    <img src="design/brand/icon-light-1024.png" width="112" alt="Ícone do piu.">
-  </picture>
+  <img src="design/brand/icon-1024.png" width="120" alt="Logo do piu.">
+  &nbsp;&nbsp;
+  <img src="design/brand/icon-light-1024.png" width="120" alt="Logo do piu.">
 </p>
 
 <p align="center">

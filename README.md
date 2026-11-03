@@ -1,8 +1,7 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand/icon-1024.png">
-    <img src="design/brand/icon-light-1024.png" width="128" alt="piu. logo">
-  </picture>
+  <img src="design/brand/icon-1024.png" width="120" alt="piu. logo">
+  &nbsp;&nbsp;
+  <img src="design/brand/icon-light-1024.png" width="120" alt="piu. logo">
 </p>
 
 <h1 align="center">piu.</h1>
@@ -110,6 +109,8 @@ piu. moves forward with whoever joins:
 - **Audit it.** Found a flaw? Report it so everyone is safer.
 
 Any proposal is welcome **as long as it does not violate the principles of freedom and privacy**: no backdoors, no master keys, no data collection beyond the minimum, no central point of control, no identifying people without their consent.
+
+Proposals and improvements: open an issue or pull request, or write to **[lucashermescardeal@gmail.com](mailto:lucashermescardeal@gmail.com)**.
 
 ## Status
 

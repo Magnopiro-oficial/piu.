@@ -1,8 +1,7 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand/icon-1024.png">
-    <img src="design/brand/icon-light-1024.png" width="120" alt="Ícone do piu.">
-  </picture>
+  <img src="design/brand/icon-1024.png" width="120" alt="Logo do piu.">
+  &nbsp;&nbsp;
+  <img src="design/brand/icon-light-1024.png" width="120" alt="Logo do piu.">
 </p>
 
 <h1 align="center">Manifesto do piu.</h1>
@@ -56,6 +55,10 @@ Qualquer proposta pode ser discutida e implementada, **desde que não fira os pr
 - mecanismos que identifiquem pessoas sem o consentimento delas.
 
 Quando houver dúvida, vale a pergunta: *isso deixa as pessoas mais livres e mais protegidas, ou menos?*
+
+## Propostas e melhorias
+
+Quer propor uma melhoria, um protocolo novo ou uma parceria? Abra uma *issue* ou um *pull request* aqui no repositório, ou escreva para mim: **[lucashermescardeal@gmail.com](mailto:lucashermescardeal@gmail.com)**.
 
 ---
 
