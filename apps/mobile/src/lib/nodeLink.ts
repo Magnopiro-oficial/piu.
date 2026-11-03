@@ -16,7 +16,7 @@ export const pinnedSend: NodeSend | null = PiuNodeLink
 
 /** Por que o app ainda não conversa com este equipamento (ou `null` se pode). */
 export function linkBlocker(n: Pick<PairedNode, 'pin' | 'url' | 'node'>): string | null {
-  if (!n.pin) return 'O QR deste painel não traz a impressão digital do certificado do equipamento. Sem ela, o celular não tem como confiar na conexão. Atualize o Piu Node e pareie de novo.';
+  if (!n.pin) return 'O QR deste painel não traz a impressão digital do certificado do equipamento. Sem ela, o celular não tem como confiar na conexão. Quando o Piu Node incluir a impressão digital no QR, pareie de novo.';
   if (!nodeBaseUrl(n)) return 'O endereço do equipamento no QR não é válido.';
   if (!pinnedSend) return 'A conexão com o equipamento precisa do app instalado no celular (não funciona no navegador nem no Expo Go).';
   return null;

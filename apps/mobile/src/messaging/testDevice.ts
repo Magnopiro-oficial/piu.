@@ -20,6 +20,7 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
   const seed = st ? Uint8Array.from(st.seed.match(/../g)!.map(x => parseInt(x, 16))) : newSeed();
   const ids = { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') };
   let reply: (data: Uint8Array) => void = () => {};
+  let hasReply = false;
   const m: Messenger = new Messenger({
     identities: ids, node: deriveNodeKey(seed), relay: false, now, state: st?.m,
     transmit: async (_peer, bytes) => reply(bytes),
@@ -59,7 +60,8 @@ export function createTestDevice(now: () => number, saved?: string, save?: (stat
   return {
     card: () => encodeCard(ids.public, TEST_DEVICE_NAME, m.issueInvite('public')),
     messenger: m,
-    setReply: fn => { reply = fn; },
+    // Primeira resposta possível: anuncia a presença na hora (antes, não havia por onde mandar).
+    setReply: fn => { const first = !hasReply; reply = fn; hasReply = true; if (first) m.peerConnected('app', 'ble'); },
     stop: () => clearInterval(timer),
   };
 }

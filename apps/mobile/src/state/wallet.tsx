@@ -98,8 +98,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     inviteState: id => {
       const at = invites[id];
       if (at == null || now - at >= INVITE_COOLDOWN_MS) return { kind: 'none' };
-      if (reserved.some(r => r.id === id)) return { kind: 'pending', hoursLeft: Math.max(1, Math.ceil((at + INVITE_HOLD_MS - now) / HOUR)) };
-      return { kind: 'cooldown', daysLeft: Math.max(1, Math.ceil((at + INVITE_COOLDOWN_MS - now) / DAY)) };
+      // O relógio da tela anda a cada 30 s: nunca mostra mais que 24 h / 30 dias.
+      const t = Math.max(now, at);
+      if (reserved.some(r => r.id === id)) return { kind: 'pending', hoursLeft: Math.max(1, Math.ceil((at + INVITE_HOLD_MS - t) / HOUR)) };
+      return { kind: 'cooldown', daysLeft: Math.max(1, Math.ceil((at + INVITE_COOLDOWN_MS - t) / DAY)) };
     },
     invite: (id, name, fee) => {
       const at = invites[id];

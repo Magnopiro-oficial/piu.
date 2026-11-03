@@ -160,7 +160,7 @@ function Rewards() {
     <>
       <View style={{ marginTop: 10, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, borderRadius: 26, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
-          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar · estimativa</T>
+          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar</T>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>{fmt(t.validado)}</T>
             <T size={15} color={c.invink} style={{ opacity: 0.7 }}>créditos</T>
