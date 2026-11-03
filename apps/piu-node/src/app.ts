@@ -12,9 +12,10 @@ import { APPROVAL_TTL_MS, approvalMatches, checkCode, newSecret, PAIR_TTL_MS, pa
 import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, sessionLabel, STEP_UP_MS } from './security/session.js';
 import { readPanelFile } from './static.js';
 import { BACKUP_FILENAME, OperatorKeyError, OperatorVault } from './operator.js';
+import { claimableEpochs, isLunesAddress } from './payout.js';
 import { toHex } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
-import type { RelayReceipt } from './protocol/receipts.js';
+import { makePayoutClaim, type RelayReceipt } from './protocol/receipts.js';
 import { certFromJson, certToJson, type OperatorCert, type RevocationList, unhex } from './relay/operator-frames.js';
 import type { Device, DeviceLimits, Session, Settings, Store } from './store.js';
 
@@ -390,6 +391,53 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     for (const d of store.devicesOf(id)) if (d.nodePk) store.updateDevice(d.id, { cert: certToJson(vault.certify(id, unhex(d.nodePk), now())) });
     if (store.isOwner(id)) syncOperator();
     return vault.info(id);
+  });
+
+  // ── evidências para o validador e carteira do lote ─────
+  /** Recibos que o nó guardou, no formato `EvidenceFile` do validador (apps/settlement). Só o dono. */
+  app.get('/api/relay/evidence', authed(), async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento exporta as evidências dele.');
+    const e = o.relay?.engine;
+    if (!e) return fail(reply, 409, 'Retransmissão LNNP desligada neste nó: não há recibos.');
+    // Provas de entrega (`ackSecret`) só existem no destino; o piu-node não decifra nada, então não tem nenhuma.
+    const file = { v: 1 as const, receipts: e.receiptLog.map(r => ({ envelopeId: r.envelopeId, ackHash: toHex(r.ackHash), nodePk: toHex(r.nodePk), at: r.at, sig: toHex(r.sig) })), proofs: [] as { envelopeId: string; ackSecret: string }[] };
+    const day = new Date(now()).toISOString().slice(0, 10);
+    return reply.header('Content-Disposition', `attachment; filename="piu-evidencias-${toHex(e.node.pk).slice(0, 8)}-${day}.json"`).send(file);
+  });
+
+  const claimView = () => {
+    const e = o.relay?.engine;
+    const epochs = claimableEpochs(now());
+    return { enabled: !!e, epochs, claims: store.claims().filter(c => !e || c.nodePk === toHex(e.node.pk)).map(({ epoch, address, at }) => ({ epoch, address, at })) };
+  };
+  app.get('/api/payout-claims', authed(), async () => claimView());
+
+  /** O nó assina a carteira que recebe o lote (`PayoutClaim`). Só o dono; exige step-up (decide para onde vai o dinheiro). */
+  app.post<{ Body: { epoch: string; address: string } }>('/api/payout-claims', {
+    ...mutate(), config: strictLimit(10, '10 minutes'),
+    schema: { body: { type: 'object', required: ['epoch', 'address'], additionalProperties: false, properties: {
+      epoch: { type: 'string', pattern: '^[0-9]{4}-S[0-9]{2}$' }, address: { type: 'string', minLength: 40, maxLength: 60 } } } },
+  }, async (req, reply) => {
+    const s = req.piuSession!;
+    if (!store.isOwner(s.operatorId)) return fail(reply, 403, 'Só o dono do equipamento declara a carteira dele.');
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const e = o.relay?.engine;
+    if (!e) return fail(reply, 409, 'Retransmissão LNNP desligada neste nó: não há chave de nó para assinar.');
+    const address = req.body.address.trim();
+    if (!isLunesAddress(address)) return fail(reply, 400, 'Endereço LUNES inválido. Confira se copiou inteiro (formato SS58).');
+    if (!claimableEpochs(now()).includes(req.body.epoch)) return fail(reply, 400, 'Só dá para declarar a carteira do lote desta semana ou da próxima.');
+    const c = makePayoutClaim(e.node, req.body.epoch, address);
+    store.setClaim({ epoch: c.epoch, address: c.address, nodePk: toHex(c.nodePk), sig: toHex(c.sig), at: now() });
+    return reply.code(201).send(claimView());
+  });
+
+  /** As declarações no formato `ClaimFile` do validador, para levar junto com as evidências. Só o dono. */
+  app.get('/api/payout-claims/file', authed(), async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento exporta as declarações dele.');
+    const e = o.relay?.engine;
+    const claims = store.claims().filter(c => !e || c.nodePk === toHex(e.node.pk)).map(({ epoch, address, nodePk: pk, sig }) => ({ epoch, address, nodePk: pk, sig }));
+    const tag = e ? toHex(e.node.pk).slice(0, 8) : 'no';
+    return reply.header('Content-Disposition', `attachment; filename="piu-carteira-${tag}.json"`).send({ v: 1, claims });
   });
 
   // ── carteira ───────────────────────────────────────────
