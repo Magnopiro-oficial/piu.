@@ -17,6 +17,7 @@ import { toHex } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
 import { makePayoutClaim, type RelayReceipt } from './protocol/receipts.js';
 import { certFromJson, certToJson, type OperatorCert, type RevocationList, unhex } from './relay/operator-frames.js';
+import { MAX_RUNTIME_PEERS, parsePeerAddress, type PeerStatus } from './relay/lan.js';
 import type { Device, DeviceLimits, Session, Settings, Store } from './store.js';
 
 declare module 'fastify' {
@@ -40,7 +41,13 @@ export interface AppOptions {
     /** Operador dono do nó: linhagem de chaves, certificados e lista de revogação. */
     setOperator?(t: { lineage?: string[]; cert?: OperatorCert | null; deviceCerts?: OperatorCert[]; list?: RevocationList | null }): void;
     /** Chave técnica do nó (assina a carteira do lote) e recibos guardados (evidências para o validador). */
-    engine?: { node: KeyPair; receiptLog: RelayReceipt[]; lineage: string[] };
+    engine?: { node: KeyPair; receiptLog: RelayReceipt[]; lineage: string[]; peerSeen?(peerId: string): { online: boolean; lastSeen: number | null; address: string | null } };
+    /** Vizinhos fixos do enlace (configuração e painel), adicionar e remover sem reiniciar. */
+    peers?(): PeerStatus[];
+    addPeer?(address: string): void;
+    removePeer?(address: string): boolean;
+    waitPeer?(address: string, ms: number, from?: number): Promise<PeerStatus | null>;
+    isConfigPeer?(address: string): boolean;
     /** Pausar retransmissão do equipamento que serve o painel. */
     setPaused?(paused: boolean): void;
     /** Histórico das estatísticas (amostras de 24 h e totais por dia). */
@@ -103,6 +110,11 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   };
   if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
   syncOperator();
+  // Vizinhos fixos adicionados pelo painel antes do reinício voltam a conectar (somados aos de PIU_LNNP_PEERS).
+  for (const a of store.relayPeers()) {
+    const p = parsePeerAddress(a);
+    if (p && o.relay?.addPeer) { try { o.relay.addPeer(p); } catch { /* acima do limite: ignora o excesso */ } }
+  }
   const app = Fastify({
     https: o.https ?? null,
     bodyLimit: 16 * 1024,
@@ -250,6 +262,41 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   /** Recibos de retransmissão guardados para o validador: quantos e os horários dos mais recentes. */
   app.get('/api/relay/receipts', authed(), async () => (o.relay?.receipts ? { enabled: true, ...o.relay.receipts() } : { enabled: false }));
 
+  // ── vizinhos fixos do enlace (host:porta), sem reiniciar ─
+  /** Vizinhos fixos: os de PIU_LNNP_PEERS e os adicionados aqui, com o estado de cada um. */
+  app.get('/api/relay/peers', authed(), async () => (o.relay?.peers ? { enabled: true, max: MAX_RUNTIME_PEERS, peers: o.relay.peers() } : { enabled: false, peers: [] }));
+  const addressSchema = { type: 'string', minLength: 3, maxLength: 262 } as const;
+  /**
+   * Adiciona um vizinho por endereço (só `host:porta`) e espera o handshake (até ~6 s). Só o dono do
+   * equipamento: o enlace é do nó, não da sessão.
+   */
+  app.post<{ Body: { address: string } }>('/api/relay/peers', {
+    ...mutate(), config: strictLimit(20, '1 minute'),
+    schema: { body: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: addressSchema } } },
+  }, async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento muda os vizinhos dele.');
+    if (!o.relay?.addPeer || !o.relay.waitPeer) return fail(reply, 409, 'A retransmissão LNNP está desligada neste nó.');
+    const address = parsePeerAddress(req.body.address);
+    if (!address) return fail(reply, 400, 'Endereço inválido. Use só host:porta (ex.: 192.168.0.12:8422), sem http:// nem caminho.');
+    const from = now();
+    try { o.relay.addPeer(address); } catch (e) { return fail(reply, 400, e instanceof Error ? e.message : 'Não foi possível adicionar.'); }
+    if (!o.relay.isConfigPeer?.(address)) store.addRelayPeer(address);
+    const peer = await o.relay.waitPeer(address, 6000, from);
+    return reply.code(201).send({ peer });
+  });
+  app.delete<{ Params: { address: string } }>('/api/relay/peers/:address', {
+    ...mutate(), schema: { params: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: addressSchema } } },
+  }, async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento muda os vizinhos dele.');
+    const address = parsePeerAddress(req.params.address);
+    if (!address) return fail(reply, 400, 'Endereço inválido.');
+    if (o.relay?.isConfigPeer?.(address)) return fail(reply, 409, 'Este vizinho vem da configuração do nó (PIU_LNNP_PEERS): tire de lá e reinicie.');
+    const fromLink = o.relay?.removePeer?.(address) ?? false;
+    const fromStore = store.removeRelayPeer(address);
+    if (!fromLink && !fromStore) return fail(reply, 404, 'Não encontrado.');
+    return reply.code(204).send();
+  });
+
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
   const deviceView = ({ id, ownerId, name, cls, status, self, pub, nodePk: pk, cert, limits }: Device) => {
@@ -258,6 +305,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
       id, name, cls, status, self: !!self, ...(pub ? { pub } : {}),
       // Identidade técnica (os 16 primeiros hex, como no LNNP) e se está assinada pela chave de operador atual.
       ...(pk ? { nodeId: pk.slice(0, 16), signed: !!cert && !!current && cert.operatorPk === toHex(current.pk) } : {}),
+      // Enlace real com este equipamento (outro piu-node): conectado agora e última vez visto desde que o motor subiu.
+      ...(pk && !self && o.relay?.engine?.peerSeen ? { link: o.relay.engine.peerSeen(pk.slice(0, 16)) } : {}),
       ...(limits ? { limits } : {}),
     };
   };

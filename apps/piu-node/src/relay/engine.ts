@@ -22,6 +22,7 @@ import {
   type RevocationList, type RotationStep, samePk, trustPath, verifyCert, verifyRevocationList,
 } from './operator-frames.js';
 import type { RelaySnapshot } from './persist.js';
+import { confirmCode } from './confirm.js';
 
 /** Um enlace autenticado, visto pelo motor. O adapter cuida do meio físico. */
 export interface LinkPort {
@@ -149,6 +150,8 @@ export class RelayEngine {
   private revoked = new Set<string>();
   /** Enlaces cujo vizinho mostrou certificado do mesmo operador (id do enlace → chave do operador). */
   private sameOperator = new Map<string, string>();
+  /** Última vez que cada vizinho (id) esteve conectado, desde que o motor subiu (só em memória). */
+  private lastSeen = new Map<string, number>();
 
   constructor(private o: EngineOptions) {
     this.node = o.node;
@@ -227,6 +230,18 @@ export class RelayEngine {
   get linkCount() { return this.links.size; }
   hasPeer(peerId: string) { for (const l of this.links.values()) if (l.session.peerId === peerId) return true; return false; }
 
+  /** Enlace aberto com o vizinho agora (chave completa e desde quando), ou `null`. */
+  linkInfo(peerId: string): { pk: string; since: number; address: string } | null {
+    for (const l of this.links.values()) if (l.session.peerId === peerId) return { pk: toHex(l.session.peerPk), since: l.since, address: l.address };
+    return null;
+  }
+
+  /** Para a página de equipamentos: conectado agora e a última vez visto desde que o motor subiu. */
+  peerSeen(peerId: string): { online: boolean; lastSeen: number | null; address: string | null } {
+    const l = this.linkInfo(peerId);
+    return l ? { online: true, lastSeen: this.now(), address: l.address } : { online: false, lastSeen: this.lastSeen.get(peerId) ?? null, address: null };
+  }
+
   /** O vizinho conhece este nó pela etiqueta do anúncio? (evita conexão dupla pela descoberta) */
   hasPeerTag(tag: Uint8Array) {
     const t = toHex(tag);
@@ -249,6 +264,7 @@ export class RelayEngine {
     }
     this.counters.handshakesOk++;
     this.links.set(link.id, link);
+    this.lastSeen.set(link.session.peerId, this.now());
     this.log(`LNNP: vizinho ${link.session.peerId} conectado (${link.address}, v${link.session.version})`);
     this.flush(link);
     this.syncOperator(link);
@@ -261,6 +277,7 @@ export class RelayEngine {
     this.links.delete(id);
     this.reassembly.delete(id);
     this.sameOperator.delete(id);
+    this.lastSeen.set(l.session.peerId, this.now());
     this.log(`LNNP: vizinho ${l.session.peerId} desconectado`);
   }
 
@@ -590,6 +607,8 @@ export class RelayEngine {
         address: l.address, link: l.medium, inbound: l.inbound, since: l.since, version: l.session.version,
         relay: l.session.peerCaps.relay, mtu: l.session.negotiated.mtu,
         media: mediaNames.filter(([m]) => l.session.peerCaps.media & m).map(([, n]) => n),
+        // Igual nos dois nós deste enlace (ver confirm.ts): o operador confere nos dois painéis.
+        confirmCode: l.session.transcript ? confirmCode(l.session.transcript, this.node.pk, l.session.peerPk) : null,
       })),
       store: { envelopes: r.stored, bytes: r.bytes, maxBytes: this.router.limits.maxBytes, seen: r.seen, restored: this.restored },
       counters: { ...this.counters },

@@ -7,13 +7,14 @@ import { toHex } from '../protocol/bytes.js';
 import { type DeviceLimits, type EngineOptions, type OperatorTrust, type OperatorTrustState, RelayEngine } from './engine.js';
 import { type CertJson, certFromJson, certToJson, type ListJson, listFromJson, listToJson, unhex } from './operator-frames.js';
 import { RelayHistory, SAMPLE_MS } from './history.js';
-import { LanAdapter, type LanOptions } from './lan.js';
+import { LanAdapter, type LanOptions, type PeerStatus } from './lan.js';
 import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
 import { type Modem, openSerialModem, SerialAdapter, type SerialStats } from './serial.js';
 
 export { type DeviceLimits, inWindow, type LinkPort, RelayEngine, type RelayStats } from './engine.js';
 export { loadNodeKey } from './identity.js';
-export { LanAdapter } from './lan.js';
+export { LanAdapter, MAX_RUNTIME_PEERS, parsePeerAddress, type PeerStatus } from './lan.js';
+export { confirmCode } from './confirm.js';
 export { type Modem, SerialAdapter } from './serial.js';
 export { RadioSim } from './radio-sim.js';
 export { dayKey, RelayHistory } from './history.js';
@@ -41,7 +42,17 @@ export interface RelayHandle {
   sample(): void;
   /** Grava agora o armazenamento de mensagens, se mudou (também roda sozinho e ao desligar). */
   persist(): void;
-  stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null }; serial: SerialStats[] };
+  /** Vizinhos fixos (configuração e painel) e o estado de cada um. */
+  peers(): PeerStatus[];
+  /** Vizinho fixo adicionado pelo painel (endereço já validado por `parsePeerAddress`): conecta sem reiniciar. */
+  addPeer(address: string): void;
+  /** Tira um vizinho adicionado pelo painel (`false` se não era um deles). */
+  removePeer(address: string): boolean;
+  /** Espera o handshake com o vizinho fixo terminar (ou falhar), até `ms`. */
+  waitPeer(address: string, ms: number, from?: number): Promise<PeerStatus | null>;
+  /** O endereço veio de `PIU_LNNP_PEERS` (não sai pelo painel)? */
+  isConfigPeer(address: string): boolean;
+  stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null; peers: PeerStatus[] }; serial: SerialStats[] };
   close(): Promise<void>;
 }
 
@@ -127,7 +138,12 @@ export async function startRelay(
     history: () => history.view(sampleMs, engine.counters),
     receipts: () => engine.receiptsView(),
     sample, persist,
-    stats: () => ({ ...engine.stats(), lan: { port, discoveryPort }, serial: serial.map(a => a.stats()) }),
+    peers: () => lan.peerStatus(),
+    addPeer: a => lan.addPeer(a),
+    removePeer: a => lan.removePeer(a),
+    waitPeer: (a, ms, from) => lan.waitPeer(a, ms, from),
+    isConfigPeer: a => lan.isConfigPeer(a),
+    stats: () => ({ ...engine.stats(), lan: { port, discoveryPort, peers: lan.peerStatus() }, serial: serial.map(a => a.stats()) }),
     // Última rodada ao desligar: o que aconteceu desde a anterior não se perde.
     // e o armazenamento é gravado de novo (o que chegou depois da última gravação também volta).
     close: async () => { clearInterval(timer); clearInterval(persistTimer); sample(); await Promise.all(serial.map(a => a.stop())); await lan.stop(); persist(); },
