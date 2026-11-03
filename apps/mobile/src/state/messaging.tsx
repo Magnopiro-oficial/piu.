@@ -135,6 +135,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!identities || !node || !onboarded) return;
     let saving: Promise<void> | null = null;
+    /** Mensagem de sistema na conversa do grupo cuja chave foi trocada. */
+    const rotatedNote = (g: GroupState, text: string) => {
+      const cid = chatIdForGroup(g.id);
+      if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text });
+    };
     // Backup restaurado por arquivo: importa perfil, conversas e verificações uma vez.
     const restored = takeRestoredData();
     const restoredState = typeof restored?.['msg.state'] === 'string' ? (restored['msg.state'] as string) : undefined;
@@ -153,13 +158,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       events: {
         changed: saveSoon,
         inviteUsed: () => setInviteEpoch(e => e + 1),
-        notice: (contactId, text) => {
+        notice: (contactId, text, pub) => {
           try {
             const n = decodeRevocation(text);
             const c = mRef.current?.getContact(contactId);
-            if (!c || !verifyRevocation(n, c.pub.signPk)) return;
+            if (!verifyRevocation(n, (c?.pub ?? pub).signPk)) return;
+            // Grupos em que sou admin e o contato participa trocam de chave (o aparelho perdido tinha a antiga).
+            for (const g of mRef.current?.rotateForRevocation(contactId, n.sig) ?? []) {
+              const who = c?.name || g.members.find(x => x.id === contactId)?.name || 'um membro';
+              rotatedNote(g, `${who} revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.`);
+            }
             const cid = chatIdFor(contactId);
-            if (!chatsRef.current.some(x => x.id === cid)) return;
+            if (!c || !chatsRef.current.some(x => x.id === cid)) return;
             handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: 'Este contato revogou um aparelho perdido ou comprometido. Confira o código de segurança pessoalmente antes de confiar em mensagens novas.' });
           } catch { /* aviso inválido: ignora */ }
         },
@@ -242,7 +252,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     const flush = () => {
       const list = pendingRevocations();
       if (!list.length || !identities) return;
-      for (const n of list) messenger.broadcastNotice(toHex(identities.public.signPk) === toHex(unb64url(n.by)) ? 'public' : 'anon', encodeRevocation(n));
+      for (const n of list) {
+        const via: IdentityKind = toHex(identities.public.signPk) === toHex(unb64url(n.by)) ? 'public' : 'anon';
+        // Contatos e admins dos meus grupos recebem o aviso; nos grupos em que sou admin, a chave troca aqui.
+        messenger.broadcastNotice(via, encodeRevocation(n));
+        for (const g of messenger.rotateForRevocation(identities[via].id, n.sig, via)) {
+          const cid = chatIdForGroup(g.id);
+          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: 'Você revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.' });
+        }
+      }
       void markRevocationsSent(list.map(n => n.sig));
     };
     flush();

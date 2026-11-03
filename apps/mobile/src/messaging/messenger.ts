@@ -64,8 +64,11 @@ export interface MessengerEvents {
   groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
-  /** Um contato avisou que revogou um aparelho (texto do aviso; quem chama confere a assinatura). */
-  notice(contactId: string, notice: string): void;
+  /**
+   * Um contato (ou membro de um grupo meu) avisou que revogou um aparelho: texto do aviso e as chaves
+   * públicas de quem mandou. Quem chama confere a assinatura e, se valer, chama `rotateForRevocation`.
+   */
+  notice(contactId: string, notice: string, pub: PublicIdentity): void;
   /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
   peerPhoto(contactId: string, jpegBase64: string | null): void;
   /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
@@ -241,6 +244,7 @@ export class Messenger {
     for (const [gid, k] of (st.gp ?? []) as [string, { keyV: number; key: string }][]) this.prevKeys.set(gid, k);
     for (const [gid, list] of (st.gq ?? []) as [string, { id: string; name: string; via: IdentityKind; s: string; a: string; b: string; at: number }[]][])
       this.pendingJoins.set(gid, list.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, pub: { signPk: unb64url(p.s), agreePk: unb64url(p.a), binding: unb64url(p.b) } })));
+    this.rotatedFor = Array.isArray(st.rk) ? (st.rk as string[]).slice(-200) : [];
     for (const [gid, v] of (st.gv ?? []) as [string, Vouch][]) if (v.at + GROUP_INVITE_TTL_SEC > o.now()) this.vouched.set(gid, v);
     this.refreshGroupKeys();
     for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
@@ -684,9 +688,64 @@ export class Messenger {
     }
   }
 
-  /** Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via`. */
+  /**
+   * Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via` e aos
+   * admins dos grupos dessa identidade em que não sou admin (mesmo que não sejam contatos): eles trocam
+   * a chave do grupo ao conferir o aviso.
+   */
   broadcastNotice(via: IdentityKind, notice: string) {
-    for (const c of this.contacts.values()) if (c.via === via && !c.request) this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High);
+    const sent = new Set<string>();
+    for (const c of this.contacts.values()) if (c.via === via && !c.request) { sent.add(c.id); this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High); }
+    const me = this.myId(via);
+    for (const g of this.groups.values()) {
+      if (g.via !== via || isAdmin(g, me)) continue;
+      for (const m of g.members) {
+        if (m.role !== 'admin' || sent.has(m.id)) continue;
+        sent.add(m.id);
+        this.enqueue({ id: m.id, via, pub: m.pub, name: m.name }, { t: 'rv', n: notice }, null, Priority.High);
+      }
+    }
+  }
+
+  /** Avisos de revogação já tratados (cada aviso troca a chave uma vez só). */
+  private rotatedFor: string[] = [];
+
+  /** Troca a chave do grupo sem tirar ninguém (v → v+1). Só admin. */
+  rotateKey(gid: string) {
+    const g = this.assertAdmin(gid);
+    this.prevKeys.set(gid, { keyV: g.keyV, key: g.key });
+    const next: GroupState = { ...g, rev: g.rev + 1, keyV: g.keyV + 1, key: newKey() };
+    this.groups.set(gid, next);
+    this.refreshGroupKeys();
+    this.distribute(next);
+    this.o.events.groupUpdated?.(next, 'updated');
+    this.o.events.changed?.();
+    return next;
+  }
+
+  /**
+   * Aparelho revogado (design: "Grupos trocam de chave conforme os nós recebem o aviso"). Troca a
+   * chave de cada grupo em que sou admin e `who` participa; `who` = eu mesmo quando a revogação é
+   * minha (aí valem os grupos da identidade `via`). Uma vez por aviso (`noticeId`). Devolve os grupos.
+   *
+   * Um admin só por grupo troca, para dois admins não publicarem chaves diferentes na mesma revisão:
+   * quem revogou, se for admin; senão, o admin de menor id.
+   */
+  rotateForRevocation(who: string, noticeId: string, via?: IdentityKind): GroupState[] {
+    if (this.rotatedFor.includes(noticeId)) return [];
+    this.rotatedFor.push(noticeId);
+    while (this.rotatedFor.length > 200) this.rotatedFor.shift();
+    const out: GroupState[] = [];
+    for (const g of [...this.groups.values()]) {
+      const me = this.myId(g.via);
+      if (via && g.via !== via) continue;
+      if (!isAdmin(g, me) || !isMemberOf(g, who)) continue;
+      const leader = isAdmin(g, who) ? who : g.members.filter(m => m.role === 'admin').map(m => m.id).sort()[0];
+      if (leader !== me) continue;
+      out.push(this.rotateKey(g.id));
+    }
+    this.o.events.changed?.();
+    return out;
   }
 
   /**
@@ -985,7 +1044,12 @@ export class Messenger {
     if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
     if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return r; }
     if (p?.t === 'gv') { this.onVouch(m.fromId, p); return r; }
-    if (p?.t === 'rv') { if (this.contacts.has(m.fromId) && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n); return r; }
+    if (p?.t === 'rv') {
+      // De contato, ou de membro de um grupo em que sou admin (admin promovido pode não ser contato dele).
+      const known = this.contacts.has(m.fromId) || [...this.groups.values()].some(g => isAdmin(g, this.myId(g.via)) && isMemberOf(g, m.fromId));
+      if (known && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n, m.from);
+      return r;
+    }
     if (p?.t === 'pp') {
       const c = this.contacts.get(m.fromId);
       if (c && c.via === 'public' && !c.request && used === 'public' && typeof p.p === 'string') this.o.events.peerPhoto?.(m.fromId, p.p === '' ? null : isJpegBase64(p.p) ? p.p : null);
@@ -1047,6 +1111,7 @@ export class Messenger {
       g: [...this.groups.values()].map(g => encodeState(g, 'store')),
       gp: [...this.prevKeys],
       gv: [...this.vouched],
+      rk: this.rotatedFor,
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],

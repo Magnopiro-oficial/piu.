@@ -192,3 +192,47 @@ test('3.3 canal não aceita convite de inscrito; indicação de quem não é con
   net.link('Davi', 'Caio');
   assert.equal(c.m.getGroup(g2.id), undefined);
 });
+
+// ── 1.2 revogar aparelho troca a chave dos grupos ───────────────────
+
+test('1.2 aparelho revogado: o admin confere o aviso e troca a chave; o próprio admin troca nos grupos dele', async () => {
+  const { createRevocation, decodeRevocation, encodeRevocation, newDeviceKey, verifyRevocation } = await import('../../lib/devicesCore');
+  const net = new Net();
+  // O admin confere a assinatura com a chave conhecida e troca a chave (como em state/messaging.tsx).
+  const onNotice = (self: () => Messenger) => (from: string, text: string, pub: { signPk: Uint8Array }) => {
+    const n = decodeRevocation(text);
+    if (verifyRevocation(n, pub.signPk)) self().rotateForRevocation(from, n.sig);
+  };
+  let am: Messenger | null = null, dm: Messenger | null = null;
+  const a = device(net, 'Ana', { events: { notice: onNotice(() => am!) } });
+  const b = device(net, 'Beto'), c = device(net, 'Caio');
+  const d = device(net, 'Davi', { events: { notice: onNotice(() => dm!) } });
+  am = a.m; dm = d.m;
+  for (const x of [b, c, d]) { know(a, x); know(x, a); }
+  const g = a.m.createGroup({ kind: 'group', name: 'Mutirão', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id, d.ids.public.id] });
+  for (const x of ['Beto', 'Caio', 'Davi']) net.link('Ana', x);
+  // Davi vira admin também (e não é contato de Beto).
+  a.m.setRole(g.id, d.ids.public.id, 'admin');
+  net.run();
+  const lost = newDeviceKey();
+  const notice = createRevocation(b.ids.public, { pk: b64url(lost.pk) }, 'lost', T0);
+  b.m.broadcastNotice('public', encodeRevocation(notice));
+  net.run();
+  assert.equal(a.m.getGroup(g.id)!.keyV, 2, 'a chave trocou uma vez (um admin só troca)');
+  assert.equal(d.m.getGroup(g.id)!.keyV, 2);
+  assert.equal(c.m.getGroup(g.id)!.keyV, a.m.getGroup(g.id)!.keyV, 'os membros receberam a chave nova');
+  // O mesmo aviso de novo (repetido pela malha ou reenviado) não troca outra vez.
+  const before = a.m.getGroup(g.id)!.keyV;
+  a.m.rotateForRevocation(b.ids.public.id, notice.sig);
+  assert.equal(a.m.getGroup(g.id)!.keyV, before);
+  // Aviso forjado (assinado por outra chave) não troca nada.
+  const forged = createRevocation(c.ids.public, { pk: b64url(lost.pk) }, 'lost', T0 + 1);
+  inner(c.m).enqueue(c.m.getContact(a.ids.public.id), { t: 'rv', n: encodeRevocation({ ...forged, by: b64url(b.ids.public.signPk) }) }, null, 2);
+  net.run();
+  assert.equal(a.m.getGroup(g.id)!.keyV, before);
+  // Revogação da própria Ana: troca nos grupos em que ela é admin.
+  const own = createRevocation(a.ids.public, { pk: b64url(newDeviceKey().pk) }, 'lost', T0 + 2);
+  assert.equal(a.m.rotateForRevocation(a.ids.public.id, own.sig, 'public').length, 1);
+  net.run();
+  assert.equal(b.m.getGroup(g.id)!.keyV, before + 1);
+});
