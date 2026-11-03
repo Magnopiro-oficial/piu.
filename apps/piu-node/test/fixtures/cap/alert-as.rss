@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Fixture de teste no formato do feed RSS de CAP 1.2 do INMET (cap_12/rss/alert-as.rss). Dados de teste. -->
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>INMET - Alertas</title>
+    <link>http://alert-as.inmet.gov.br/cap_12/rss/alert-as.rss</link>
+    <description>Avisos meteorológicos em CAP 1.2</description>
+    <language>pt-br</language>
+    <item>
+      <title>Aviso de Tempestade. Severidade Grau: Perigo</title>
+      <link>http://alert-as.inmet.gov.br/cap_12/xml/2026/11/03/tempestade-teste.xml</link>
+      <guid isPermaLink="false">urn:oid:2.49.0.1.76.0.2026.11.3.1.1</guid>
+      <pubDate>Tue, 03 Nov 2026 13:00:00 GMT</pubDate>
+      <description>Aviso de Tempestade &amp; ventos</description>
+    </item>
+    <item>
+      <title>Aviso de Baixa Umidade. Severidade Grau: Perigo Potencial</title>
+      <link>xml/2026/11/03/umidade-teste.xml</link>
+      <guid isPermaLink="false">urn:oid:2.49.0.1.76.0.2026.11.3.1.2</guid>
+    </item>
+    <item>
+      <title>Exercício</title>
+      <link>http://alert-as.inmet.gov.br/cap_12/xml/2026/11/03/exercicio-teste.xml</link>
+    </item>
+    <item>
+      <title>Link para a rede local (deve ser ignorado)</title>
+      <link>http://192.168.0.1/cap.xml</link>
+    </item>
+  </channel>
+</rss>

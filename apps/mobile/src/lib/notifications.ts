@@ -24,7 +24,7 @@ export interface NotifyInput {
   kind: NotifyKind;
   title: string;
   body: string;
-  /** Alerta crítico (emergência assinada por fonte oficial): sempre avisa, mostra o conteúdo e toca até no modo noturno. */
+  /** Alerta crítico (alerta oficial severo ou extremo, lib/alerts.ts): sempre avisa, mostra o conteúdo e toca até no modo noturno. */
   critical?: boolean;
   /** `href`: rota a abrir ao tocar (ex.: `/chat/abc`). O resto vai junto na notificação. */
   data?: { href?: string } & Record<string, unknown>;
@@ -37,7 +37,7 @@ interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: bool
 /** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"). */
 const HIDDEN_BODY: Record<NotifyKind, string> = {
   msg: 'Nova mensagem', group: 'Nova mensagem', channel: 'Nova publicação', nearby: 'Novo pedido de conversa',
-  wallet: 'Movimentação na carteira', network: 'Aviso da rede', alert: 'Alerta de emergência',
+  wallet: 'Movimentação na carteira', network: 'Aviso da rede', alert: 'Alerta oficial',
 };
 
 /** Canais do Android (importância e som são fixos depois de criados, por isso um canal por modo). */
@@ -46,7 +46,7 @@ const CHANNELS: Record<Mode, Notifications.NotificationChannelInput> = {
   normal: { name: 'Mensagens e avisos', importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   discreet: { name: 'Avisos discretos', description: 'Sem som; um toque curto', importance: Notifications.AndroidImportance.HIGH, sound: null, enableVibrate: true, vibrationPattern: [0, 90], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   quiet: { name: 'Modo noturno', description: 'Entre 22h e 7h: sem som nem vibração', importance: Notifications.AndroidImportance.LOW, sound: null, enableVibrate: false, vibrationPattern: null, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  critical: { name: 'Alertas de emergência', description: 'Assinados por fonte oficial', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], bypassDnd: true, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC },
+  critical: { name: 'Alertas oficiais', description: 'Severos e extremos (CAP), retransmitidos pelo seu Piu Node', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], bypassDnd: true, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC },
 };
 const channelId = (m: Mode) => `piu-${m}`;
 

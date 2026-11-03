@@ -49,22 +49,3 @@ export const PREVIEW_HINT: Record<Preview, string> = {
   unlocked: 'Na tela bloqueada aparece só “Piu · Nova mensagem”.',
   never: 'Nunca mostra remetente nem conteúdo, nem com o aparelho desbloqueado.',
 };
-/**
- * Prévia da tela bloqueada: um aviso de cada tipo, com textos genéricos (sem pessoas nem valores de
- * exemplo), só para mostrar o efeito da pré-visualização. `priv` é o texto quando o conteúdo fica oculto.
- */
-export interface LockNotif { id: string; critical?: boolean; title: string; body: string; priv?: string; time: string; stacked?: boolean; count?: string; href: string }
-export const LOCK_NOTIFS: LockNotif[] = [
-  { id: 'alert', critical: true, title: 'Alerta de emergência · exemplo', body: 'Alertas assinados por fonte oficial sempre mostram o conteúdo.', time: 'agora', href: '/alert' },
-  { id: 'msg', title: 'Nome do contato', body: 'Texto da mensagem aparece aqui.', priv: 'Nova mensagem', time: '2 min', href: '/(tabs)' },
-  { id: 'group', title: 'Nome do grupo', body: 'Quem escreveu: texto da mensagem.', priv: 'Novas mensagens', time: '8 min', stacked: true, count: 'mais mensagens do grupo', href: '/(tabs)' },
-  { id: 'nearby', title: 'Pedido de conversa', body: 'Alguém por perto quer conversar · expira em 24 h', priv: 'Novo pedido de conversa', time: '15 min', href: '/nearby/requests' },
-  { id: 'wallet', title: 'Movimentação na carteira', body: 'LUNES recebidos e bônus liberados aparecem assim.', priv: 'Movimentação na carteira', time: '1 h', href: '/(tabs)/wallet' },
-];
-
-/** Alerta de emergência assinado (Defesa Civil). */
-export const EMERGENCY = {
-  title: 'Risco de deslizamento na Serra',
-  body: 'Chuva acima de 80 mm nas últimas 6 h. Deixe áreas de encosta agora e siga para o ponto de apoio na Escola Municipal.',
-  rows: [['Origem', 'Defesa Civil · Serra'], ['Recebido', 'LoRa 915 MHz · 3 saltos · 13:52'], ['Assinatura', 'chave oficial 2B7E…91AC']] as [string, string][],
-};

@@ -5,6 +5,7 @@ import { Platform, ScrollView, TextInput, View } from 'react-native';
 import { fmtLunes } from '../data/wallet';
 import { approvalCode, checkCode, PAIR_PREFIX, type PairedNode, pairCode, parsePair, parseRequest, REQUEST_PREFIX, type TransferRequest } from '../lib/approvals';
 import { confirmDevice } from '../lib/deviceAuth';
+import { cardFromText } from '../lib/inviteLink';
 import { loadApprovalNodes, saveApprovalNodes } from '../lib/vault';
 import type { ContactCard } from '../messaging/card';
 import { GROUP_LINK, useMessaging } from '../state/messaging';
@@ -82,7 +83,8 @@ export default function Scan() {
         router.back();
         return;
       }
-      const k = readCard(text);
+      // Link de convite (`piu://invite/accept?c=…`, QR da tela Convidar) leva o mesmo cartão.
+      const k = readCard(cardFromText(text) ?? text);
       setCamera(false);
       if (target) {
         if (k.id !== target.peer) { setCard(null); setError(`Este QR não é de ${target.name}. Se a pessoa está na sua frente, alguém pode ter trocado as chaves: não confie na conversa.`); return; }
@@ -131,7 +133,7 @@ export default function Scan() {
         {camera && <Button label="Fechar a câmera" variant="soft" height={44} onPress={() => setCamera(false)} />}
 
         <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 6 }}>OU COLE O CÓDIGO</T>
-        <TextInput value={code} onChangeText={t => { setCode(t); setError(null); }} placeholder="piu1:…" placeholderTextColor={c.ink3}
+        <TextInput value={code} onChangeText={t => { setCode(t); setError(null); }} placeholder="piu1:… ou piu://invite/…" placeholderTextColor={c.ink3}
           autoCapitalize="none" autoCorrect={false} multiline accessibilityLabel="Código de contato"
           style={{ minHeight: 76, padding: 14, borderRadius: 16, backgroundColor: c.bg2, color: c.ink, fontSize: 13, fontFamily: fontFamily(400, true), textAlignVertical: 'top' }} />
         <Button label="Ler código" variant="outline" height={46} disabled={!code.trim() || !ready} onPress={() => parse(code)} />
