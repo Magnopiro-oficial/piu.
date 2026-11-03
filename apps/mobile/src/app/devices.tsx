@@ -74,7 +74,7 @@ export default function Devices() {
     await revokeDevice(d.id, kind === 'revoke' ? 'lost' : 'disconnected', identities);
     showToast(kind === 'revoke'
       ? { icon: 'gpp_maybe', title: 'Revogação assinada', body: 'O aviso segue para seus contatos pela malha. Chaves de sessão trocadas.' }
-      : { icon: 'sync_lock', title: `${d.name} desconectado`, body: 'Chaves de sessão trocadas. Ele não lê nada novo.' });
+      : { icon: 'sync_lock', title: `${d.name} desconectado`, body: 'Chaves de sessão trocadas neste aparelho. Ele ainda tem a sua frase: para cortar o acesso de vez, crie uma identidade nova.' });
   };
 
   return (
@@ -126,7 +126,7 @@ export default function Devices() {
 
         <SectionLabel>PERDEU UM APARELHO?</SectionLabel>
         <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: c.bg2, gap: 12 }}>
-          <T size={13.5} lh={1.45} color={c.ink2}>A revogação é assinada pela sua identidade e anunciada pela malha. As chaves de sessão são trocadas e seus contatos passam a recusar o aparelho perdido.</T>
+          <T size={13.5} lh={1.45} color={c.ink2}>A revogação é assinada pela sua identidade e anunciada pela malha. As chaves de sessão são trocadas e os grupos trocam de chave. Os aparelhos derivam as mesmas chaves da frase: seus contatos ainda não conseguem recusar o aparelho perdido.</T>
           {picking && (
             <View accessibilityRole="radiogroup" accessibilityLabel="Qual aparelho" style={{ gap: 6 }}>
               {active.map(d => (
@@ -152,7 +152,7 @@ export default function Devices() {
       {ask && (
         <Dialog icon={ask.kind === 'revoke' ? 'gpp_maybe' : 'link_off'} hold={ask.kind === 'revoke'}
           title={ask.kind === 'revoke' ? `Revogar ${ask.d.name}?` : `Desconectar ${ask.d.name}?`}
-          body={ask.kind === 'revoke' ? 'Não dá para desfazer. Um aviso assinado vai para seus contatos e as chaves de sessão são trocadas.' : 'As chaves de sessão são trocadas e ele deixa de receber o que é novo. Para voltar, pareie de novo.'}
+          body={ask.kind === 'revoke' ? 'Não dá para desfazer. Um aviso assinado vai para seus contatos e as chaves de sessão são trocadas.' : 'Ele sai da lista e as chaves de sessão deste aparelho são trocadas. Ele continua com a sua frase: para cortar o acesso de vez, crie uma identidade nova.'}
           primary={ask.kind === 'revoke' ? 'Segure para revogar' : 'Desconectar'} primaryIcon={ask.kind === 'revoke' ? 'touch_app' : undefined}
           onPrimary={() => { void confirmAsk(); }} onClose={() => setAsk(null)} />
       )}

@@ -4,7 +4,7 @@ import { ScrollView, TextInput, View } from 'react-native';
 import { RESTORE_OPTS } from '../data/settings';
 import { BackupError, openBackup, parseBackupHeader } from '../lib/backupFile';
 import { pickBackupFile } from '../lib/migrationIO';
-import { requestSessionRotation, stashRestoredData } from '../lib/migrationState';
+import { requestDeviceChangeNotice, requestSessionRotation, stashRestoredData } from '../lib/migrationState';
 import { isValidPhrase, PHRASE_WORDS, WORDLIST } from '../protocol';
 import { useKeys } from '../state/keys';
 import { useSettings } from '../state/settings';
@@ -23,6 +23,7 @@ import { T } from '../ui/T';
  * Restaurar: as chaves vêm de outro aparelho seu, da frase ou de um arquivo de backup. Sem servidor.
  * - Frase: recria as mesmas chaves.
  * - Arquivo: abre o `.piu` com a senha (scrypt + XChaCha20-Poly1305) e aplica a frase que está dentro.
+ * - Nos dois casos as sessões antigas saem e os contatos recebem um aviso assinado de troca de aparelho.
  * - Outro aparelho: a transferência (QR + código de 4 palavras) acontece na tela seguinte.
  */
 export default function Restore() {
@@ -63,6 +64,8 @@ export default function Restore() {
     try {
       if (restoreMode === 'phrase') {
         await restore(words);
+        // O pedido do aviso vem antes: a rotação remonta o mensageiro, que assina e distribui.
+        await requestDeviceChangeNotice('phrase');
         await requestSessionRotation('restaurado pela frase');
         router.push('/migrate');
         return;
@@ -72,6 +75,8 @@ export default function Restore() {
       const content = await openBackup(file.text, pw, { onProgress: setProgress });
       await restore(content.phrase);
       if (content.data && Object.keys(content.data).length) await stashRestoredData(content.data);
+      // O pedido do aviso vem antes: a rotação remonta o mensageiro, que assina e distribui.
+      await requestDeviceChangeNotice('file');
       await requestSessionRotation('restaurado do arquivo');
       setPw('');
       router.push({ pathname: '/migrate', params: { file: file.name, hist: content.data ? String(Object.keys(content.data).length) : '0' } });

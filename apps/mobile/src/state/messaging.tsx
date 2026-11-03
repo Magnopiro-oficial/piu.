@@ -8,14 +8,15 @@ import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
 import { type Contact, Messenger, type NearPeer, type NearRequest } from '../messaging/messenger';
 import { canPost, type GroupState, memberCount } from '../messaging/groups';
+import { GroupRate, groupShouldNotify } from '../messaging/mentions';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
 import { getTransport } from '../transport';
-import { applySessionRotation, takeRestoredData, useSessionRotationEpoch } from '../lib/migrationState';
+import { applySessionRotation, deviceChangeOutbox, saveDeviceChangeOutbox, takeDeviceChangeRequest, takeRestoredData, useSessionRotationEpoch } from '../lib/migrationState';
 import { markRevocationsSent, pendingRevocations } from '../lib/devices';
-import { decodeRevocation, encodeRevocation, verifyRevocation } from '../lib/devicesCore';
+import { createDeviceChange, decodeNotice, type DeviceChangeOutbox, encodeDeviceChange, encodeRevocation, isNewDeviceChange, verifyDeviceChange, verifyRevocation } from '../lib/devicesCore';
 import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
@@ -29,6 +30,12 @@ import { useStore } from './store';
 import { useWallet } from './wallet';
 
 const STATE_KEY = 'msg.state';
+/** Último aviso de troca de aparelho aceito de cada contato (contra repetição). */
+const CHANGES_SEEN = 'dev.changeSeen';
+
+/** Mensagem de sistema do contato que trocou de aparelho. A identidade é a mesma: o código de segurança não muda. */
+export const deviceChangeText = (who: string, reason: 'phrase' | 'file') =>
+  `${who} trocou de aparelho (restaurou ${reason === 'phrase' ? 'pela frase' : 'de um arquivo de backup'}). Aviso assinado pela chave da identidade: as chaves de sessão foram renovadas e o código de segurança continua o mesmo. Se você não esperava, confirme com a pessoa.`;
 /** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
 export const receivedFiles = new Map<string, IncomingFile>();
 const SAVE_DELAY = 300;
@@ -137,6 +144,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const chatsRef = useRef(chats); chatsRef.current = chats;
   const privRef = useRef(priv); privRef.current = priv;
   const msgToChat = useRef(new Map<string, string>());
+  const groupRate = useRef(new GroupRate());
 
   const saveTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mRef = useRef<Messenger | null>(null);
@@ -182,13 +190,27 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         inviteUsed: () => setInviteEpoch(e => e + 1),
         notice: (contactId, text, pub) => {
           try {
-            const n = decodeRevocation(text);
+            const got = decodeNotice(text);
             const c = mRef.current?.getContact(contactId);
+            if (got.kind === 'change') {
+              // Troca de aparelho: só de contato, conferida com a chave que já conhecíamos dele.
+              const ch = got.n;
+              if (!c || !verifyDeviceChange(ch, c.pub.signPk)) return;
+              const seen = readPersisted<Record<string, { at: number; sig: string }>>(CHANGES_SEEN) ?? {};
+              if (!isNewDeviceChange(ch, seen[contactId])) return;
+              void persistNow(CHANGES_SEEN, { ...seen, [contactId]: { at: ch.at, sig: ch.sig } }).catch(() => {});
+              const cid = chatIdFor(contactId);
+              if (!chatsRef.current.some(x => x.id === cid)) return;
+              const who = c.name || 'Este contato';
+              handlers.current.receive(cid, { id: 'sys-dc-' + ch.sig.slice(0, 12), from: 'sys', time: nowHM(), text: deviceChangeText(who, ch.reason) });
+              return;
+            }
+            const n = got.n;
             if (!verifyRevocation(n, (c?.pub ?? pub).signPk)) return;
             // Grupos em que sou admin e o contato participa trocam de chave (o aparelho perdido tinha a antiga).
             for (const g of mRef.current?.rotateForRevocation(contactId, n.sig) ?? []) {
               const who = c?.name || g.members.find(x => x.id === contactId)?.name || 'um membro';
-              rotatedNote(g, `${who} revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.`);
+              rotatedNote(g, `${who} revogou um aparelho. A chave do grupo foi trocada.`);
             }
             const cid = chatIdFor(contactId);
             if (!c || !chatsRef.current.some(x => x.id === cid)) return;
@@ -200,16 +222,17 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { photo: b64 ? `data:image/jpeg;base64,${b64}` : undefined });
         },
-        lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
+        // Banners com tipo também viram notificação do sistema (store.tsx → notify), com a rota em `href`.
+        lotClosed: lot => handlers.current.showToast({ kind: 'wallet', href: '/(tabs)/wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
         // Por perto: perfis, pedidos recebidos e convite meu aceito.
         nearbyChanged: () => setNearEpoch(e => e + 1),
-        nearRequest: r => handlers.current.showToast({ kind: 'nearby', icon: 'waving_hand', title: `${r.name} quer conversar`, body: `+${fmtLunes(r.fee)} LUNES se você aceitar · expira em 24 h`, action: 'Ver',
+        nearRequest: r => handlers.current.showToast({ kind: 'nearby', href: '/nearby/requests', icon: 'waving_hand', title: `${r.name} quer conversar`, body: `+${fmtLunes(r.fee)} LUNES se você aceitar · expira em 24 h`, action: 'Ver',
           hidden: { title: 'Pedido de conversa', body: 'Abra Por perto para ver.' }, go: () => router.push('/nearby/requests') }),
         nearAccepted: (c, fee) => {
           walletRef.current.settleInvite(c.id);
           const cid = chatIdFor(c.id);
           if (!chatsRef.current.some(x => x.id === cid)) handlers.current.addChat(nearChat(c, privRef.current.temp, `${c.name || 'A pessoa'} aceitou seu convite de Por perto. A conversa é cifrada de ponta a ponta.`));
-          handlers.current.showToast({ kind: 'nearby', icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
+          handlers.current.showToast({ kind: 'nearby', href: `/chat/${cid}`, icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
             hidden: { title: 'Convite aceito', body: 'Abra Por perto para ver.' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
         },
         // Grupos: entrar, mudanças, remoção e mensagens.
@@ -228,11 +251,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         groupMessage: (gid, _fromId, fromName, x) => {
           const cid = chatIdForGroup(gid);
           if (!chatsRef.current.some(c => c.id === cid)) return;
-          handlers.current.receive(cid, { id: 'in-' + gid.slice(0, 6) + '-' + x.msgId, from: 'them', sender: fromName, text: x.text, time: nowHM() });
+          // Grupos: "Só menções acima de 20 mensagens/h" (conta por grupo, na última hora).
+          const perHour = groupRate.current.hit(gid, now());
+          const quiet = mRef.current?.getGroup(gid)?.kind === 'group' && !groupShouldNotify(perHour, !!x.mentioned);
+          handlers.current.receive(cid, { id: 'in-' + gid.slice(0, 6) + '-' + x.msgId, from: 'them', sender: fromName, text: x.text, time: nowHM() }, { quiet });
         },
         joinRequest: (gid, who) => {
           setGroupEpoch(e => e + 1);
-          handlers.current.showToast({ kind: 'group', icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver',
+          handlers.current.showToast({ kind: 'group', href: `/group/${chatIdForGroup(gid)}`, icon: 'person_add', title: `${who.name || 'Alguém'} quer entrar`, body: 'Abra os dados do grupo para aprovar ou recusar.', action: 'Ver',
             hidden: { title: 'Pedido para entrar', body: 'Abra os dados do grupo para aprovar ou recusar.' }, go: () => router.push({ pathname: '/group/[id]', params: { id: chatIdForGroup(gid) } }) });
         },
         // Arquivos: progresso por bloco, entrega conferida e recebimento.
@@ -290,6 +316,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         },
       },
     });
+    // Restaurou as chaves (frase ou arquivo): assina o aviso de troca de aparelho, um por identidade.
+    const change = takeDeviceChangeRequest();
+    if (change) {
+      const fresh: DeviceChangeOutbox[] = (['public', 'anon'] as const).map(via => ({ via, at: change.at, sentTo: [], text: encodeDeviceChange(createDeviceChange(identities[via], change.reason, change.at)) }));
+      void saveDeviceChangeOutbox([...deviceChangeOutbox(now()), ...fresh]).catch(() => {});
+    }
     mRef.current = m;
     setMessenger(m);
     return () => { clearTimeout(saveTimer.current); void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
@@ -307,17 +339,33 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         messenger.broadcastNotice(via, encodeRevocation(n));
         for (const g of messenger.rotateForRevocation(identities[via].id, n.sig, via)) {
           const cid = chatIdForGroup(g.id);
-          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: 'Você revogou um aparelho. A chave do grupo foi trocada: o aparelho revogado não lê nada novo.' });
+          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: 'Você revogou um aparelho. A chave do grupo foi trocada.' });
         }
       }
       void markRevocationsSent(list.map(n => n.sig));
     };
-    flush();
-    const t = setInterval(flush, 30_000);
+    // Avisos de troca de aparelho: aos contatos de cada identidade, inclusive os que aparecerem
+    // depois (dentro da janela de 7 dias), uma vez por contato.
+    const flushChanges = () => {
+      const list = deviceChangeOutbox(now());
+      if (!list.length) return;
+      let changed = false;
+      const next = list.map(o => {
+        const sent = messenger.broadcastNotice(o.via, o.text, o.sentTo);
+        if (!sent.length) return o;
+        changed = true;
+        return { ...o, sentTo: [...o.sentTo, ...sent] };
+      });
+      if (changed) void saveDeviceChangeOutbox(next).catch(() => {});
+    };
+    flush(); flushChanges();
+    const t = setInterval(() => { flush(); flushChanges(); }, 30_000);
     return () => clearInterval(t);
   }, [messenger, identities]);
 
   useEffect(() => { if (messenger) { messenger.relay = relay; } }, [messenger, relay]);
+  // Privacidade → "Quem pode me encontrar" (identidade pública): Por perto e pedidos pelo código.
+  useEffect(() => { messenger?.setDiscovery(priv.find); setNearEpoch(e => e + 1); }, [messenger, priv.find]);
   // Bloqueados (só contatos reais `piu:…`): o mensageiro descarta o que eles mandam.
   useEffect(() => { messenger?.setBlocked(blocked.map(b => b.id).filter(id => id.startsWith('piu:'))); }, [messenger, blocked]);
   // Limites do nó (Rede e Ajustes → Armazenamento / Bateria e limites) aplicados no roteador.

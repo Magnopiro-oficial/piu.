@@ -17,6 +17,7 @@ import type { GroupKey } from '../protocol/envelope';
 import type { IdentityKind, PublicIdentity } from '../protocol/keys';
 import { random } from '../protocol/suite';
 import { b64url, unb64url } from './card';
+import { cleanMentions } from './mentions';
 
 export type GroupKind = 'group' | 'channel' | 'community';
 export type ChannelVisibility = 'public' | 'private' | 'secret';
@@ -134,8 +135,13 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
   }
 }
 
-/** Conteúdo de uma mensagem de grupo (dentro do envelope de grupo). */
-export const encodeGroupText = (msgId: string, text: string) => utf8(JSON.stringify({ i: msgId, x: text }));
-export function decodeGroupText(b: Uint8Array): { i: string; x: string } | null {
-  try { const j = JSON.parse(fromUtf8(b)); return typeof j.i === 'string' && j.i.length <= 64 && typeof j.x === 'string' ? { i: j.i, x: j.x.slice(0, 4000) } : null; } catch { return null; }
+/** Conteúdo de uma mensagem de grupo (dentro do envelope de grupo). `m`: ids mencionados com `@Nome` (messaging/mentions.ts). */
+export const encodeGroupText = (msgId: string, text: string, mentions?: string[]) => utf8(JSON.stringify({ i: msgId, x: text, ...(mentions?.length ? { m: mentions } : {}) }));
+export function decodeGroupText(b: Uint8Array): { i: string; x: string; m?: string[] } | null {
+  try {
+    const j = JSON.parse(fromUtf8(b));
+    if (typeof j.i !== 'string' || j.i.length > 64 || typeof j.x !== 'string') return null;
+    const m = cleanMentions(j.m);
+    return { i: j.i, x: j.x.slice(0, 4000), ...(m ? { m } : {}) };
+  } catch { return null; }
 }

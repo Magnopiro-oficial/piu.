@@ -72,7 +72,8 @@ interface Store {
   /** Estou digitando nesta conversa. */
   notifyTyping: (chatId: string) => void;
   /** Mensagem real recebida (já decifrada e conferida). */
-  receive: (chatId: string, msg: Msg) => void;
+  /** `quiet`: entra na conversa sem banner nem notificação (ex.: grupo movimentado sem menção). */
+  receive: (chatId: string, msg: Msg, opts?: { quiet?: boolean }) => void;
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
   /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
   setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
@@ -184,9 +185,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const patchFile = useCallback((cid: string, mid: string, p: Partial<FileXfer>) =>
     patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {})), [patchMsg]);
 
-  /** Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). */
+  /**
+   * Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). Banner com `kind` também
+   * vira notificação do sistema quando o app não está em primeiro plano (`notify` confere tipos
+   * ligados, silêncio e prévia, e não dispara com o app aberto).
+   */
   const showToast = useCallback((t: ToastData) => {
     if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
+    if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.href ? { data: { href: t.href } } : {}) });
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
     setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });
@@ -200,19 +206,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
   const dismissToast = useCallback(leave, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const push = useCallback((cid: string, msg: Msg) => {
+  const push = useCallback((cid: string, msg: Msg, opts?: { quiet?: boolean }) => {
     const viewingIt = viewing.current === cid;
     if (msg.from === 'them') {
       stopTyping(cid);
       // Conversa aberta: a mensagem que chegou já foi lida.
       if (viewingIt && msg.id.startsWith('in-')) setTimeout(() => markRead(cid, [msg.id]), 0);
     }
-    if (msg.from === 'them' && !viewingIt) {
+    if (msg.from === 'them' && !viewingIt && !opts?.quiet) {
       const c = chatsRef.current.find(x => x.id === cid);
-      // Com o app em segundo plano, vira notificação do sistema (respeita prévia, tipos e silêncio).
-      if (c && !c.muted) notify({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' || c.kind === 'community' ? 'channel' : 'msg', title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''), data: { href: `/chat/${cid}` } });
-      if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''),
-        hidden: { title: 'Piu', body: c.kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+      // Banner e, com o app em segundo plano, notificação do sistema (showToast chama `notify`).
+      // Comunidade conta como Canais (o mesmo tipo nos dois).
+      const kind = c?.kind === 'group' ? 'group' as const : c?.kind === 'channel' || c?.kind === 'community' ? 'channel' as const : 'msg' as const;
+      if (c && !c.muted) showToast({ kind, av: c.initials, title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''), href: `/chat/${cid}`,
+        hidden: { title: 'Piu', body: kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
       // Recebida: guarda quando chegou (prévia da tela bloqueada, lib/lockFeed.ts).
@@ -300,7 +307,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     typing,
     setTyping,
     notifyTyping: cid => { const c = chatsRef.current.find(x => x.id === cid); if (c?.peer && !c.request) signals.current?.typing(cid, c.peer); },
-    receive: (cid, msg) => push(cid, msg),
+    receive: (cid, msg, opts) => push(cid, msg, opts),
     setMsgStatus: (cid, mid, st) => {
       setStatus(cid, mid, st);
       const c = chatsRef.current.find(x => x.id === cid);

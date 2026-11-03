@@ -12,11 +12,15 @@ import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
-/** Tipos de canal (FUN-007), textos do design. */
+/**
+ * Tipos de canal (FUN-007). Não há diretório nem busca de canais: todos entram pelo link ou QR do
+ * convite (7 dias, até 50 usos). Público entra sem aprovação; privado e secreto pedem aprovação de um
+ * admin e escondem os inscritos uns dos outros.
+ */
 const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', string, string][] = [
-  ['public', 'campaign', 'Público', 'Qualquer pessoa encontra e lê. Aparece em Por perto e na busca.'],
-  ['private', 'lock', 'Privado', 'Entra só com convite. Inscritos não veem uns aos outros.'],
-  ['secret', 'visibility_off', 'Secreto', 'Não aparece em busca. Nem o nome sai sem convite.'],
+  ['public', 'campaign', 'Público', 'Entra quem tiver o link ou o QR, sem aprovação. Não aparece em Por perto nem em busca.'],
+  ['private', 'lock', 'Privado', 'Entra pelo link ou QR com aprovação de um admin. Inscritos não veem uns aos outros.'],
+  ['secret', 'visibility_off', 'Secreto', 'Como o privado. O nome só circula dentro do convite.'],
 ];
 
 /** Criar canal (FUN-007): público, privado ou secreto; quem publica; com identidade pública ou anônima. */

@@ -6,12 +6,12 @@
  *   Desbloqueado / Nunca), modo noturno (22h–7h, só alertas críticos tocam) e vibração discreta.
  * - Só dispara com o app fora do primeiro plano: em primeiro plano o app já mostra o banner in-app.
  * - `NotificationBridge` (montado uma vez, dentro dos provedores) liga os ajustes, abre a tela certa
- *   ao tocar na notificação, pede a permissão na hora certa e espelha os banners in-app que
- *   acontecem com o app em segundo plano.
+ *   ao tocar na notificação e pede a permissão na hora certa. Os banners in-app com tipo chamam
+ *   `notify` direto (state/store.tsx, `showToast`), com o conteúdo original e a rota (`href`).
  */
 import * as Notifications from 'expo-notifications';
 import { router, type Href } from 'expo-router';
-import { useEffect, useRef } from 'react';
+import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 import type { NotifKey, Preview } from '../data/settings';
 import { useSettings } from '../state/settings';
@@ -183,7 +183,7 @@ const OPENS = 'notif.opens';
  */
 export function NotificationBridge() {
   const { preview, notifs, quiet, discreet } = useSettings();
-  const { onboarded, toast } = useStore();
+  const { onboarded } = useStore();
   cfg = { preview, notifs, quiet, discreet, onboarded };
 
   // Toque na notificação → abre a tela (com o app aberto, em segundo plano ou fechado).
@@ -215,15 +215,6 @@ export function NotificationBridge() {
     }, 4000);
     return () => clearTimeout(t);
   }, [onboarded]);
-
-  // Banners in-app que acontecem com o app em segundo plano viram notificação do sistema.
-  const seen = useRef(0);
-  useEffect(() => {
-    if (!toast || toast.seq === seen.current || toast.leaving) return;
-    seen.current = toast.seq;
-    if (!toast.kind || active) return;
-    void notify({ kind: toast.kind, title: toast.title, body: toast.body, go: toast.go });
-  }, [toast]);
 
   // Ao voltar para o app, limpa as notificações já vistas.
   useEffect(() => {

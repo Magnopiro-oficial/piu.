@@ -4,12 +4,16 @@
  *   O mensageiro (do líder) aplica com `applySessionRotation` ao montar e se remonta quando
  *   `useSessionRotationEpoch()` muda.
  * - Dados do app vindos de um arquivo de backup (histórico), guardados para importação.
+ * - Aviso de troca de aparelho (restaurar pela frase ou por arquivo): pedido aqui, assinado pelo
+ *   mensageiro com as identidades e distribuído aos contatos (lib/devicesCore.ts).
  */
 import { useSyncExternalStore } from 'react';
+import type { DeviceChangeOutbox, DeviceChangeReason } from './devicesCore';
+import { deviceChangeActive } from './devicesCore';
 import { dropSessions } from './migration';
 import { persistNow, readPersisted } from './persist';
 
-const ROTATE = 'mig.rotate', IMPORT = 'mig.import';
+const ROTATE = 'mig.rotate', IMPORT = 'mig.import', CHANGE = 'mig.change', CHANGES = 'mig.changes';
 
 let epoch = 0;
 const listeners = new Set<() => void>();
@@ -35,6 +39,24 @@ export function applySessionRotation(state: string | undefined): string | undefi
   if (!state) return state;
   try { return dropSessions(state); } catch { return state; }
 }
+
+/**
+ * Restaurou as chaves neste aparelho: pede o aviso assinado de troca de aparelho para os contatos.
+ * O mensageiro assina (com as duas identidades, um aviso por identidade) ao montar.
+ */
+export const requestDeviceChangeNotice = (reason: DeviceChangeReason) => persistNow(CHANGE, { at: Math.floor(Date.now() / 1000), reason });
+
+/** Para o líder: devolve (uma vez) o pedido de aviso de troca de aparelho. */
+export function takeDeviceChangeRequest(): { at: number; reason: DeviceChangeReason } | null {
+  const r = readPersisted<{ at: number; reason: DeviceChangeReason }>(CHANGE);
+  if (!r || typeof r.at !== 'number' || (r.reason !== 'phrase' && r.reason !== 'file')) return null;
+  void persistNow(CHANGE, null).catch(() => {});
+  return r;
+}
+
+/** Avisos de troca ainda na janela de distribuição (com quem já recebeu). */
+export const deviceChangeOutbox = (now: number): DeviceChangeOutbox[] => (readPersisted<DeviceChangeOutbox[]>(CHANGES) ?? []).filter(o => deviceChangeActive(o, now));
+export const saveDeviceChangeOutbox = (list: DeviceChangeOutbox[]) => persistNow(CHANGES, list);
 
 /** Muda a cada pedido de rotação (para o mensageiro se remontar e aplicar). */
 export const useSessionRotationEpoch = () => useSyncExternalStore(subscribe, () => epoch, () => epoch);

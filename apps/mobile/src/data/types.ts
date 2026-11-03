@@ -62,4 +62,6 @@ export interface ToastData {
    * nem conteúdo, nem com o aparelho desbloqueado"). Banner sem isto não mostra nada de conversa.
    */
   hidden?: { title: string; body: string };
+  /** Rota a abrir ao tocar na notificação do sistema (vale também com o app reaberto). */
+  href?: string;
 }
