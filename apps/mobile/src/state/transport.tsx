@@ -72,13 +72,13 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       if (state === 'running' && now - startedAt.current > 10_000 && now - lastNodeBanner.current > 60_000) {
         lastNodeBanner.current = now;
-        toastRef.current({ kind: 'network', icon: 'settings_input_antenna', title: 'Novo nó alcançável', body: `${p.name} · ${p.via === 'ble' ? 'Bluetooth LE' : p.via === 'nearby' ? 'Wi-Fi Direct' : 'por perto'}`, go: goNetwork });
+        toastRef.current({ kind: 'network', href: '/(tabs)/network', icon: 'settings_input_antenna', title: 'Novo nó alcançável', body: `${p.name} · ${p.via === 'ble' ? 'Bluetooth LE' : p.via === 'nearby' ? 'Wi-Fi Direct' : 'por perto'}`, go: goNetwork });
       }
     }
     if (connected.length) hadPeers.current = true;
     else if (hadPeers.current && state === 'running') {
       hadPeers.current = false;
-      toastRef.current({ kind: 'network', icon: 'portable_wifi_off', title: 'Você saiu da malha', body: 'Nenhum nó por perto. Mensagens ficam na fila até reencontrar um.', go: goNetwork });
+      toastRef.current({ kind: 'network', href: '/(tabs)/network', icon: 'portable_wifi_off', title: 'Você saiu da malha', body: 'Nenhum nó por perto. Mensagens ficam na fila até reencontrar um.', go: goNetwork });
     }
   }, [peers, state]);
 

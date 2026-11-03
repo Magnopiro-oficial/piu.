@@ -3,7 +3,7 @@
 import type { IconName } from '../ui/Icon';
 
 export const PROFILE_NOTES = {
-  public: 'Perfil público. Pessoas podem encontrar você por nome ou código.',
+  public: 'Perfil público. Quem tem o seu código, ou vê você em Por perto, vê este nome.',
   anon: 'Chaves e contatos separados. Sem vínculo público com seu perfil.',
 };
 
@@ -24,8 +24,8 @@ export const RESTORE_OPTS: [RestoreMode, IconName, string, string][] = [
 ];
 export const MIG_META: Record<RestoreMode, { title: string; sub: string; icon: IconName; label: string; done: string }> = {
   device: { title: 'Transferindo do aparelho antigo', sub: 'Direto entre os dois aparelhos, cifrado. Nada passa por servidor.', icon: 'phone_android', label: 'aparelho antigo', done: 'O aparelho antigo foi desconectado e as chaves de sessão foram trocadas.' },
-  phrase: { title: 'Recuperando pela frase', sub: 'As chaves são recriadas a partir das 12 palavras, neste aparelho.', icon: 'password', label: 'frase', done: 'Seus contatos verão um aviso de troca de chave. Verifique os mais importantes.' },
-  file: { title: 'Restaurando do arquivo', sub: 'Arquivo .piu cifrado com a sua senha.', icon: 'sd_card', label: 'arquivo', done: 'Seus contatos verão um aviso de troca de chave. Verifique os mais importantes.' },
+  phrase: { title: 'Recuperando pela frase', sub: 'As chaves são recriadas a partir das 12 palavras, neste aparelho.', icon: 'password', label: 'frase', done: 'Os contatos não vêm com a frase. Quem você adicionar de novo nos próximos 7 dias recebe um aviso assinado de troca de aparelho.' },
+  file: { title: 'Restaurando do arquivo', sub: 'Arquivo .piu cifrado com a sua senha.', icon: 'sd_card', label: 'arquivo', done: 'Os contatos do arquivo recebem um aviso assinado de troca de aparelho quando houver rota. O código de segurança de vocês não muda.' },
 };
 
 // ── aparelhos ────────────────────────────────────────────

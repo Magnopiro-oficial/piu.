@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Image, Pressable, ScrollView, View } from 'react-native';
 import { initialsOf } from '../../lib/text';
 import { useMessaging } from '../../state/messaging';
+import { useSettings } from '../../state/settings';
 import { useTransport } from '../../state/transport';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -18,7 +19,10 @@ import { T } from '../../ui/T';
  */
 export default function Nearby() {
   const { c } = useTheme();
-  const { visible, setVisible, visibleMinutesLeft, inviteState } = useWallet();
+  const { visible: chosen, setVisible, visibleMinutesLeft, inviteState } = useWallet();
+  // "Quem pode me encontrar" fora de Todos: Por perto não anuncia nem recebe pedidos (mensageiro).
+  const findOff = useSettings().priv.find !== 'all';
+  const visible = chosen && !findOff;
   const { nearby } = useMessaging();
   const profiles = nearby?.profiles ?? [];
   const { kind, peers } = useTransport();
@@ -45,9 +49,9 @@ export default function Nearby() {
           <Icon name={visible ? 'visibility' : 'visibility_off'} size={24} w={300} color={fg} />
           <View style={{ flex: 1, gap: 2 }}>
             <T size={15} w={600} color={fg}>{visible ? 'Você está visível' : 'Você está invisível'}</T>
-            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? `Perfil público · desliga sozinho em ${visibleMinutesLeft} min` : 'Identidade anônima nunca aparece aqui'}</T>
+            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? `Perfil público · desliga sozinho em ${visibleMinutesLeft} min` : findOff ? 'Desligado em Privacidade → Quem pode me encontrar' : 'Identidade anônima nunca aparece aqui'}</T>
           </View>
-          <VisSwitch on={visible} onChange={() => setVisible(!visible)} />
+          <VisSwitch on={visible} onChange={() => (findOff ? router.push('/settings/privacy') : setVisible(!visible))} />
         </View>
 
         {visible ? (

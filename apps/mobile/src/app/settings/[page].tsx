@@ -35,6 +35,13 @@ export default function SettingsPage() {
   );
 }
 
+/** O que "Quem pode me encontrar" controla de fato (identidade pública; não há busca por nome). */
+const FIND_DESC: Record<'all' | 'contacts' | 'none', string> = {
+  all: 'Identidade pública · aparece em Por perto quando visível e recebe pedidos de quem tem seu código',
+  contacts: 'Identidade pública · fora de Por perto · pedidos só de quem tem seu código',
+  none: 'Identidade pública · fora de Por perto · pedidos pelo seu código são descartados',
+};
+
 function Privacy() {
   const { priv, setPriv } = useSettings();
   const { showToast, blocked } = useStore();
@@ -42,7 +49,7 @@ function Privacy() {
   return (
     <>
       <SetGroup title="VISIBILIDADE">
-        <SegRow name="Quem pode me encontrar" desc="Pela identidade pública" value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
+        <SegRow name="Quem pode me encontrar" desc={FIND_DESC[priv.find]} value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
         <SegRow name="Por perto começa" value={priv.near} onChange={near => setPriv({ near })} options={[['off', 'Invisível'], ['1h', 'Visível por 1 h']]} />
       </SetGroup>
       <SetGroup title="CONVERSAS">

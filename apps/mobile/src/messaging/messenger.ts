@@ -11,6 +11,7 @@
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
 import { isJpegBase64 } from './photo';
+import { mentionIds } from './mentions';
 import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
@@ -45,7 +46,9 @@ export interface Contact {
 interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
 /** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). */
-export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number }
+export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number;
+  /** Grupo: a mensagem me menciona (`@Nome`). */
+  mentioned?: boolean }
 export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number;
   /** "Baixar mídia automaticamente" não deixou baixar agora: espera a pessoa tocar em "Baixar". */
   held?: boolean }
@@ -76,8 +79,9 @@ export interface MessengerEvents {
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
   /**
-   * Um contato (ou membro de um grupo meu) avisou que revogou um aparelho: texto do aviso e as chaves
-   * públicas de quem mandou. Quem chama confere a assinatura e, se valer, chama `rotateForRevocation`.
+   * Um contato (ou membro de um grupo meu) mandou um aviso assinado (lib/devicesCore.ts): aparelho
+   * revogado ou troca de aparelho. Texto do aviso e as chaves públicas de quem mandou. Quem chama
+   * confere a assinatura e, na revogação, chama `rotateForRevocation`.
    */
   notice(contactId: string, notice: string, pub: PublicIdentity): void;
   /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
@@ -95,6 +99,9 @@ export interface MessengerEvents {
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
+
+/** Privacidade → "Quem pode me encontrar" (ver `Messenger.setDiscovery`). */
+export type Discovery = 'all' | 'contacts' | 'none';
 
 /** Perfil de Por perto visível agora (só enquanto eu também estou visível). */
 export interface NearPeer { id: string; name: string; fee: number; photo?: string; prox: NearProx; via: string; common: string; at: number }
@@ -172,7 +179,7 @@ type Payload =
   | { t: 'gv'; g: string; a: WireMember[] }
   | { t: 'gl'; g: string }
   | { t: 'gr'; g: string }
-  /** Aviso assinado de aparelho revogado (lib/devicesCore.ts), para os contatos. */
+  /** Aviso assinado (lib/devicesCore.ts): aparelho revogado ou troca de aparelho, para os contatos. */
   | { t: 'rv'; n: string }
   /** Foto do perfil público (JPEG de 96 px em base64; vazio = removida). Só entre contatos públicos. */
   | { t: 'pp'; p: string }
@@ -606,7 +613,27 @@ export class Messenger {
   /** Perfis denunciados: não aparecem mais para mim em Por perto (só neste aparelho). */
   private nearHidden = new Set<string>();
 
-  private nearVisible() { return this.near.until > this.o.now(); }
+  /**
+   * Privacidade → "Quem pode me encontrar" (identidade pública). `all`: Por perto anuncia (quando
+   * visível) e aceita pedidos pagos. `contacts`: fora de Por perto (nem anuncia nem recebe pedidos);
+   * pedidos de conversa só de quem tem o meu código. `none`: também descarta os pedidos pelo código da
+   * identidade pública (só eu adiciono, lendo o código da pessoa). A anônima não muda.
+   */
+  private discovery: Discovery = 'all';
+
+  setDiscovery(d: Discovery) {
+    if (d === this.discovery) return;
+    const was = this.nearVisible();
+    this.discovery = d;
+    const now = this.nearVisible();
+    if (was && !now) {
+      this.withdraw();
+      if (this.presences.size) { this.presences.clear(); this.o.events.nearbyChanged?.(); }
+    } else if (now && !was) this.announce();
+  }
+
+  /** Por perto ativo: visível pelo prazo escolhido e "Quem pode me encontrar" em Todos. */
+  private nearVisible() { return this.discovery === 'all' && this.near.until > this.o.now(); }
 
   /**
    * Visibilidade de Por perto (desliga sozinha em 1 h: quem chama passa o fim, em segundos). Ao ficar
@@ -744,6 +771,7 @@ export class Messenger {
    */
   sendNearInvite(profileId: string, text: string) {
     const now = this.o.now();
+    if (this.discovery !== 'all') throw new Error('Por perto está desligado em Privacidade → Quem pode me encontrar.');
     if (!this.nearVisible()) throw new Error('Fique visível em Por perto para convidar.');
     const e = this.presences.get(profileId);
     if (!e || e.p.until <= now) throw new Error('Esta pessoa não está mais por perto.');
@@ -761,6 +789,7 @@ export class Messenger {
   private onNearInvite(m: Opened, used: IdentityKind, p: Extract<Payload, { t: 'ni' }>) {
     const now = this.o.now(), from = m.fromId;
     if (used !== 'public' || this.blocked.has(from)) return; // a anônima nunca recebe pedido de Por perto
+    if (this.discovery !== 'all') return; // "Quem pode me encontrar": fora de Por perto, descarta
     const known = this.contacts.get(from);
     if (known && !known.request) return;
     // Só convite enviado enquanto eu estava visível, e ainda dentro das 24 h.
@@ -1025,7 +1054,10 @@ export class Messenger {
     const me = this.o.identities[g.via];
     if (!canPost(g, me.id)) throw new Error(g.kind === 'group' ? 'Só admins publicam neste grupo.' : 'Só admins publicam aqui.');
     const now = this.o.now();
-    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body: encodeGroupText(msgId, text.slice(0, MAX_TEXT)), now, ttlSec: TTL_SEC, pad: this.o.pad?.() ?? true });
+    const x = text.slice(0, MAX_TEXT);
+    // `@Nome` de membros vira a lista de ids mencionados (vai cifrada junto do texto).
+    const mentions = mentionIds(x, g.members, me.id);
+    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body: encodeGroupText(msgId, x, mentions), now, ttlSec: TTL_SEC, pad: this.o.pad?.() ?? true });
     const delaySec = this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (r.status === 'stored') this.groupOut.set(sealed.id, msgId);
@@ -1071,20 +1103,23 @@ export class Messenger {
   /**
    * Envia um aviso (ex.: aparelho revogado) a todos os contatos aceitos da identidade `via` e aos
    * admins dos grupos dessa identidade em que não sou admin (mesmo que não sejam contatos): eles trocam
-   * a chave do grupo ao conferir o aviso.
+   * a chave do grupo ao conferir o aviso. `skip`: quem já recebeu (não manda de novo). Devolve para
+   * quem saiu agora.
    */
-  broadcastNotice(via: IdentityKind, notice: string) {
-    const sent = new Set<string>();
-    for (const c of this.contacts.values()) if (c.via === via && !c.request) { sent.add(c.id); this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High); }
+  broadcastNotice(via: IdentityKind, notice: string, skip: Iterable<string> = []): string[] {
+    const sent = new Set<string>(skip);
+    const out: string[] = [];
+    for (const c of this.contacts.values()) if (c.via === via && !c.request && !sent.has(c.id)) { sent.add(c.id); out.push(c.id); this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High); }
     const me = this.myId(via);
     for (const g of this.groups.values()) {
       if (g.via !== via || isAdmin(g, me)) continue;
       for (const m of g.members) {
         if (m.role !== 'admin' || sent.has(m.id)) continue;
-        sent.add(m.id);
+        sent.add(m.id); out.push(m.id);
         this.enqueue({ id: m.id, via, pub: m.pub, name: m.name }, { t: 'rv', n: notice }, null, Priority.High);
       }
     }
+    return out;
   }
 
   /** Avisos de revogação já tratados (cada aviso troca a chave uma vez só). */
@@ -1239,7 +1274,8 @@ export class Messenger {
     this.markDelivered(key);
     if (m.fromId === this.myId(g.via)) return; // minha própria, voltando pela malha
     const who = g.members.find(x => x.id === m.fromId);
-    this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt });
+    const mentioned = !!t.m?.includes(this.myId(g.via));
+    this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt, ...(mentioned ? { mentioned } : {}) });
     this.o.events.changed?.();
   }
 
@@ -1500,6 +1536,8 @@ export class Messenger {
       // Contato novo só com convite válido, emitido por mim para a identidade que recebeu, e ainda não usado.
       const inv = typeof p.k === 'string' ? this.invites.get(p.k) : undefined;
       if (!inv || inv.kind !== used || inv.expiresAt <= this.o.now()) { this.o.events.changed?.(); return false; }
+      // "Quem pode me encontrar: Ninguém" (identidade pública): pedido pelo código é descartado, sem resposta.
+      if (used === 'public' && this.discovery === 'none') return false;
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
       if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return false; // contra enxurrada de pedidos
       this.invites.delete(inv.code); // uso único
