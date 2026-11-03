@@ -84,7 +84,7 @@ export default function NewChat() {
         <View style={{ paddingHorizontal: 8 }}>
           {near.length ? near.map(p => (
             <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 10, paddingHorizontal: 12 }}>
-              <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={14} w={600}>{initialsOf(p.name)}</T></View>
+              <View style={{ width: 44, height: 44, borderRadius: 22, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={14} w={600}>{initialsOf(p.name.replace(/[^A-Za-zÀ-ÿ0-9\s]/g, ' '))}</T></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <T size={15.5} w={550} numberOfLines={1}>{p.name}</T>
                 <T size={12} mono color={c.ink2}>{MEDIUM[p.via]} · {p.connected ? 'conectado' : 'visto agora'}</T>

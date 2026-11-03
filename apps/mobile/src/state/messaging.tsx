@@ -401,7 +401,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 /** Prefixo do link de convite de grupo, canal ou comunidade. */
 export const GROUP_LINK = 'piug:';
 export const chatIdForGroup = (gid: string) => 'g' + gid.slice(0, 20);
-const KIND_LABEL = { group: 'grupo', channel: 'canal', community: 'comunidade' } as const;
 function groupSub(g: GroupState) {
   const n = g.members.length;
   if (g.kind === 'channel') return `canal ${g.visibility === 'public' ? 'público' : g.visibility === 'secret' ? 'secreto' : 'privado'} · ${n} ${n === 1 ? 'inscrito' : 'inscritos'}`;
@@ -413,7 +412,7 @@ function chatForGroup(g: GroupState, myId: string): Chat {
     id: chatIdForGroup(g.id), group: g.id, ident: g.via, kind: g.kind === 'community' ? 'community' : g.kind, name: g.name, initials: initialsOf(g.name),
     time: nowHM(), unread: 0, owner: canPost(g, myId) || undefined,
     sub: groupSub(g), via: 'Por perto', viaIcon: 'hub',
-    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${KIND_LABEL[g.kind][0].toUpperCase() + KIND_LABEL[g.kind].slice(1)} cifrado de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
+    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${g.kind === 'community' ? 'Comunidade cifrada' : g.kind === 'channel' ? 'Canal cifrado' : 'Grupo cifrado'} de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
   };
 }
 
