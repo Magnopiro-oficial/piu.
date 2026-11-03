@@ -3,14 +3,14 @@
  * - Saldo disponível: o saldo livre (`free`) da conta Lunes que a pessoa informou, lido na Lunes
  *   Mainnet (lib/lunesRpc.ts), menos o que estiver reservado em convites pagos (nunca abaixo de 0).
  *   Sem endereço informado ou sem nenhuma leitura ainda, é 0.
- * - "A liberar": créditos de rede validados ou já em lote, em LUNES. O pagamento semanal desses lotes
- *   depende da liquidação (apps/settlement), que ainda não está ligada ao app.
+ * - "A liberar": créditos de rede validados ou em lote (aguardando liquidação), em LUNES. O pagamento
+ *   semanal desses lotes depende da liquidação (apps/settlement), que ainda não está ligada ao app.
  * - Movimentações: lotes de créditos de rede e convites pagos reservados, aceitos e devolvidos.
  * Nada de valor inventado: sem dado real, a lista fica vazia.
  */
 import type { IconName } from '../ui/Icon';
 
-export interface CreditTotals { pendente: number; validado: number; rejeitado: number; pago: number }
+export interface CreditTotals { pendente: number; validado: number; em_lote: number; rejeitado: number; pago: number }
 export interface LotInfo { id: string; closedAt: number; credits: number; lunes: number; count: number }
 /** Convite pago que eu fiz em Por perto (valor reservado por 24 h). `at` em ms. */
 export interface InviteMove { id: string; to: string; amt: number; at: number }
@@ -42,7 +42,7 @@ export interface WalletSummary {
   available: number;
   /** Reservado em convites pagos ainda sem resposta. */
   reserved: number;
-  /** Créditos de rede validados ou em lote, ainda não liquidados de verdade, em LUNES. */
+  /** Créditos de rede validados ou em lote, ainda não liquidados de verdade, em LUNES (`pago` já é saldo real). */
   toRelease: number;
 }
 
@@ -52,7 +52,7 @@ export function walletSummary(o: { onchain?: number; totals: CreditTotals; reser
   return {
     available: Math.max(0, Math.round((onchain - reserved) * 100) / 100),
     reserved,
-    toRelease: creditsToLunes(o.totals.validado + o.totals.pago, o.perLunes),
+    toRelease: creditsToLunes(o.totals.validado + o.totals.em_lote, o.perLunes),
   };
 }
 
@@ -69,16 +69,36 @@ export function activityRows(o: { lots: LotInfo[]; reserved: InviteMove[]; refun
   return rows.sort((a, b) => b.at - a.at);
 }
 
-/** Etapas do bônus de boas-vindas com o que dá para saber neste aparelho. */
-export function bonusSteps(o: { onboarded: boolean; verifiedContact: boolean; since: number | null; now: number }): [string, number][] {
-  const days = o.since == null ? 0 : Math.min(7, Math.max(0, Math.floor((o.now - o.since) / DAY)));
+/**
+ * Etapas do bônus de boas-vindas com o que dá para saber neste aparelho.
+ * - "Identidade criada": só com o backup cifrado das chaves feito (sem backup, a identidade se perde
+ *   com o aparelho).
+ * - "7 dias de uso": dias com entrega confirmada para pelo menos 3 contatos distintos
+ *   (messaging/usage.ts), não dias desde a instalação.
+ * O pagamento é da Lunes, ainda não ligado.
+ */
+export function bonusSteps(o: { onboarded: boolean; backupDone: boolean; verifiedContact: boolean; activeDays: number }): [string, number][] {
+  const days = Math.min(7, Math.max(0, Math.floor(o.activeDays)));
   return [
     // Conferida pela Lunes na primeira abertura: ainda não existe essa verificação.
     ['Instalação verificada', 0],
-    ['Identidade criada', o.onboarded ? 100 : 0],
+    [o.onboarded && !o.backupDone ? 'Identidade criada · falta o backup' : 'Identidade criada', o.onboarded && o.backupDone ? 100 : 0],
     ['Confirmada por 1 contato', o.verifiedContact ? 100 : 0],
     [`7 dias de uso · ${days}/7`, Math.round((days / 7) * 100)],
   ];
+}
+
+/** Convites aceitos (registro local de quem entrou em contato pelo meu QR/link). `at` em ms. */
+export interface AcceptedRow { contactId: string; name: string; via: 'public' | 'anon'; at: number }
+
+/**
+ * Contadores da distribuição. `accepted`: quantas pessoas usaram meu convite; `thisMonth`: no mês
+ * local de `now` (o limite mensal da proposta). Ativos e pagos dependem da Lunes: nenhum ainda.
+ */
+export function referralStats(list: AcceptedRow[], now: number): { accepted: number; thisMonth: number; paid: number; earned: number } {
+  const n = new Date(now);
+  const thisMonth = list.filter(a => { const d = new Date(a.at); return d.getFullYear() === n.getFullYear() && d.getMonth() === n.getMonth(); }).length;
+  return { accepted: list.length, thisMonth, paid: 0, earned: 0 };
 }
 
 /**

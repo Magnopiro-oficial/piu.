@@ -4,17 +4,18 @@ import { test } from 'node:test';
 import { LEGACY_KEYS, legacyKeysIn } from '../legacyCore';
 import { fmtBytes, meshStatus, radarPos, relayCard } from '../networkCore';
 import { mediaBytes, storageBreakdown } from '../storageCore';
-import { activityRows, blockLabel, bonusSteps, dayLabel, onchainView, walletSummary, whenLabel } from '../walletCore';
+import { activityRows, blockLabel, bonusSteps, dayLabel, onchainView, referralStats, walletSummary, whenLabel } from '../walletCore';
 
 const DAY = 86_400_000;
-const zero = { pendente: 0, validado: 0, rejeitado: 0, pago: 0 };
+const zero = { pendente: 0, validado: 0, em_lote: 0, rejeitado: 0, pago: 0 };
 
 test('carteira: sem Mainnet o saldo é 0, nunca negativo, e créditos ficam "a liberar"', () => {
   assert.deepEqual(walletSummary({ totals: zero, reserved: [] }), { available: 0, reserved: 0, toRelease: 0 });
-  const s = walletSummary({ totals: { pendente: 50, validado: 640, rejeitado: 9, pago: 100 }, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] });
+  const s = walletSummary({ totals: { pendente: 50, validado: 640, em_lote: 100, rejeitado: 9, pago: 30 }, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] });
   assert.equal(s.available, 0);
   assert.equal(s.reserved, 3);
-  assert.equal(s.toRelease, 7.4); // (640 + 100) / 100; pendentes e rejeitados não contam
+  // (640 validados + 100 em lote) / 100; pendentes e rejeitados não contam, e pago (liquidado de verdade) já é saldo.
+  assert.equal(s.toRelease, 7.4);
   assert.equal(walletSummary({ onchain: 10, totals: zero, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] }).available, 7);
 });
 
@@ -34,9 +35,23 @@ test('carteira: datas e etapas do bônus', () => {
   assert.equal(dayLabel(now - DAY, now), 'Ontem');
   assert.equal(dayLabel(new Date(2026, 9, 28, 9).getTime(), now), '28 out');
   assert.equal(dayLabel(new Date(2025, 9, 28, 9).getTime(), now), '28 out 2025');
-  assert.deepEqual(bonusSteps({ onboarded: true, verifiedContact: false, since: now - 3.5 * DAY, now }).map(s => s[1]), [0, 100, 0, 43]);
-  assert.equal(bonusSteps({ onboarded: true, verifiedContact: true, since: now - 30 * DAY, now })[3][0], '7 dias de uso · 7/7');
-  assert.equal(bonusSteps({ onboarded: false, verifiedContact: false, since: null, now })[3][1], 0);
+  // 7.4: identidade só conta com backup; dias = dias com entrega para 3+ contatos (não dias desde a instalação).
+  assert.deepEqual(bonusSteps({ onboarded: true, backupDone: true, verifiedContact: false, activeDays: 3 }).map(s => s[1]), [0, 100, 0, 43]);
+  const noBackup = bonusSteps({ onboarded: true, backupDone: false, verifiedContact: false, activeDays: 0 });
+  assert.equal(noBackup[1][1], 0, 'sem backup a identidade não conta');
+  assert.equal(noBackup[1][0], 'Identidade criada · falta o backup');
+  assert.equal(bonusSteps({ onboarded: true, backupDone: true, verifiedContact: true, activeDays: 30 })[3][0], '7 dias de uso · 7/7');
+  assert.equal(bonusSteps({ onboarded: false, backupDone: false, verifiedContact: false, activeDays: 0 })[3][1], 0);
+});
+
+test('6.5 convites aceitos: contadores do registro local, nada pago', () => {
+  const now = new Date(2026, 10, 3, 15).getTime();
+  assert.deepEqual(referralStats([], now), { accepted: 0, thisMonth: 0, paid: 0, earned: 0 });
+  const list = [
+    { contactId: 'a', name: 'Ana', via: 'public' as const, at: now - DAY },
+    { contactId: 'b', name: '', via: 'anon' as const, at: new Date(2026, 9, 20).getTime() },
+  ];
+  assert.deepEqual(referralStats(list, now), { accepted: 2, thisMonth: 1, paid: 0, earned: 0 });
 });
 
 test('rede: radar estável e dentro da área; números do Modo nó', () => {

@@ -21,6 +21,8 @@ import { randomDelaySec, Router, type TransportClass } from '../protocol/router'
 import { SessionManager } from '../protocol/sessions';
 import { b64url, unb64url } from './card';
 import { CreditBook, type Lot } from './credits';
+import { buildEvidence, type EvidenceFile } from './evidence';
+import { AcceptedInvites, type AcceptedInvite, DeliveryDays } from './usage';
 import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
 import { EnvelopeKind, MsgType, type Opened, sealGroup } from '../protocol/envelope';
 import { toPublic } from '../protocol/keys';
@@ -82,8 +84,8 @@ export interface MessengerEvents {
   peerPhoto(contactId: string, jpegBase64: string | null): void;
   /** Lote de créditos fechado (só registro local: o pagamento depende da liquidação, ainda não ligada). */
   lotClosed(lot: Lot): void;
-  /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
-  inviteUsed(): void;
+  /** Um convite meu foi usado (registrado em `acceptedInvites`): o QR precisa mostrar um código novo. */
+  inviteUsed(info: AcceptedInvite): void;
   /** Por perto: perfis visíveis mudaram (chegou, saiu, venceu). */
   nearbyChanged(): void;
   /** Por perto: pedido de conversa pago recebido (convite de alguém que me viu visível). */
@@ -280,6 +282,8 @@ export class Messenger {
     };
     this.wantRelay = o.relay;
     this.credits = new CreditBook(st?.cr);
+    this.deliveryDays = new DeliveryDays(st?.ud);
+    this.accepted = new AcceptedInvites(st?.ia);
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
     this.nodeDay = Math.floor(o.now() / 86400);
     this.routerOpts = {
@@ -1242,6 +1246,9 @@ export class Messenger {
   // ── créditos, provas de entrega e métricas ───────────────────────────
 
   readonly credits: CreditBook;
+  /** Dias com entrega confirmada para contatos distintos (andamento do bônus). */
+  readonly deliveryDays: DeliveryDays;
+  private accepted: AcceptedInvites;
   private proofs = new Map<string, Proof>();
   private days = new Map<string, DayMetrics>();
 
@@ -1274,6 +1281,17 @@ export class Messenger {
       latencyMedian: pct(lat, 0.5), latencyP95: pct(lat, 0.95), queueMean: queue.length ? queue.reduce((a, b) => a + b, 0) / queue.length : null, queueMax: queue.at(-1) ?? null,
       hops, via, relayedToday: today.relayed, altRoutes: sum(d => d.altRoutes), thirdPartyBytes: this.router.thirdPartyBytes(), queued: this.outbox.size,
     };
+  }
+
+  /** Quem entrou em contato comigo pelo meu convite (registro local), mais recentes primeiro. */
+  acceptedInvites(): AcceptedInvite[] { return this.accepted.all(); }
+
+  /**
+   * Arquivo de evidências deste aparelho (`EvidenceFile` v1 do validador): recibos que o meu roteador
+   * assinou e as provas de entrega que conheço (as guardadas nos créditos e as que circulam agora).
+   */
+  evidence(): EvidenceFile {
+    return buildEvidence(this.credits.list(), [...this.proofs].map(([id, p]) => [id, p.secret] as [string, Uint8Array]));
   }
 
   private addProof(envId: string, secret: Uint8Array) {
@@ -1466,6 +1484,7 @@ export class Messenger {
           if (q.msgId === id && q.to === m.fromId) {
             this.outbox.delete(k); this.router.forget(k); this.o.events.status?.(id, 'entregue');
             const d = this.day(); d.delivered++;
+            this.deliveryDays.record(this.clock.day(), m.fromId);
             if (q.at != null) { this.sample(d.lat, this.o.now() - q.at); if (q.via) { const v = (d.via[q.via] ??= { ok: 0, fail: 0, lat: [] }); this.sample(v.lat, this.o.now() - q.at); } }
           }
         }
@@ -1484,8 +1503,10 @@ export class Messenger {
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
       if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return false; // contra enxurrada de pedidos
       this.invites.delete(inv.code); // uso único
-      this.o.events.inviteUsed?.();
       const name = typeof p.n === 'string' && used === 'public' ? p.n.slice(0, 40) : '';
+      const info: AcceptedInvite = { contactId: m.fromId, name, via: used, at: this.o.now() * 1000 };
+      this.accepted.add(info);
+      this.o.events.inviteUsed?.(info);
       c = { id: m.fromId, via: used, pub: m.from, name, request: true };
       this.contacts.set(c.id, c);
     }
@@ -1513,6 +1534,8 @@ export class Messenger {
       inv: [...this.invites.values()],
       cr: this.credits.export(this.o.now()),
       mx: [...this.days],
+      ud: this.deliveryDays.export(),
+      ia: this.accepted.export(),
       g: [...this.groups.values()].map(g => encodeState(g, 'store')),
       gp: [...this.prevKeys],
       gv: [...this.vouched],

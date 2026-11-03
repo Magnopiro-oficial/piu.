@@ -9,6 +9,8 @@ import { router } from 'expo-router';
 import { type Contact, Messenger, type NearPeer, type NearRequest } from '../messaging/messenger';
 import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
+import type { EvidenceFile } from '../messaging/evidence';
+import type { AcceptedInvite } from '../messaging/usage';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
 import type { IdentityKind, PublicIdentity } from '../protocol';
@@ -76,6 +78,8 @@ interface Messaging {
   groupEpoch: number;
   /** Métricas e créditos deste aparelho (null antes das chaves). */
   stats: () => Stats | null;
+  /** Arquivo de evidências deste aparelho (formato do validador), ou null antes das chaves. */
+  evidence: () => EvidenceFile | null;
   /** Troca (ou remove) a foto do perfil público e manda a versão pequena aos contatos públicos. */
   setProfilePhoto: (p: ProfilePhoto | null) => void;
   /**
@@ -98,6 +102,8 @@ export interface Stats {
   metrics: ReturnType<Messenger['metrics']>;
   credits: { totals: ReturnType<CreditBook['totals']>; list: Credit[]; lots: Lot[] };
   relay: ReturnType<Messenger['relayStatus']>;
+  /** Uso real registrado neste aparelho: dias com entrega a 3+ contatos e convites aceitos. */
+  usage: { activeDays: number; accepted: AcceptedInvite[] };
 }
 
 const Ctx = createContext<Messaging | null>(null);
@@ -200,7 +206,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdFor(contactId);
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { photo: b64 ? `data:image/jpeg;base64,${b64}` : undefined });
         },
-        lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
+        lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES em lote`, body: `${lot.count} entregas comprovadas · aguardando liquidação (nada foi pago ainda)`, go: () => router.push('/(tabs)/wallet') }),
         // Por perto: perfis, pedidos recebidos e convite meu aceito.
         nearbyChanged: () => setNearEpoch(e => e + 1),
         nearRequest: r => handlers.current.showToast({ kind: 'nearby', icon: 'waving_hand', title: `${r.name} quer conversar`, body: `+${fmtLunes(r.fee)} LUNES se você aceitar · expira em 24 h`, action: 'Ver',
@@ -510,7 +516,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
       hide: id => messenger.hideNear(id),
     } : null,
-    stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
+    stats: () => (messenger ? {
+      metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus(),
+      usage: { activeDays: messenger.deliveryDays.activeDays(), accepted: messenger.acceptedInvites() },
+    } : null),
+    evidence: () => (messenger ? messenger.evidence() : null),
   }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, patchChat, setIdentity, priv.temp, wallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
