@@ -14,7 +14,7 @@ import { isJpegBase64 } from './photo';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
-import { DEFAULT_HOPS, envelopeId, Priority } from '../protocol/envelope';
+import { DEFAULT_HOPS, envelopeId, HOP_OFFSET, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
@@ -990,8 +990,11 @@ export class Messenger {
     }
     const out = this.router.outgoing(peerId, via, now, { thirdPartyBudget: budget });
     let changed = false;
+    /** Saltos restantes de cada envelope que sai (para contar os relays da entrega até aqui). */
+    const hopsOut = new Map<string, number>();
     for (const bytes of out) {
       const id = envelopeId(bytes);
+      hopsOut.set(id, bytes[HOP_OFFSET]);
       if (!this.router.isOwn(id)) {
         this.relayDay.bytes += bytes.length;
         if (Number.isFinite(this.bw.tokens)) this.bw.tokens = Math.max(0, this.bw.tokens - bytes.length);
@@ -1008,7 +1011,9 @@ export class Messenger {
     // Recibos que o roteador acabou de assinar (envelopes de terceiros): viram créditos pendentes.
     for (const rc of this.router.receipts.splice(0)) {
       const info = this.router.infoOf(rc.envelopeId);
-      if (info) { this.credits.addReceipt(rc, info, via); changed = true; }
+      // O remetente põe DEFAULT_HOPS e cada salto tira 1: relays até mim = DEFAULT_HOPS − saltos ao sair.
+      const left = hopsOut.get(rc.envelopeId);
+      if (info) { this.credits.addReceipt(rc, { ...info, relays: left === undefined ? 1 : DEFAULT_HOPS - left - 1 }, via); changed = true; }
     }
     this.sendProofs(peerId);
     if (p && this.relayDay.bytes >= p.dailyBytes) this.applyRelay(); // chegou ao limite do dia

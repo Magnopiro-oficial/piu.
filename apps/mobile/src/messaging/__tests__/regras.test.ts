@@ -260,3 +260,48 @@ test('7.9 recibo: horário arredondado para a hora antes de assinar, e a assinat
   assert.equal(c.at, T0);
   assert.ok(verifyRelayReceipt(relay.m.credits.receiptOf(c)));
 });
+
+// ── 7.6 / 7.7 créditos: divisão entre relays e validade de 180 dias ──
+
+test('7.6 estimativa: a unidade de entrega é dividida entre os relays conhecidos até o aparelho', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), r1 = device(net, 'R1'), r2 = device(net, 'R2'), b = device(net, 'Beto');
+  know(a, b); know(b, a);
+  a.m.sendText(b.ids.public.id, 'm1', 'Dois saltos');
+  net.link('Ana', 'R1'); net.unlink('Ana', 'R1');
+  net.link('R1', 'R2'); net.unlink('R1', 'R2');
+  net.link('R2', 'Beto');
+  net.link('R1', 'R2'); // a prova de entrega volta até R1
+  const c1 = r1.m.credits.list()[0], c2 = r2.m.credits.list()[0];
+  assert.equal(c1.relays, 1);
+  assert.equal(c2.relays, 2);
+  assert.ok(Math.abs(c2.credits - c1.credits / 2) < 0.011, 'o segundo relay divide com o primeiro');
+  assert.equal(c2.state, 'validado');
+});
+
+test('7.7 validado e não liquidado expira em 180 dias (não some em 90) e continua 30 dias na lista', async () => {
+  const { CreditBook } = await import('../credits');
+  const { makeRelayReceipt } = await import('../../protocol/receipts');
+  const { hash } = await import('../../protocol/suite');
+  const node = deriveNodeKey(newSeed());
+  const book = new CreditBook();
+  const secret = new Uint8Array(16).fill(9);
+  book.addReceipt(makeRelayReceipt(node, 'ab'.repeat(16), hash(secret).slice(0, 16), T0), { bytes: 300, expiresAt: T0 + 3600 }, 'ble');
+  assert.ok(book.applyProof('ab'.repeat(16), secret));
+  // Abaixo do mínimo do lote: fica validado. Aos 120 dias ainda está lá (antes sumia aos 90).
+  book.tick(T0 + 120 * 86400);
+  const again = new CreditBook(book.export(T0 + 120 * 86400));
+  assert.equal(again.list()[0]?.state, 'validado');
+  // Aos 181 dias, expira com o motivo; 20 dias depois ainda aparece; 31 dias depois sai.
+  assert.ok(again.tick(T0 + 181 * 86400).changed);
+  const c = again.list()[0];
+  assert.equal(c.state, 'rejeitado');
+  assert.match(c.reason ?? '', /180 dias/);
+  assert.equal(new CreditBook(again.export(T0 + 201 * 86400)).list().length, 1);
+  assert.equal(new CreditBook(again.export(T0 + 212 * 86400)).list().length, 0);
+  // Pendente e rejeitado comuns continuam saindo aos 90 dias.
+  const b2 = new CreditBook();
+  b2.addReceipt(makeRelayReceipt(node, 'cd'.repeat(16), new Uint8Array(16), T0), { bytes: 300, expiresAt: T0 + 3600 }, 'ble');
+  b2.tick(T0 + 2 * 86400);
+  assert.equal(new CreditBook(b2.export(T0 + 91 * 86400)).list().length, 0);
+});
