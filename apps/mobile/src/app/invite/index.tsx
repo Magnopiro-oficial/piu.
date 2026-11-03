@@ -17,7 +17,7 @@ export default function Invite() {
   const [card, bump] = useMyCard(identity);
   const me = useKeys().identities?.[identity];
   const fp = me ? fingerprintOf(me) : null;
-  const inviter = profile.idType === 'public' && profile.name.trim() ? profile.name.trim() : 'Cardeal';
+  const inviter = identity === 'public' && profile.name.trim() ? profile.name.trim() : '';
   return (
     <Screen>
       <BackHeader title="Convidar" />
@@ -27,7 +27,7 @@ export default function Invite() {
           <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center' }}>
             {card ? <QrCode value={card} size={128} radius={18} label="QR do convite" /> : <View style={{ width: 128, height: 128, borderRadius: 18, backgroundColor: c.invink, opacity: 0.2 }} />}
             <View style={{ gap: 6, minWidth: 0, flex: 1 }}>
-              <T size={15} w={600} color={c.invink}>Convite de {inviter}</T>
+              <T size={15} w={600} color={c.invink}>{inviter ? `Convite de ${inviter}` : 'Convite anônimo'}</T>
               <T size={11.5} mono lh={1.5} color={c.invink} style={{ opacity: 0.72 }}>{`uso único\nexpira em 24 h\nassinado ${fp ? fp[0] + '…' + fp[7] : '…'}`}</T>
             </View>
           </View>

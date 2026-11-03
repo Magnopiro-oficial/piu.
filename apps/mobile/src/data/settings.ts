@@ -1,4 +1,5 @@
-// Perfil, segurança e ajustes, notificações (design/PiuApp.dc.html). Dados ilustrativos.
+// Perfil, segurança e ajustes, notificações (design/PiuApp.dc.html): textos e opções.
+// Aparelhos vêm do registro real (lib/devices.ts) e o armazenamento é medido (lib/storageUsage.ts).
 import type { IconName } from '../ui/Icon';
 
 export const PROFILE_NOTES = {
@@ -22,25 +23,18 @@ export const RESTORE_OPTS: [RestoreMode, IconName, string, string][] = [
   ['file', 'sd_card', 'De um arquivo de backup', 'Cartão SD, pendrive ou outro aparelho.'],
 ];
 export const MIG_META: Record<RestoreMode, { title: string; sub: string; icon: IconName; label: string; done: string }> = {
-  device: { title: 'Transferindo do Galaxy antigo', sub: 'Direto por Wi-Fi Direct, cifrado. Nada passa por servidor.', icon: 'phone_android', label: 'Galaxy antigo', done: 'O aparelho antigo foi desconectado e as chaves de sessão foram trocadas.' },
+  device: { title: 'Transferindo do aparelho antigo', sub: 'Direto entre os dois aparelhos, cifrado. Nada passa por servidor.', icon: 'phone_android', label: 'aparelho antigo', done: 'O aparelho antigo foi desconectado e as chaves de sessão foram trocadas.' },
   phrase: { title: 'Recuperando pela frase', sub: 'As chaves são recriadas a partir das 12 palavras, neste aparelho.', icon: 'password', label: 'frase', done: 'Seus contatos verão um aviso de troca de chave. Verifique os mais importantes.' },
-  file: { title: 'Restaurando do arquivo', sub: 'piu-backup-2026-10.piu · cifrado com a sua frase.', icon: 'sd_card', label: 'arquivo', done: 'Seus contatos verão um aviso de troca de chave. Verifique os mais importantes.' },
+  file: { title: 'Restaurando do arquivo', sub: 'Arquivo .piu cifrado com a sua senha.', icon: 'sd_card', label: 'arquivo', done: 'Seus contatos verão um aviso de troca de chave. Verifique os mais importantes.' },
 };
-export const migItems = (m: RestoreMode): [string, string][] => m === 'device'
-  ? [['Identidade pública', 'Cardeal · chaves copiadas'], ['Identidade anônima', 'separada · sem vínculo com a pública'], ['Contatos e conversas', '214 contatos · 38 conversas · 1,1 GB'], ['Carteira LUNES', 'chave da carteira · 58,40 LUNES'], ['Sessões antigas', 'encerradas · chaves de sessão rotacionadas']]
-  : [['Identidade pública', 'recuperada da frase'], ['Identidade anônima', 'recuperada · separada da pública'], ['Contatos', 'avisados da troca de aparelho'], ['Carteira LUNES', '58,40 LUNES'], ['Histórico de conversas', m === 'file' ? '38 conversas do arquivo cifrado' : 'não fica na frase · só por aparelho ou arquivo']];
 
 // ── aparelhos ────────────────────────────────────────────
+/**
+ * @deprecated Compatibilidade com a aba Perfil (que ainda conta os aparelhos por aqui): só este
+ * aparelho. A lista real é `useDevices()` de `lib/devices.ts` (ativos: `useActiveDeviceCount()`).
+ */
 export interface MyDevice { id: string; icon: IconName; name: string; desc: string; tag: string; current?: boolean; revoked?: boolean; canDrop?: boolean }
-export const MY_DEVICES: MyDevice[] = [
-  { id: 'this', icon: 'smartphone', name: 'Este aparelho', desc: 'Pixel 8 · desde 24 out', tag: 'atual', current: true },
-  { id: 'note', icon: 'computer', name: 'Notebook', desc: 'painel do provider · pareado em 30 out', tag: 'ativo', canDrop: true },
-  { id: 'old', icon: 'phone_android', name: 'Galaxy antigo', desc: 'desconectado em 24 out · chaves rotacionadas', tag: 'revogado', revoked: true },
-];
-
-// ── armazenamento ────────────────────────────────────────
-/** [rótulo, MB, texto, opacidade] — total 1.195 MB ≈ 1,2 GB. */
-export const STORAGE_USE: [string, number, string, number][] = [['Conversas', 820, '820 MB', 1], ['Mídia', 310, '310 MB', 0.55], ['De terceiros', 61, '61 MB', 0.3], ['Recibos e créditos', 4, '4 MB', 0.15]];
+export const MY_DEVICES: MyDevice[] = [{ id: 'this', icon: 'smartphone', name: 'Este aparelho', desc: '', tag: 'atual', current: true }];
 
 // ── notificações ─────────────────────────────────────────
 export type NotifKey = 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network';
@@ -55,14 +49,17 @@ export const PREVIEW_HINT: Record<Preview, string> = {
   unlocked: 'Na tela bloqueada aparece só “Piu · Nova mensagem”.',
   never: 'Nunca mostra remetente nem conteúdo, nem com o aparelho desbloqueado.',
 };
-/** Tela bloqueada: avisos de exemplo. `priv` é o texto quando o conteúdo fica oculto. */
+/**
+ * Prévia da tela bloqueada: um aviso de cada tipo, com textos genéricos (sem pessoas nem valores de
+ * exemplo), só para mostrar o efeito da pré-visualização. `priv` é o texto quando o conteúdo fica oculto.
+ */
 export interface LockNotif { id: string; critical?: boolean; title: string; body: string; priv?: string; time: string; stacked?: boolean; count?: string; href: string }
 export const LOCK_NOTIFS: LockNotif[] = [
-  { id: 'alert', critical: true, title: 'Alerta · Defesa Civil', body: 'Risco de deslizamento na Serra. Deixe áreas de encosta agora.', time: 'agora', href: '/alert' },
-  { id: 'marina', title: 'Marina Alves', body: 'Cheguei na praça! Onde você está?', priv: 'Nova mensagem', time: '2 min', href: '/chat/marina' },
-  { id: 'mutirao', title: 'Mutirão Vila Esperança', body: 'João: Gerador ligado. O roteador do galpão voltou a retransmitir.', priv: '4 novas mensagens', time: '8 min', stacked: true, count: '+3 mensagens de Lia e Seu Antônio', href: '/chat/mutirao' },
-  { id: 'helena', title: 'Helena quer conversar', body: '+3,00 LUNES se você aceitar · expira em 24 h', priv: 'Novo pedido de conversa', time: '15 min', href: '/nearby/requests' },
-  { id: 'lunes', title: 'Você recebeu 25,00 LUNES', body: 'Distribuição · Seu Antônio ficou ativo por 7 dias', priv: 'Movimentação na carteira', time: '1 h', href: '/wallet' },
+  { id: 'alert', critical: true, title: 'Alerta de emergência · exemplo', body: 'Alertas assinados por fonte oficial sempre mostram o conteúdo.', time: 'agora', href: '/alert' },
+  { id: 'msg', title: 'Nome do contato', body: 'Texto da mensagem aparece aqui.', priv: 'Nova mensagem', time: '2 min', href: '/(tabs)' },
+  { id: 'group', title: 'Nome do grupo', body: 'Quem escreveu: texto da mensagem.', priv: 'Novas mensagens', time: '8 min', stacked: true, count: 'mais mensagens do grupo', href: '/(tabs)' },
+  { id: 'nearby', title: 'Pedido de conversa', body: 'Alguém por perto quer conversar · expira em 24 h', priv: 'Novo pedido de conversa', time: '15 min', href: '/nearby/requests' },
+  { id: 'wallet', title: 'Movimentação na carteira', body: 'LUNES recebidos e bônus liberados aparecem assim.', priv: 'Movimentação na carteira', time: '1 h', href: '/(tabs)/wallet' },
 ];
 
 /** Alerta de emergência assinado (Defesa Civil). */

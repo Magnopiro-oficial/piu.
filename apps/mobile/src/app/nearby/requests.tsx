@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { ScrollView, Pressable, View } from 'react-native';
-import { FEE_OPTIONS, fmtLunes, REQUESTS } from '../../data/wallet';
+import { FEE_OPTIONS, fmtLunes } from '../../data/wallet';
 import { useLayout } from '../../lib/responsive';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
@@ -16,14 +16,21 @@ import { T } from '../../ui/T';
 export default function Requests() {
   const { c } = useTheme();
   const { compact } = useLayout();
-  const { reqStatus, accept, decline, block, myFee, setMyFee } = useWallet();
+  const { requests, reqStatus, accept, decline, block, myFee, setMyFee } = useWallet();
   const { block: blockContact } = useStore();
 
   return (
     <Screen>
       <BackHeader title="Pedidos de conversa" />
       <ScrollView contentContainerStyle={{ paddingTop: 4, paddingHorizontal: 20, paddingBottom: 32, gap: 12 }}>
-        {REQUESTS.map(r => {
+        {requests.length === 0 && (
+          <View style={{ paddingVertical: 32, paddingHorizontal: 24, alignItems: 'center', gap: 10 }}>
+            <Icon name="waving_hand" size={36} w={300} color={c.ink2} />
+            <T size={16} w={650} align="center">Nenhum pedido de conversa</T>
+            <T size={13} lh={1.45} color={c.ink2} align="center">Quando alguém por perto convidar você, o pedido aparece aqui com a taxa que você escolheu.</T>
+          </View>
+        )}
+        {requests.map(r => {
           const st = reqStatus[r.id];
           const done: [IconName, string] | null = st === 'accepted' ? ['check_circle', 'Aceito · conversa aberta']
             : st === 'blocked' ? ['block', 'Bloqueado e denunciado']

@@ -1,9 +1,12 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
-import { STORAGE_USE } from '../../data/settings';
 import { confirmDevice } from '../../lib/deviceAuth';
+import { fmtBytes } from '../../lib/networkCore';
+import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
+import { useStats } from '../../state/messaging';
 import { useResetApp } from '../../state/reset';
+import { useBattery } from '../../lib/battery';
 import { useNetwork } from '../../state/network';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
@@ -70,36 +73,43 @@ function Privacy() {
 
 function Storage() {
   const { c, reduceMotion } = useTheme();
-  const { sto, setSto, mediaCleared, clearMedia } = useSettings();
+  const { sto, setSto } = useSettings();
   const { storage, setStorage } = useNetwork();
   const { showToast } = useStore();
   const reset = useResetApp();
   const [del, setDel] = useState(false);
-  const use = STORAGE_USE.map(([l, mb, v, op]) => (l === 'Mídia' && mediaCleared ? [l, 0, '0 MB', op] as const : [l, mb, v, op] as const));
-  const total = use.reduce((a, [, mb]) => a + mb, 0);
+  const st = useStats(10_000);
+  // Tamanhos que o mensageiro informa (terceiros e recibos ficam dentro do estado dele).
+  const thirdPartyBytes = st?.metrics.thirdPartyBytes ?? 0;
+  const creditsBytes = st ? JSON.stringify(st.credits.list).length + JSON.stringify(st.credits.lots).length : 0;
+  const [use, refresh] = useStorageUsage({ thirdPartyBytes, creditsBytes });
+  const [cache, setCache] = useState(receivedCacheBytes);
+  const parts = (use?.parts ?? []).filter(([l, n]) => n > 0 || l !== 'Ajustes e registros');
+  const total = use?.total ?? 0;
+  const OP = [1, 0.55, 0.3, 0.15, 0.08];
   const grow = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => { if (!reduceMotion) Animated.timing(grow, { toValue: 1, duration: 700, easing: Easing.bezier(0.2, 0.9, 0.3, 1), useNativeDriver: false }).start(); }, [reduceMotion, grow]);
 
   return (
     <>
-      <View style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
+      <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <T size={32} w={650} ls={-0.04}>{mediaCleared ? '0,9 GB' : '1,2 GB'}</T>
+          <T size={32} w={650} ls={-0.04}>{use ? fmtBytes(total) : '…'}</T>
           <T size={13.5} color={c.ink2}>neste aparelho · cifrados</T>
         </View>
-        <Animated.View accessibilityLabel="Uso por tipo" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }}>
-          {use.filter(([, mb]) => mb > 0).map(([l, mb, , op]) => <View key={l} style={{ flex: mb, backgroundColor: c.ink, opacity: op }} />)}
+        <Animated.View accessibilityLabel="Uso por tipo" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: total ? 'transparent' : c.bg3, width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }}>
+          {parts.map(([l, n], i) => (n > 0 ? <View key={l} style={{ flex: n, backgroundColor: c.ink, opacity: OP[i] }} /> : null))}
         </Animated.View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-          {use.map(([l, , v, op]) => (
+          {parts.map(([l, n], i) => (
             <View key={l} style={{ width: '50%', flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingRight: 10 }}>
-              <View style={{ width: 8, height: 8, marginTop: 4, borderRadius: 2, backgroundColor: c.ink, opacity: op }} />
+              <View style={{ width: 8, height: 8, marginTop: 4, borderRadius: 2, backgroundColor: c.ink, opacity: OP[i] }} />
               <T size={12.5} lh={1.3} color={c.ink2} style={{ flex: 1 }}>{l}</T>
-              <T size={12.5} w={600}>{v}</T>
+              <T size={12.5} w={600}>{fmtBytes(n)}</T>
             </View>
           ))}
         </View>
-        <T size={11} mono color={c.ink2}>{`${total.toLocaleString('pt-BR')} MB no total`}</T>
+        <T size={11} mono color={c.ink2}>medido agora · tamanho cifrado no disco</T>
       </View>
       <SetGroup title="MÍDIA">
         <SegRow name="Baixar mídia automaticamente" value={sto.auto} onChange={auto => setSto({ auto })} options={[['wifi', 'Wi-Fi e cabo'], ['always', 'Sempre'], ['never', 'Nunca']]} />
@@ -111,8 +121,13 @@ function Storage() {
       </SetGroup>
       <SetGroup title="LIMPEZA">
         <LockedRow name="Armazenamento cifrado" desc="Sempre ativo · chave protegida pelo aparelho" />
-        <ActionRow name="Limpar cache de mídia" value={mediaCleared ? '0 MB' : '310 MB'} onPress={() => {
-          if (!mediaCleared) { clearMedia(); showToast({ icon: 'cleaning_services', title: 'Cache limpo', body: '310 MB liberados. Conversas continuam intactas.' }); }
+        {/* Arquivos recebidos ficam só na memória nesta execução; limpar é o mesmo que fechar o app. */}
+        <ActionRow name="Limpar cache de mídia" value={fmtBytes(cache)} onPress={() => {
+          const freed = clearReceivedCache();
+          setCache(0); refresh();
+          showToast(freed
+            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. Conversas continuam intactas.` }
+            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Arquivos recebidos ficam só na memória e já somem ao fechar o app.' });
         }} />
         <ActionRow name="Apagar dados locais" strong onPress={() => setDel(true)} />
       </SetGroup>
@@ -130,16 +145,17 @@ function Battery() {
   const { c } = useTheme();
   const { bat, setBat } = useSettings();
   const { battery, setBattery, chargingOnly, setChargingOnly } = useNetwork();
-  // Estimativa local do gasto como nó (% da bateria por dia), como no protótipo.
-  const est = ((bat.bg ? 2.2 : 0.6) + { eco: 0.4, normal: 1.1, fast: 2.6 }[bat.disc] + (chargingOnly ? -1 : 0) + bat.traffic / 500).toFixed(1).replace('.', ',');
+  // Bateria real do aparelho. O gasto como nó não é medido: o sistema não separa esse consumo.
+  const { level, charging } = useBattery();
+  const pct = level < 0 ? null : Math.round(level * 100);
   const DISC = { eco: 'Bluetooth a cada 60 s', normal: 'Bluetooth a cada 20 s', fast: 'Bluetooth a cada 5 s' };
   return (
     <>
       <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
         <Icon name="battery_charging_80" size={34} w={300} color={c.invink} />
         <View style={{ flex: 1, gap: 2 }}>
-          <T size={26} w={650} ls={-0.03} color={c.invink}>{`~${est}%`}</T>
-          <T size={12.5} color={c.invink} style={{ opacity: 0.75 }}>da bateria por dia como nó · estimativa local</T>
+          <T size={26} w={650} ls={-0.03} color={c.invink}>{pct == null ? '—' : `${pct}%`}</T>
+          <T size={12.5} lh={1.35} color={c.invink} style={{ opacity: 0.75 }}>{`${pct == null ? 'Bateria sem leitura neste aparelho' : charging ? 'Bateria agora · carregando' : 'Bateria agora'}. O gasto como nó não é medido: o sistema não separa esse consumo.`}</T>
         </View>
       </View>
       <SetGroup title="RETRANSMISSÃO">

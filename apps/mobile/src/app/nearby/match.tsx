@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
-import { fmtLunes, REQUESTS } from '../../data/wallet';
+import { fmtLunes } from '../../data/wallet';
+import { useWallet } from '../../state/wallet';
 import { initialsOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -18,7 +19,8 @@ export default function Match() {
   const { c, reduceMotion } = useTheme();
   const { profile } = useStore();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const r = REQUESTS.find(x => x.id === id) ?? REQUESTS[0];
+  const { requests } = useWallet();
+  const r = requests.find(x => x.id === id) ?? { id: id ?? '', name: 'Contato', initials: '··', fee: 0 };
   const t = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) return;

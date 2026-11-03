@@ -2,7 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fmtLunes, NEAR_PROFILES, type NearProfile } from '../../data/wallet';
+import { fmtLunes, type NearProfile } from '../../data/wallet';
+import { BackHeader } from '../../ui/Controls';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
 import { fontFamily } from '../../theme/fonts';
@@ -19,10 +20,28 @@ const MAX = 140;
 
 /** Perfil público de alguém por perto, com convite pago para conversar. */
 export default function NearProfileScreen() {
+  const { id } = useLocalSearchParams<{ id: string }>();
+  const { profiles } = useWallet();
+  const { c } = useTheme();
+  const p = profiles.find(x => x.id === id);
+  if (!p) {
+    return (
+      <Screen>
+        <BackHeader />
+        <View style={{ paddingVertical: 56, paddingHorizontal: 40, alignItems: 'center', gap: 10 }}>
+          <Icon name="radar" size={40} w={300} color={c.ink2} />
+          <T size={17} w={650} align="center">Esta pessoa não está mais por perto</T>
+          <T size={13.5} lh={1.45} color={c.ink2} align="center">Perfis de Por perto só aparecem enquanto a pessoa está visível e ao alcance.</T>
+        </View>
+      </Screen>
+    );
+  }
+  return <ProfileView p={p} />;
+}
+
+function ProfileView({ p }: { p: NearProfile }) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const p = NEAR_PROFILES.find(x => x.id === id) ?? NEAR_PROFILES[0];
   const { inviteState } = useWallet();
   const { showToast } = useStore();
   const [sheet, setSheet] = useState(false);
@@ -90,7 +109,7 @@ export default function NearProfileScreen() {
 
 function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
   const { c } = useTheme();
-  const { invite, balance } = useWallet();
+  const { invite, onchain: balance } = useWallet();
   const ref = useRef<SheetHandle>(null);
   const [msg, setMsg] = useState('');
   const [done, setDone] = useState(false);

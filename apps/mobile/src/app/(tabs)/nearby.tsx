@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
-import { NEAR_PROFILES, REQUESTS } from '../../data/wallet';
+import { useTransport } from '../../state/transport';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Icon } from '../../ui/Icon';
@@ -9,12 +9,21 @@ import { Screen } from '../../ui/Screen';
 import { Stripes } from '../../ui/Stripes';
 import { T } from '../../ui/T';
 
-/** Por perto: visibilidade recíproca (desliga sozinha em 1 h), perfis públicos com proximidade aproximada. */
+/**
+ * Por perto: visibilidade recíproca (desliga sozinha em 1 h), perfis públicos com proximidade aproximada.
+ * Os perfis vêm só da malha (anúncio de Por perto); sem nenhum, o estado vazio diz quantos aparelhos o
+ * transporte vê, sem inventar pessoas.
+ */
 export default function Nearby() {
   const { c } = useTheme();
-  const { visible, setVisible, visibleMinutesLeft, inviteState, reqStatus } = useWallet();
-  const pending = REQUESTS.filter(r => !reqStatus[r.id]).length;
+  const { visible, setVisible, visibleMinutesLeft, inviteState, reqStatus, profiles, requests } = useWallet();
+  const { kind, peers } = useTransport();
+  const pending = requests.filter(r => !reqStatus[r.id]).length;
+  const nodes = peers.filter(p => p.connected).length;
   const fg = visible ? c.invink : c.ink;
+  const empty = nodes
+    ? `${nodes} ${nodes === 1 ? 'aparelho' : 'aparelhos'} ${kind === 'sim' ? 'simulados ' : ''}por perto, sem perfil público visível. Quem ligar Por perto aparece aqui.`
+    : 'Quem estiver por perto com Por perto ligado aparece aqui. Seu perfil fica visível até desligar.';
 
   return (
     <Screen edges={['top']} enter="tab">
@@ -39,9 +48,16 @@ export default function Nearby() {
 
         {visible ? (
           <>
-            <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 20, paddingHorizontal: 24, paddingBottom: 10 }}>{`${NEAR_PROFILES.length} PERFIS PÚBLICOS · SEM LOCALIZAÇÃO EXATA`}</T>
+            <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 20, paddingHorizontal: 24, paddingBottom: 10 }}>{`${profiles.length} ${profiles.length === 1 ? 'PERFIL PÚBLICO' : 'PERFIS PÚBLICOS'} · SEM LOCALIZAÇÃO EXATA`}</T>
+            {profiles.length === 0 && (
+              <View style={{ paddingVertical: 40, paddingHorizontal: 40, alignItems: 'center', gap: 10 }}>
+                <Icon name="radar" size={40} w={300} color={c.ink2} />
+                <T size={17} w={650} align="center">Ninguém visível por perto</T>
+                <T size={13.5} lh={1.45} color={c.ink2} align="center">{empty}</T>
+              </View>
+            )}
             <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-              {NEAR_PROFILES.map(p => (
+              {profiles.map(p => (
                 <Pressable key={p.id} onPress={() => router.push({ pathname: '/nearby/[id]', params: { id: p.id } })} accessibilityRole="button"
                   accessibilityLabel={`${p.name}, ${p.age} anos, ${p.prox}. ${p.bio}${inviteState(p.id).kind === 'pending' ? '. Convite enviado' : ''}`}
                   style={({ pressed }) => ({ width: '47.5%', flexGrow: 1, gap: 8, transform: [{ scale: pressed ? 0.98 : 1 }] })}>

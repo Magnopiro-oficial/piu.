@@ -1,15 +1,19 @@
+import { router } from 'expo-router';
 import { ScrollView, View } from 'react-native';
-import { REFERRALS, REF_RULES } from '../../data/wallet';
-import { useWallet } from '../../state/wallet';
+import { REF_RULES, REFERRAL_MONTHLY_CAP } from '../../data/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
+import { Button } from '../../ui/Button';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
-/** Seus convidados: 25 LUNES por pessoa ativa, só indicação direta (sem níveis). */
+/**
+ * Seus convidados: 25 LUNES por pessoa ativa, só indicação direta (sem níveis).
+ * Cada convidado é registrado quando alguém instala a partir deste celular, o que ainda não existe
+ * nesta versão (o app não é enviado de celular para celular). Sem registro, a lista fica vazia.
+ */
 export default function Referrals() {
-  const { joaoPaid } = useWallet();
   const { c } = useTheme();
   return (
     <Screen>
@@ -18,10 +22,10 @@ export default function Referrals() {
         <View style={{ paddingTop: 4, paddingHorizontal: 20, gap: 14 }}>
           <View style={{ gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-              <T size={44} w={650} ls={-0.05} tabular style={{ lineHeight: 46 }}>75,00</T>
+              <T size={44} w={650} ls={-0.05} tabular style={{ lineHeight: 46 }}>0,00</T>
               <T size={14} w={600} color={c.ink2}>LUNES recebidos</T>
             </View>
-            <T size={13.5} color={c.ink2}>+ 50,00 em validação · 3 de 20 no limite do mês</T>
+            <T size={13.5} color={c.ink2}>{`0 de ${REFERRAL_MONTHLY_CAP} no limite do mês`}</T>
           </View>
           <View style={{ padding: 16, borderRadius: 20, backgroundColor: c.bg2, gap: 12 }}>
             <T size={14} w={600}>Quando a recompensa é paga</T>
@@ -33,23 +37,11 @@ export default function Referrals() {
             ))}
           </View>
         </View>
-        <SectionLabel>{`${REFERRALS.length} CONVITES`}</SectionLabel>
-        <View style={{ marginHorizontal: 20 }}>
-          {REFERRALS.map(r => (joaoPaid && r[1] === 'João Souza' ? [r[0], r[1], 100, 'Pago agora · ativo há 7 dias', '+25,00', 1] as typeof r : r)).map(([ini, name, w, s, v, op]) => (
-            <View key={name} accessibilityLabel={`${name}: ${s}, ${v}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.line, opacity: op }}>
-              <View style={{ width: 42, height: 42, borderRadius: 21, borderWidth: 1.5, borderColor: c.ink, backgroundColor: w === 100 ? c.ink : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
-                <T size={13.5} w={600} color={w === 100 ? c.invink : c.ink}>{ini}</T>
-              </View>
-              <View style={{ flex: 1, minWidth: 0, gap: 5 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <T size={14.5} w={600} numberOfLines={1} style={{ flex: 1 }}>{name}</T>
-                  <T size={13.5} w={600} tabular>{v}</T>
-                </View>
-                <View style={{ height: 3, borderRadius: 2, backgroundColor: c.bg3, overflow: 'hidden' }}><View style={{ height: '100%', width: `${w}%`, backgroundColor: c.ink }} /></View>
-                <T size={12} color={c.ink2}>{s}</T>
-              </View>
-            </View>
-          ))}
+        <SectionLabel>0 CONVITES</SectionLabel>
+        <View style={{ marginHorizontal: 20, padding: 18, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, gap: 12 }}>
+          <T size={15} w={600}>Nenhum convidado ainda</T>
+          <T size={13} lh={1.45} color={c.ink2}>Quem instalar o Piu a partir do seu celular aparece aqui, com o andamento dos 7 dias. O pagamento depende da liquidação na Lunes Mainnet, ainda não conectada.</T>
+          <Button label="Convidar agora" height={44} fontSize={14} onPress={() => router.push('/invite')} />
         </View>
       </ScrollView>
     </Screen>
