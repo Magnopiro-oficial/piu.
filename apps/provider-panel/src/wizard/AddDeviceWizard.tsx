@@ -12,7 +12,9 @@ import type { DeviceFamily, HoursPolicy, RelayNode } from '../types';
 type Step = 0 | 1 | 2 | 3;
 interface WizState {
   step: Step; fam: string; install: 'dl' | 'term'; scan: 'searching' | 'found'; paired: boolean; n: number;
-  name: string; pub: string; parent: string; bw: number; sto: number; hours: HoursPolicy; wallet: 'provider' | 'personal';
+  name: string; pub: string; parent: string; bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy; wallet: 'provider' | 'personal';
+  /** Com piu-node: chave do vizinho LNNP que é este equipamento ('' = sem vínculo). */
+  nodePk: string;
 }
 
 const STEPS = ['Equipamento', 'Conectar', 'Teste real', 'Regras'];
@@ -24,13 +26,16 @@ export function AddDeviceWizard() {
   const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode, live } = useStore();
   /** Com piu-node: busca, pareamento e teste real ainda não existem; o assistente diz isso em vez de simular. */
   const real = nodeMode === 'node';
-  const neighbors = relayOn(live)?.neighbors.length ?? 0;
+  const neighborList = relayOn(live)?.neighbors ?? [];
+  const neighbors = neighborList.length;
+  // Vizinhos que ainda não são equipamentos registrados (podem ser o equipamento novo).
+  const candidates = neighborList.filter(n => n.pk && !devices.some(d => d.nodeId === n.id));
   const parents = devices.filter(d => !d.passive && d.cls !== 'Super Node');
   const [activating, setActivating] = useState(false);
   const [w, setW] = useState<WizState>(() => ({
     step: 0, fam: 'router', install: 'dl', scan: 'searching', paired: false, n: 0,
     name: FAMILIES[0].defName!, pub: FAMILIES[0].defPub!, parent: parents.find(p => p.id === 'mini')?.id ?? parents[0]?.id ?? '',
-    bw: 20, sto: 4, hours: 'always', wallet: 'provider',
+    bw: 20, sto: 4, hours: 'always', wallet: 'provider', nodePk: '',
   }));
   const patch = (p: Partial<WizState>) => setW(s => ({ ...s, ...p }));
   const fam = FAMILIES.find(f => f.id === w.fam) ?? FAMILIES[0];
@@ -83,7 +88,11 @@ export function AddDeviceWizard() {
     };
     if (isAp) dev.model = `Repetidor comum · firmware original · ligado ao ${parent}`;
     setActivating(true);
-    const id = await addDevice(dev, fam.id);
+    const linkable = real && !isAp && !fam.isRadio;
+    const id = await addDevice(dev, fam.id, real && !isAp ? {
+      ...(linkable && w.nodePk ? { nodePk: w.nodePk } : {}),
+      limits: { bw: w.bw, sto: w.sto, hours: w.hours },
+    } : {});
     setActivating(false);
     if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
@@ -206,6 +215,28 @@ export function AddDeviceWizard() {
                         </span>
                         {fam.isRadio ? 'Liguei o rádio a um equipamento meu' : 'Instalei o Piu Node no equipamento'}
                       </button>
+                      {!fam.isRadio && w.paired && (
+                        <div className="col" style={{ gap: 6 }}>
+                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Qual vizinho é ele? A identidade técnica dele é assinada pela sua chave de operador, e dá para revogar depois.</div>
+                          <div role="radiogroup" aria-label="Identidade técnica do equipamento" className="col" style={{ gap: 6 }}>
+                            {candidates.map(n => (
+                              <button key={n.id} type="button" role="radio" aria-checked={w.nodePk === n.pk} className="choice row" onClick={() => patch({ nodePk: n.pk! })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
+                                <Icon name="fingerprint" size={18} wght={300} />
+                                <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+                                  <div className="mono ellipsis" style={{ fontSize: 12.5, fontWeight: 600 }}>{n.id}</div>
+                                  <div className="mono ellipsis" style={{ fontSize: 11, color: 'var(--ink2)' }}>{n.address}{n.sameOperator ? ' · já tem a sua chave' : ''}</div>
+                                </div>
+                                <div className="radio"><span /></div>
+                              </button>
+                            ))}
+                            <button type="button" role="radio" aria-checked={w.nodePk === ''} className="choice row" onClick={() => patch({ nodePk: '' })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
+                              <Icon name="link_off" size={18} wght={300} />
+                              <div className="grow" style={{ fontSize: 12.5, fontWeight: 600, textAlign: 'left' }}>{candidates.length ? 'Nenhum destes' : 'Nenhum vizinho novo conectado'} · registrar sem identidade</div>
+                              <div className="radio"><span /></div>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : w.scan === 'searching' && !real ? (
                     <div className="row" aria-live="polite" style={{ gap: 14, padding: 16, borderRadius: 16, border: '1px dashed var(--line2)' }}>
@@ -292,11 +323,10 @@ export function AddDeviceWizard() {
                     </div>
                     <div id="wiz-pub-msg" aria-live="polite" style={{ fontSize: 12, lineHeight: 1.4, color: pub.tone === 'strong' ? 'var(--ink)' : 'var(--ink2)' }}>{pub.msg}</div>
                   </div>
-                  {real && !isAp && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>Os limites globais de Configurações (banda, armazenamento, horário) valem para este equipamento.</div>}
-                  {!isAp && !real && (
+                  {!isAp && (
                     <>
-                      <WizLimit title="Banda para a rede"><Segmented variant="bg2" label="Banda" value={w.bw} onChange={bw => patch({ bw })} options={[5, 20, 50].map(v => ({ value: v, label: `${v} Mbps` }))} /></WizLimit>
-                      <WizLimit title="Armazenamento para terceiros"><Segmented variant="bg2" label="Armazenamento" value={w.sto} onChange={sto => patch({ sto })} options={[1, 4, 8].map(v => ({ value: v, label: `${v} GB` }))} /></WizLimit>
+                      <WizLimit title="Banda para a rede"><Segmented variant="bg2" label="Banda" value={w.bw} onChange={bw => patch({ bw })} options={([5, 20, 50] as const).map(v => ({ value: v, label: `${v} Mbps` }))} /></WizLimit>
+                      <WizLimit title="Armazenamento para terceiros"><Segmented variant="bg2" label="Armazenamento" value={w.sto} onChange={sto => patch({ sto })} options={([1, 4, 8] as const).map(v => ({ value: v, label: `${v} GB` }))} /></WizLimit>
                       <WizLimit title="Horário"><Segmented<HoursPolicy> variant="bg2" label="Horário" value={w.hours} onChange={hours => patch({ hours })} options={HOURS} /></WizLimit>
                     </>
                   )}
@@ -305,7 +335,7 @@ export function AddDeviceWizard() {
                   {!isAp && real && (
                     <div style={{ padding: 16, borderRadius: 16, background: 'var(--bg2)', display: 'flex', gap: 12 }}>
                       <Icon name="account_balance_wallet" size={21} wght={300} />
-                      <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)' }}>Carteira de recebimento: ainda não configurável neste nó. Os créditos ficam no operador até a liquidação.</div>
+                      <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)' }}>Carteira de recebimento: cada nó assina, lote a lote, a carteira que recebe (aba Ganhos do painel dele), sem um vínculo fixo.</div>
                     </div>
                   )}
                   {!isAp && !real && (
@@ -331,7 +361,7 @@ export function AddDeviceWizard() {
                       <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)', textWrap: 'pretty' }}>Pontos de acesso não geram créditos próprios. As entregas que passam por ele contam para o {parent}, que assina os recibos.</div>
                     </div>
                   )}
-                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real.` : `${fam.result} · aprovado no teste real.`} Os limites globais de Configurações continuam valendo.</div>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real${w.nodePk ? ', com identidade técnica assinada por você' : ''}.` : `${fam.result} · aprovado no teste real.`} Os limites globais de Configurações continuam valendo.{real && !isAp ? ' As regras ficam registradas; o equipamento ainda não as recebe deste nó.' : ''}</div>
                 </div>
               </div>
             )}

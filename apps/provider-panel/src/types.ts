@@ -46,6 +46,11 @@ export interface RelayNode {
   telemetry?: 'live' | 'none';
   /** Recibos assinados hoje (só `live`). */
   receiptsToday?: number;
+  /** Com piu-node: identidade técnica (16 hex) e se está assinada pela chave de operador atual. */
+  nodeId?: string;
+  signed?: boolean;
+  /** Regras deste equipamento (assistente, passo "Regras"); ausente = só os limites globais. */
+  limits?: { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy };
 }
 
 export interface WalletTx {

@@ -7,15 +7,20 @@
  * Nada de dado sensível em log: o painel não usa console.
  */
 export interface Operator { id: string; name: string }
-/** `self`: o nó que serve o painel (com estatísticas reais); os outros são registros do assistente. */
-export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; self: boolean; pub?: string }
+/** Regras do equipamento (assistente, passo "Regras"). */
+export interface ApiDeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: 'always' | 'night' | 'day' }
+/**
+ * `self`: o nó que serve o painel (com estatísticas reais); os outros são registros do assistente.
+ * `nodeId`: identidade técnica (16 hex) quando o equipamento tem uma; `signed`: assinada pela chave de operador atual.
+ */
+export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; self: boolean; pub?: string; nodeId?: string; signed?: boolean; limits?: ApiDeviceLimits }
 /** `kind` ausente (versões antigas) = saída. Entrada (`in`) é liquidação recebida, com o lote em `from`. */
 export interface ApiWalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
 export interface ApiWallet { balance: number; txs: ApiWalletTx[] }
 
 /** Contadores do motor (os mesmos nomes de `GET /api/relay`). */
 export interface ApiTotals { received: number; stored: number; forwarded: number; duplicates: number; rejected: number; relayOff: number; full: number; expired: number; receipts: number; receiptsReceived: number }
-export interface ApiNeighbor { id: string; address: string; link: string; inbound: boolean; since: number; version: number; relay: boolean; mtu: number; media: string[] }
+export interface ApiNeighbor { id: string; pk?: string; sameOperator?: boolean; address: string; link: string; inbound: boolean; since: number; version: number; relay: boolean; mtu: number; media: string[] }
 export interface ApiSerial { label: string; kind: 'lora' | 'usb'; packetsSent: number; packetsReceived: number; retries: number; lost: number; dutyPercent?: number; dutyUsedPercent?: number }
 /** `GET /api/relay`. Com o motor desligado: `{ enabled: false }`. */
 export type ApiRelay = { enabled: false } | {
@@ -23,7 +28,8 @@ export type ApiRelay = { enabled: false } | {
   lnnp: { version: number; minVersion: number }; node: string; neighbors: ApiNeighbor[];
   store: { envelopes: number; bytes: number; maxBytes: number; seen: number };
   counters: ApiTotals & { delivered: number; handshakesOk: number; handshakesFailed: number };
-  limits: { bwMbps: number; stoGB: number; hours: string; media: boolean };
+  limits: { bwMbps: number; stoGB: number; hours: string; media: boolean; device?: ApiDeviceLimits | null; effective?: { bwMbps: number; stoGB: number; hours: string[] } };
+  operator?: { signed: boolean; revoked: number; listSeq: number };
   lan?: { port: number; discoveryPort: number | null }; serial?: ApiSerial[];
 };
 export interface ApiSample extends ApiTotals { at: number; neighbors: number; storedBytes: number }
@@ -37,6 +43,13 @@ export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hou
 export interface ApiPending { id: string; request: string; code: string; phone: string; expiresAt: number }
 export interface ApiPhone { id: string; name: string; addedAt: number; confirmed: boolean }
 export interface ApiPackage { name: string; version: string; file: string; size: number; sha256: string }
+/** `GET /api/operator`: chave de operador (sem a parte secreta). */
+export interface ApiOperatorKey {
+  publicKey: string; fingerprint: string[]; createdAt: number; rotations: number; rotatedAt: number | null; lastBackupAt: number | null;
+  owner?: boolean; revoked?: number; rotatedElsewhere?: boolean; signedDevices?: number;
+}
+/** `GET /api/payout-claims`: épocas que dá para declarar (esta semana e a próxima) e as já declaradas. */
+export interface ApiClaims { enabled: boolean; epochs: string[]; claims: { epoch: string; address: string; at: number }[] }
 
 export class AuthLost extends Error {}
 export class NeedsReauth extends Error {}
@@ -98,7 +111,9 @@ export class NodeApi {
 
   devices = () => this.call<ApiDevice[]>('GET', '/api/devices');
   togglePause = (id: string) => this.call<{ id: string; status: 'active' | 'paused' }>('POST', `/api/devices/${encodeURIComponent(id)}/pause`);
-  revoke = (id: string) => this.call<void>('DELETE', `/api/devices/${encodeURIComponent(id)}`);
+  /** Sem identidade técnica: 204 (só sai do painel). Com: a chave entra na lista de revogação do operador. */
+  revoke = (id: string) => this.call<{ revoked: boolean; appliedHere: boolean } | undefined>('DELETE', `/api/devices/${encodeURIComponent(id)}`);
+  setDeviceLimits = (id: string, limits: ApiDeviceLimits | null) => this.call<ApiDevice>('PUT', `/api/devices/${encodeURIComponent(id)}/limits`, limits ?? { clear: true });
   wallet = () => this.call<ApiWallet>('GET', '/api/wallet');
   /** `to`: 'personal' ou um endereço `lunes:…`. */
   /** Com celular pareado, devolve `pending` (aprovar no celular); sem celular, executa na hora. */
@@ -108,7 +123,15 @@ export class NodeApi {
   startPhonePairing = (name: string) => this.call<{ id: string; qr: string; expiresAt: number }>('POST', '/api/phones', { name });
   confirmPhone = (id: string, code: string) => this.call<ApiPhone>('POST', `/api/phones/${encodeURIComponent(id)}/confirm`, { code });
   removePhone = (id: string) => this.call<void>('DELETE', `/api/phones/${encodeURIComponent(id)}`);
-  createDevice = (d: { name: string; cls: string; family: string; pub?: string }) => this.call<ApiDevice>('POST', '/api/devices', d);
+  createDevice = (d: { name: string; cls: string; family: string; pub?: string; nodePk?: string; limits?: ApiDeviceLimits }) => this.call<ApiDevice>('POST', '/api/devices', d);
+  operatorKey = () => this.call<ApiOperatorKey>('GET', '/api/operator');
+  backupOperatorKey = (password: string) => this.call<{ filename: string; backup: string }>('POST', '/api/operator/backup', { password });
+  rotateOperatorKey = () => this.call<ApiOperatorKey>('POST', '/api/operator/rotate');
+  /** Arquivo de evidências (`EvidenceFile` do validador), como o nó devolveu. */
+  evidence = () => this.call<{ v: 1; receipts: unknown[]; proofs: unknown[] }>('GET', '/api/relay/evidence');
+  claims = () => this.call<ApiClaims>('GET', '/api/payout-claims');
+  declareClaim = (epoch: string, address: string) => this.call<ApiClaims>('POST', '/api/payout-claims', { epoch, address });
+  claimsFile = () => this.call<{ v: 1; claims: unknown[] }>('GET', '/api/payout-claims/file');
   settings = () => this.call<ApiSettings>('GET', '/api/settings');
   saveSettings = (s: ApiSettings) => this.call<ApiSettings>('PUT', '/api/settings', s);
   sessions = () => this.call<ApiSession[]>('GET', '/api/sessions');
