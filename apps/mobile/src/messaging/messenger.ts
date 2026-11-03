@@ -15,13 +15,13 @@ import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
-import { DEFAULT_HOPS, envelopeId, HOP_OFFSET, Priority } from '../protocol/envelope';
+import { DEFAULT_HOPS, envelopeId, HOP_OFFSET, parseHeader, Priority } from '../protocol/envelope';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
 import { b64url, unb64url } from './card';
 import { CreditBook, type Lot } from './credits';
-import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
+import { canPost, decodeGroupText, decodeState, encodeGroupText, encodeState, GROUP_INVITE_MAX_USES, GROUP_INVITE_TTL_SEC, type GroupKind, type GroupPriority, groupPriority, type GroupMember, type GroupState, groupKeyOf, isAdmin, isMemberOf, MAX_GROUP_MEMBERS, newGroupId, newKey, type ChannelVisibility } from './groups';
 import { EnvelopeKind, MsgType, type Opened, sealGroup } from '../protocol/envelope';
 import { toPublic } from '../protocol/keys';
 import { decodePresence, encodePresence, isPresenceFrame, makePresence, NEAR_COOLDOWN_SEC, NEAR_FEES, NEAR_INVITE_MAX, NEAR_INVITE_TTL_SEC, type NearProx, type Presence, type PresenceBody, PRESENCE_EVERY_SEC, PRESENCE_HOPS, proxOf } from './nearby';
@@ -42,9 +42,29 @@ export interface Contact {
 /** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
 interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
-/** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). */
-export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number }
-export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number;
+/**
+ * Por onde um envelope passou, do ponto de vista deste aparelho (os nós no caminho não se
+ * identificam). `peer`: vizinho que entregou ou recebeu; `via`: classe do enlace com ele; `bytes`:
+ * tamanho real do envelope; `hops`: saltos usados até aqui (só no recebimento); `priority`: a do
+ * cabeçalho do envelope.
+ */
+export interface RouteInfo { peer: string; via?: TransportClass; bytes: number; hops?: number; priority: Priority }
+
+/** Localização em texto curto (graus decimais, 5 casas ≈ 1 m). */
+export interface WireLocation { lat: number; lon: number }
+/** Valida `[lat, lon]` recebido; `undefined` se não for uma coordenada. */
+export function readWireLocation(v: unknown): WireLocation | undefined {
+  if (!Array.isArray(v) || v.length !== 2) return undefined;
+  const [lat, lon] = v;
+  if (typeof lat !== 'number' || typeof lon !== 'number' || !Number.isFinite(lat) || !Number.isFinite(lon)) return undefined;
+  if (Math.abs(lat) > 90 || Math.abs(lon) > 180) return undefined;
+  return { lat: Math.round(lat * 1e5) / 1e5, lon: Math.round(lon * 1e5) / 1e5 };
+}
+const wireLocation = (l: WireLocation): [number, number] => [Math.round(l.lat * 1e5) / 1e5, Math.round(l.lon * 1e5) / 1e5];
+
+/** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). `loc`: localização. */
+export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number; loc?: WireLocation; route?: RouteInfo }
+export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number; route?: RouteInfo;
   /** "Baixar mídia automaticamente" não deixou baixar agora: espera a pessoa tocar em "Baixar". */
   held?: boolean }
 
@@ -53,8 +73,11 @@ export interface MessengerEvents {
   message(contactId: string, m: IncomingText): void;
   /** Alguém que tem o meu código escreveu pela primeira vez (pedido de conversa). */
   newContact(c: Contact, m: IncomingText): void;
-  /** `encaminhada`: saiu deste aparelho para um vizinho; `entregue`: o destino confirmou. */
-  status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada'): void;
+  /**
+   * `encaminhada`: saiu deste aparelho para um vizinho (com `route`: meio, tamanho e prioridade reais
+   * do envelope); `entregue`: o destino confirmou.
+   */
+  status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada', route?: RouteInfo): void;
   /** O contato leu estas mensagens minhas (confirmação de leitura dele). */
   read(contactId: string, msgIds: string[]): void;
   /** O contato está digitando (dura alguns segundos). */
@@ -144,7 +167,7 @@ export interface MessengerOptions {
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
 type Payload =
   /** Texto. `e`: mensagem temporária, some `e` segundos depois de enviada (nos dois lados). */
-  | { t: 'm'; i: string; x: string; n?: string; k?: string; e?: number }
+  | { t: 'm'; i: string; x: string; n?: string; k?: string; e?: number; /** localização [lat, lon] */ l?: [number, number] }
   /** Confirmação de leitura (só se o ajuste de quem leu estiver ligado). */
   | { t: 'r'; i: string[] }
   /** "digitando…": sinal efêmero, sem fila, prazo de segundos e sem prova de entrega. */
@@ -209,7 +232,7 @@ export const MAX_FILE_BYTES = 50 * 1024 * 1024;
 const FILE_WINDOW = 8;
 const BLOCK_TAG = 0x01;
 
-interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean; /** criada (s) */ at?: number; /** primeira saída (s) e meio */ fwdAt?: number; via?: TransportClass; peers?: string[] }
+interface Outgoing { env: string; msgId: string; to: string; bytes: string; forwarded: boolean; /** criada (s) */ at?: number; /** primeira saída (s) e meio */ fwdAt?: number; via?: TransportClass; peers?: string[]; /** prioridade do envelope */ pr?: Priority }
 
 /** Prova de entrega circulando pela malha (pública: não diz quem é o destino). */
 interface Proof { secret: Uint8Array; at: number; sentTo: Set<string> }
@@ -221,6 +244,8 @@ const PROOF_TTL_SEC = 48 * 3600;
 export interface DayMetrics { sent: number; delivered: number; expired: number; lat: number[]; queue: number[]; hops: Record<string, number>; relayed: number; altRoutes: number; via: Record<string, { ok: number; fail: number; lat: number[] }> }
 const emptyDay = (): DayMetrics => ({ sent: 0, delivered: 0, expired: 0, lat: [], queue: [], hops: {}, relayed: 0, altRoutes: 0, via: {} });
 const MAX_SAMPLES = 300;
+/** Prioridade gravada no cabeçalho do envelope (protocol/envelope.ts, `parseHeader`). */
+const headerPriority = (bytes: Uint8Array): Priority => { try { return parseHeader(bytes).priority; } catch { return Priority.Normal; } };
 
 /**
  * Prazo de uma mensagem sem rota (FUN-011): 48 h, como no design ("não encontrou rota em 48 h",
@@ -376,11 +401,25 @@ export class Messenger {
   getContact(id: string) { return this.contacts.get(id); }
   listContacts() { return [...this.contacts.values()]; }
 
+  /**
+   * Apaga o contato deste aparelho: sai da lista, a fila própria para ele é descartada (inclusive
+   * envelopes que ainda não saíram) e envios/recebimentos de arquivo com ele param. Depois disso,
+   * uma mensagem dele só entra com um convite novo (como um desconhecido).
+   */
   removeContact(id: string) {
     this.contacts.delete(id);
     for (const [k, q] of this.outbox) if (q.to === id) { this.outbox.delete(k); this.router.forget(k); }
+    // Controles, recibos e blocos de arquivo para ele que ainda estão na fila do roteador.
+    for (const [k, to] of this.ownTo) if (to === id) { this.ownTo.delete(k); this.router.forget(k); }
+    for (const [k, j] of this.fileJobs) if (j.to === id) this.fileJobs.delete(k);
+    for (const [k, r] of this.fileRx) if (r.from === id) this.fileRx.delete(k);
+    this.typingAt.delete(id);
     this.o.events.changed?.();
   }
+
+  /** Envelopes próprios na fila do roteador → contato de destino (só nesta execução). */
+  private ownTo = new Map<string, string>();
+  private pruneOwn() { for (const k of this.ownTo.keys()) if (!this.router.has(k)) this.ownTo.delete(k); }
 
   /** Mensagens ainda na fila para um contato (aguardando rota ou confirmação). */
   pendingFor(contactId: string) { return [...this.outbox.values()].filter(q => q.to === contactId).map(q => q.msgId); }
@@ -408,12 +447,13 @@ export class Messenger {
    * Texto para o contato. `expireSec`: mensagem temporária (o envelope também vence antes, se o prazo
    * for menor que o da fila).
    */
-  sendText(contactId: string, msgId: string, text: string, expireSec?: number) {
+  sendText(contactId: string, msgId: string, text: string, expireSec?: number, loc?: WireLocation) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     const x = text.slice(0, MAX_TEXT);
     const mgr = this.managers[c.via];
     const p: Payload = { t: 'm', i: msgId, x };
+    if (loc) { if (!readWireLocation([loc.lat, loc.lon])) throw new Error('Coordenadas inválidas.'); p.l = wireLocation(loc); }
     const e = validExpire(expireSec);
     if (e) p.e = e;
     const firm = mgr.get(contactId)?.established;
@@ -456,7 +496,8 @@ export class Messenger {
     const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec, priority, bulk, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
-    if (msgId && r.status === 'stored') { this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false, at: now }); if (!(p instanceof Uint8Array) && p.t === 'm') this.day().sent++; }
+    if (r.status === 'stored') { this.ownTo.set(sealed.id, c.id); if (this.ownTo.size > 5000) this.pruneOwn(); }
+    if (msgId && r.status === 'stored') { this.outbox.set(sealed.id, { env: sealed.id, msgId, to: c.id, bytes: b64url(sealed.bytes), forwarded: false, at: now, pr: priority }); if (!(p instanceof Uint8Array) && p.t === 'm') this.day().sent++; }
     this.o.events.changed?.();
     this.flushAll();
   }
@@ -564,7 +605,7 @@ export class Messenger {
       const hold = !shouldAutoDownload(this.autoDownload, this.peers.values());
       this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e, held: hold });
       this.markDelivered(`${from}|file|${p.i}`);
-      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e, ...(hold ? { held: true } : {}) });
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e, ...(hold ? { held: true } : {}), ...(this.rx ? { route: this.rx } : {}) });
       return;
     }
     if (p.t !== 'fa' && p.t !== 'fd' && p.t !== 'fw') return;
@@ -840,7 +881,7 @@ export class Messenger {
   }
 
   /** Cria um grupo, canal ou comunidade comigo como admin e envia o estado a cada membro. */
-  createGroup(o: { kind: GroupKind; name: string; desc?: string; via: IdentityKind; memberIds: string[]; send?: 'all' | 'admins'; inv?: 'all' | 'admins'; approve?: boolean; visibility?: ChannelVisibility; parent?: string; postMods?: boolean }): GroupState {
+  createGroup(o: { kind: GroupKind; name: string; desc?: string; via: IdentityKind; memberIds: string[]; send?: 'all' | 'admins'; inv?: 'all' | 'admins'; approve?: boolean; visibility?: ChannelVisibility; parent?: string; postMods?: boolean; prio?: GroupPriority }): GroupState {
     const me = this.o.identities[o.via];
     const members: GroupMember[] = [{ id: me.id, name: o.via === 'public' ? this.displayName || 'Você' : '', role: 'admin', pub: toPublic(me) }];
     for (const id of o.memberIds) {
@@ -853,6 +894,8 @@ export class Messenger {
       id: newGroupId(), kind: o.kind, name: o.name.trim().slice(0, 60), desc: (o.desc ?? '').slice(0, 200), via: o.via, rev: 1, keyV: 1, key: newKey(), members,
       send: o.kind === 'group' ? o.send ?? 'all' : 'admins', inv: o.inv ?? 'admins', approve: o.approve ?? true,
       visibility: o.kind === 'channel' ? o.visibility ?? 'private' : undefined, postMods: o.kind === 'channel' ? !!o.postMods : undefined, children: o.kind === 'community' ? [] : undefined, parent: o.parent,
+      // Prioridade (canal de alerta): definida pelo admin na criação, vai no cabeçalho de cada publicação.
+      ...(o.kind === 'channel' && o.prio === 'high' ? { prio: 'high' as const } : {}),
     };
     this.groups.set(g.id, g);
     this.refreshGroupKeys();
@@ -885,10 +928,18 @@ export class Messenger {
   /** Muda nome, regras ou a lista de uma comunidade (admin). */
   updateGroup(gid: string, patch: Partial<Pick<GroupState, 'name' | 'desc' | 'send' | 'inv' | 'approve' | 'visibility' | 'children' | 'postMods'>>) {
     const g = this.assertAdmin(gid);
-    const next: GroupState = { ...g, ...patch, rev: g.rev + 1 };
+    const p = { ...patch };
+    // Nome e descrição: mesmos limites da criação (e do estado recebido, groups.ts).
+    if (p.name !== undefined) { p.name = p.name.trim().slice(0, 60); if (!p.name) throw new Error('O nome não pode ficar vazio.'); }
+    if (p.desc !== undefined) p.desc = p.desc.trim().slice(0, 200);
+    const next: GroupState = { ...g, ...p, rev: g.rev + 1 };
     if (next.kind !== 'group') next.send = 'admins';
     this.groups.set(gid, next);
     this.distribute(next);
+    // Renomeado dentro de uma comunidade minha: a lista dela mostra o nome novo.
+    const parent = next.parent ? this.groups.get(next.parent) : undefined;
+    if (p.name && p.name !== g.name && parent?.children?.some(x => x.id === gid) && isAdmin(parent, this.myId(parent.via)))
+      this.updateGroup(parent.id, { children: parent.children.map(x => (x.id === gid ? { ...x, name: next.name } : x)) });
     this.o.events.changed?.();
     return next;
   }
@@ -1015,19 +1066,23 @@ export class Messenger {
   }
 
   /** Envia texto ao grupo (envelope de grupo, cifrado com a chave atual). */
-  sendGroupText(gid: string, msgId: string, text: string) {
+  sendGroupText(gid: string, msgId: string, text: string, loc?: WireLocation) {
     const g = this.groups.get(gid);
     if (!g) throw new Error('Grupo desconhecido.');
     const me = this.o.identities[g.via];
     if (!canPost(g, me.id)) throw new Error(g.kind === 'group' ? 'Só admins publicam neste grupo.' : 'Só admins publicam aqui.');
+    if (loc && !readWireLocation([loc.lat, loc.lon])) throw new Error('Coordenadas inválidas.');
     const now = this.o.now();
-    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body: encodeGroupText(msgId, text.slice(0, MAX_TEXT)), now, ttlSec: TTL_SEC, pad: this.o.pad?.() ?? true });
+    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body: encodeGroupText(msgId, text.slice(0, MAX_TEXT), loc && wireLocation(loc)), now, ttlSec: TTL_SEC, priority: groupPriority(g), pad: this.o.pad?.() ?? true });
     const delaySec = this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (r.status === 'stored') this.groupOut.set(sealed.id, msgId);
     this.o.events.changed?.();
     this.flushAll();
   }
+
+  /** Prioridade com que as publicações deste grupo saem (para a tela de rota). */
+  groupPriority(gid: string) { const g = this.groups.get(gid); return g ? groupPriority(g) : Priority.Normal; }
 
   /** Convite do grupo (link/QR): vale 7 dias e até 50 usos. `fresh` revoga o anterior. */
   groupInvite(gid: string, fresh = false) {
@@ -1235,7 +1290,8 @@ export class Messenger {
     this.markDelivered(key);
     if (m.fromId === this.myId(g.via)) return; // minha própria, voltando pela malha
     const who = g.members.find(x => x.id === m.fromId);
-    this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt });
+    const loc = readWireLocation(t.l);
+    this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt, ...(loc ? { loc } : {}), ...(this.rx ? { route: this.rx } : {}) });
     this.o.events.changed?.();
   }
 
@@ -1329,6 +1385,7 @@ export class Messenger {
     if (ct.lot) this.o.events.lotClosed?.(ct.lot);
     if (ct.changed) this.o.events.changed?.();
     this.router.purge(this.o.now());
+    this.pruneOwn();
     // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
     let changed = false;
     for (const [k, q] of this.outbox) {
@@ -1373,9 +1430,13 @@ export class Messenger {
         if (Number.isFinite(this.bw.tokens)) this.bw.tokens = Math.max(0, this.bw.tokens - bytes.length);
       }
       const gm = this.groupOut.get(id);
-      if (gm) { this.groupOut.delete(id); changed = true; this.o.events.status?.(gm, 'encaminhada'); }
+      if (gm) { this.groupOut.delete(id); changed = true; this.o.events.status?.(gm, 'encaminhada', { peer: peerId, via, bytes: bytes.length, priority: headerPriority(bytes) }); }
       const q = this.outbox.get(id);
-      if (q && !q.forwarded) { q.forwarded = true; q.fwdAt = now; q.via = via; changed = true; this.o.events.status?.(q.msgId, 'encaminhada'); if (q.at != null) this.sample(this.day().queue, now - q.at); }
+      if (q && !q.forwarded) {
+        q.forwarded = true; q.fwdAt = now; q.via = via; changed = true;
+        this.o.events.status?.(q.msgId, 'encaminhada', { peer: peerId, via, bytes: bytes.length, priority: q.pr ?? headerPriority(bytes) });
+        if (q.at != null) this.sample(this.day().queue, now - q.at);
+      }
       if (q) { q.peers = [...new Set([...(q.peers ?? []), peerId])]; if (q.peers.length === 2) this.day().altRoutes++; }
       if (!this.router.isOwn(id)) this.day().relayed++;
       const vm = (this.day().via[via] ??= { ok: 0, fail: 0, lat: [] });
@@ -1398,11 +1459,14 @@ export class Messenger {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }
     const r = this.router.ingest(bytes, peerId, this.o.now());
+    this.rx = null;
     if (r.status === 'delivered') {
       // Sou o destino: conto os saltos (a prova de entrega sai depois de abrir, ver abaixo).
       const hopsUsed = Math.max(1, DEFAULT_HOPS - r.hopsLeft);
       const k = hopsUsed >= 4 ? '4+' : String(hopsUsed);
       this.day().hops[k] = (this.day().hops[k] ?? 0) + 1;
+      // Rota real do que chegou: vai junto nos eventos desta entrega.
+      this.rx = { peer: peerId, via: this.peers.get(peerId), bytes: bytes.length, hops: hopsUsed, priority: headerPriority(bytes) };
     }
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
@@ -1410,14 +1474,17 @@ export class Messenger {
     if (m.kind === EnvelopeKind.Group) {
       // Prova de entrega: segredo que só quem decifrou conhece (vira crédito para os relays).
       this.addProof(m.id, m.ackSecret);
-      if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m);
+      try { if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m); } finally { this.rx = null; }
       if (r.stored) this.flushAll(); // os outros membros ainda precisam receber
       return r;
     }
     // Sinal efêmero ("digitando…") não publica prova: não gera crédito para quem repassou.
-    if (!this.onDirect(m)) this.addProof(m.id, m.ackSecret);
+    try { if (!this.onDirect(m)) this.addProof(m.id, m.ackSecret); } finally { this.rx = null; }
     return r;
   }
+
+  /** Rota do envelope que está sendo aberto agora (só durante `receive`). */
+  private rx: RouteInfo | null = null;
 
   /** Conteúdo de uma mensagem direta para mim. `true` = sinal efêmero (sem prova de entrega). */
   private onDirect(m: Opened): boolean {
@@ -1493,7 +1560,8 @@ export class Messenger {
     const key = `${m.fromId}|${p.i}`;
     if (this.deliveredSet.has(key)) return false; // já mostrada
     this.markDelivered(key);
-    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt, expireSec: validExpire(p.e) };
+    const loc = readWireLocation(p.l);
+    const msg: IncomingText = { msgId: p.i, text: p.x.slice(0, MAX_TEXT), sentAt: m.sentAt, expireSec: validExpire(p.e), ...(loc ? { loc } : {}), ...(this.rx ? { route: this.rx } : {}) };
     if (isNew) this.o.events.newContact?.(c, msg); else this.o.events.message?.(c.id, msg);
     this.o.events.changed?.();
     return false;
