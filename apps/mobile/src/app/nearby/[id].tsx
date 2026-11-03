@@ -155,10 +155,10 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
           </View>
         ))}
       </View>
-      {/* Sem liquidação na Mainnet não há saldo on-chain para conferir nem reserva assinada em LUNES. */}
+      {/* Sem a liquidação ligada ao app não há reserva assinada em LUNES: só o registro local. */}
       <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2 }}>
         <Icon name="cloud_off" size={18} w={300} />
-        <T size={12.5} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{`O convite e o texto vão pela malha agora. A reserva fica registrada só neste aparelho: ${MAINNET_PENDING}.`}</T>
+        <T size={12.5} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{'O convite e o texto vão pela malha agora. A reserva fica registrada só neste aparelho: a reserva assinada em LUNES depende da liquidação, ainda não ligada ao app.'}</T>
       </View>
       {authErr && <T size={12.5} color={c.ink2} align="center" accessibilityRole="alert">{authErr}</T>}
       <Button label={signing ? 'Confirmando…' : `Assinar e enviar · ${fee} LUNES`} disabled={!msg.trim() || signing}

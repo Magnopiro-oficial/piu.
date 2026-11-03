@@ -12,8 +12,9 @@
  *   aqui: o orçamento da época é da Lunes e não chega ao aparelho. O valor final é o do validador.
  * - Validade: validado e não liquidado em 180 dias expira (seção 3.4) e fica 30 dias na lista.
  *
- * LIQUIDAÇÃO SIMULADA: não há integração com a Lunes Mainnet (decimais, taxas e endpoint ainda não
- * definidos). Um lote "pago" aqui é uma simulação local, marcada como tal na tela.
+ * LOTE SEM PAGAMENTO: o app já lê a Lunes Mainnet (lib/lunesRpc.ts: saldo, blocos), mas não paga
+ * lotes. O pagamento é da liquidação (apps/settlement), ainda não ligada ao app; um lote fechado aqui
+ * fica só registrado neste aparelho, e a tela diz "aguardando liquidação".
  */
 import { equal, toHex } from '../protocol/bytes';
 import { type RelayReceipt, verifyRelayReceipt } from '../protocol/receipts';
