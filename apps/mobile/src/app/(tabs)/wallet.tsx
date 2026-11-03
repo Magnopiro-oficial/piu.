@@ -151,15 +151,16 @@ function Rewards() {
     ...(st?.credits.list ?? []).slice(0, 12).map(x => [
       x.state === 'rejeitado' ? 'block' : x.state === 'pendente' ? 'hourglass_top' : 'verified',
       `Entrega de terceiro · ${Math.round(x.bytes / 100) / 10} KB`,
-      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${x.state}${x.reason ? ` (${x.reason})` : ''}`,
-      `${x.state === 'rejeitado' ? '' : '+'}${fmt(x.credits)}`,
+      // Regra 7.6: o valor é estimado, dividido entre os relays que este aparelho conhece até ele.
+      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${x.state}${x.reason ? ` (${x.reason})` : ''} · estimativa${(x.relays ?? 1) > 1 ? ` ÷ ${x.relays} relays` : ''}`,
+      `${x.state === 'rejeitado' ? '' : '≈ +'}${fmt(x.credits)}`,
     ] as [IconName, string, string, string]),
   ];
   return (
     <>
       <View style={{ marginTop: 10, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, borderRadius: 26, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
-          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar</T>
+          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar · estimativa</T>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>{fmt(t.validado)}</T>
             <T size={15} color={c.invink} style={{ opacity: 0.7 }}>créditos</T>
@@ -191,7 +192,8 @@ function Rewards() {
         {history.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>Nenhum crédito ainda. Com o Modo nó ligado, cada mensagem de outra pessoa que você levar até o destino gera créditos depois que a entrega for comprovada.</T>}
         {history.map(([icon, title, d, v], i) => <Row key={`${title}-${i}`} icon={icon} t={title} d={d} v={v} />)}
       </View>
-      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Os valores são estimativa: a recompensa de cada entrega é dividida entre os relays do caminho, e o validador confere a divisão e o teto por nó antes de pagar.</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 8, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
     </>
   );
 }
