@@ -11,7 +11,12 @@ import type { Pairing } from './security/pairing.js';
 import { APPROVAL_TTL_MS, approvalMatches, checkCode, newSecret, PAIR_TTL_MS, pairCode, pairPayload, requestPayload } from './security/approval.js';
 import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, sessionLabel, STEP_UP_MS } from './security/session.js';
 import { readPanelFile } from './static.js';
-import type { Device, Session, Settings, Store } from './store.js';
+import { BACKUP_FILENAME, OperatorKeyError, OperatorVault } from './operator.js';
+import { toHex } from './protocol/bytes.js';
+import type { KeyPair } from './protocol/keys.js';
+import type { RelayReceipt } from './protocol/receipts.js';
+import { certFromJson, certToJson, type OperatorCert, type RevocationList, unhex } from './relay/operator-frames.js';
+import type { Device, DeviceLimits, Session, Settings, Store } from './store.js';
 
 declare module 'fastify' {
   interface FastifyRequest { piuSession: Session | null }
@@ -30,7 +35,11 @@ export interface AppOptions {
   onCodeSpent?: (reason: 'used' | 'locked') => void;
   /** Motor de retransmissão LNNP (ausente: `GET /api/relay` responde `enabled: false`). */
   relay?: {
-    stats(): object; applySettings(s: Settings): void;
+    stats(): object; applySettings(s: Settings, device?: DeviceLimits | null): void;
+    /** Operador dono do nó: linhagem de chaves, certificados e lista de revogação. */
+    setOperator?(t: { lineage?: string[]; cert?: OperatorCert | null; deviceCerts?: OperatorCert[]; list?: RevocationList | null }): void;
+    /** Chave técnica do nó (assina a carteira do lote) e recibos guardados (evidências para o validador). */
+    engine?: { node: KeyPair; receiptLog: RelayReceipt[]; lineage: string[] };
     /** Pausar retransmissão do equipamento que serve o painel. */
     setPaused?(paused: boolean): void;
     /** Histórico das estatísticas (amostras de 24 h e totais por dia). */
@@ -40,6 +49,10 @@ export interface AppOptions {
   } | null;
   /** O próprio nó, registrado como equipamento do dono no primeiro pareamento. Ausente: não registra. */
   selfDevice?: { name: string; cls: string };
+  /** Chaves de operador (`<data>/operator/keys.json`). Ausente: só em memória (testes). */
+  vault?: OperatorVault;
+  /** Custo do scrypt do backup de operador (só os testes baixam). */
+  backupN?: number;
 }
 
 /** CSP igual à do painel (a mesma política vale para o HTML servido aqui). */
@@ -56,6 +69,37 @@ const fail = (reply: FastifyReply, code: number, error: string, extra: Record<st
 export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   const now = o.now ?? Date.now;
   const { store, pairing } = o;
+  const vault = o.vault ?? new OperatorVault(null);
+  const nodePk = o.relay?.engine ? toHex(o.relay.engine.node.pk) : null;
+
+  /**
+   * Chave de operador → motor: o dono assina a identidade técnica do próprio nó e dos equipamentos
+   * vinculados (de novo depois de uma rotação), e a lista de revogação dele passa a valer aqui e a
+   * ir para os vizinhos do mesmo operador. Também aplica as regras do próprio equipamento.
+   */
+  const syncOperator = () => {
+    const owner = store.owner();
+    if (!owner) return;
+    const op = vault.ensure(owner.id, now());
+    const current = toHex(op.pk);
+    const self = store.selfDevice();
+    if (self && nodePk && self.nodePk !== nodePk) store.updateDevice(self.id, { nodePk });
+    for (const d of store.devicesOf(owner.id)) {
+      if (d.nodePk && d.cert?.operatorPk !== current) store.updateDevice(d.id, { cert: certToJson(vault.certify(owner.id, unhex(d.nodePk), now())) });
+    }
+    const devs = store.devicesOf(owner.id);
+    const selfNow = devs.find(d => d.self);
+    const certOf = (d: Device) => (d.cert ? certFromJson(d.cert) : null);
+    o.relay?.setOperator?.({
+      lineage: vault.lineage(owner.id),
+      cert: selfNow?.nodePk ? certOf(selfNow) : null,
+      deviceCerts: devs.filter(d => !d.self && d.nodePk && d.cert).map(d => certOf(d)!),
+      list: vault.revocation(owner.id),
+    });
+    o.relay?.applySettings(store.nodeSettings(), selfNow?.limits ?? null);
+  };
+  if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
+  syncOperator();
   const app = Fastify({
     https: o.https ?? null,
     bodyLimit: 16 * 1024,
@@ -130,6 +174,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     // (sessão expirada, outro navegador); com um nome novo, cria outro operador.
     const op = store.operatorByName(req.body.name) ?? store.addOperator(req.body.name.trim(), now());
     if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
+    vault.ensure(op.id, now());
+    syncOperator();
     const { token, session } = createSession(store, op.id, now(), sessionLabel(req.headers['user-agent']));
     reply.setCookie(SESSION_COOKIE, token, cookieOptions);
     return { operator: { id: op.id, name: op.name }, csrf: session.csrf };
@@ -189,7 +235,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async req => {
     const saved = store.setSettings(req.piuSession!.operatorId, req.body);
     // Os limites do dono do equipamento passam a valer no roteador na hora (banda, espaço, horário, mídia).
-    o.relay?.applySettings(store.nodeSettings());
+    o.relay?.applySettings(store.nodeSettings(), store.selfDevice()?.limits ?? null);
     return saved;
   });
 
@@ -203,24 +249,61 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
 
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
-  const deviceView = ({ id, name, cls, status, self, pub }: Device) => ({ id, name, cls, status, self: !!self, ...(pub ? { pub } : {}) });
+  const deviceView = ({ id, ownerId, name, cls, status, self, pub, nodePk: pk, cert, limits }: Device) => {
+    const current = vault.keyPair(ownerId);
+    return {
+      id, name, cls, status, self: !!self, ...(pub ? { pub } : {}),
+      // Identidade técnica (os 16 primeiros hex, como no LNNP) e se está assinada pela chave de operador atual.
+      ...(pk ? { nodeId: pk.slice(0, 16), signed: !!cert && !!current && cert.operatorPk === toHex(current.pk) } : {}),
+      ...(limits ? { limits } : {}),
+    };
+  };
   app.get('/api/devices', authed(), async req => store.devicesOf(req.piuSession!.operatorId).map(deviceView));
 
   /** Equipamento ativado pelo assistente "Adicionar equipamento". */
-  app.post<{ Body: { name: string; cls: string; family: string; pub?: string } }>('/api/devices', {
+  /** Regras do assistente (passo "Regras"): os mesmos valores das opções do painel. */
+  const limitsSchema = { type: 'object', required: ['bw', 'sto', 'hours'], additionalProperties: false, properties: {
+    bw: { type: 'integer', enum: [5, 20, 50] }, sto: { type: 'integer', enum: [1, 4, 8] }, hours: { type: 'string', enum: ['always', 'night', 'day'] },
+  } } as const;
+  app.post<{ Body: { name: string; cls: string; family: string; pub?: string; nodePk?: string; limits?: DeviceLimits } }>('/api/devices', {
     ...mutate(), config: strictLimit(20, '1 minute'),
     schema: { body: { type: 'object', required: ['name', 'cls', 'family'], additionalProperties: false, properties: {
       name: { type: 'string', minLength: 1, maxLength: 40 },
       cls: { type: 'string', enum: ['Home Node', 'Super Node', 'Gateway Local', 'Ponto de Acesso'] },
       family: { type: 'string', enum: ['router', 'linux', 'minipc', 'lora', 'ap', 'p2p'] },
       pub: { type: 'string', pattern: '^piu\\.[a-z0-9](?:[a-z0-9-]{0,26}[a-z0-9])?$' },
+      // Identidade técnica de um vizinho LNNP (chave do nó em hex), escolhida no assistente.
+      nodePk: { type: 'string', pattern: '^[0-9a-f]{64}$' },
+      limits: limitsSchema,
     } } },
   }, async (req, reply) => {
     const s = req.piuSession!;
     if (store.devicesOf(s.operatorId).length >= 100) return fail(reply, 400, 'Limite de equipamentos atingido.');
-    const { name, cls, family, pub } = req.body;
-    const d = store.addDevice({ ownerId: s.operatorId, name: name.trim(), cls, family, pub, createdAt: now() });
+    const { name, cls, family, pub, nodePk: pk, limits } = req.body;
+    if (pk) {
+      if (pk === nodePk) return fail(reply, 409, 'Esta é a identidade técnica do nó que serve o painel, que já é um equipamento seu.');
+      if (store.deviceByNodePk(pk)) return fail(reply, 409, 'Esta identidade técnica já pertence a um equipamento registrado.');
+      if (vault.revocation(s.operatorId)?.revoked.some(x => toHex(x) === pk)) return fail(reply, 409, 'Esta identidade técnica foi revogada. Reinstale o Piu Node no equipamento para gerar outra.');
+    }
+    const d = store.addDevice({
+      ownerId: s.operatorId, name: name.trim(), cls, family, pub, createdAt: now(),
+      ...(pk ? { nodePk: pk, cert: certToJson(vault.certify(s.operatorId, unhex(pk), now())) } : {}),
+      ...(limits ? { limits } : {}),
+    });
+    if (store.isOwner(s.operatorId)) syncOperator();
     return reply.code(201).send(deviceView(d));
+  });
+
+  /** Regras de um equipamento. No próprio nó, valem no motor na hora (junto com os limites globais). */
+  app.put<{ Params: { id: string }; Body: DeviceLimits | { clear: true } }>('/api/devices/:id/limits', {
+    ...mutate(), schema: { params: idParams, body: { oneOf: [limitsSchema, { type: 'object', required: ['clear'], additionalProperties: false, properties: { clear: { const: true } } }] } },
+  }, async (req, reply) => {
+    const d = store.ownedDevice(req.piuSession!.operatorId, req.params.id);
+    if (!d) return fail(reply, 404, 'Não encontrado.');
+    const limits = 'clear' in req.body ? undefined : req.body;
+    store.updateDevice(d.id, { limits });
+    if (d.self && store.isOwner(req.piuSession!.operatorId)) o.relay?.applySettings(store.nodeSettings(), limits ?? null);
+    return deviceView(store.ownedDevice(req.piuSession!.operatorId, d.id)!);
   });
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/pause', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
@@ -237,8 +320,76 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     const d = store.ownedDevice(req.piuSession!.operatorId, req.params.id);
     if (!d) return fail(reply, 404, 'Não encontrado.');
     if (d.self) return fail(reply, 409, 'Este é o equipamento que serve o painel. Para tirá-lo da malha, pause a retransmissão ou desinstale o Piu Node nele.');
+    const s = req.piuSession!;
+    // Com identidade técnica: a chave do nó entra na lista de revogação assinada pela chave de operador.
+    // No nó do dono, vale na hora (handshake recusado, enlace fechado) e vai para os vizinhos do mesmo operador.
+    let revoked = false;
+    if (d.nodePk) { vault.revoke(s.operatorId, [unhex(d.nodePk)], now()); revoked = true; }
     store.removeDevice(d.id);
-    return reply.code(204).send();
+    if (store.isOwner(s.operatorId)) syncOperator();
+    // Sem identidade técnica (registro do assistente sem vizinho vinculado): só sai do painel.
+    if (!revoked) return reply.code(204).send();
+    return { revoked, appliedHere: store.isOwner(s.operatorId) };
+  });
+
+  // ── chave de operador ─────────────────────────────────
+  /** Impressão digital, quando foi criada, rotações e último backup. Sem a chave secreta. */
+  app.get('/api/operator', authed(), async req => {
+    const id = req.piuSession!.operatorId;
+    vault.ensure(id, now());
+    const info = vault.info(id)!;
+    const owner = store.isOwner(id);
+    const head = o.relay?.engine?.lineage.at(-1);
+    return {
+      ...info, owner,
+      revoked: vault.revocation(id)?.revoked.length ?? 0,
+      // Outro equipamento do operador rotacionou a chave e este nó recebeu a nova na sincronização.
+      rotatedElsewhere: owner && !!head && head !== info.publicKey,
+      signedDevices: store.devicesOf(id).filter(d => d.cert?.operatorPk === info.publicKey).length,
+    };
+  });
+
+  const stepUpOk = (req: FastifyRequest) => now() - req.piuSession!.authAt <= STEP_UP_MS;
+  const keyError = (reply: FastifyReply, e: unknown) => {
+    if (e instanceof OperatorKeyError) return fail(reply, e.code === 'AUTH' ? 403 : 400, e.message);
+    throw e;
+  };
+
+  /** Backup cifrado com a senha escolhida. Sensível: exige confirmação recente (step-up). */
+  app.post<{ Body: { password: string } }>('/api/operator/backup', {
+    ...mutate(), config: strictLimit(5, '10 minutes'),
+    schema: { body: { type: 'object', required: ['password'], additionalProperties: false, properties: { password: { type: 'string', minLength: 1, maxLength: 256 } } } },
+  }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const s = req.piuSession!;
+    try {
+      const text = await vault.backup(s.operatorId, store.operator(s.operatorId)?.name ?? '', req.body.password, now(), { N: o.backupN });
+      return { filename: BACKUP_FILENAME, backup: text };
+    } catch (e) { return keyError(reply, e); }
+  });
+
+  /** Rotação: chave nova assinada pela antiga; equipamentos recebem a nova na próxima sincronização. Exige step-up. */
+  app.post('/api/operator/rotate', { ...mutate(), config: strictLimit(5, '10 minutes') }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const id = req.piuSession!.operatorId;
+    try { vault.rotate(id, now()); } catch (e) { return keyError(reply, e); }
+    if (store.isOwner(id)) syncOperator();
+    return vault.info(id);
+  });
+
+  /** Restaura um backup (por exemplo, num segundo nó do mesmo operador). Exige step-up. */
+  app.post<{ Body: { backup: string; password: string } }>('/api/operator/restore', {
+    ...mutate(), config: strictLimit(5, '10 minutes'), bodyLimit: 300 * 1024,
+    schema: { body: { type: 'object', required: ['backup', 'password'], additionalProperties: false, properties: {
+      backup: { type: 'string', minLength: 1, maxLength: 256 * 1024 }, password: { type: 'string', minLength: 1, maxLength: 256 } } } },
+  }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const id = req.piuSession!.operatorId;
+    try { await vault.restore(id, req.body.backup, req.body.password); } catch (e) { return keyError(reply, e); }
+    // Certificados assinados pela chave anterior deste nó deixam de valer: assina de novo com a restaurada.
+    for (const d of store.devicesOf(id)) if (d.nodePk) store.updateDevice(d.id, { cert: certToJson(vault.certify(id, unhex(d.nodePk), now())) });
+    if (store.isOwner(id)) syncOperator();
+    return vault.info(id);
   });
 
   // ── carteira ───────────────────────────────────────────

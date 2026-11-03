@@ -9,6 +9,7 @@ import type { Config } from './config.js';
 import { loadPackages, type Manifest, releaseKey } from './packages.js';
 import { loadNodeKey, type RelayHandle, startRelay } from './relay/index.js';
 import { Pairing } from './security/pairing.js';
+import { OperatorVault } from './operator.js';
 import { Store } from './store.js';
 
 export interface NodeServer {
@@ -79,6 +80,7 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
     try {
       relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), {
         log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json'), storeFile: join(config.dataDir, 'lnnp', 'relay-store.bin'),
+        trustFile: join(config.dataDir, 'lnnp', 'operator-trust.json'),
       });
     } catch (e) {
       o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
@@ -92,7 +94,7 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
 
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay, selfDevice,
+    config, store, pairing, packages, packagesDir, relay, selfDevice, vault: new OperatorVault(config.dataDir),
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).
