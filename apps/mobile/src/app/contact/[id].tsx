@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
 import { Image, Pressable, ScrollView, View } from 'react-native';
-import { handleOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { useLayout } from '../../lib/responsive';
-import { cachedSafetyCode, safetyCodeFor } from '../../lib/demoContacts';
 import { useKeys } from '../../state/keys';
+import { useSettings } from '../../state/settings';
 import { useMessaging, useMyCard } from '../../state/messaging';
 import { safetyNumber, toPublic } from '../../protocol';
 import { QrCode } from '../../ui/QrCode';
@@ -26,29 +25,28 @@ export default function Contact() {
   const ident = chats.find(x => x.id === id)?.ident ?? 'public';
   const { contactKeys } = useMessaging();
   const [myCard] = useMyCard(ident);
-  // Contato real: chaves que vieram no cartão ou na primeira mensagem. Demonstração: chaves fixas do exemplo.
+  const { priv } = useSettings();
+  // Chaves do contato: vieram no cartão (QR) ou na primeira mensagem (pedido de conversa).
   const real = id ? contactKeys(id) : null;
-  // Código real: chaves da identidade usada nesta conversa × chaves do contato (hash iterado: calcula uma vez).
+  // Código: chaves da identidade usada nesta conversa × chaves do contato.
   const mine = identities?.[ident];
-  const [code, setCode] = useState<string[] | null>(() => (mine && id && !real ? cachedSafetyCode(mine, id, ident) : null));
-  // Calcula depois de desenhar a tela (não trava a navegação) e guarda em cache.
+  const [code, setCode] = useState<string[] | null>(null);
+  // Hash iterado (~25 ms): calcula depois de desenhar a tela, para não travar a navegação.
   useEffect(() => {
-    if (!mine || !id) return;
-    const t = setTimeout(() => setCode(real ? safetyNumber(toPublic(mine), real) : safetyCodeFor(mine, id, ident)), 0);
+    if (!mine || !real) return;
+    const t = setTimeout(() => setCode(safetyNumber(toPublic(mine), real)), 0);
     return () => clearTimeout(t);
-  }, [mine, id, ident, real]);
+  }, [mine, real]);
   const shown = code ?? Array<string>(12).fill('·····');
-  const chat = chats.find(x => x.id === id);
-  if (!chat) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
+  const chat = chats.find(x => x.id === id && x.peer);
+  if (!chat?.peer) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
 
   const ver = !!verified[chat.id];
 
   const first = chat.name.split(' ')[0];
-  const handle = chat.peer
-    ? `${chat.peer.slice(0, 8)}…${chat.peer.slice(-4)} · ${chat.ident === 'anon' ? 'anônima' : 'pública'}`
-    : chat.ident === 'anon' ? 'piu:b2d9…7a10 · anônima' : `${handleOf(first)} · pública`;
-  // Bloqueio (design): contato real pelo id da chave; conversa de exemplo pelo id da conversa.
-  const blockId = chat.peer ?? chat.id;
+  const handle = `${chat.peer.slice(0, 8)}…${chat.peer.slice(-4)} · ${chat.ident === 'anon' ? 'anônima' : 'pública'}`;
+  // Bloqueio (design): pelo id da chave do contato.
+  const blockId = chat.peer;
   const isBl = isBlocked(blockId);
   const blockAct = isBl
     ? () => router.push({ pathname: '/blocked', params: { sel: blockId } })
@@ -56,7 +54,7 @@ export default function Contact() {
       block({ id: blockId, chatId: chat.id, name: chat.name, initials: chat.initials, how: 'pela conversa', reported: false });
       showToast({ icon: 'block', title: `${first} bloqueado(a)`, body: 'Não é avisado(a). Desfaça em Privacidade → Contatos bloqueados.' });
     };
-  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', 'Desligado', 450],
+  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', priv.temp === '24h' ? '24 horas' : priv.temp === '7d' ? '7 dias' : 'Desligado', 450],
     [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct]];
 
   return (
@@ -86,10 +84,7 @@ export default function Contact() {
           <T size={13} lh={1.45} color={c.ink2}>Compare com a tela de {first} ou escaneie o QR dela pessoalmente. Se bater, ninguém está no meio da conversa.</T>
           <View style={{ flexDirection: compact ? 'column' : 'row', gap: 8 }}>
             <Button label="Escanear QR" variant="outline" height={44} fontSize={14} style={[!compact && { flex: 1 }, { paddingHorizontal: 4 }]}
-              onPress={() => {
-                if (chat.peer) { router.push({ pathname: '/scan', params: { verify: chat.id } }); return; }
-                setVerified(chat.id, true); showToast({ icon: 'qr_code_scanner', title: 'Código confere', body: `${chat.name} verificado pessoalmente.` });
-              }} />
+              onPress={() => router.push({ pathname: '/scan', params: { verify: chat.id } })} />
             <Button label={ver ? 'Remover verificação' : 'Marcar como verificado'} height={44} fontSize={13.5} style={[!compact && { flex: 1.3 }, { paddingHorizontal: 4 }]} onPress={() => setVerified(chat.id, !ver)} />
           </View>
         </View>

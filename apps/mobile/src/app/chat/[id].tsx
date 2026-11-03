@@ -23,7 +23,7 @@ export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { chats, send, retry, typing, verified, sendFile, sendRealFile, toggleFilePause, showToast, patchChat } = useStore();
+  const { chats, send, retry, verified, sendRealFile, toggleFilePause, showToast, patchChat } = useStore();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
@@ -42,21 +42,21 @@ export default function ChatScreen() {
   }
 
   const msgs = chat.msgs ?? [];
-  // Real (grupo/canal pelo protocolo): publica quem o estado do grupo permite. Exemplo: canal só do dono.
-  const readOnly = chat.group ? !chat.owner : chat.kind === 'channel' && !chat.owner;
+  // Grupo, canal ou comunidade: publica quem o estado do grupo permite (`owner` = pode publicar).
+  const readOnly = !!chat.group && !chat.owner;
   const canSend = draft.trim().length > 0;
   const submit = () => { if (!canSend) return; send(chat.id, draft.trim()); setDraft(''); toEnd(); };
   const selected = msgs.find(m => m.id === routeMsg);
-  // ⋯ abre o contato (conversa direta), o grupo, ou mostra os dados do canal.
+  // ⋯ abre o contato (conversa direta), os dados do grupo/canal ou a comunidade.
   const openInfo = () => {
     if (chat.kind === 'direct') router.push({ pathname: '/contact/[id]', params: { id: chat.id } });
-    else if (chat.kind === 'group' || (chat.group && chat.kind === 'channel')) router.push({ pathname: '/group/[id]', params: { id: chat.id } });
-    else if (chat.group && chat.kind === 'community') router.push({ pathname: '/community/[id]', params: { id: chat.id } });
-    else showToast({ icon: 'campaign', title: chat.name, body: chat.sub ?? '' });
+    else if (chat.kind === 'community') router.push({ pathname: '/community/[id]', params: { id: chat.id } });
+    else router.push({ pathname: '/group/[id]', params: { id: chat.id } });
   };
   const onAttach = (k: 'image' | 'doc' | 'location') => {
     if (k === 'location') showToast({ icon: 'location_on', title: 'Localização', body: 'Envio de localização chega numa próxima versão.' });
-    else if (chat.peer) {
+    else if (!chat.peer) showToast({ icon: k === 'image' ? 'image' : 'description', title: 'Arquivos em grupos e canais', body: 'Por enquanto, fotos e documentos vão só nas conversas com uma pessoa.' });
+    else {
       // Conversa real: escolhe a foto ou o documento e envia em blocos pelo protocolo.
       void (k === 'image' ? pickImage() : pickDocument()).then(f => {
         if (!f) return;
@@ -64,7 +64,6 @@ export default function ChatScreen() {
         sendRealFile(chat.id, f); toEnd();
       }).catch(() => showToast({ icon: 'error', title: 'Não foi possível abrir o arquivo', body: 'Tente outro arquivo.' }));
     }
-    else { sendFile(chat.id, k); toEnd(); }
   };
 
   return (
@@ -81,9 +80,9 @@ export default function ChatScreen() {
             <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, verificado` : chat.name}>{chat.name}</T>
             {verified[chat.id] && <Icon name="verified" size={16} fill />}
           </View>
-          <T size={12.5} color={c.ink2} numberOfLines={1}>{typing === chat.id ? 'digitando…' : chat.sub}</T>
+          <T size={12.5} color={c.ink2} numberOfLines={1}>{chat.sub}</T>
         </View>
-        <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? 'Ver contato e código de segurança' : chat.kind === 'group' ? 'Informações do grupo' : 'Informações do canal'} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? 'Ver contato e código de segurança' : chat.kind === 'group' ? 'Informações do grupo' : chat.kind === 'community' ? 'Informações da comunidade' : 'Informações do canal'} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="more_horiz" size={22} />
         </Pressable>
       </View>
@@ -101,16 +100,6 @@ export default function ChatScreen() {
             <Bubble key={m.id} msg={m} chat={chat} gap={i > 0 && msgs[i - 1].from === m.from ? 0 : 8}
               onPress={() => setRouteMsg(m.id)} onRetry={() => retry(chat.id, m.id)} onToggleFile={() => toggleFilePause(chat.id, m.id)} />
           ))}
-          {typing === chat.id && <Typing />}
-          {chat.offline && (
-            <View style={{ alignSelf: 'center', marginTop: 12, maxWidth: 310, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, backgroundColor: c.bg, gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="schedule_send" size={18} />
-                <T size={14} w={600}>{chat.name.split(' ')[0]} está fora de alcance</T>
-              </View>
-              <T size={13} lh={1.4} color={c.ink2}>Sua mensagem está guardada no nó Galpão e será entregue quando uma rota surgir. Expira em 47 h.</T>
-            </View>
-          )}
         </ScrollView>
       </View>
 
@@ -240,31 +229,6 @@ function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; 
           <T size={12} color={c.ink2}>Não entregue no prazo · <T size={12} w={600}>Reenviar</T></T>
         </Pressable>
       )}
-    </View>
-  );
-}
-
-/** Digitando…: 3 pontos, 1,1 s, defasagem de .15 s. */
-function Typing() {
-  const { c, reduceMotion } = useTheme();
-  const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;
-  useEffect(() => {
-    if (reduceMotion) return;
-    const loops = dots.map((d, i) => Animated.loop(Animated.sequence([
-      Animated.delay(i * 150),
-      Animated.timing(d, { toValue: 1, duration: 330, useNativeDriver: true }),
-      Animated.timing(d, { toValue: 0, duration: 330, useNativeDriver: true }),
-      Animated.delay(440 - i * 150),
-    ])));
-    loops.forEach(l => l.start());
-    return () => loops.forEach(l => l.stop());
-  }, [reduceMotion, dots]);
-  return (
-    <View accessibilityLabel="digitando" style={{ alignSelf: 'flex-start', marginTop: 8, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: c.bub, borderWidth: 1, borderColor: c.line, flexDirection: 'row', gap: 4 }}>
-      {dots.map((d, i) => (
-        <Animated.View key={i} style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: c.ink2,
-          opacity: d.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }), transform: [{ translateY: d.interpolate({ inputRange: [0, 1], outputRange: [0, -4] }) }] }} />
-      ))}
     </View>
   );
 }

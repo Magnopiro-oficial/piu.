@@ -1,7 +1,6 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
-import { CHANNEL_TYPES } from '../data/seed';
 import type { ChannelType, IdentityKind } from '../data/types';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
@@ -13,28 +12,35 @@ import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
+/** Tipos de canal (FUN-007), textos do design. */
+const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', string, string][] = [
+  ['public', 'campaign', 'Público', 'Qualquer pessoa encontra e lê. Aparece em Por perto e na busca.'],
+  ['private', 'lock', 'Privado', 'Entra só com convite. Inscritos não veem uns aos outros.'],
+  ['secret', 'visibility_off', 'Secreto', 'Não aparece em busca. Nem o nome sai sem convite.'],
+];
+
 /** Criar canal (FUN-007): público, privado ou secreto; quem publica; com identidade pública ou anônima. */
 export default function NewChannel() {
   const { parent } = useLocalSearchParams<{ parent?: string }>();
   const { c } = useTheme();
-  const { createChannel, profile, showToast } = useStore();
+  const { profile, identity, showToast } = useStore();
   const { ready, createGroup } = useMessaging();
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [type, setType] = useState<ChannelType>('public');
   const [post, setPost] = useState<'admins' | 'mods'>('admins');
-  const [ident, setIdent] = useState<IdentityKind>('public');
-  const ok = name.trim().length > 0;
+  const [ident, setIdent] = useState<IdentityKind>(identity);
+  // Só pelo protocolo: sem as chaves carregadas, espera (não cria canal de mentira).
+  const ok = ready && name.trim().length > 0;
   const input = { borderRadius: 16, backgroundColor: c.bg2, paddingHorizontal: 16, color: c.ink } as const;
+  const myName = profile.name.trim();
 
   const create = () => {
     if (!ok) return;
-    // Canal real pelo protocolo (os inscritos entram pelo convite do canal). Sem chaves ainda: só local.
+    // Canal real pelo protocolo: os inscritos entram pelo convite do canal.
     let id: string;
     try {
-      id = ready
-        ? createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent })
-        : createChannel({ name, desc, type, post, ident });
+      id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent });
     } catch (e) { showToast({ icon: 'error', title: 'Não foi possível criar', body: (e as Error).message }); return; }
     router.dismissTo('/(tabs)');
     router.push({ pathname: '/chat/[id]', params: { id } });
@@ -80,7 +86,7 @@ export default function NewChannel() {
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
           <Segmented label="Publicar como" value={ident} onChange={setIdent} options={[['public', 'Identidade pública'], ['anon', 'Identidade anônima']]} />
           <T size={12.5} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>
-            {ident === 'anon' ? 'O canal fica na sua identidade anônima, sem vínculo com o perfil público.' : `Inscritos veem que o canal é seu (${profile.name || 'Cardeal'}).`}
+            {ident === 'anon' ? 'O canal fica na sua identidade anônima, sem vínculo com o perfil público.' : myName ? `Inscritos veem que o canal é seu (${myName}).` : 'Inscritos veem que o canal é da sua identidade pública.'}
           </T>
         </View>
 

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Chat } from '../data/types';
+import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
@@ -104,8 +105,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const { setProfile, setVerified, addChat: addChatRestore } = useStore();
   const importRestored = useRef((d: Record<string, unknown>) => {
     if (d.profile && typeof d.profile === 'object') setProfile(d.profile as never);
-    if (Array.isArray(d.chats)) for (const ch of d.chats as Chat[]) addChatRestore(ch);
-    if (d.verified && typeof d.verified === 'object') for (const [k, v] of Object.entries(d.verified as Record<string, boolean>)) setVerified(k, !!v);
+    // Backups antigos podem trazer as conversas de exemplo: só as reais entram.
+    for (const ch of cleanChats(d.chats)) addChatRestore(ch);
+    for (const k of Object.keys(cleanVerified(d.verified, cleanChats(d.chats)))) setVerified(k, true);
   });
 
   // Referências para os eventos do mensageiro (que vivem fora do React).
