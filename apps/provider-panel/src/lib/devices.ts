@@ -1,8 +1,10 @@
 import type { RelayNode } from '../types';
 import { fmt, fmtDec, fmtInt } from './format';
 
+/** Com piu-node, um equipamento com identidade técnica mostra o enlace real (online/offline); sem ela, só "Registrado". */
 export const statusShort = (d: RelayNode) =>
-  d.telemetry === 'none' && d.status === 'active' ? 'Registrado' : d.status === 'active' ? 'Ativo' : d.status === 'paused' ? 'Pausado' : 'Aquecendo';
+  d.telemetry === 'none' && d.status === 'active' ? (d.link ? (d.link.online ? 'Online' : 'Offline') : 'Registrado')
+  : d.status === 'active' ? 'Ativo' : d.status === 'paused' ? 'Pausado' : 'Aquecendo';
 
 /** Rótulos de exibição usados nas tabelas. Com piu-node, "hoje" é contagem de recibos (LUNES só depois da liquidação). */
 export function deviceLabels(d: RelayNode) {

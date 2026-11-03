@@ -83,6 +83,8 @@ interface Store {
   totals: { month: number; today: number; active: number; validated: number };
   /** Estatísticas reais do nó (retransmissão, histórico, recibos); null na demonstração. */
   live: Live | null;
+  /** Com piu-node: lê de novo agora as estatísticas e os equipamentos (ex.: depois de adicionar um vizinho). */
+  refreshLive: () => Promise<void>;
 }
 
 const Ctx = createContext<Store | null>(null);
@@ -112,6 +114,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [phones, setPhones] = useState<ApiPhone[] | null>(null);
   const settingsLoaded = useRef(false);
+  const readLive = useRef<(() => Promise<void>) | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const toastSeq = useRef(0);
 
@@ -136,13 +139,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     node.guard(api.phones()).then(setPhones).catch(() => {});
     node.guard(api.settings()).then(s => { setLimitsState(s.limits); setPolicies(s.policies); settingsLoaded.current = true; }).catch(() => {});
     // Estatísticas reais do motor: lidas agora e a cada LIVE_MS (vizinhos entram e saem, contadores sobem).
+    // Os equipamentos também: o estado do enlace de cada um (conectado, visto por último) vem do nó.
     let alive = true;
     const read = () => Promise.all([
       node.guard(api.relay()).catch(() => null), node.guard(api.history()).catch(() => null), node.guard(api.receipts()).catch(() => null),
-    ]).then(([relay, history, receipts]) => { if (alive) setLive({ relay, history, receipts }); });
+      node.guard(api.devices()).catch(() => null),
+    ]).then(([relay, history, receipts, devs]) => { if (!alive) return; setLive({ relay, history, receipts }); if (devs) setApiDevices(devs); });
+    readLive.current = read;
     void read();
     const t = window.setInterval(() => { if (document.visibilityState !== 'hidden') void read(); }, LIVE_MS);
-    return () => { alive = false; window.clearInterval(t); };
+    return () => { alive = false; readLive.current = null; window.clearInterval(t); };
   }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const devices = useMemo<RelayNode[]>(
@@ -288,6 +294,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       toast, showToast,
       totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: api ? 0 : month - PENDING },
       live,
+      refreshLive: () => readLive.current?.() ?? Promise.resolve(),
     };
   }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
 

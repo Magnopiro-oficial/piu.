@@ -4,6 +4,7 @@ import { Dialog } from '../components/Overlays';
 import { Bar, Icon, Segmented, Toggle, growX, pressable } from '../components/ui';
 import { HOURS } from './Settings';
 import { fmt, fmtInt } from '../lib/format';
+import { ago } from '../lib/live';
 import { deviceLabels, parentName } from '../lib/devices';
 import { useStore } from '../state/store';
 import type { DeviceFilter, HoursPolicy, RelayNode } from '../types';
@@ -88,7 +89,8 @@ function DeviceDetail({ d }: { d: RelayNode }) {
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const paused = d.status === 'paused';
   const parent = parentName(devices, d.parent);
-  const statusLabel = d.telemetry === 'none' && !paused ? 'Registrado · sem contato com este nó'
+  const statusLabel = d.telemetry === 'none' && !paused
+    ? (d.link ? (d.link.online ? 'Online · enlace com este nó' : 'Offline · sem enlace com este nó') : d.passive ? 'Só registro · sem software do Piu' : 'Registrado · sem identidade técnica')
     : d.status === 'active' ? (d.passive ? 'Vinculado à malha' : 'Ativo na malha') : paused ? (d.passive ? 'Desvinculado' : 'Pausado por você') : 'Aquecendo';
   const metrics = d.telemetry === 'live'
     ? [[fmtInt(d.receiptsToday ?? 0), 'recibos hoje'], [paused ? '0' : fmtInt(d.pph), 'encaminhados/h'], [String(d.neighbors), 'vizinhos']]
@@ -148,6 +150,19 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         </div>
       )}
 
+      {real && d.telemetry === 'none' && d.nodeId && (
+        // Estado real do enlace LNNP, medido por este nó (não é estatística do outro equipamento).
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)' }}>
+          <Icon name={d.link?.online ? 'link' : 'link_off'} size={17} wght={300} />
+          <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{d.link?.online ? 'Conectado a este nó agora' : 'Sem enlace com este nó agora'}</span>
+            <span className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>
+              {d.link?.online ? (d.link.address ?? 'enlace LNNP') : d.link?.lastSeen ? (ago(d.link.lastSeen) === 'agora' ? 'visto por último há menos de 1 min' : `visto por último há ${ago(d.link.lastSeen)}`) : 'não visto desde que este nó ligou'}
+            </span>
+          </div>
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
         {metrics.map(([v, l]) => (
           <div key={l} className="col" style={{ padding: 12, borderRadius: 14, background: 'var(--bg2)', gap: 3 }}>
@@ -165,7 +180,10 @@ function DeviceDetail({ d }: { d: RelayNode }) {
             {i.load !== null && <div className="track" style={{ height: 4, borderRadius: 2 }}><div style={{ width: (paused ? 0 : i.load) + '%', animation: growX(), transition: 'width .3s' }} /></div>}
           </div>
         ))}
-        {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Este equipamento ainda não manda estatísticas a este nó. Quando o Piu Node dele se conectar, ele aparece como vizinho na Malha.</div>}
+        {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>{
+          d.passive ? 'Sem software do Piu: este nó não fala com ele, só guarda o registro e o nome público.'
+          : d.nodeId ? 'As estatísticas dele ficam no painel do próprio equipamento; aqui aparece só o estado do enlace com este nó.'
+          : 'Registrado sem identidade técnica: este nó não sabe qual vizinho ele é. Para ver o enlace, registre de novo escolhendo o vizinho no assistente.'}</div>}
       </div>
 
       {real && !d.passive && <DeviceRules d={d} onSave={l => setDeviceLimits(d.id, l)} />}
