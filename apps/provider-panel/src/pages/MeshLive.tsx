@@ -60,7 +60,7 @@ export function MeshLive() {
           </div>
         )}
         {kinds.length > 0 && (
-          <div style={{ position: 'absolute', left: 16, bottom: 16, display: 'flex', gap: 14, flexWrap: 'wrap', padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, color: 'var(--ink2)' }}>
+          <div className="mesh-legend" style={{ position: 'absolute', left: 16, bottom: 16, display: 'flex', gap: 14, flexWrap: 'wrap', padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, color: 'var(--ink2)' }}>
             {kinds.map(k => (
               <div key={k} className="row" style={{ gap: 7 }}><div style={{ width: 22, height: 0, borderTop: `${LINE_STYLE[k][0]} ${LINE_STYLE[k][1]} var(--ink)` }} />{MEDIUM[k]}</div>
             ))}

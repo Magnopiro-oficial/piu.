@@ -65,7 +65,7 @@ export function Wallet() {
         <div className="col" style={{ gap: 6 }}>
           <div style={{ fontSize: 13, opacity: 0.7 }}>Saldo disponível</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-            <span className="tnum" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{fmt(balance)}</span>
+            <span className="tnum hero-num" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{fmt(balance)}</span>
             <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.75 }}>LUNES</span>
           </div>
           <div style={{ fontSize: 13.5, opacity: 0.75 }}>{real ? 'Ganhos entram aqui quando um lote for liquidado na Mainnet.' : `+ ${fmt(totals.month)} em formação no lote ${PERIOD.lot}`}</div>
@@ -118,11 +118,11 @@ export function Wallet() {
         <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>Movimentações</h2>
         {!txs.length && <div style={{ padding: '18px', borderTop: '1px solid var(--line)', fontSize: 13.5, color: 'var(--ink2)' }}>Nenhuma movimentação ainda. Liquidações recebidas e transferências aparecem aqui.</div>}
         {txs.map(t => (
-          <div key={t.id} style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) 120px', gap: 14, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)', animation: t.fresh ? 'piuUp .4s both' : 'none' }}>
+          <div key={t.id} className="tx-row" style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) 120px', gap: 14, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)', animation: t.fresh ? 'piuUp .4s both' : 'none' }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={t.icon} size={18} wght={300} /></div>
             <span style={{ fontSize: 14, fontWeight: 600 }}>{t.title}</span>
-            <span style={{ fontSize: 13, color: 'var(--ink2)' }}>{t.date}</span>
-            <span className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>{t.status}</span>
+            <span className="tx-date" style={{ fontSize: 13, color: 'var(--ink2)' }}>{t.date}</span>
+            <span className="mono tx-status" style={{ fontSize: 12, color: 'var(--ink2)' }}>{t.status}</span>
             <span className="tnum" style={{ textAlign: 'right', fontSize: 14, fontWeight: 650 }}>{t.value}</span>
           </div>
         ))}

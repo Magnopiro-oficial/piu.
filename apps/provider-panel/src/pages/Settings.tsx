@@ -58,7 +58,7 @@ export function Settings() {
   ];
 
   return (
-    <div className="page-body" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16, alignItems: 'start' }}>
+    <div className="page-body settings-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(2,minmax(0,1fr))', gap: 16, alignItems: 'start' }}>
       <section className="card-soft col" style={{ borderRadius: 22, padding: 20, gap: 16 }}>
         <CardHead title="Limites globais" sub="Somados entre todos os seus equipamentos" />
         <LimitRow title="Banda total para a rede" hint="somando equipamentos">
@@ -150,7 +150,7 @@ export function Settings() {
         </>)}
       </section>
 
-      <section className="card-line" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 28 }}>
+      <section className="card-line settings-wide" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 28 }}>
         <div className="col" style={{ gap: 10 }}>
           <CardHead title="Nomes públicos das suas redes" sub="Qualquer pessoa por perto vê estes nomes na lista de Wi-Fi e no app" />
           {devices.filter(d => d.pub).map(d => (

@@ -40,11 +40,11 @@ export function EarningsLive() {
 
       <section className="span7 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>
         <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>Recibos por dia</h2>
-        <div className="mono table-head" style={{ display: 'grid', gridTemplateColumns: DAY_COLS, gap: 12, ...head }}>
+        <div className="mono tbl-head" style={{ display: 'grid', gridTemplateColumns: DAY_COLS, gap: 12, ...head }}>
           <span>DIA</span><span style={{ textAlign: 'right' }}>RECEBIDOS</span><span style={{ textAlign: 'right' }}>ENCAMINHADOS</span><span style={{ textAlign: 'right' }}>DUPLICATAS</span><span style={{ textAlign: 'right' }}>RECIBOS</span>
         </div>
         {days.map(d => (
-          <div key={d.day} className="table-row" style={{ display: 'grid', gridTemplateColumns: DAY_COLS, gap: 12, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
+          <div key={d.day} className="tbl-row" style={{ display: 'grid', gridTemplateColumns: DAY_COLS, gap: 12, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
             <span style={{ fontWeight: 600 }}>{d.day === h?.today ? 'hoje' : dayLabel(d.day)}</span>
             <span className="tnum" data-label="recebidos" style={{ textAlign: 'right' }}>{fmtInt(d.received)}</span>
             <span className="tnum" data-label="encaminhados" style={{ textAlign: 'right' }}>{fmtInt(d.forwarded)}</span>

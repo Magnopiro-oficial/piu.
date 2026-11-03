@@ -17,9 +17,9 @@ export function Devices() {
   const filtered = devices.filter(d => (devFilter === 'all' || d.status === devFilter) && (!q || d.name.toLowerCase().includes(q)));
 
   return (
-    <div className="page-body" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
+    <div className="page-body devices-layout" style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
       <div className="col grow" style={{ gap: 12 }}>
-        <div className="row" style={{ gap: 8 }}>
+        <div className="row dev-filters" style={{ gap: 8, flexWrap: 'wrap' }}>
           {FILTERS.map(([k, l]) => {
             const on = devFilter === k;
             const n = k === 'all' ? devices.length : devices.filter(d => d.status === k).length;
@@ -40,13 +40,13 @@ export function Devices() {
         </div>
 
         <div className="card-line" role="table" aria-label="Equipamentos" style={{ borderRadius: 20, overflow: 'hidden' }}>
-          <div role="row" className="mono" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 14, padding: '11px 18px', background: 'var(--bg2)', fontSize: 11, fontWeight: 500, letterSpacing: '.05em', color: 'var(--ink2)' }}>
-            <span role="columnheader">EQUIPAMENTO</span><span role="columnheader">STATUS</span><span role="columnheader" style={{ textAlign: 'right' }}>PAC/H</span><span role="columnheader">ARMAZENAMENTO</span><span role="columnheader" style={{ textAlign: 'right' }}>HOJE</span>
+          <div role="row" className="mono dev-table" style={{ display: 'grid', gridTemplateColumns: COLS, gap: 14, padding: '11px 18px', background: 'var(--bg2)', fontSize: 11, fontWeight: 500, letterSpacing: '.05em', color: 'var(--ink2)' }}>
+            <span role="columnheader">EQUIPAMENTO</span><span role="columnheader">STATUS</span><span role="columnheader" className="col-sec" style={{ textAlign: 'right' }}>PAC/H</span><span role="columnheader" className="col-sec">ARMAZENAMENTO</span><span role="columnheader" style={{ textAlign: 'right' }}>HOJE</span>
           </div>
           {filtered.map(d => {
             const on = d.id === sel, v = deviceLabels(d);
             return (
-              <div key={d.id} {...pressable(() => navigate('devices', d.id), d.name)} aria-pressed={on}
+              <div key={d.id} className="dev-table" {...pressable(() => navigate('devices', d.id), d.name)} aria-pressed={on}
                 style={{ display: 'grid', gridTemplateColumns: COLS, gap: 14, alignItems: 'center', padding: '13px 18px', borderTop: '1px solid var(--line)', cursor: 'pointer', background: on ? 'var(--bg2)' : 'transparent', animation: d.fresh ? 'piuUp .5s .15s both' : 'none', transition: 'background .15s' }}>
                 <div className="row" style={{ gap: 12, minWidth: 0 }}>
                   <div style={{ width: 38, height: 38, borderRadius: 11, background: on ? 'var(--ink)' : 'var(--bg2)', color: on ? 'var(--invink)' : 'var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', transition: 'background .15s' }}>
@@ -58,8 +58,8 @@ export function Devices() {
                   </div>
                 </div>
                 <DeviceStatusCell d={d} />
-                <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
-                <div className="col" style={{ gap: 5 }}>
+                <div className="mono col-sec" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
+                <div className="col col-sec" style={{ gap: 5 }}>
                   <Bar pct={v.stoPct} height={5} radius={3} />
                   <div className="mono" style={{ fontSize: 11, color: 'var(--ink2)' }}>{v.stoLabel}</div>
                 </div>
@@ -107,7 +107,7 @@ function DeviceDetail({ d }: { d: RelayNode }) {
   const rowStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderTop: '1px solid var(--line)', cursor: 'pointer', fontSize: 13.5, fontWeight: 550 } as const;
 
   return (
-    <aside aria-label={'Detalhe de ' + d.name} className="card-line col" style={{ width: 360, flex: 'none', borderRadius: 22, padding: 20, gap: 16, animation: 'piuPanel .32s var(--ease-out) both' }}>
+    <aside aria-label={'Detalhe de ' + d.name} className="card-line col dev-detail" style={{ width: 360, flex: 'none', borderRadius: 22, padding: 20, gap: 16, animation: 'piuPanel .32s var(--ease-out) both' }}>
       <div style={{ display: 'flex', alignItems: 'flex-start', gap: 12 }}>
         <div style={{ width: 46, height: 46, borderRadius: 14, background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name={d.icon} size={24} wght={350} /></div>
         <div className="col grow" style={{ gap: 3 }}>

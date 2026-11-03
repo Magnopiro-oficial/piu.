@@ -42,13 +42,13 @@ export function OverviewLive() {
   ].sort((a, b) => b[3] - a[3]).slice(0, 6);
 
   return (
-    <div className="grid12" style={{ padding: '24px 32px 36px' }}>
+    <div className="grid12 page-body">
       <section className="span8 card-ink col" style={{ padding: 24, borderRadius: 24, gap: 20, animation: 'piuUp .45s both' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div className="col" style={{ gap: 6 }}>
             <div style={{ fontSize: 13, opacity: 0.7 }}>Recibos assinados em {mon || 'este mês'}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span className="tnum" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{loading ? '—' : fmtInt(month.receipts)}</span>
+              <span className="tnum hero-num" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{loading ? '—' : fmtInt(month.receipts)}</span>
               <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.75 }}>recibos</span>
             </div>
             <div style={{ fontSize: 13.5, opacity: 0.75 }}>+{fmtInt(today.receipts)} hoje · {state} · {withData} de {devices.length} equipamentos com dados</div>
@@ -119,7 +119,7 @@ export function OverviewLive() {
                 </div>
               </div>
               <DeviceStatusCell d={d} />
-              <div className="mono" title="encaminhados na última hora" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
+              <div className="mono col-sec" title="encaminhados na última hora" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
               <div className="tnum" style={{ fontSize: 13, fontWeight: 650, textAlign: 'right' }}>{v.today}</div>
             </div>
           );

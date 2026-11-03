@@ -18,14 +18,14 @@ function OverviewDemo() {
   const rateMax = Math.max(...RATES.map(r => r.lunes));
 
   return (
-    <div className="grid12" style={{ padding: '24px 32px 36px' }}>
+    <div className="grid12 page-body">
       {/* herói: ganhos do mês */}
       <section className="span8 card-ink col" style={{ padding: 24, borderRadius: 24, gap: 20, animation: 'piuUp .45s both' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div className="col" style={{ gap: 6 }}>
             <div style={{ fontSize: 13, opacity: 0.7 }}>Ganhos em {PERIOD.month}</div>
             <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
-              <span className="tnum" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{fmt(totals.month)}</span>
+              <span className="tnum hero-num" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{fmt(totals.month)}</span>
               <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.75 }}>LUNES</span>
             </div>
             <div style={{ fontSize: 13.5, opacity: 0.75 }}>+{fmt(totals.today)} hoje · {totals.active} de {devices.length} equipamentos ativos</div>
@@ -87,7 +87,7 @@ function OverviewDemo() {
         {devices.map(d => {
           const v = deviceLabels(d);
           return (
-            <div key={d.id} className="click-row" {...pressable(() => navigate('devices', d.id), d.name)}
+            <div key={d.id} className="click-row dev-row" {...pressable(() => navigate('devices', d.id), d.name)}
               style={{ display: 'grid', gridTemplateColumns: 'minmax(0,2.4fr) minmax(0,1.2fr) 90px 90px', gap: 16, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)' }}>
               <div className="row" style={{ gap: 12, minWidth: 0 }}>
                 <div style={{ width: 36, height: 36, borderRadius: 11, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name={d.icon} size={20} wght={300} /></div>
@@ -97,7 +97,7 @@ function OverviewDemo() {
                 </div>
               </div>
               <DeviceStatusCell d={d} />
-              <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
+              <div className="mono col-sec" style={{ fontSize: 12.5, fontWeight: 500, textAlign: 'right' }}>{v.pph}</div>
               <div className="tnum" style={{ fontSize: 14, fontWeight: 650, textAlign: 'right' }}>{v.today}</div>
             </div>
           );
@@ -149,7 +149,7 @@ function OverviewDemo() {
               <div style={{ fontSize: 13.5, fontWeight: 600 }}>{r.title}</div>
               <div className="mono" style={{ fontSize: 11, color: 'var(--ink2)' }}>{r.volume}</div>
             </div>
-            <div style={{ width: 110 }}><Bar pct={((r.lunes / rateMax) * 100).toFixed(0) + '%'} height={5} radius={3} /></div>
+            <div className="hide-sm" style={{ width: 110 }}><Bar pct={((r.lunes / rateMax) * 100).toFixed(0) + '%'} height={5} radius={3} /></div>
             <div className="tnum" style={{ width: 64, textAlign: 'right', fontSize: 13.5, fontWeight: 650 }}>{fmt(r.lunes)}</div>
           </div>
         ))}

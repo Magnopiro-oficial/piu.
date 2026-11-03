@@ -6,7 +6,7 @@ export function Toast() {
   const { toast } = useStore();
   if (!toast) return null;
   return (
-    <div key={toast.seq} role="status" aria-live="polite" style={{ position: 'fixed', right: 24, bottom: 24, width: 380, zIndex: 50, borderRadius: 18, background: 'var(--ink)', color: 'var(--invink)', padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'center', boxShadow: '0 20px 50px rgba(0,0,0,.3)', animation: 'piuToast .4s cubic-bezier(.2,.9,.3,1.15) both' }}>
+    <div key={toast.seq} role="status" aria-live="polite" className="toast" style={{ position: 'fixed', right: 24, bottom: 24, width: 380, zIndex: 50, borderRadius: 18, background: 'var(--ink)', color: 'var(--invink)', padding: '14px 16px', display: 'flex', gap: 12, alignItems: 'center', boxShadow: '0 20px 50px rgba(0,0,0,.3)', animation: 'piuToast .4s cubic-bezier(.2,.9,.3,1.15) both' }}>
       <Icon name={toast.icon} size={22} style={{ display: 'inline-block', animation: 'piuPop .4s .1s var(--ease-pop) both' }} />
       <div className="col grow" style={{ gap: 2 }}>
         <div style={{ fontSize: 14, fontWeight: 650 }}>{toast.title}</div>
@@ -27,7 +27,7 @@ export function Dialog({ icon, title, body, code, waiting, primaryLabel, onPrima
   return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45, animation: 'piuFade .2s ease-out both' }} />
-      <div role="dialog" aria-modal="true" aria-labelledby="dlg-title" style={{ position: 'fixed', left: '50%', top: '50%', width: 420, marginLeft: -210, transform: 'translateY(-50%)', zIndex: 46 }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="dlg-title" className="dlg" style={{ position: 'fixed', left: '50%', top: '50%', width: 420, marginLeft: -210, transform: 'translateY(-50%)', zIndex: 46 }}>
         <div className="col" style={{ borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '28px 24px 20px', alignItems: 'center', gap: 14, textAlign: 'center', animation: 'piuDialog .3s cubic-bezier(.2,.9,.3,1.2) both' }}>
           <div style={{ position: 'relative', width: 62, height: 62 }}>
             {waiting && <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 1.8s ease-out infinite' }} />}

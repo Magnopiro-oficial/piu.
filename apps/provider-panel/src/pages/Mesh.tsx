@@ -20,9 +20,9 @@ function MeshDemo() {
   const ownCount = NODES.filter(([key, k]) => k === 'own' && byId.has(key)).length;
 
   return (
-    <div className="page-body" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 16 }}>
-      <div role="img" aria-label="Topologia ao vivo da malha" style={{ position: 'relative', height: MAP_H, borderRadius: 24, backgroundColor: 'var(--bg2)', backgroundImage: 'radial-gradient(var(--line2) 1px, transparent 1.2px)', backgroundSize: '22px 22px', overflow: 'hidden' }}>
-        <div style={{ position: 'absolute', left: '50%', top: 0, width: MAP_W, height: MAP_H, marginLeft: -MAP_W / 2 }}>
+    <div className="page-body mesh-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 16 }}>
+      <div role="img" aria-label="Topologia ao vivo da malha" className="mesh-map" style={{ position: 'relative', height: MAP_H, borderRadius: 24, backgroundColor: 'var(--bg2)', backgroundImage: 'radial-gradient(var(--line2) 1px, transparent 1.2px)', backgroundSize: '22px 22px', overflow: 'hidden' }}>
+        <div className="mesh-canvas" style={{ position: 'absolute', left: '50%', top: 0, width: MAP_W, height: MAP_H, marginLeft: -MAP_W / 2 }}>
           {LINKS.map(([a, b, t, own], i) => {
             if (!visible(a) || !visible(b)) return null;
             const [x1, y1] = POS[a], [x2, y2] = POS[b], dx = x2 - x1, dy = y2 - y1;
@@ -58,7 +58,7 @@ function MeshDemo() {
             );
           })}
         </div>
-        <div style={{ position: 'absolute', left: 16, bottom: 16, display: 'flex', gap: 14, padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, color: 'var(--ink2)' }}>
+        <div className="mesh-legend" style={{ position: 'absolute', left: 16, bottom: 16, display: 'flex', flexWrap: 'wrap', gap: 14, padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, color: 'var(--ink2)' }}>
           {LEGEND.map(([k, l]) => (
             <div key={k} className="row" style={{ gap: 7 }}><div style={{ width: 22, height: 0, borderTop: `${LINE_STYLE[k][0]} ${LINE_STYLE[k][1]} var(--ink)` }} />{l}</div>
           ))}

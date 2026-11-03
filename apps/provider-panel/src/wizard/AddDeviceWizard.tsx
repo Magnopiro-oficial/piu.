@@ -104,14 +104,14 @@ export function AddDeviceWizard() {
     <>
       <div onClick={close} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 40, animation: 'piuFade .2s ease-out both' }} />
       <div role="dialog" aria-modal="true" aria-labelledby="wiz-title"
-        style={{ position: 'fixed', left: '50%', top: '50%', width: 780, height: 620, maxHeight: 'calc(100vh - 32px)', transform: 'translate(-50%,-50%)', zIndex: 41 }}>
+        className="wiz" style={{ position: 'fixed', left: '50%', top: '50%', width: 780, height: 620, maxWidth: 'calc(100vw - 32px)', maxHeight: 'calc(100vh - 32px)', transform: 'translate(-50%,-50%)', zIndex: 41 }}>
         <div className="col" style={{ width: '100%', height: '100%', borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', overflow: 'hidden', animation: 'piuDialog .32s cubic-bezier(.2,.9,.3,1.15) both' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 26px 0' }}>
+          <div className="wiz-pad" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '22px 26px 0' }}>
             <h2 id="wiz-title" style={{ margin: 0, fontSize: 22, fontWeight: 700, letterSpacing: '-0.03em' }}>Adicionar equipamento</h2>
             <button type="button" className="btn" aria-label="Fechar" onClick={close} style={{ width: 34, height: 34, borderRadius: 17, background: 'var(--bg2)' }}><Icon name="close" size={19} /></button>
           </div>
 
-          <ol aria-label="Etapas" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 26px', margin: 0, listStyle: 'none' }}>
+          <ol aria-label="Etapas" className="wiz-steps" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '18px 26px', margin: 0, listStyle: 'none' }}>
             {STEPS.map((l, i) => (
               <li key={l} aria-current={i === w.step ? 'step' : undefined} className="col" style={{ flex: 1, gap: 8 }}>
                 <div className="track" style={{ height: 4, borderRadius: 2 }}><div style={{ width: i < w.step ? '100%' : i === w.step ? '50%' : '0%', transition: 'width .4s var(--ease-out)' }} /></div>
@@ -120,10 +120,10 @@ export function AddDeviceWizard() {
             ))}
           </ol>
 
-          <div className="scroll-thin" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 26px 16px' }}>
+          <div className="scroll-thin wiz-pad" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 26px 16px' }}>
             {w.step === 0 && <StepFamily value={w.fam} onPick={f => patch({ fam: f.id, name: f.defName!, pub: f.defPub! })} />}
             {w.step === 1 && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="col" style={{ gap: 12 }}>
                   <div style={{ fontSize: 15, fontWeight: 650 }}>{isAp ? '1 · Configure o roteador' : fam.isRadio ? '1 · Conecte o rádio' : '1 · Instale o Piu Node'}</div>
                   {fam.install && (
@@ -276,7 +276,7 @@ export function AddDeviceWizard() {
               </div>
             ) : <StepTest fam={fam} parent={parent} n={w.n} />)}
             {w.step === 3 && (
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="col" style={{ gap: 14 }}>
                   <label className="col" style={{ gap: 7 }}>
                     <span style={fieldLabel}>Nome do equipamento</span>
@@ -337,7 +337,7 @@ export function AddDeviceWizard() {
             )}
           </div>
 
-          <div className="row" style={{ gap: 10, padding: '16px 26px 22px', borderTop: '1px solid var(--line)' }}>
+          <div className="row wiz-pad wiz-foot" style={{ gap: 10, padding: '16px 26px 22px', borderTop: '1px solid var(--line)' }}>
             <button type="button" className="btn btn-outline" disabled={w.step === 0} onClick={back} style={{ height: 44, padding: '0 18px', borderRadius: 22, fontSize: 14, opacity: w.step > 0 ? 1 : 0.35 }}>Voltar</button>
             <div className="mono" aria-live="polite" style={{ flex: 1, fontSize: 12, color: 'var(--ink2)' }}>{hint}</div>
             <button type="button" className="btn btn-primary" aria-disabled={!canNext} onClick={next} style={{ height: 44, padding: '0 22px', borderRadius: 22, fontSize: 14, opacity: canNext ? 1 : 0.35, transition: 'opacity .25s,transform .15s' }}>
@@ -358,7 +358,7 @@ function WizLimit({ title, children }: { title: string; children: ReactNode }) {
 
 function StepFamily({ value, onPick }: { value: string; onPick: (f: DeviceFamily) => void }) {
   return (
-    <div role="radiogroup" aria-label="Tipo de equipamento" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+    <div role="radiogroup" aria-label="Tipo de equipamento" className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
       {FAMILIES.map(f => (
         <button key={f.id} type="button" role="radio" aria-checked={value === f.id} disabled={f.disabled} className="choice" onClick={() => onPick(f)} style={{ display: 'flex', gap: 14, padding: 16, borderRadius: 20 }}>
           <div style={{ width: 42, height: 42, borderRadius: 13, background: 'var(--bg3)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name={f.icon} size={22} wght={300} /></div>
@@ -388,7 +388,7 @@ function StepTest({ fam, parent, n }: { fam: DeviceFamily; parent: string; n: nu
     : [['Banda medida', fam.bw], ['Latência', fam.lat], ['Vizinhos', fam.nb]];
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 20 }}>
+    <div className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1.3fr) minmax(0,1fr)', gap: 20 }}>
       <div className="col">
         <div style={{ fontSize: 14, color: 'var(--ink2)', lineHeight: 1.4, paddingBottom: 6 }}>
           {fam.isAp ? 'Conferimos o sinal e se os celulares conseguem se encontrar através dele, ligados ao seu nó.' : 'Capacidade anunciada não basta: medimos com vizinhos independentes.'}
