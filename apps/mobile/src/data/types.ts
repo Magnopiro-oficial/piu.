@@ -17,6 +17,8 @@ export interface FileXfer {
   preview?: string;
   /** Depois de reabrir o app, o envio real não continua (o conteúdo não fica guardado). */
   lost?: boolean;
+  /** Recebido esperando "Baixar" (ajuste "Baixar mídia automaticamente"). */
+  held?: boolean;
 }
 
 export interface Msg {

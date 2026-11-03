@@ -20,13 +20,16 @@ const mb = (n: number) => String(n).replace('.', ',');
 
 /**
  * Conteúdo do balão de arquivo: progresso por bloco, estado e Pausar/Retomar.
- * `inverse`: balão enviado (fundo tinta). Recebido: fundo do balão, sem Pausar.
+ * `inverse`: balão enviado (fundo tinta). Recebido: fundo do balão, sem Pausar; com "Baixar" quando
+ * o ajuste "Baixar mídia automaticamente" segurou o arquivo.
  */
 export function FileBubble({ file, onToggle, inverse = true }: { file: FileXfer; onToggle: () => void; inverse?: boolean }) {
   const { c } = useTheme();
   const fg = inverse ? c.invink : c.ink, chip = inverse ? c.invink : c.ink, chipFg = inverse ? c.ink : c.invink;
   const [icon, label] = file.incoming
-    ? (file.state === 'verified' ? ['verified', 'Recebido · integridade conferida (SHA-256)'] as [IconName, string] : ['download', 'Recebendo em blocos'] as [IconName, string])
+    ? (file.state === 'verified' ? ['verified', 'Recebido · integridade conferida (SHA-256)'] as [IconName, string]
+      : file.held ? ['download', 'Toque em Baixar para receber'] as [IconName, string]
+        : ['download', 'Recebendo em blocos'] as [IconName, string])
     : file.lost && file.state !== 'verified'
       ? ['error', 'Interrompido ao fechar o app. Envie o arquivo de novo.'] as [IconName, string]
       : (file.real && REAL[file.state]) || LABEL[file.state];
@@ -34,7 +37,7 @@ export function FileBubble({ file, onToggle, inverse = true }: { file: FileXfer;
   const meta = file.state === 'verified'
     ? `${mb(file.mb)} MB · ${file.blocks} blocos`
     : `${mb(Number((file.mb * file.done / Math.max(1, file.blocks)).toFixed(1)))} de ${mb(file.mb)} MB · bloco ${file.done}/${file.blocks}`;
-  const canToggle = file.state !== 'verified' && !file.incoming && !file.lost;
+  const canToggle = file.state !== 'verified' && !file.lost && (!file.incoming || !!file.held);
   return (
     <View style={{ width: 236, gap: 9, paddingTop: 4, paddingBottom: 2 }}>
       {file.preview && (
@@ -60,7 +63,7 @@ export function FileBubble({ file, onToggle, inverse = true }: { file: FileXfer;
         {canToggle && (
           <Pressable onPress={onToggle} accessibilityRole="button" hitSlop={8}
             style={{ height: 26, paddingHorizontal: 10, borderRadius: 13, borderWidth: 1, borderColor: 'rgba(127,127,127,0.55)', justifyContent: 'center' }}>
-            <T size={11.5} w={600} color={fg}>{file.state === 'userPaused' ? 'Retomar' : 'Pausar'}</T>
+            <T size={11.5} w={600} color={fg}>{file.incoming ? 'Baixar' : file.state === 'userPaused' ? 'Retomar' : 'Pausar'}</T>
           </Pressable>
         )}
       </View>

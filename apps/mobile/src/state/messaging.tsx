@@ -251,7 +251,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           msgToChat.current.set('in-' + f.msgId, cid);
           const expiresAt = expiryOf({ sentAt: f.sentAt ?? now(), expireSec: f.expireSec });
           handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
-            file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true } });
+            file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true, ...(f.held ? { held: true } : {}) } });
         },
         fileReceived: (contactId, f) => {
           const cid = msgToChat.current.get('in-' + f.msgId) ?? chatIdFor(contactId);
@@ -331,6 +331,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       hours: bat.hours === 'night' ? 'night' : 'always',
     });
   }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours]);
+  // Armazenamento → "Baixar mídia automaticamente".
+  useEffect(() => { messenger?.setAutoDownload(sto.auto); }, [messenger, sto.auto]);
   useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
   // Por perto: anúncio de presença só enquanto visível (até o fim da 1 h), com o perfil PÚBLICO
   // (nome e foto pequena) e a minha taxa. Invisível = retirada do anúncio.
@@ -362,6 +364,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         try { msgToChat.current.set(msgId, chatId); return messenger.sendFile(peer, msgId, f, expireSec); } catch { return null; }
       },
       setPaused: (msgId, paused) => messenger.setFilePaused(msgId, paused),
+      download: (peer, msgId) => messenger.downloadFile(peer, msgId),
     });
     return () => setFileOps(null);
   }, [messenger, setFileOps]);

@@ -11,6 +11,7 @@
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
 import { isJpegBase64 } from './photo';
+import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
@@ -43,7 +44,9 @@ interface Invite { code: string; kind: IdentityKind; expiresAt: number }
 
 /** `expireSec`: mensagem temporária (some esse tempo depois de `sentAt`). */
 export interface IncomingText { msgId: string; text: string; sentAt: number; expireSec?: number }
-export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number }
+export interface IncomingFile { msgId: string; name: string; size: number; mime: string; blocks: number; data: Uint8Array; sentAt?: number; expireSec?: number;
+  /** "Baixar mídia automaticamente" não deixou baixar agora: espera a pessoa tocar em "Baixar". */
+  held?: boolean }
 
 export interface MessengerEvents {
   /** Mensagem nova de um contato conhecido. */
@@ -146,6 +149,8 @@ type Payload =
   /** Blocos recebidos (confirmação parcial) e arquivo montado e conferido. */
   | { t: 'fa'; i: string; k: number[] }
   | { t: 'fd'; i: string }
+  /** Quem recebe pede os blocos (tocou em "Baixar" depois de a oferta ficar esperando). */
+  | { t: 'fw'; i: string }
   /** Estado do grupo, enviado por um admin. */
   | { t: 'g'; s: string }
   /** Pedido para entrar (código do convite do grupo) e aviso de saída/remoção. */
@@ -189,7 +194,7 @@ interface PendingJoin { id: string; name: string; via: IdentityKind; pub: Public
 
 /** Envio de arquivo em andamento (só na memória: o conteúdo não vai para o armazenamento do app). */
 interface FileJob { msgId: string; to: string; data: Uint8Array; total: number; next: number; acked: Set<number>; inFlight: Set<number>; paused: boolean }
-interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number; sentAt?: number; e?: number }
+interface FileRx { msgId: string; from: string; name: string; size: number; mime: string; total: number; hash: string; parts: Map<number, Uint8Array>; bytes: number; at: number; sentAt?: number; e?: number; held?: boolean }
 
 /** Bloco de arquivo: 12 KB de dados por envelope (cabe no preenchimento de 16 KB). */
 export const FILE_BLOCK = 12 * 1024;
@@ -459,6 +464,20 @@ export class Messenger {
     return true;
   }
 
+  /** Ajuste "Baixar mídia automaticamente". Padrão: sempre (como antes do ajuste existir). */
+  private autoDownload: AutoDownload = 'always';
+  setAutoDownload(a: AutoDownload) { this.autoDownload = a; }
+
+  /** "Baixar" num arquivo que ficou esperando: pede os blocos a quem enviou. */
+  downloadFile(contactId: string, msgId: string) {
+    const rx = this.fileRx.get(`${contactId}|${msgId}`);
+    const c = this.contacts.get(contactId);
+    if (!rx || !c) return false;
+    if (rx.held) { rx.held = false; this.o.events.fileProgress?.(msgId, 0, rx.total, 'in'); }
+    this.enqueue(c, { t: 'fw', i: msgId }, null, Priority.High);
+    return true;
+  }
+
   /** O envio ainda existe nesta execução do app? (depois de reabrir, o conteúdo não fica guardado). */
   hasFileJob(msgId: string) { return this.fileJobs.has(msgId); }
 
@@ -488,7 +507,7 @@ export class Messenger {
     const msgId = fromUtf8(pt.subarray(2, 2 + n));
     const k = new DataView(pt.buffer, pt.byteOffset).getUint32(2 + n);
     const rx = this.fileRx.get(`${from}|${msgId}`);
-    if (!rx || k >= rx.total) return;
+    if (!rx || rx.held || k >= rx.total) return; // esperando "Baixar": não guarda nem confirma
     const data = pt.slice(6 + n);
     if (data.length > FILE_BLOCK || (k < rx.total - 1 && data.length !== FILE_BLOCK)) return;
     if (!rx.parts.has(k)) { rx.parts.set(k, data); rx.bytes += data.length; }
@@ -515,19 +534,26 @@ export class Messenger {
       if (typeof p.i !== 'string' || p.i.length > 64 || !(p.s > 0 && p.s <= MAX_FILE_BYTES) || p.c !== Math.ceil(p.s / FILE_BLOCK) || !/^[0-9a-f]{64}$/.test(p.h)) return;
       const key = `${from}|${p.i}`;
       if (this.fileRx.has(key) || this.deliveredSet.has(`${from}|file|${p.i}`)) return;
-      if (this.fileRx.size >= 8) return; // poucos recebimentos simultâneos (memória)
+      // Poucos recebimentos simultâneos (memória); ofertas esperando "Baixar" não guardam blocos.
+      const held = [...this.fileRx.values()].filter(r => r.held).length;
+      if (this.fileRx.size - held >= 8 || held >= 100) return;
       const e = validExpire(p.e);
-      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e });
+      // "Baixar mídia automaticamente" (Wi-Fi e cabo / Sempre / Nunca) pelo meio dos vizinhos de agora.
+      const hold = !shouldAutoDownload(this.autoDownload, this.peers.values());
+      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e, held: hold });
       this.markDelivered(`${from}|file|${p.i}`);
-      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e });
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e, ...(hold ? { held: true } : {}) });
       return;
     }
-    if (p.t !== 'fa' && p.t !== 'fd') return;
+    if (p.t !== 'fa' && p.t !== 'fd' && p.t !== 'fw') return;
     const job = typeof p.i === 'string' ? this.fileJobs.get(p.i) : undefined;
     if (!job || job.to !== from) return;
     if (p.t === 'fa' && Array.isArray(p.k)) {
       for (const k of p.k.slice(0, 64)) if (Number.isInteger(k) && k >= 0 && k < job.total) { job.acked.add(k); job.inFlight.delete(k); }
       this.o.events.fileProgress?.(job.msgId, job.acked.size, job.total, 'out');
+      this.pumpFile(job);
+    } else if (p.t === 'fw') { // quem recebe tocou em "Baixar": manda de novo o que ainda não foi confirmado
+      job.inFlight.clear(); job.next = 0;
       this.pumpFile(job);
     } else if (p.t === 'fd') { // montado e conferido do lado de lá (pode chegar antes da última confirmação de bloco)
       this.fileJobs.delete(job.msgId);
@@ -1382,7 +1408,7 @@ export class Messenger {
     if (pt[0] === BLOCK_TAG) { this.onBlock(m.fromId, pt); return false; }
     let p: Payload;
     try { p = JSON.parse(fromUtf8(pt)); } catch { return false; }
-    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f') { this.onFileControl(m.fromId, p, m.sentAt); return false; }
+    if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f' || p?.t === 'fw') { this.onFileControl(m.fromId, p, m.sentAt); return false; }
     if (p?.t === 'ty') {
       const c = this.contacts.get(m.fromId);
       if (c && !c.request) this.o.events.typing?.(m.fromId);
