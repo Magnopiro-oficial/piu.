@@ -6,7 +6,7 @@ export const pt = {
   path: '/',
   title: 'Piu · mensagens sem internet',
   description: 'O Piu leva suas conversas de aparelho em aparelho, por Bluetooth, Wi-Fi e rádio. Sem servidor, sem operadora e cifrado de ponta a ponta.',
-  nav: { how: 'Como funciona', privacy: 'Privacidade', provider: 'Seja provider', lunes: 'LUNES', faq: 'Dúvidas', download: 'Baixar', themeLight: 'Usar tema claro', themeDark: 'Usar tema escuro', langLabel: 'Idioma' },
+  nav: { how: 'Como funciona', privacy: 'Privacidade', provider: 'Seja provider', lunes: 'LUNES', faq: 'Dúvidas', download: 'Baixar', themeLight: 'Usar tema claro', themeDark: 'Usar tema escuro', langLabel: 'Idioma', github: 'Código do projeto no GitHub' },
   hero: {
     kicker: 'LUNES NETWORK · MENSAGEIRO DESCENTRALIZADO',
     title: 'Mensagens que voam sem internet.',
@@ -32,7 +32,7 @@ export const pt = {
     { icon: 'forum', title: 'Conversas, grupos e canais', desc: 'Grupos com convites e moderação. Canais públicos, privados ou secretos. Comunidades que reúnem tudo.' },
     { icon: 'person_off', title: 'Identidade pública ou anônima', desc: 'Sem telefone, sem e-mail. Duas identidades com chaves separadas, sem vínculo entre elas.' },
     { icon: 'description', title: 'Arquivos em blocos', desc: 'Fotos e documentos vão em pedaços, retomam quando a rota muda e chegam conferidos.' },
-    { icon: 'warning', title: 'Alertas de emergência', desc: 'Avisos da Defesa Civil chegam por rádio, com assinatura oficial verificada.' },
+    { icon: 'warning', title: 'Alertas da comunidade', desc: 'Qualquer membro da comunidade publica um alerta, e a própria comunidade confirma ou contesta.' },
     { icon: 'radar', title: 'Por perto', desc: 'Encontre perfis públicos ao redor, sem localização exata. Visível só quando você quiser.' },
     { icon: 'schedule_send', title: 'Funciona fora de alcance', desc: 'Sem rede por perto? A mensagem espera na fila e sai sozinha quando surgir uma rota.' },
   ] as Item[],
@@ -87,6 +87,7 @@ export const pt = {
       { id: 'node', icon: 'router', title: 'Piu Node', desc: 'Para roteadores OpenWrt, Linux, Raspberry Pi e mini-PCs. Torne-se provider.', cta: 'Ver pacotes', primary: false,
         note: 'Escolha o pacote do seu equipamento: .ipk para OpenWrt, .deb para Linux e Raspberry Pi. Todos assinados.' },
     ],
+    source: { title: 'Código aberto', desc: 'Todo o Piu é software livre (AGPL-3.0): app, Piu Node, painel e protocolo. Confira, audite, faça um fork ou contribua.', cta: 'Ver no GitHub' },
     signature: ['Assinatura Lunes Network · 4C9A 7B21 … 09D3 E1F0', 'Piu 0.1.4 · SHA-256 a91f 0c3e … 52d8 7b2d'],
   },
   faq: {
@@ -106,7 +107,7 @@ export const pt = {
     cols: [
       { t: 'PRODUTO', links: [['Como funciona', '#como'], ['Privacidade', '#privacidade'], ['Baixar', '#baixar']] },
       { t: 'PROVIDER', links: [['Seja provider', '#provider'], ['Painel do provider', '/painel/'], ['Piu Node', '#baixar']] },
-      { t: 'PROJETO', links: [['Telas do app', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['Especificação LNNP', '#faq'], ['Documento de requisitos v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
+      { t: 'PROJETO', links: [['Telas do app', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['Código no GitHub', 'https://github.com/Magnopiro-oficial/piu.'], ['Manifesto', 'https://github.com/Magnopiro-oficial/piu./blob/main/MANIFESTO.md'], ['Especificação LNNP', 'https://github.com/Magnopiro-oficial/piu./blob/main/docs/lnnp/especificacao-v1.md'], ['Documento de requisitos v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
     ] as { t: string; links: [string, string][] }[],
     legal: '© 2026 Lunes Network · Sem servidor central · Mensagens nunca vão para a blockchain',
   },

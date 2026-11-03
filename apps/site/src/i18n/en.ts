@@ -5,7 +5,7 @@ export const en: Dict = {
   path: '/en/',
   title: 'Piu · messages without internet',
   description: 'Piu carries your conversations from device to device over Bluetooth, Wi-Fi and radio. No servers, no carrier, end-to-end encrypted.',
-  nav: { how: 'How it works', privacy: 'Privacy', provider: 'Become a provider', lunes: 'LUNES', faq: 'FAQ', download: 'Download', themeLight: 'Use light theme', themeDark: 'Use dark theme', langLabel: 'Language' },
+  nav: { how: 'How it works', privacy: 'Privacy', provider: 'Become a provider', lunes: 'LUNES', faq: 'FAQ', download: 'Download', themeLight: 'Use light theme', themeDark: 'Use dark theme', langLabel: 'Language', github: 'Project source code on GitHub' },
   hero: {
     kicker: 'LUNES NETWORK · DECENTRALIZED MESSENGER',
     title: 'Messages that fly without internet.',
@@ -31,7 +31,7 @@ export const en: Dict = {
     { icon: 'forum', title: 'Chats, groups and channels', desc: 'Groups with invites and moderation. Public, private or secret channels. Communities that bring it all together.' },
     { icon: 'person_off', title: 'Public or anonymous identity', desc: 'No phone number, no email. Two identities with separate keys and no link between them.' },
     { icon: 'description', title: 'Files in chunks', desc: 'Photos and documents travel in pieces, resume when the route changes and arrive verified.' },
-    { icon: 'warning', title: 'Emergency alerts', desc: 'Civil defense warnings arrive over radio, with a verified official signature.' },
+    { icon: 'warning', title: 'Community alerts', desc: 'Any community member can post an alert, and the community itself confirms or disputes it.' },
     { icon: 'radar', title: 'Nearby', desc: 'Find public profiles around you, never with an exact location. Visible only when you want.' },
     { icon: 'schedule_send', title: 'Works out of range', desc: 'No network nearby? The message waits in the queue and leaves on its own when a route appears.' },
   ],
@@ -86,6 +86,7 @@ export const en: Dict = {
       { id: 'node', icon: 'router', title: 'Piu Node', desc: 'For OpenWrt routers, Linux, Raspberry Pi and mini-PCs. Become a provider.', cta: 'See packages', primary: false,
         note: 'Pick your device’s package: .ipk for OpenWrt, .deb for Linux and Raspberry Pi. All signed.' },
     ],
+    source: { title: 'Open source', desc: 'All of Piu is free software (AGPL-3.0): app, Piu Node, panel and protocol. Check it, audit it, fork it or contribute.', cta: 'View on GitHub' },
     signature: ['Lunes Network signature · 4C9A 7B21 … 09D3 E1F0', 'Piu 0.1.4 · SHA-256 a91f 0c3e … 52d8 7b2d'],
   },
   faq: {
@@ -105,7 +106,7 @@ export const en: Dict = {
     cols: [
       { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar']] },
       { t: 'PROVIDER', links: [['Become a provider', '#provider'], ['Provider dashboard', '/painel/'], ['Piu Node', '#baixar']] },
-      { t: 'PROJECT', links: [['App screens', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['LNNP specification', '#faq'], ['Requirements document v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
+      { t: 'PROJECT', links: [['App screens', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['Source on GitHub', 'https://github.com/Magnopiro-oficial/piu.'], ['Manifesto', 'https://github.com/Magnopiro-oficial/piu./blob/main/MANIFESTO.en.md'], ['LNNP specification', 'https://github.com/Magnopiro-oficial/piu./blob/main/docs/lnnp/especificacao-v1.md'], ['Requirements document v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
     ],
     legal: '© 2026 Lunes Network · No central server · Messages never go on the blockchain',
   },

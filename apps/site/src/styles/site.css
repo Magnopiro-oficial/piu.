@@ -184,3 +184,17 @@ section[id], div[id] { scroll-margin-top: 68px; }
   .nav-links a::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease-out); }
   .nav-links a:hover::after { transform: scaleX(1); }
 }
+
+/* Código aberto (GitHub) */
+a.icon-btn { color: var(--ink); }
+.gh-card { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 22px 24px; border-radius: 24px; background: var(--bg); box-shadow: 0 0 0 1px var(--line2) inset; }
+.gh-card:hover { opacity: 1; }
+.gh-ic { width: 52px; height: 52px; border-radius: 16px; background: var(--ink); color: var(--invink); display: flex; align-items: center; justify-content: center; flex: none; }
+@media (hover: hover) {
+  .gh-card { transition: transform .3s var(--ease-out), box-shadow .3s; }
+  .gh-card:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px var(--ink) inset; }
+  .gh-card .gh-ic { transition: transform .4s var(--ease-pop); }
+  .gh-card:hover .gh-ic { transform: rotate(-8deg) scale(1.06); }
+  .gh-card:hover .pill > .ic:last-child { transform: translate(2px, -2px); }
+}
+@media (max-width: 560px) { .gh-card .pill { width: 100%; } }
