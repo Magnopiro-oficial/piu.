@@ -1,6 +1,15 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand/icon-1024.png">
+    <img src="design/brand/icon-light-1024.png" width="112" alt="Ícone do piu.">
+  </picture>
+</p>
+
 # piu.
 
 Mensageiro **descentralizado e offline-first** da Lunes Network. As mensagens viajam de aparelho em aparelho (Bluetooth LE, Wi-Fi Direct, Wi-Fi Mesh, LoRa, USB/Ethernet), sem internet nem servidor central, com criptografia ponta a ponta e store-and-forward.
+
+**Leia o [Manifesto](MANIFESTO.md)** ([English](MANIFESTO.en.md)): liberdade, segurança e independência na internet.
 
 ## Estrutura
 
@@ -11,6 +20,7 @@ Cada pasta em `apps/` é um projeto independente: tem o próprio `package.json`,
 | [`apps/provider-panel`](apps/provider-panel) | Painel local do provider (Vite + React + TypeScript), servido pelo `piu-node` em `piu-node.local:8420` |
 | [`apps/site`](apps/site) | Site do projeto em PT e EN (Astro), com o painel embutido |
 | [`apps/mobile`](apps/mobile) | App Piu para Android e iOS (Expo + React Native), em construção por etapas |
+| [`design/brand/`](design/brand) | Identidade do piu.: ícone (claro e escuro), marca, favicons e manifest web |
 | [`design/`](design) | Protótipos de referência em HTML (Claude Design): app mobile, painel do provider e site em PT/EN |
 | [`docs/design-spec.md`](docs/design-spec.md) | Especificação de design: tokens, tipografia, movimento, telas e regras de produto |
 | [`docs/requisitos/`](docs/requisitos) | Documento de requisitos da Lunes Network (IDs FUN, INF e NFR) |
