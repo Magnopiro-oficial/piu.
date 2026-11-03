@@ -24,6 +24,7 @@ stop(): Promise<void>
 send(peerId: string, base64: string): Promise<void>     // até 32 KB; primeiro meio que conhece o id
 sendVia?(medium, peerId, base64): Promise<void>         // por um meio específico
 setBackground?(on, title, text): Promise<void>          // Android: serviço em primeiro plano; iPhone: nada
+setDiscoveryInterval?(seconds: number): void            // "Procurar vizinhos" (NFR-004): 60 / 20 / 5 s
 // eventos: onState, onPeerFound, onPeerLost, onConnected, onDisconnected, onEnvelope — todos com `via`
 ```
 
@@ -86,6 +87,7 @@ Se o envio pelo primeiro falhar, tenta o próximo; se todos falharem, `send` rej
 3. **Enlaces duplicados:** dois aparelhos podem se conectar nos dois papéis ao mesmo tempo (dois enlaces BLE). A camada TS junta pelo nome; custa um pouco mais de bateria.
 4. **Confiança:** as conexões são aceitas no transporte; a verificação de chaves do Piu (código de segurança) é que confirma quem é quem.
 5. **Versão do Nearby:** `play-services-nearby:19.3.0`. Confira se há uma mais nova.
+6. **Intervalo de descoberta (`setDiscoveryInterval`):** o Bluetooth LE varre 4 s a cada intervalo (Android e iPhone); o Nearby descobre 10 s a cada intervalo. Com intervalo curto (Rápida, 5 s) a varredura fica contínua, o que também evita o limite do Android de 5 inícios de varredura a cada 30 s. Enlaces já conectados não são afetados; o anúncio (advertising) continua ligado. No iPhone, o sistema limita a varredura em segundo plano de qualquer jeito.
 
 ## Como testar em aparelhos (Android + iPhone)
 

@@ -30,6 +30,7 @@ private class UnknownMediumException(m: String) : CodedException("ERR_MEDIUM", "
 
 private const val NEARBY = "nearby"
 private const val BLE = "ble"
+private const val NEARBY_WINDOW_MS = 10_000L
 
 /**
  * Transporte P2P no Android com dois meios ao mesmo tempo:
@@ -49,6 +50,24 @@ class PiuTransportModule : Module() {
   private val names = mutableMapOf<String, String>()
   private val connected = mutableSetOf<String>()
   private var ble: BleEngine? = null
+  private var serviceId = ""
+  /** "Procurar vizinhos" (NFR-004): Econômica 60 s, Normal 20 s, Rápida 5 s. */
+  private var discoveryIntervalMs = 20_000L
+  private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
+  private var discovering = false
+  /** Nearby: descobre por `NEARBY_WINDOW_MS` a cada intervalo (ou sem parar, se o intervalo for curto). */
+  private val discoveryCycle = object : Runnable {
+    override fun run() {
+      if (!running) return
+      if (discovering) {
+        client.stopDiscovery(); discovering = false
+        mainHandler.postDelayed(this, discoveryIntervalMs - NEARBY_WINDOW_MS)
+      } else {
+        startDiscovery()
+        if (discoveryIntervalMs > NEARBY_WINDOW_MS + 5_000L) mainHandler.postDelayed(this, NEARBY_WINDOW_MS)
+      }
+    }
+  }
 
   // Estado de cada meio: null = ainda iniciando; o transporte está "running" se algum estiver ok.
   private var nearbyOk: Boolean? = null
@@ -66,14 +85,19 @@ class PiuTransportModule : Module() {
     AsyncFunction("start") { name: String, serviceId: String, promise: Promise ->
       if (running) { promise.resolve(null); return@AsyncFunction }
       localName = name
+      this@PiuTransportModule.serviceId = serviceId
       running = true
       synchronized(this@PiuTransportModule) { nearbyOk = null; bleOk = null; nearbyReason = null; bleReason = null }
       state("starting")
-      ble = BleEngine(context, name, bleListener).also { it.start() }
+      ble = BleEngine(context, name, bleListener).also { it.setScanInterval(discoveryIntervalMs); it.start() }
       val strategy = Strategy.P2P_CLUSTER
       client.startAdvertising(name, serviceId, lifecycle, AdvertisingOptions.Builder().setStrategy(strategy).build())
         .onSuccessTask { client.startDiscovery(serviceId, discovery, DiscoveryOptions.Builder().setStrategy(strategy).build()) }
-        .addOnSuccessListener { medium(NEARBY, true, null); promise.resolve(null) }
+        .addOnSuccessListener {
+          discovering = true
+          medium(NEARBY, true, null); promise.resolve(null)
+          restartDiscoveryCycle()
+        }
         .addOnFailureListener { e ->
           // Sem Nearby (ex.: sem Google Play Services) o BLE ainda funciona.
           try { client.stopAdvertising(); client.stopDiscovery() } catch (_: Exception) {}
@@ -94,6 +118,12 @@ class PiuTransportModule : Module() {
 
     AsyncFunction("sendVia") { medium: String, peerId: String, data: String, promise: Promise ->
       sendVia(medium, peerId, data, promise)
+    }
+
+    Function("setDiscoveryInterval") { seconds: Double ->
+      discoveryIntervalMs = (seconds * 1000).toLong().coerceAtLeast(1_000L)
+      ble?.setScanInterval(discoveryIntervalMs)
+      if (running && nearbyOk == true) mainHandler.post { restartDiscoveryCycle() }
     }
 
     AsyncFunction("setBackground") { on: Boolean, title: String, text: String ->
@@ -144,9 +174,23 @@ class PiuTransportModule : Module() {
     }
   }
 
+  private fun startDiscovery() {
+    client.startDiscovery(serviceId, discovery, DiscoveryOptions.Builder().setStrategy(Strategy.P2P_CLUSTER).build())
+      .addOnSuccessListener { discovering = true }
+  }
+
+  /** Começa o ciclo de novo com o intervalo atual (a descoberta já está ligada quando é chamado). */
+  private fun restartDiscoveryCycle() {
+    mainHandler.removeCallbacks(discoveryCycle)
+    if (discoveryIntervalMs > NEARBY_WINDOW_MS + 5_000L) mainHandler.postDelayed(discoveryCycle, NEARBY_WINDOW_MS)
+    else if (!discovering) startDiscovery()
+  }
+
   private fun stopAll() {
     if (!running) return
     running = false
+    mainHandler.removeCallbacks(discoveryCycle)
+    discovering = false
     client.stopAdvertising()
     client.stopDiscovery()
     client.stopAllEndpoints()
