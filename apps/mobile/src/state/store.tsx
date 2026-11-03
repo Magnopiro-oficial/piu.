@@ -215,7 +215,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         hidden: { title: 'Piu', body: c.kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
-      ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, fresh: true }],
+      // Recebida: guarda quando chegou (prévia da tela bloqueada, lib/lockFeed.ts).
+      ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, ...(msg.from === 'them' && !msg.at ? { at: Date.now() } : {}), fresh: true }],
       unread: msg.from === 'me' || viewingIt ? c.unread : c.unread + 1,
     })));
   }, [showToast, stopTyping, markRead]);
