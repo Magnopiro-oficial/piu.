@@ -34,7 +34,7 @@ export default function SettingsPage() {
 
 function Privacy() {
   const { priv, setPriv } = useSettings();
-  const { showToast } = useStore();
+  const { showToast, blocked } = useStore();
   const t = (k: 'read' | 'typing' | 'delay' | 'pad' | 'noRoutes' | 'lock') => () => setPriv({ [k]: !priv[k] });
   return (
     <>
@@ -61,7 +61,7 @@ function Privacy() {
             if (r === 'ok') setPriv({ lock: !priv.lock });
             else if (r === 'unavailable') showToast({ icon: 'lock', title: 'Sem bloqueio no aparelho', body: 'Ative a biometria ou um PIN/senha nos ajustes do aparelho para usar esta opção.' });
           }} />
-        <ActionRow name="Contatos bloqueados" value="2" onPress={() => showToast({ icon: 'block', title: '2 contatos bloqueados', body: 'Eles não conseguem iniciar conversa nem ver seu status.' })} />
+        <ActionRow name="Contatos bloqueados" value={blocked.length ? String(blocked.length) : 'Nenhum'} onPress={() => router.push('/blocked')} />
       </SetGroup>
       <FootNote icon="info">Relays nunca veem conteúdo. Estas opções reduzem o que dá para inferir pelo tráfego, sem prometer anonimato absoluto.</FootNote>
     </>

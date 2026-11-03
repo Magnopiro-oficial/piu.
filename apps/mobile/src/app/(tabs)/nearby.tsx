@@ -17,7 +17,7 @@ export default function Nearby() {
   const fg = visible ? c.invink : c.ink;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 4, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">Por perto</T>

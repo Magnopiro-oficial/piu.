@@ -1,3 +1,4 @@
+import { Enter as ScreenEnter } from '../../ui/Enter';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View, type ScrollViewInstance } from 'react-native';
@@ -68,12 +69,13 @@ export default function ChatScreen() {
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenEnter kind="push">
       {/* cabeçalho */}
       <View style={{ paddingTop: insets.top + 6, paddingBottom: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: c.line, backgroundColor: c.bg, zIndex: 2 }}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar para Conversas" style={{ width: 38, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="arrow_back_ios_new" size={22} />
         </Pressable>
-        <Avatar initials={chat.initials} size={40} square={chat.kind !== 'direct'} inverted={chat.inv} />
+        <Avatar initials={chat.initials} size={40} square={chat.kind !== 'direct'} inverted={chat.inv} photo={chat.photo} />
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
             <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, verificado` : chat.name}>{chat.name}</T>
@@ -146,6 +148,7 @@ export default function ChatScreen() {
 
       {selected && <RouteSheet chat={chat} msg={selected} onClose={() => setRouteMsg(null)} />}
       {attachOpen && <AttachSheet onPick={onAttach} onClose={() => setAttachOpen(false)} />}
+      </ScreenEnter>
     </KeyboardAvoidingView>
   );
 }

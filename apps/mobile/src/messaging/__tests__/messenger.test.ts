@@ -498,3 +498,43 @@ test('métricas: enviadas, entregues, latência e saltos medidos neste aparelho'
   assert.deepEqual(Object.keys(b.m.metrics().hops), ['2']);
   assert.equal(r.m.metrics().relayedToday > 0, true);
 });
+
+test('foto do perfil: só para contatos públicos, conferida, e nunca pela identidade anônima', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio');
+  const photos: [string, string, string | null][] = [];
+  for (const [n, d] of [['Beto', b], ['Caio', c]] as const) (d.m as unknown as { o: { events: Record<string, unknown> } }).o.events.peerPhoto = (id: string, p: string | null) => photos.push([n, id, p]);
+  a.m.addContact(contactOf(b, 'Beto'));            // pública
+  a.m.addContact(contactOf(c, 'Caio', 'anon'));    // anônima
+  b.m.addContact(contactOf(a, 'Ana'));
+  c.m.addContact(contactOf(a, 'Ana', 'anon'));
+  net.link('Ana', 'Beto'); net.link('Ana', 'Caio');
+  const jpeg = '/9j/' + 'A'.repeat(200);
+  a.m.sendProfilePhoto(jpeg);
+  net.run();
+  assert.deepEqual(photos, [['Beto', a.ids.public.id, jpeg]], 'só o contato público recebe');
+  a.m.sendProfilePhoto(null);
+  net.run();
+  assert.deepEqual(photos.at(-1), ['Beto', a.ids.public.id, null], 'remover a foto avisa');
+  // Conteúdo que não é JPEG chega como "sem foto".
+  (a.m as unknown as { enqueue: (...x: unknown[]) => void }).enqueue(a.m.getContact(b.ids.public.id), { t: 'pp', p: 'iVBORw0KGgo=' }, null, 1, true);
+  net.run();
+  assert.deepEqual(photos.at(-1), ['Beto', a.ids.public.id, null]);
+});
+
+test('bloqueio: mensagens de quem está bloqueado são descartadas, sem confirmação de entrega', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto');
+  a.m.addContact(contactOf(b, 'Beto')); b.m.addContact(contactOf(a, 'Ana'));
+  net.link('Ana', 'Beto');
+  b.m.setBlocked([a.ids.public.id]);
+  a.m.sendText(b.ids.public.id, 'm1', 'Oi, você me bloqueou?');
+  net.run();
+  assert.deepEqual(b.log.msgs, [], 'nada entregue');
+  assert.ok(!a.log.status.some(([id, s]) => id === 'm1' && s === 'entregue'), 'quem mandou não recebe confirmação');
+  // Desbloqueado: as próximas chegam (o que foi mandado durante o bloqueio não é reentregue).
+  b.m.setBlocked([]);
+  a.m.sendText(b.ids.public.id, 'm2', 'Agora sim');
+  net.run();
+  assert.deepEqual(b.log.msgs.map(x => x[1]), ['Agora sim']);
+});

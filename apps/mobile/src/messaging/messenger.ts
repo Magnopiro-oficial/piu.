@@ -10,6 +10,7 @@
  * - Estado salvo (`export`): sessões, fila própria, ids vistos (contra replay) e contatos.
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
+import { isJpegBase64 } from './photo';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
@@ -65,6 +66,8 @@ export interface MessengerEvents {
   joinRequest(groupId: string, who: { id: string; name: string }): void;
   /** Um contato avisou que revogou um aparelho (texto do aviso; quem chama confere a assinatura). */
   notice(contactId: string, notice: string): void;
+  /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
+  peerPhoto(contactId: string, jpegBase64: string | null): void;
   /** Lote de créditos fechado (liquidação SIMULADA, sem Mainnet). */
   lotClosed(lot: Lot): void;
   /** Um convite meu foi usado: o QR precisa mostrar um código novo. */
@@ -119,7 +122,9 @@ type Payload =
   | { t: 'gl'; g: string }
   | { t: 'gr'; g: string }
   /** Aviso assinado de aparelho revogado (lib/devicesCore.ts), para os contatos. */
-  | { t: 'rv'; n: string };
+  | { t: 'rv'; n: string }
+  /** Foto do perfil público (JPEG de 96 px em base64; vazio = removida). Só entre contatos públicos. */
+  | { t: 'pp'; p: string };
 
 /** Pedido para entrar aguardando um admin (só no aparelho do admin). */
 interface PendingJoin { id: string; name: string; via: IdentityKind; pub: PublicIdentity; at: number }
@@ -599,6 +604,26 @@ export class Messenger {
     for (const c of this.contacts.values()) if (c.via === via && !c.request) this.enqueue(c, { t: 'rv', n: notice }, null, Priority.High);
   }
 
+  /**
+   * Foto do perfil público para os contatos públicos (nunca pela identidade anônima, nunca para
+   * pedidos de conversa ainda não aceitos nem para bloqueados). `to`: só um contato (novo contato).
+   * Vai marcada como mídia: nunca passa por LoRa.
+   */
+  sendProfilePhoto(jpegBase64: string | null, to?: string) {
+    for (const c of this.contacts.values()) {
+      if (c.via !== 'public' || c.request || this.blocked.has(c.id) || (to && c.id !== to)) continue;
+      this.enqueue(c, { t: 'pp', p: jpegBase64 ?? '' }, null, Priority.Low, true);
+    }
+  }
+
+  /**
+   * Contatos bloqueados: o que eles mandam é descartado sem confirmação (quem mandou não é avisado,
+   * a mensagem só não é entregue), e eles não recebem a foto do perfil.
+   */
+  private blocked = new Set<string>();
+  setBlocked(ids: Iterable<string>) { this.blocked = new Set(ids); }
+  isBlocked(id: string) { return this.blocked.has(id); }
+
   /** Admin aprova ou recusa um pedido pendente. */
   answerJoin(gid: string, id: string, accept: boolean) {
     const list = this.pendingJoins.get(gid) ?? [];
@@ -849,7 +874,9 @@ export class Messenger {
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
     const m = r.message;
-    if (m.kind === EnvelopeKind.Group) { this.onGroupEnvelope(m); return r; }
+    if (m.kind === EnvelopeKind.Group) { if (!this.blocked.has(m.fromId)) this.onGroupEnvelope(m); return r; }
+    // Bloqueado: descarta antes de abrir a sessão (sem confirmação de entrega nem pedido de conversa).
+    if (this.blocked.has(m.fromId)) return r;
     const via: IdentityKind = this.contacts.get(m.fromId)?.via ?? (this.managers.anon.get(m.fromId) ? 'anon' : 'public');
     // Abre na sessão da identidade que recebeu; tenta a outra se não abrir (primeira mensagem).
     let pt = this.managers[via].open(m), used: IdentityKind = via;
@@ -863,6 +890,11 @@ export class Messenger {
     if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return r; }
     if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return r; }
     if (p?.t === 'rv') { if (this.contacts.has(m.fromId) && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n); return r; }
+    if (p?.t === 'pp') {
+      const c = this.contacts.get(m.fromId);
+      if (c && c.via === 'public' && !c.request && used === 'public' && typeof p.p === 'string') this.o.events.peerPhoto?.(m.fromId, p.p === '' ? null : isJpegBase64(p.p) ? p.p : null);
+      return r;
+    }
     if (p?.t === 'a' && Array.isArray(p.i)) {
       for (const id of p.i.slice(0, 64)) {
         for (const [k, q] of this.outbox) {

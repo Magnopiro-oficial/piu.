@@ -17,6 +17,7 @@ import { decodeRevocation, encodeRevocation, verifyRevocation } from '../lib/dev
 import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
+import type { ProfilePhoto } from '../lib/avatar';
 import type { IncomingFile } from '../messaging/messenger';
 import { attachVirtualPeer } from '../transport/simulated';
 import { useKeys } from './keys';
@@ -70,6 +71,8 @@ interface Messaging {
   groupEpoch: number;
   /** Métricas e créditos deste aparelho (null antes das chaves). */
   stats: () => Stats | null;
+  /** Troca (ou remove) a foto do perfil público e manda a versão pequena aos contatos públicos. */
+  setProfilePhoto: (p: ProfilePhoto | null) => void;
 }
 
 export interface Stats {
@@ -88,7 +91,7 @@ const Ctx = createContext<Messaging | null>(null);
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node } = useKeys();
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked } = useStore();
   const { relay: relayOn, relayPaused, storage } = useNetwork();
   const relay = relayOn && !relayPaused;
   const { priv, sto, bat } = useSettings();
@@ -155,6 +158,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             if (!chatsRef.current.some(x => x.id === cid)) return;
             handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: 'Este contato revogou um aparelho perdido ou comprometido. Confira o código de segurança pessoalmente antes de confiar em mensagens novas.' });
           } catch { /* aviso inválido: ignora */ }
+        },
+        // Foto do perfil público de um contato (já conferida: JPEG pequeno, só de contato público).
+        peerPhoto: (contactId, b64) => {
+          const cid = chatIdFor(contactId);
+          if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { photo: b64 ? `data:image/jpeg;base64,${b64}` : undefined });
         },
         lotClosed: lot => handlers.current.showToast({ kind: 'wallet', icon: 'toll', coin: true, title: `Lote fechado · ${lot.lunes.toFixed(2).replace('.', ',')} LUNES`, body: `${lot.count} entregas comprovadas · liquidação simulada (sem Mainnet)`, go: () => router.push('/(tabs)/wallet') }),
         // Grupos: entrar, mudanças, remoção e mensagens.
@@ -239,6 +247,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   }, [messenger, identities]);
 
   useEffect(() => { if (messenger) { messenger.relay = relay; } }, [messenger, relay]);
+  // Bloqueados (só contatos reais `piu:…`): o mensageiro descarta o que eles mandam.
+  useEffect(() => { messenger?.setBlocked(blocked.map(b => b.id).filter(id => id.startsWith('piu:'))); }, [messenger, blocked]);
   // Limites do nó (Rede e Ajustes → Armazenamento / Bateria e limites) aplicados no roteador.
   useEffect(() => {
     if (!messenger) return;
@@ -321,7 +331,13 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       messenger.addContact(contact);
       const cid = chatIdFor(card.id);
       addChat(chatFor(contact, false));
+      // Contato público novo: recebe a foto do perfil público (o anônimo nunca recebe foto).
+      if (via === 'public' && profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, card.id);
       return cid;
+    },
+    setProfilePhoto: p => {
+      setProfile({ photo: p?.full ?? null, photoSmall: p?.small ?? null });
+      messenger?.sendProfilePhoto(p?.small ?? null);
     },
     contactKeys: chatId => {
       const peer = chats.find(c => c.id === chatId)?.peer;
@@ -375,7 +391,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     },
     groupEpoch,
     stats: () => (messenger ? { metrics: messenger.metrics(), credits: { totals: messenger.credits.totals(), list: messenger.credits.list().slice(0, 30), lots: messenger.credits.lots }, relay: messenger.relayStatus() } : null),
-  }), [messenger, identities, profile.name, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, patchChat, setIdentity]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,0 +1,416 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0..1,0&display=block" rel="stylesheet">
+<style>
+:root{--t-hero:300px;--t-section:132px;--t-title:72px;--t-sub:44px;--t-body:34px;--t-small:28px;--t-mono:24px;--pad-top:100px;--pad-bottom:80px;--pad-x:100px;--gap-title:60px;}
+html,body{margin:0;background:#0a0a0a;font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:underline;text-underline-offset:4px;}
+a:hover{opacity:.7;}
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%">
+
+<section data-label="Title" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;overflow:hidden;">
+  <div style="position:absolute;left:1000px;top:90px;width:900px;height:900px;">
+    <div style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:1.5px solid rgba(255,255,255,.18);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:200px;top:200px;width:500px;height:500px;border-radius:50%;border:1.5px solid rgba(255,255,255,.14);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:100px;top:100px;width:700px;height:700px;border-radius:50%;border:1.5px solid rgba(255,255,255,.1);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:0;top:0;width:900px;height:900px;border-radius:50%;border:1.5px solid rgba(255,255,255,.07);box-sizing:border-box;"></div>
+    <div data-loop="pulse" style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:2px solid rgba(255,255,255,.35);box-sizing:border-box;opacity:0;"></div>
+    <div data-loop="pulse" data-delay="1600" style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:2px solid rgba(255,255,255,.35);box-sizing:border-box;opacity:0;"></div>
+    <div style="position:absolute;left:420px;top:420px;width:60px;height:60px;border-radius:50%;background:#f4f4f2;"></div>
+    <div data-anim="500" data-kind="scale" style="position:absolute;left:560px;top:170px;display:flex;align-items:center;gap:14px;"><div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.praca</span></div>
+    <div data-anim="650" data-kind="scale" style="position:absolute;left:150px;top:300px;display:flex;align-items:center;gap:14px;"><div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.cafe</span></div>
+    <div data-anim="800" data-kind="scale" style="position:absolute;left:660px;top:640px;display:flex;align-items:center;gap:14px;"><div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.escola</span></div>
+    <div data-anim="950" data-kind="scale" style="position:absolute;left:230px;top:720px;display:flex;align-items:center;gap:14px;"><div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.feira</span></div>
+  </div>
+  <div style="position:absolute;left:var(--pad-x);top:var(--pad-top);bottom:var(--pad-bottom);width:900px;display:flex;flex-direction:column;justify-content:space-between;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">COMMUNITY ROUND · 2026</span>
+    <div style="display:flex;flex-direction:column;gap:36px;">
+      <div data-anim="100" style="display:flex;align-items:baseline;font-size:var(--t-hero);font-weight:750;letter-spacing:-0.07em;line-height:.85;"><span>piu</span><span style="color:#6c6c69;">.</span></div>
+      <p data-anim="250" style="margin:0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;line-height:1.15;max-width:780px;text-wrap:pretty;">A messenger that works without the internet — owned by no fund.</p>
+    </div>
+    <span data-anim="400" style="font-size:var(--t-small);color:#a2a29e;">Lucas Cardeal · Founder &amp; CEO</span>
+  </div>
+</section>
+
+<section data-label="The Problem" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">WHY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The Problem</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:64px;">
+    <div data-anim="200" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">01</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">Every message goes through a server</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">If the data center goes down or gets blocked, everyone goes quiet at once.</p>
+    </div>
+    <div data-anim="340" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">02</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">No internet, no conversation</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">Blackouts, floods, crowded events, rural areas — when people most need to talk.</p>
+    </div>
+    <div data-anim="480" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">03</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">Someone else owns the network</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">A central company sees who talks to whom, and answers to its shareholders.</p>
+    </div>
+  </div>
+</section>
+
+<section data-label="Why Now" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">WHY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Why Now</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:64px;">
+    <div data-anim="200" style="display:flex;flex-direction:column;gap:24px;border-top:2px solid #f4f4f2;padding-top:36px;">
+      <span style="font-size:160px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">2.2B</span>
+      <span style="font-size:var(--t-small);line-height:1.35;">people still offline in 2025</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">ITU, Facts and Figures 2025</span>
+    </div>
+    <div data-anim="340" style="display:flex;flex-direction:column;gap:24px;border-top:2px solid #f4f4f2;padding-top:36px;">
+      <span style="font-size:160px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">96%</span>
+      <span style="font-size:var(--t-small);line-height:1.35;">of them live in low- and middle-income countries</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">ITU, Facts and Figures 2025</span>
+    </div>
+    <div data-anim="480" style="display:flex;flex-direction:column;gap:24px;border-top:2px solid #f4f4f2;padding-top:36px;">
+      <span style="font-size:160px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">313</span>
+      <span style="font-size:var(--t-small);line-height:1.35;">internet shutdowns in 52 countries in 2025, a record</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">Access Now, #KeepItOn 2025</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="Meet Piu" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;align-items:center;gap:120px;overflow:hidden;">
+  <div style="flex:1;display:flex;flex-direction:column;align-self:stretch;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">WHAT</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Meet Piu</h2>
+    <p data-anim="200" style="margin:var(--gap-title) 0 0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;line-height:1.2;text-wrap:pretty;">An offline-first messenger. Messages hop from device to device — over Bluetooth, Wi-Fi or radio — until they arrive.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:22px;">
+      <div data-anim="360" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">cloud_off</span><span>No central server</span></div>
+      <div data-anim="460" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">lock</span><span>End-to-end encrypted</span></div>
+      <div data-anim="560" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">hub</span><span>Powered by people who run nodes</span></div>
+    </div>
+  </div>
+  <div data-om-raster="" data-anim="250" data-kind="scale" style="width:400px;height:839px;flex:none;position:relative;">
+    <img src="export/shots/chats-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:62px;box-shadow:0 0 0 1px rgba(255,255,255,.12);">
+  </div>
+</section>
+
+<section data-label="How It Works" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">PRODUCT</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">How It Works</h2>
+  <div style="margin-top:auto;display:flex;align-items:flex-start;">
+    <div data-anim="200" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;background:#0c0c0c;color:#ffffff;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">You</span>
+    </div>
+    <div data-anim="300" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Bluetooth</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;"><div style="width:100%;border-top:2px dotted #0c0c0c;"></div><div data-loop="travel" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div></div>
+    </div>
+    <div data-anim="400" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">A stranger's phone</span>
+    </div>
+    <div data-anim="500" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Wi-Fi Mesh</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;"><div style="width:100%;border-top:2px solid #0c0c0c;"></div><div data-loop="travel" data-delay="600" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div></div>
+    </div>
+    <div data-anim="600" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">router</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Home node</span>
+    </div>
+    <div data-anim="700" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">LoRa radio</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;"><div style="width:100%;border-top:2px dashed #0c0c0c;"></div><div data-loop="travel" data-delay="1200" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div></div>
+    </div>
+    <div data-anim="800" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">cell_tower</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Super node</span>
+    </div>
+    <div data-anim="900" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Wi-Fi Direct</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;"><div style="width:100%;border-top:2px dotted #0c0c0c;"></div><div data-loop="travel" data-delay="1800" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div></div>
+    </div>
+    <div data-anim="1000" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;background:#0c0c0c;color:#ffffff;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Your friend</span>
+    </div>
+  </div>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:48px;border-top:1px solid rgba(0,0,0,.16);padding-top:36px;">
+    <span data-anim="1100" style="font-size:var(--t-small);">Store-and-forward when no route exists</span>
+    <span data-anim="1180" style="font-size:var(--t-small);">Relays carry sealed envelopes they can't read</span>
+    <span data-anim="1260" style="font-size:var(--t-small);">Uses the internet when it's there, never depends on it</span>
+  </div>
+</section>
+
+<section data-label="Inside the App" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) 60px;box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">PRODUCT</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Inside the App</h2>
+  <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:20px;"><div data-om-raster="" data-anim="200" style="width:322px;height:675px;"><img src="export/shots/chats-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;"></div><span data-anim="300" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Conversations</span></div>
+    <div style="display:flex;flex-direction:column;gap:20px;"><div data-om-raster="" data-anim="320" style="width:322px;height:675px;"><img src="export/shots/network-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;"></div><span data-anim="420" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Network &amp; node mode</span></div>
+    <div style="display:flex;flex-direction:column;gap:20px;"><div data-om-raster="" data-anim="440" style="width:322px;height:675px;"><img src="export/shots/wallet-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;"></div><span data-anim="540" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">LUNES wallet</span></div>
+    <div style="display:flex;flex-direction:column;gap:20px;"><div data-om-raster="" data-anim="560" style="width:322px;height:675px;"><img src="export/shots/rewards-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;"></div><span data-anim="660" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Network credits</span></div>
+    <div style="display:flex;flex-direction:column;gap:20px;"><div data-om-raster="" data-anim="680" style="width:322px;height:675px;"><img src="export/shots/nearby-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;"></div><span data-anim="780" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Nearby</span></div>
+  </div>
+</section>
+
+<section data-label="Built to Spread" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:100px;">
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">GROWTH</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Built to Spread</h2>
+    <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;line-height:1.3;text-wrap:pretty;">Growth doesn't depend on app stores, ads or connectivity.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;">
+      <div data-anim="260" style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:20px;padding:24px 0;border-top:1px solid rgba(0,0,0,.16);align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:40px;font-variation-settings:'wght' 300;">send_to_mobile</span><div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:var(--t-small);font-weight:650;">Phone-to-phone install</span><span style="font-size:var(--t-mono);color:#5f5f5c;">The app itself travels over Wi-Fi Direct</span></div></div>
+      <div data-anim="340" style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:20px;padding:24px 0;border-top:1px solid rgba(0,0,0,.16);align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:40px;font-variation-settings:'wght' 300;">group_add</span><div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:var(--t-small);font-weight:650;">Referral rewards</span><span style="font-size:var(--t-mono);color:#5f5f5c;">25 LUNES per active invitee, direct only</span></div></div>
+      <div data-anim="420" style="display:grid;grid-template-columns:64px minmax(0,1fr);gap:20px;padding:24px 0;border-top:1px solid rgba(0,0,0,.16);border-bottom:1px solid rgba(0,0,0,.16);align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:40px;font-variation-settings:'wght' 300;">network_node</span><div style="display:flex;flex-direction:column;gap:6px;"><span style="font-size:var(--t-small);font-weight:650;">Network effect</span><span style="font-size:var(--t-mono);color:#5f5f5c;">Every new phone also extends coverage</span></div></div>
+    </div>
+  </div>
+  <div style="display:flex;gap:36px;align-items:center;">
+    <div data-om-raster="" data-anim="300" data-kind="scale" style="width:358px;height:750px;"><img src="export/shots/invite-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:55px;"></div>
+    <div data-om-raster="" data-anim="450" data-kind="scale" style="width:358px;height:750px;"><img src="export/shots/share-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:55px;"></div>
+  </div>
+</section>
+
+<section data-label="The Provider Network" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:64px;">
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">GROWTH</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The Provider Network</h2>
+    <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-small);color:#5f5f5c;line-height:1.4;text-wrap:pretty;">Infrastructure comes from the community. Anyone can plug in a node and earn.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:18px;font-size:var(--t-small);">
+      <span data-anim="300">Home Node · Super Node · Local Gateway</span>
+      <span data-anim="360">Credits per confirmed delivery</span>
+      <span data-anim="420">100 credits = 1 LUNES</span>
+      <span data-anim="480" style="color:#5f5f5c;">No towers to build. No capex for Piu.</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;">
+    <div data-om-raster="" data-anim="240" data-kind="scale" style="width:1216px;height:779px;border-radius:14px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,0,0,.3),0 0 0 1px rgba(0,0,0,.12);"><img src="export/shots/desk-light.png" alt="" style="width:100%;height:100%;display:block;"></div>
+  </div>
+</section>
+
+<section data-label="The Flywheel" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:80px;overflow:hidden;">
+  <div style="width:620px;flex:none;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">GROWTH</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The Flywheel</h2>
+    <p data-anim="160" style="margin:auto 0 0;font-size:var(--t-body);color:#a2a29e;line-height:1.3;text-wrap:pretty;">Users and providers grow each other. LUNES rewards keep the loop turning.</p>
+  </div>
+  <div style="flex:1;position:relative;">
+    <div data-anim="200" data-kind="scale" style="position:absolute;left:50%;top:50%;width:600px;height:600px;margin:-300px 0 0 -300px;border-radius:50%;border:2px dashed rgba(255,255,255,.3);box-sizing:border-box;"></div>
+    <div data-loop="spin" style="position:absolute;left:50%;top:50%;width:600px;height:600px;margin:-300px 0 0 -300px;">
+      <div style="position:absolute;left:291px;top:-9px;width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div>
+    </div>
+    <div data-anim="250" data-kind="scale" style="position:absolute;left:50%;top:50%;width:220px;height:220px;margin:-110px 0 0 -110px;border-radius:50%;background:#f4f4f2;color:#0a0a0a;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;"><span style="font-size:var(--t-small);font-weight:700;">LUNES</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);">rewards</span></div>
+    <div style="position:absolute;left:50%;top:calc(50% - 300px);transform:translate(-50%,-50%);"><div data-anim="350" style="background:#0a0a0a;padding:14px 22px;white-space:nowrap;font-size:var(--t-small);font-weight:650;">More people use Piu</div></div>
+    <div style="position:absolute;left:calc(50% + 300px);top:50%;transform:translate(-50%,-50%);"><div data-anim="450" style="background:#0a0a0a;padding:14px 22px;white-space:nowrap;font-size:var(--t-small);font-weight:650;">More traffic to earn from</div></div>
+    <div style="position:absolute;left:50%;top:calc(50% + 300px);transform:translate(-50%,-50%);"><div data-anim="550" style="background:#0a0a0a;padding:14px 22px;white-space:nowrap;font-size:var(--t-small);font-weight:650;">More nodes join</div></div>
+    <div style="position:absolute;left:calc(50% - 300px);top:50%;transform:translate(-50%,-50%);"><div data-anim="650" style="background:#0a0a0a;padding:14px 22px;white-space:nowrap;font-size:var(--t-small);font-weight:650;">Better coverage</div></div>
+  </div>
+</section>
+
+<section data-label="Where We Start" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">MARKET</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Where We Start</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;line-height:1.3;max-width:1400px;text-wrap:pretty;">Global by design, emerging markets first — where connectivity is weakest and most contested.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;">
+    <div data-anim="260" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">signal_cellular_connected_no_internet_0_bar</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Fragile connectivity</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Rural areas, outskirts, informal settlements</span></div>
+    <div data-anim="360" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">flood</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Disasters &amp; emergencies</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Floods, storms, blackouts, civil defense</span></div>
+    <div data-anim="460" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">wifi_off</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Shutdown-prone regions</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Elections, protests, conflict zones</span></div>
+    <div data-anim="560" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">stadium</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Crowds</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Festivals, stadiums, markets, campuses</span></div>
+  </div>
+</section>
+
+<section data-label="How Piu Sustains Itself" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">MODEL</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">How Piu Sustains Itself</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#a2a29e;line-height:1.3;">Messaging stays free. Revenue comes from around it.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;">
+    <div data-anim="260" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">memory</span><span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Piu Node kits</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">Ready-to-plug hardware for providers</span></div>
+    <div data-anim="380" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">apartment</span><span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Services for organizations</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">Coverage and signed alerts for cities, events, civil defense</span></div>
+    <div data-anim="500" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:400px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">toll</span><span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Network fees</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">A small share of Nearby invites and credit settlements</span></div>
+  </div>
+</section>
+
+<section data-label="Traction" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">PROGRESS</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Traction</h2>
+  <div style="margin-top:auto;display:flex;flex-direction:column;">
+    <div data-anim="200" style="display:grid;grid-template-columns:72px minmax(0,1fr) 520px;gap:24px;align-items:center;padding:28px 0;border-top:1px solid rgba(0,0,0,.16);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">check_circle</span><span style="font-size:var(--t-body);font-weight:650;">Full product design</span><span style="font-size:var(--t-small);color:#5f5f5c;">App, provider dashboard, site</span></div>
+    <div data-anim="280" style="display:grid;grid-template-columns:72px minmax(0,1fr) 520px;gap:24px;align-items:center;padding:28px 0;border-top:1px solid rgba(0,0,0,.16);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">check_circle</span><span style="font-size:var(--t-body);font-weight:650;">Working prototype</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;border:2px dashed rgba(0,0,0,.25);border-radius:12px;padding:10px 16px;justify-self:start;">Add: what it does today</span></div>
+    <div data-anim="360" style="display:grid;grid-template-columns:72px minmax(0,1fr) 520px;gap:24px;align-items:center;padding:28px 0;border-top:1px solid rgba(0,0,0,.16);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">check_circle</span><span style="font-size:var(--t-body);font-weight:650;">Waitlist open</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;border:2px dashed rgba(0,0,0,.25);border-radius:12px;padding:10px 16px;justify-self:start;">Add: number of sign-ups</span></div>
+    <div data-anim="440" style="display:grid;grid-template-columns:72px minmax(0,1fr) 520px;gap:24px;align-items:center;padding:28px 0;border-top:1px solid rgba(0,0,0,.16);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">check_circle</span><span style="font-size:var(--t-body);font-weight:650;">Partners &amp; pilots</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;border:2px dashed rgba(0,0,0,.25);border-radius:12px;padding:10px 16px;justify-self:start;">Add: partner names</span></div>
+    <div data-anim="520" style="display:grid;grid-template-columns:72px minmax(0,1fr) 520px;gap:24px;align-items:center;padding:28px 0;border-top:1px solid rgba(0,0,0,.16);border-bottom:1px solid rgba(0,0,0,.16);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">check_circle</span><span style="font-size:var(--t-body);font-weight:650;">Backed by Lunes Network</span><span style="font-size:var(--t-small);color:#5f5f5c;">Token, wallet and settlement layer</span></div>
+  </div>
+</section>
+
+<section data-label="Roadmap" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">PROGRESS</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Roadmap</h2>
+  <div style="margin-top:auto;position:relative;">
+    <div style="position:absolute;left:0;right:0;top:15px;height:2px;background:rgba(0,0,0,.16);"></div>
+    <div data-anim="200" data-kind="grow" style="position:absolute;left:0;width:42%;top:14px;height:4px;background:#0c0c0c;transform-origin:0 50%;"></div>
+    <div style="position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:36px;">
+      <div data-anim="300" style="display:flex;flex-direction:column;gap:22px;"><div style="width:32px;height:32px;border-radius:50%;background:#0c0c0c;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 1</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Product design</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">App, dashboard, site</span><span style="align-self:flex-start;font-family:'Geist Mono';font-size:var(--t-mono);background:#0c0c0c;color:#ffffff;padding:6px 16px;border-radius:999px;">Done</span></div>
+      <div data-anim="400" style="display:flex;flex-direction:column;gap:22px;"><div style="width:32px;height:32px;border-radius:50%;background:#0c0c0c;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 2</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Core prototype</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Phone-to-phone messaging</span><span style="align-self:flex-start;font-family:'Geist Mono';font-size:var(--t-mono);background:#0c0c0c;color:#ffffff;padding:6px 16px;border-radius:999px;">Working</span></div>
+      <div data-anim="500" style="display:flex;flex-direction:column;gap:22px;"><div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:4px solid #0c0c0c;box-sizing:border-box;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 3</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Closed beta</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Waitlist, P2P install, groups</span><span style="align-self:flex-start;font-family:'Geist Mono';font-size:var(--t-mono);border:1.5px solid #0c0c0c;padding:5px 15px;border-radius:999px;">This round</span></div>
+      <div data-anim="600" style="display:flex;flex-direction:column;gap:22px;"><div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:2px solid rgba(0,0,0,.3);box-sizing:border-box;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 4</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Provider network</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Piu Node, LoRa, testnet credits</span></div>
+      <div data-anim="700" style="display:flex;flex-direction:column;gap:22px;"><div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:2px solid rgba(0,0,0,.3);box-sizing:border-box;"></div><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 5</span><span style="font-size:var(--t-body);font-weight:650;line-height:1.15;">Public launch</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">iOS, Mainnet payouts</span></div>
+    </div>
+  </div>
+</section>
+
+<section data-label="Team" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">PEOPLE</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Team</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1fr);gap:100px;align-items:end;">
+    <div data-anim="200" style="display:flex;align-items:center;gap:48px;">
+      <div style="width:240px;height:240px;flex:none;border-radius:50%;background:#f4f4f2;color:#0a0a0a;display:flex;align-items:center;justify-content:center;font-size:96px;font-weight:700;letter-spacing:-0.04em;">LC</div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;">Lucas Cardeal</span>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">FOUNDER &amp; CEO</span>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;border:2px dashed rgba(255,255,255,.3);border-radius:12px;padding:10px 16px;align-self:flex-start;">Add: background</span>
+      </div>
+    </div>
+    <div style="display:flex;flex-direction:column;">
+      <span data-anim="300" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-bottom:18px;border-bottom:2px solid #f4f4f2;">HIRING WITH THIS ROUND</span>
+      <span data-anim="380" style="padding:22px 0;border-bottom:1px solid rgba(255,255,255,.18);font-size:var(--t-small);">Mobile &amp; P2P networking engineer</span>
+      <span data-anim="460" style="padding:22px 0;border-bottom:1px solid rgba(255,255,255,.18);font-size:var(--t-small);">Embedded &amp; radio engineer</span>
+      <span data-anim="540" style="padding:22px 0;border-bottom:1px solid rgba(255,255,255,.18);font-size:var(--t-small);">Community &amp; provider lead</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="Part: The Round" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;gap:36px;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">THE ROUND</span>
+  <h2 data-anim="100" style="margin:0;font-size:var(--t-section);font-weight:700;letter-spacing:-0.055em;line-height:.95;">Funded by the Network</h2>
+  <div data-anim="250" data-kind="grow" style="height:2px;background:#f4f4f2;transform-origin:0 50%;"></div>
+  <p data-anim="350" style="margin:0;font-size:var(--t-body);color:#a2a29e;">No venture funds. Backed by the people who use it and power it.</p>
+</section>
+
+<section data-label="Why No Venture Funds" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">THE ROUND</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Why No Venture Funds</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:64px;">
+    <div data-anim="200" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">diversity_3</span><h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">No single owner</h3><p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">A decentralized network shouldn't answer to one cap table.</p></div>
+    <div data-anim="340" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">handshake</span><h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Aligned incentives</h3><p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">No pressure to sell data or chase ads. Backers want what users want.</p></div>
+    <div data-anim="480" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;"><span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">shield</span><h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Hard to capture</h3><p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">Thousands of small backers can't be pressured into a backdoor.</p></div>
+  </div>
+</section>
+
+<section data-label="Ways to Back Piu" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">THE ROUND</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Ways to Back Piu</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:24px;">
+    <div data-anim="200" style="background:#0c0c0c;color:#ffffff;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">volunteer_activism</span><span style="font-size:var(--t-body);font-weight:650;">Donate</span><span style="font-size:var(--t-mono);line-height:1.4;opacity:.8;">In LUNES or other currencies, any amount</span></div>
+    <div data-anim="280" style="background:#f3f3f1;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">router</span><span style="font-size:var(--t-body);font-weight:650;">Run a node</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Contribute infrastructure and earn credits</span></div>
+    <div data-anim="360" style="background:#f3f3f1;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">school</span><span style="font-size:var(--t-body);font-weight:650;">Sponsor a community node</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Fund a node at a school, clinic or square</span></div>
+    <div data-anim="440" style="background:#f3f3f1;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">package_2</span><span style="font-size:var(--t-body);font-weight:650;">Pre-order a Piu Node kit</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Pre-orders fund the first hardware batch</span></div>
+    <div data-anim="520" style="background:#f3f3f1;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">code</span><span style="font-size:var(--t-body);font-weight:650;">Fund a feature</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Community bounties for specific work</span></div>
+    <div data-anim="600" style="background:#f3f3f1;border-radius:24px;padding:34px 36px;display:flex;flex-direction:column;gap:16px;"><span style="font-family:'Material Symbols Rounded';font-size:48px;font-variation-settings:'wght' 300;">workspace_premium</span><span style="font-size:var(--t-body);font-weight:650;">Grants</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Digital-rights, humanitarian and open-tech programs</span></div>
+  </div>
+</section>
+
+<section data-label="What Backers Get" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">THE ROUND</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">What Backers Get</h2>
+  <div style="margin-top:auto;display:flex;flex-direction:column;">
+    <div data-anim="200" style="display:grid;grid-template-columns:72px minmax(0,1fr) 560px;gap:24px;align-items:center;padding:26px 0;border-top:1px solid rgba(255,255,255,.18);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">bolt</span><span style="font-size:var(--t-body);font-weight:650;">Early access to updates and betas</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">All backers</span></div>
+    <div data-anim="280" style="display:grid;grid-template-columns:72px minmax(0,1fr) 560px;gap:24px;align-items:center;padding:26px 0;border-top:1px solid rgba(255,255,255,.18);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">verified</span><span style="font-size:var(--t-body);font-weight:650;">Founding backer badge, opt-in</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">All backers</span></div>
+    <div data-anim="360" style="display:grid;grid-template-columns:72px minmax(0,1fr) 560px;gap:24px;align-items:center;padding:26px 0;border-top:1px solid rgba(255,255,255,.18);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">forum</span><span style="font-size:var(--t-body);font-weight:650;">A voice in roadmap priorities</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">All backers</span></div>
+    <div data-anim="440" style="display:grid;grid-template-columns:72px minmax(0,1fr) 560px;gap:24px;align-items:center;padding:26px 0;border-top:1px solid rgba(255,255,255,.18);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">star</span><span style="font-size:var(--t-body);font-weight:650;">Founding provider status</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">Node runners</span></div>
+    <div data-anim="520" style="display:grid;grid-template-columns:72px minmax(0,1fr) 560px;gap:24px;align-items:center;padding:26px 0;border-top:1px solid rgba(255,255,255,.18);border-bottom:1px solid rgba(255,255,255,.18);"><span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;">location_on</span><span style="font-size:var(--t-body);font-weight:650;">A dedication on the sponsored node</span><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">Community node sponsors</span></div>
+  </div>
+  <span data-anim="620" style="margin-top:36px;font-size:var(--t-mono);color:#a2a29e;">Contributions are donations or in-kind support — not equity or profit share.</span>
+</section>
+
+<section data-label="Use of Funds" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">THE ROUND</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Use of Funds</h2>
+  <div data-anim="200" data-kind="grow" style="margin-top:auto;display:flex;height:120px;border-radius:20px;overflow:hidden;transform-origin:0 50%;">
+    <div style="width:50%;background:#0c0c0c;"></div>
+    <div style="width:30%;background:#5f5f5c;"></div>
+    <div style="width:20%;background:#c9c9c5;"></div>
+  </div>
+  <div style="margin-top:48px;display:grid;grid-template-columns:50fr 30fr 20fr;gap:40px;">
+    <div data-anim="400" style="display:flex;flex-direction:column;gap:16px;"><span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">50%</span><span style="font-size:var(--t-body);font-weight:650;">Engineering</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Mobile apps, P2P transport, Piu Node software</span></div>
+    <div data-anim="500" style="display:flex;flex-direction:column;gap:16px;"><span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">30%</span><span style="font-size:var(--t-body);font-weight:650;">Lunes Network</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Network nodes, integration and settlement</span></div>
+    <div data-anim="600" style="display:flex;flex-direction:column;gap:16px;"><span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;">20%</span><span style="font-size:var(--t-body);font-weight:650;">Marketing</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Community, providers, launch</span></div>
+  </div>
+</section>
+
+<section data-label="Open Books" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">THE ROUND</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Open Books</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#a2a29e;line-height:1.3;">Backers can check every coin.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;">
+    <div data-anim="240" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:380px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">account_balance_wallet</span><span style="font-size:var(--t-body);font-weight:650;">Public treasury</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">One published wallet on Lunes. Every movement on-chain.</span></div>
+    <div data-anim="360" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:380px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">flag</span><span style="font-size:var(--t-body);font-weight:650;">Milestone-based spending</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">Funds released phase by phase, tied to the roadmap.</span></div>
+    <div data-anim="480" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:380px;box-sizing:border-box;"><span style="font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">summarize</span><span style="font-size:var(--t-body);font-weight:650;">Quarterly reports</span><span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">What was built, what was spent, what's next.</span></div>
+  </div>
+</section>
+
+<section data-label="Closing" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:40px;text-align:center;overflow:hidden;">
+  <div data-loop="pulse" style="position:absolute;left:660px;top:240px;width:600px;height:600px;border-radius:50%;border:2px solid rgba(255,255,255,.25);box-sizing:border-box;opacity:0;"></div>
+  <div data-loop="pulse" data-delay="1600" style="position:absolute;left:660px;top:240px;width:600px;height:600px;border-radius:50%;border:2px solid rgba(255,255,255,.25);box-sizing:border-box;opacity:0;"></div>
+  <div data-anim="0" data-kind="scale" style="display:flex;align-items:baseline;font-size:var(--t-hero);font-weight:750;letter-spacing:-0.07em;line-height:.85;"><span>piu</span><span style="color:#6c6c69;">.</span></div>
+  <p data-anim="200" style="margin:0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;">Back the network.</p>
+  <span data-anim="320" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;border:2px dashed rgba(255,255,255,.3);border-radius:12px;padding:12px 20px;">Add: backer page link · contact</span>
+</section>
+
+</x-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.onChange = e => this.play(e.detail && e.detail.slide);
+    document.addEventListener('slidechange', this.onChange);
+    this.t = setTimeout(() => {
+      this.startLoops();
+      this.play(document.querySelector('deck-stage > [data-deck-active]'));
+    }, 300);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('slidechange', this.onChange);
+    clearTimeout(this.t);
+  }
+  still() {
+    const st = document.querySelector('deck-stage');
+    return (st && st.hasAttribute('noscale')) || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  startLoops() {
+    if (this.still()) return;
+    document.querySelectorAll('[data-loop]').forEach(el => {
+      if (el._loop) return;
+      const delay = +el.dataset.delay || 0, k = el.dataset.loop;
+      if (k === 'pulse') el._loop = el.animate([{ opacity: .9, transform: 'scale(.5)' }, { opacity: 0, transform: 'scale(3)' }], { duration: 3200, delay, iterations: Infinity, easing: 'cubic-bezier(.2,.6,.3,1)' });
+      else if (k === 'travel') el._loop = el.animate([{ left: '0%', opacity: 0 }, { opacity: 1, offset: .1 }, { opacity: 1, offset: .9 }, { left: 'calc(100% - 16px)', opacity: 0 }], { duration: 2400, delay, iterations: Infinity, easing: 'linear', fill: 'backwards' });
+      else if (k === 'spin') el._loop = el.animate([{ transform: 'rotate(0deg)' }, { transform: 'rotate(360deg)' }], { duration: 8000, iterations: Infinity, easing: 'linear' });
+    });
+  }
+  play(slide) {
+    if (!slide) return;
+    if (this.still()) { document.getAnimations().forEach(a => a.cancel()); return; }
+    this.startLoops();
+    slide.querySelectorAll('[data-anim]').forEach(el => {
+      const d = +el.dataset.anim || 0, k = el.dataset.kind || 'up';
+      const from = k === 'fade' ? { opacity: 0 } : k === 'scale' ? { opacity: 0, transform: 'scale(.92)' } : k === 'grow' ? { transform: 'scaleX(0)' } : { opacity: 0, transform: 'translateY(32px)' };
+      const to = k === 'grow' ? { transform: 'scaleX(1)' } : { opacity: 1, transform: 'none' };
+      el.animate([from, to], { duration: k === 'grow' ? 900 : 700, delay: d, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'backwards' });
+    });
+  }
+}
+</script>
+</body>
+</html>

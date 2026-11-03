@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { CHANNEL_TYPES, seedChats, seedMembers } from '../data/seed';
 import type { ChannelType, Chat, FileXfer, IdentityKind, Member, Msg, Status, ToastData } from '../data/types';
+import type { AnonAvatar } from '../lib/avatar';
 import { notify } from '../lib/notifications';
 import { usePersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
@@ -12,7 +13,20 @@ export interface FileOps {
   setPaused: (msgId: string, paused: boolean) => boolean;
 }
 
-interface Profile { idType: IdentityKind; name: string }
+interface Profile {
+  idType: IdentityKind; name: string;
+  /** Foto do perfil público: 256 px (data URI) e 96 px (base64, o que vai para os contatos públicos). */
+  photo?: string | null; photoSmall?: string | null;
+  /** Imagem da identidade anônima (gerada no aparelho; `null` = só o código da chave) e a rodada do sorteio. */
+  anonAvatar?: AnonAvatar | null; anonSeed?: number;
+}
+
+/** Contato bloqueado (design: Privacidade → Contatos bloqueados). */
+export interface Blocked {
+  /** Contato real (`piu:…`) ou conversa de exemplo. */
+  id: string; chatId?: string; name: string; initials: string;
+  at: number; how: 'pedido de conversa' | 'pela conversa'; reported: boolean;
+}
 
 export interface GroupSettings { members: Member[]; keyV: number; approve: boolean; send: 'all' | 'admins'; inv: 'admins' | 'all' }
 
@@ -21,6 +35,10 @@ export interface NewChannel { name: string; desc: string; type: ChannelType; pos
 interface Store {
   profile: Profile;
   setProfile: (p: Partial<Profile>) => void;
+  blocked: Blocked[];
+  block: (b: Omit<Blocked, 'at'>) => void;
+  unblock: (id: string) => void;
+  isBlocked: (id: string | undefined) => boolean;
   onboarded: boolean;
   finishOnboarding: () => void;
   /** Identidade em uso na lista de conversas (listas separadas). */
@@ -90,6 +108,7 @@ const TOAST_MS = 4500;
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [profile, setProfileState] = usePersisted<Profile>('profile', { idType: 'public', name: 'Cardeal' });
+  const [blocked, setBlocked] = usePersisted<Blocked[]>('blocked', []);
   const [onboarded, setOnboarded] = usePersisted('onboarded', false);
   const [identity, setIdentity] = usePersisted<IdentityKind>('identity', 'public');
   const [chats, setChats] = usePersisted<Chat[]>('chats', seedChats, reviveChats);
@@ -177,6 +196,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const store = useMemo<Store>(() => ({
     profile,
     setProfile: p => setProfileState(s => ({ ...s, ...p })),
+    blocked,
+    block: b => setBlocked(list => (list.some(x => x.id === b.id) ? list : [{ ...b, at: Date.now() }, ...list])),
+    unblock: id => setBlocked(list => list.filter(x => x.id !== id)),
+    isBlocked: id => !!id && blocked.some(x => x.id === id),
     onboarded,
     finishOnboarding: () => { setIdentity(profile.idType); setOnboarded(true); },
     identity,
@@ -308,7 +331,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     toast,
     showToast,
     dismissToast,
-  }), [profile, onboarded, identity, chats, typing, verified, group, toast, push, setStatus, patchFile, startFile, showToast, dismissToast]);
+  }), [profile, blocked, onboarded, identity, chats, typing, verified, group, toast, push, setStatus, patchFile, startFile, showToast, dismissToast]);
 
   retryRef.current = store.retry;
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

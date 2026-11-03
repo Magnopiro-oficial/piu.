@@ -2,6 +2,7 @@ import { router } from 'expo-router';
 import { ScrollView, Pressable, View } from 'react-native';
 import { FEE_OPTIONS, fmtLunes, REQUESTS } from '../../data/wallet';
 import { useLayout } from '../../lib/responsive';
+import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
@@ -16,6 +17,7 @@ export default function Requests() {
   const { c } = useTheme();
   const { compact } = useLayout();
   const { reqStatus, accept, decline, block, myFee, setMyFee } = useWallet();
+  const { block: blockContact } = useStore();
 
   return (
     <Screen>
@@ -53,7 +55,7 @@ export default function Requests() {
                     <Button label="Aceitar e conversar" height={46} fontSize={14} style={!compact && { flex: 1.6 }}
                       onPress={() => { accept(r.id); router.push({ pathname: '/nearby/match', params: { id: r.id } }); }} />
                   </View>
-                  <Pressable onPress={() => block(r.id)} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 4 }}>
+                  <Pressable onPress={() => { block(r.id); blockContact({ id: r.id, name: r.name, initials: r.initials, how: 'pedido de conversa', reported: true }); }} accessibilityRole="button" style={{ alignSelf: 'center', paddingVertical: 4 }}>
                     <T size={12.5} w={550} color={c.ink2} style={{ textDecorationLine: 'underline' }}>Bloquear e denunciar</T>
                   </Pressable>
                 </>

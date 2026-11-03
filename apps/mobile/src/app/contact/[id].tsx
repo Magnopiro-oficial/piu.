@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, View } from 'react-native';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 import { handleOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { useLayout } from '../../lib/responsive';
@@ -21,7 +21,7 @@ export default function Contact() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const { compact } = useLayout();
-  const { chats, verified, setVerified, showToast } = useStore();
+  const { chats, verified, setVerified, showToast, block, isBlocked } = useStore();
   const { identities } = useKeys();
   const ident = chats.find(x => x.id === id)?.ident ?? 'public';
   const { contactKeys } = useMessaging();
@@ -47,14 +47,26 @@ export default function Contact() {
   const handle = chat.peer
     ? `${chat.peer.slice(0, 8)}…${chat.peer.slice(-4)} · ${chat.ident === 'anon' ? 'anônima' : 'pública'}`
     : chat.ident === 'anon' ? 'piu:b2d9…7a10 · anônima' : `${handleOf(first)} · pública`;
-  const rows: [IconName, string, string, number][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', 'Desligado', 450], ['block', `Bloquear ${first}`, '', 650]];
+  // Bloqueio (design): contato real pelo id da chave; conversa de exemplo pelo id da conversa.
+  const blockId = chat.peer ?? chat.id;
+  const isBl = isBlocked(blockId);
+  const blockAct = isBl
+    ? () => router.push({ pathname: '/blocked', params: { sel: blockId } })
+    : () => {
+      block({ id: blockId, chatId: chat.id, name: chat.name, initials: chat.initials, how: 'pela conversa', reported: false });
+      showToast({ icon: 'block', title: `${first} bloqueado(a)`, body: 'Não é avisado(a). Desfaça em Privacidade → Contatos bloqueados.' });
+    };
+  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', 'Desligado', 450],
+    [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct]];
 
   return (
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={{ paddingHorizontal: 24, paddingBottom: 8, alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={28} w={650} color={c.invink}>{chat.initials}</T></View>
+          {chat.photo
+            ? <Image source={{ uri: chat.photo }} accessibilityLabel={`Foto de ${chat.name}`} style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.bg2 }} />
+            : <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={28} w={650} color={c.invink}>{chat.initials}</T></View>}
           <T size={24} w={700} ls={-0.03} align="center" accessibilityRole="header">{chat.name}</T>
           <T size={12.5} mono color={c.ink2}>{handle}</T>
           <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: ver ? c.ink : c.bg2 }}>
@@ -83,12 +95,13 @@ export default function Contact() {
         </View>
 
         <View style={{ marginTop: 14, marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
-          {rows.map(([icon, l, v, w], i) => (
-            <View key={l} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+          {rows.map(([icon, l, v, w, act], i) => (
+            <Pressable key={l} disabled={!act} onPress={act} accessibilityRole={act ? 'button' : undefined}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: i ? 1 : 0, borderTopColor: c.line, opacity: pressed ? 0.6 : 1 })}>
               <Icon name={icon} size={21} w={300} />
               <T size={15} w={w} style={{ flex: 1 }}>{l}</T>
               <T size={12.5} color={c.ink2}>{v}</T>
-            </View>
+            </Pressable>
           ))}
         </View>
       </ScrollView>

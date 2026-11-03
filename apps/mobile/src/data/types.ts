@@ -25,6 +25,8 @@ export interface Chat {
   route?: { nodes: RouteNode[]; vias: string[] };
   /** Contato real (`piu:…`): as mensagens vão cifradas pelo transporte, não pela simulação. */
   peer?: string;
+  /** Foto do perfil público que o contato mandou (data URI JPEG de 96 px). */
+  photo?: string;
   /** Escreveu primeiro, sem que você tivesse o código dele: confira antes de confiar. */
   request?: boolean;
   /** Grupo, canal ou comunidade real (id do grupo no protocolo). */

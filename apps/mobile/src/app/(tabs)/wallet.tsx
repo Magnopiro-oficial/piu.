@@ -21,7 +21,7 @@ export default function WalletTab() {
   const [sheet, setSheet] = useState<'send' | 'receive' | null>(null);
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 4, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
           <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">Carteira</T>

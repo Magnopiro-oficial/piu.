@@ -24,7 +24,7 @@ export default function Network() {
   const fg = n.relay ? c.invink : c.ink;
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 24 }}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 8, gap: 4 }}>
           <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">Rede</T>

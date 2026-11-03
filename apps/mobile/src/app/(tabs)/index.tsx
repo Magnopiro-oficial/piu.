@@ -85,7 +85,7 @@ export default function Chats() {
   );
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <FlatList
         data={list}
         keyExtractor={x => x.id}
@@ -110,7 +110,7 @@ function ChatRow({ chat, onPress }: { chat: Chat; onPress: () => void }) {
     <Pressable onPress={onPress} accessibilityRole="button"
       accessibilityLabel={`${chat.name}. ${preview}${chat.unread ? `. ${chat.unread} não lidas` : ''}`}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 9, paddingHorizontal: 20, backgroundColor: pressed || hovered ? c.bg2 : 'transparent' })}>
-      <Avatar initials={chat.initials} square={chat.kind !== 'direct'} inverted={chat.inv} />
+      <Avatar initials={chat.initials} square={chat.kind !== 'direct'} inverted={chat.inv} photo={chat.photo} />
       <View style={{ flex: 1, minWidth: 0, gap: 3, paddingVertical: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {kindIcon && <Icon name={kindIcon} size={16} />}

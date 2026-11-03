@@ -12,6 +12,7 @@ import { useMyCard } from '../../state/messaging';
 import { QrCode } from '../../ui/QrCode';
 import { Dialog } from '../../ui/Dialog';
 import { Icon, type IconName } from '../../ui/Icon';
+import { ProfileAvatar } from '../../ui/ProfileAvatar';
 import { Screen } from '../../ui/Screen';
 import { ActionRow, SetGroup } from '../../ui/Settings';
 import { T } from '../../ui/T';
@@ -48,7 +49,7 @@ export default function Profile() {
   ];
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20 }}>
           <View accessibilityRole="radiogroup" accessibilityLabel="Identidade" style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: 14, backgroundColor: c.bg2 }}>
@@ -67,9 +68,7 @@ export default function Profile() {
         </View>
 
         <View style={{ paddingTop: 28, paddingHorizontal: 20, paddingBottom: 20, alignItems: 'center', gap: 12 }}>
-          <View style={{ width: 96, height: 96, borderRadius: p.radius === 'circle' ? 48 : 28, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
-            <T size={32} w={650} ls={-0.03} color={c.invink}>{p.initials}</T>
-          </View>
+          <ProfileAvatar pub={pub} initials={p.initials} keyCode={p.initials} />
           <View style={{ alignItems: 'center', gap: 4 }}>
             <T size={26} w={700} ls={-0.035} align="center" accessibilityRole="header">{p.name}</T>
             <T size={13} mono color={c.ink2}>{p.handle}</T>
