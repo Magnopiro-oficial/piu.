@@ -464,7 +464,7 @@ export class Messenger {
       if (m.id === me) continue;
       let c = this.contacts.get(m.id);
       if (!c) { c = { id: m.id, via: g.via, pub: m.pub, name: m.name }; this.contacts.set(c.id, c); }
-      this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin') }, null, Priority.High);
+      this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin' ? 'admin' : 'member', m.id) }, null, Priority.High);
     }
   }
 
@@ -948,7 +948,7 @@ export class Messenger {
       inv: [...this.invites.values()],
       cr: this.credits.export(this.o.now()),
       mx: [...this.days],
-      g: [...this.groups.values()].map(g => encodeState(g, true)),
+      g: [...this.groups.values()].map(g => encodeState(g, 'store')),
       gp: [...this.prevKeys],
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),

@@ -6,7 +6,7 @@ import { initialsOf, nowHM } from '../lib/text';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
 import { type Contact, Messenger } from '../messaging/messenger';
-import { canPost, type GroupState } from '../messaging/groups';
+import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
@@ -402,7 +402,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 export const GROUP_LINK = 'piug:';
 export const chatIdForGroup = (gid: string) => 'g' + gid.slice(0, 20);
 function groupSub(g: GroupState) {
-  const n = g.members.length;
+  const n = memberCount(g);
   if (g.kind === 'channel') return `canal ${g.visibility === 'public' ? 'público' : g.visibility === 'secret' ? 'secreto' : 'privado'} · ${n} ${n === 1 ? 'inscrito' : 'inscritos'}`;
   if (g.kind === 'community') return `comunidade · ${(g.children ?? []).length} grupos e canais`;
   return `${n} ${n === 1 ? 'membro' : 'membros'} · chave v${g.keyV}`;

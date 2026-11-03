@@ -3,7 +3,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { Chat } from '../data/types';
 import { initialsOf } from '../lib/text';
-import { isAdmin } from '../messaging/groups';
+import { hidesSubscribers, isAdmin, memberCount } from '../messaging/groups';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -38,6 +38,10 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
   if (!g || !groupOps) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Você não participa mais deste grupo.</T></Screen>;
 
   const channel = g.kind === 'channel';
+  const total = memberCount(g);
+  // Canal privado ou secreto: o inscrito só recebe admins e moderadores (e a si mesmo).
+  const hidden = hidesSubscribers(g) && !admin;
+  const listed = hidden ? g.members.filter(m => m.role !== 'member') : g.members;
   const pending = admin ? groupOps.pending(g.id) : [];
   const candidates = contactsFor(g.via).filter(x => !g.members.some(m => m.id === x.id));
   const who = g.members.find(m => m.id === target);
@@ -52,7 +56,7 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           <View style={{ width: 84, height: 84, borderRadius: 26, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><T size={26} w={650}>{initialsOf(g.name)}</T></View>
           <T size={23} w={700} ls={-0.03} align="center" accessibilityRole="header">{g.name}</T>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-            <T size={13} color={c.ink2}>{g.members.length} {channel ? 'inscritos' : 'membros'}</T>
+            <T size={13} color={c.ink2}>{total} {channel ? (total === 1 ? 'inscrito' : 'inscritos') : total === 1 ? 'membro' : 'membros'}</T>
             <View accessibilityLabel={`chave do grupo versão ${g.keyV}`} style={{ paddingVertical: 2, paddingHorizontal: 7, borderRadius: 6, borderWidth: 1, borderColor: c.line2 }}>
               <T size={11} w={500} mono>chave v{g.keyV}</T>
             </View>
@@ -118,9 +122,9 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           </>
         )}
 
-        <SectionLabel>{`${channel ? 'INSCRITOS' : 'MEMBROS'} · ${g.members.length}`}</SectionLabel>
+        <SectionLabel>{hidden ? `ADMINS · ${listed.length}` : `${channel ? 'INSCRITOS' : 'MEMBROS'} · ${total}`}</SectionLabel>
         <View style={{ marginHorizontal: 20 }}>
-          {g.members.map(p => (
+          {listed.map(p => (
             <View key={p.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 10, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.line }}>
               <Avatar initials={initialsOf(p.id === me ? 'Você' : p.name || '?')} size={40} inverted={p.id === me} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
@@ -143,6 +147,13 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
             </View>
           ))}
         </View>
+
+        {hidden && (
+          <View style={{ marginTop: 12, marginHorizontal: 24, flexDirection: 'row', gap: 10 }}>
+            <Icon name="visibility_off" size={17} w={300} />
+            <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>{`Canal ${g.visibility === 'secret' ? 'secreto' : 'privado'}: inscritos não veem uns aos outros. Só os admins têm a lista.`}</T>
+          </View>
+        )}
 
         {admin && (
           <View style={{ paddingTop: 12, paddingHorizontal: 20, gap: 8 }}>
