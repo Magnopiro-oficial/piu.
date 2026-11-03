@@ -12,6 +12,28 @@ Data: 03/11/2026. Análise só de leitura, sobre o código deste repositório. O
 - **LNNP**: `docs/lnnp/especificacao-v1.md`.
 - **AUD**: `docs/seguranca/auditoria-2026-11.md`.
 
+## Situação depois da varredura de 03/11/2026 (leia antes das tabelas)
+
+As tabelas abaixo são a análise original. Uma varredura nova, regra por regra no código, encontrou o que já estava feito e implementou as lacunas que não dependem de terceiros. Status atual:
+
+**Implementado nesta leva (back + front):**
+- 1.4 aviso assinado de troca de aparelho, com mensagem de sistema no contato; 1.5 "Quem pode me encontrar" vale em Por perto e nos pedidos (padrão "Todos"), e a busca aceita `piu:`, link `piu://` e convite de grupo.
+- 2.6 localização em texto curto (sem GPS); 2.7 prioridade de canal (Normal/Alta) no envelope; meio, tamanho e saltos reais da rota; `priv.noRoutes`; separador de data real.
+- 4.5 limpar mídia apaga também as prévias embutidas; abrir/compartilhar arquivo recebido.
+- 6.4 convite por link `piu://` com cartão assinado (as telas de envio P2P do app saíram); 6.5 registro local de convites aceitos.
+- 7.1 endereço Lunes informado pela pessoa e saldo real da Mainnet (o Piu não guarda chave Lunes; 7.2/7.3 viram "não envia"); 7.4 progresso do bônus com backup e dias de entrega a 3+ contatos; 7.8 arquivo de evidências do celular; créditos "em lote" no lugar de "pago" simulado.
+- 9.3 regras do equipamento e 9.4 revogação pelo celular; 9.5 ganhos com dados do nó; 9.6 carteira de provider e declaração da carteira do lote pelo celular; vizinhos por endereço no celular e no painel.
+- 9.7 nó pai do Ponto de Acesso; 10.1 resumo assinado dos outros equipamentos (quadro `DEVICE_REPORT`); 10.2/10.5 pausa e limites dos equipamentos do mesmo operador pela malha (quadro `DEVICE_POLICY`); reiniciar o nó; restaurar a chave de operador; 10.9 sem saldo de exemplo; endereço SS58 na transferência; alertas CAP no painel e no celular (11.1, fonte retransmitida pelo nó).
+- Edição de grupo/canal, silenciar, apagar conversa/contato, notificações do sistema para pedidos/carteira/rede, menções e "só menções acima de 20/h" (11.3), data real do backup, textos que prometiam o que não existia.
+
+**Já estava feito (o mapa marcava como faltando):** 1.2, 2.1, 2.2, 2.3, 2.4, 3.1, 3.3, 4.1, 4.2, 5.1, 5.3–5.7, 6.2, 7.6, 7.7, 7.9, 8.1, 10.3, 10.6, 10.8, 11.2, 11.4.
+
+**Falta, sem dependência de terceiro (próximas levas):** 1.1 chave por aparelho e 3.5 canal grande (revisão de cripto); 1.3 migração com histórico; 2.5 conversa com quem está por perto sem QR; 3.2 canal público descobrível; 3.4 moderação; 3.6 entrega por membro; 4.3 arquivos em grupo; 4.4 retomada de transferência e arquivos cifrados em disco; 5.2 perfil de Por perto completo; 8.3 nomes `piu.*` assinados e transporte LAN do celular até o piu-node (o toggle "Wi-Fi Mesh" está marcado indisponível); 8.5 escolha por alcance/custo.
+
+**Decisão de produto:** 8.2 horário "Personalizado"; 10.4 critérios de "remetentes desconhecidos" e "só comunidades que sigo" (mostradas como sem efeito); injetar alertas CAP na malha.
+
+**Terceiros:** liquidação e pagamento (item 7), 7.5 bônus de indicação, 9.2 teste real com 3 vizinhos, 10.7 atualização assinada, 8.4 revogação global, destino de denúncias (5.8), alertas assinados por órgão oficial.
+
 Caminhos de código: `M/` = `apps/mobile/src/`, `P/` = `apps/provider-panel/src/`, `N/` = `apps/piu-node/src/`.
 
 **Esforço:** P = até 1 dia · M = alguns dias · G = uma semana ou mais, ou depende de outra frente.
