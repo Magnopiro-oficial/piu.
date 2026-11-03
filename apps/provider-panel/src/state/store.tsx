@@ -1,7 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
 import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
-import type { DeviceFilter, HoursPolicy, NodeClass, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
+import { type Live, liveDevice, liveTx } from '../lib/live';
+import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
 import { useNode } from './node';
 
 // ── rota (hash) ─────────────────────────────────────────
@@ -75,22 +76,25 @@ interface Store {
   wizardOpen: boolean; setWizardOpen: (o: boolean) => void;
   toast: (ToastData & { seq: number }) | null; showToast: (t: ToastData) => void;
   totals: { month: number; today: number; active: number; validated: number };
+  /** Estatísticas reais do nó (retransmissão, histórico, recibos); null na demonstração. */
+  live: Live | null;
 }
 
 const Ctx = createContext<Store | null>(null);
 
-/** Equipamento da API no formato do painel (detalhes de exibição vêm do modelo da mesma classe). */
-function fromApi(d: ApiDevice, templates: RelayNode[]): RelayNode {
-  const t = templates.find(x => x.cls === d.cls) ?? templates[0]!;
-  return { ...t, id: d.id, name: d.name, cls: (d.cls as NodeClass) ?? t.cls, status: d.status, today: d.today, fresh: false };
-}
+/** Intervalo da leitura das estatísticas do nó (vizinhos, contadores, recibos). */
+const LIVE_MS = 10_000;
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const node = useNode();
   const api = node.mode.kind === 'node' ? node.mode.api : null;
   const [theme, setThemeState] = useState<Theme>(initialTheme);
   const { route, navigate } = useHashRoute();
-  const [devices, setDevices] = useState<RelayNode[]>(seedDevices);
+  const [demoDevices, setDevices] = useState<RelayNode[]>(seedDevices);
+  /** Com piu-node: os equipamentos do operador, como o servidor devolveu. */
+  const [apiDevices, setApiDevices] = useState<ApiDevice[]>([]);
+  const [live, setLive] = useState<Live | null>(null);
+  const [fresh, setFresh] = useState<string | null>(null);
   const [devFilter, setDevFilter] = useState<DeviceFilter>('all');
   const [devQuery, setDevQuery] = useState('');
   const [balance, setBalance] = useState(START_BALANCE);
@@ -111,17 +115,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [theme]);
   useEffect(() => () => window.clearTimeout(toastTimer.current), []);
 
-  // Servido por um piu-node: equipamentos e saldo vêm do servidor (só os do operador da sessão).
+  const refreshWallet = useCallback(() => {
+    if (!api) return;
+    node.guard(api.wallet()).then(w => { setBalance(w.balance); setTxs(w.txs.map(liveTx)); }).catch(() => {});
+  }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Servido por um piu-node: equipamentos, saldo e movimentações vêm do servidor (só os do operador da sessão).
   useEffect(() => {
     if (!api) return;
-    const templates = seedDevices();
-    node.guard(api.devices()).then(ds => setDevices(ds.map(d => fromApi(d, templates)))).catch(() => {});
-    node.guard(api.wallet()).then(w => setBalance(w.balance)).catch(() => {});
+    setTxs([]); setBalance(0);
+    node.guard(api.devices()).then(setApiDevices).catch(() => {});
+    refreshWallet();
     node.guard(api.packages()).then(setPackages).catch(() => {});
     node.guard(api.sessions()).then(setSessions).catch(() => {});
     node.guard(api.phones()).then(setPhones).catch(() => {});
     node.guard(api.settings()).then(s => { setLimitsState(s.limits); setPolicies(s.policies); settingsLoaded.current = true; }).catch(() => {});
-  }, [api]);
+    // Estatísticas reais do motor: lidas agora e a cada LIVE_MS (vizinhos entram e saem, contadores sobem).
+    let alive = true;
+    const read = () => Promise.all([
+      node.guard(api.relay()).catch(() => null), node.guard(api.history()).catch(() => null), node.guard(api.receipts()).catch(() => null),
+    ]).then(([relay, history, receipts]) => { if (alive) setLive({ relay, history, receipts }); });
+    void read();
+    const t = window.setInterval(() => { if (document.visibilityState !== 'hidden') void read(); }, LIVE_MS);
+    return () => { alive = false; window.clearInterval(t); };
+  }, [api]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const devices = useMemo<RelayNode[]>(
+    () => (api ? apiDevices.map(d => ({ ...liveDevice(d, live), fresh: d.id === fresh })) : demoDevices),
+    [api, apiDevices, live, demoDevices, fresh],
+  );
 
   // Ajustes salvos no nó (depois de carregados, para não sobrescrever com o padrão).
   useEffect(() => {
@@ -160,23 +182,28 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       page: route.page, sel: route.sel, navigate,
       devices,
       addDevice: async (d, family) => {
-        let id = d.id;
         if (api) {
           try {
             const r = await node.guard(api.createDevice({ name: d.name, cls: d.cls, family, ...(d.pub ? { pub: d.pub } : {}) }));
-            id = r.id;
+            setApiDevices(ds => [...ds, r]); setFresh(r.id); setDevFilter('all'); setDevQuery('');
+            return r.id;
           } catch (e) {
             showToast({ icon: 'error', title: 'Não foi possível ativar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return null;
           }
         }
-        setDevices(ds => [...ds, { ...d, id }]); setDevFilter('all'); setDevQuery('');
-        return id;
+        setDevices(ds => [...ds, d]); setDevFilter('all'); setDevQuery('');
+        return d.id;
       },
       togglePause: id => {
-        const flip = () => setDevices(ds => ds.map(d => (d.id !== id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' })));
-        flip();
-        if (api) node.guard(api.togglePause(id)).catch(e => { flip(); showToast({ icon: 'error', title: 'Não foi possível alterar', body: e instanceof ApiError ? e.message : 'Tente de novo.' }); });
+        if (api) {
+          // O servidor decide (e, no próprio nó, pausa o motor): o painel mostra o estado que ele devolver.
+          node.guard(api.togglePause(id))
+            .then(r => { setApiDevices(ds => ds.map(d => (d.id === r.id ? { ...d, status: r.status } : d))); return node.guard(api.relay()).then(relay => setLive(l => (l ? { ...l, relay } : l))); })
+            .catch(e => showToast({ icon: 'error', title: 'Não foi possível alterar', body: e instanceof ApiError ? e.message : 'Tente de novo.' }));
+          return;
+        }
+        setDevices(ds => ds.map(d => (d.id !== id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' })));
       },
       revokeDevice: async id => {
         if (api) {
@@ -184,6 +211,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             showToast({ icon: 'error', title: 'Não foi possível revogar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return false;
           }
+          setApiDevices(ds => ds.filter(d => d.id !== id));
+          return true;
         }
         setDevices(ds => ds.filter(d => d.id !== id));
         return true;
@@ -200,15 +229,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             showToast({ icon: 'error', title: 'Transferência não feita', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
             return 'error';
           }
+          refreshWallet();
+          return 'ok';
         }
         setBalance(b => Math.round((b - amount) * 100) / 100); setTxs(t => [tx, ...t]);
         return 'ok';
       },
-      approveTransfer: async (pending, approval, amount, tx) => {
+      approveTransfer: async (pending, approval) => {
         if (!api) return 'Sem nó.';
         try { await node.guard(api.approveTransfer(pending.id, approval)); }
         catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível concluir.'; }
-        setBalance(b => Math.round((b - amount) * 100) / 100); setTxs(t => [tx, ...t]);
+        refreshWallet();
         return null;
       },
       phones,
@@ -237,9 +268,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       policies, togglePolicy: k => setPolicies(p => ({ ...p, [k]: !p[k] })),
       wizardOpen, setWizardOpen,
       toast, showToast,
-      totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: month - PENDING },
+      totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: api ? 0 : month - PENDING },
+      live,
     };
-  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions, phones]);
+  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

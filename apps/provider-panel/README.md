@@ -18,21 +18,22 @@ npm run typecheck
 - `src/data/seed.ts` e `src/data/topology.ts`: dados de exemplo do protótipo (**ilustrativos**).
 
 ## O que vem do piu-node e o que ainda é simulado
-Servido pelo `piu-node` (com sessão), estes dados e ações são **reais**:
-- equipamentos: lista, pausar, revogar e **ativar pelo assistente** (`POST /api/devices`);
-- **limites globais e política de tráfego**: carregados e salvos no nó, por operador;
-- **acessos a este painel**: a lista real de sessões ("Chrome · Linux", "App Piu Provider · macOS") e **Encerrar outras sessões** (pede um código novo do equipamento se a última confirmação passou de 15 min);
-- carteira: saldo e **transferência para a carteira pessoal ou para um endereço `lunes:…` colado** (com step-up);
-- **aprovação no celular**: em Configurações → Parear celular, o app Piu lê o QR e devolve 6 dígitos. Depois disso, "Assinar no celular" mostra o QR do pedido e o código de conferência, e a transferência só sai com o código de aprovação que o celular mostra depois da biometria (ver `apps/piu-node/README.md`);
-- pacotes assinados do instalador.
+Servido pelo `piu-node` (com sessão), o painel **não usa dados de exemplo**: o que o nó mede aparece; o que depende de terceiros (validador, Mainnet, preço do LUNES) ou de hardware ainda não suportado aparece como indisponível, nunca como número inventado. As estatísticas são lidas a cada 10 s (`src/lib/live.ts`).
 
-Ainda **simulados** (dados de `src/data/`, também com o `piu-node`):
-- Visão geral, Malha e Ganhos (métricas, topologia, créditos e lotes), que ainda não leem `GET /api/relay`;
-- movimentações da carteira (só o saldo é real). Na demonstração, sem nó, a aprovação no celular continua simulada;
-- busca, pareamento e teste real no assistente (temporizadores);
-- atualizar e reiniciar equipamento, backup e rotação da chave de operador (só aviso).
+| Tela | De onde vem |
+|---|---|
+| Visão geral | recibos assinados no mês e por dia (`GET /api/relay/history`), recebidos/encaminhados/duplicatas de hoje, vizinhos por meio (`GET /api/relay`), recibos guardados para o validador (`GET /api/relay/receipts`), atividade real (vizinhos, recibos, transferências). Sem LUNES: o valor sai do validador |
+| Malha | este nó no centro e os vizinhos LNNP de verdade (meio, MTU, versão, se retransmite, desde quando); "sem vizinhos ainda" quando não há |
+| Ganhos | recibos por dia e por semana, pagos = entradas reais da carteira; lotes só quando houver liquidação; rejeitados "—" (o validador ainda não respondeu) |
+| Carteira | saldo e movimentações reais (`GET /api/wallet`); operador novo começa com 0. Endereço da carteira e "Receber" ficam indisponíveis (ainda não configurados no nó) |
+| Equipamentos | o próprio nó (`self`) com estatísticas reais (encaminhados na última hora, recibos de hoje, vizinhos, memória usada, interfaces, recibos recentes); pausar ele pausa o motor. Os outros são registros do assistente, marcados "sem dados neste nó" |
+| Configurações | limites, políticas, sessões e celulares reais. Chave de operador, backup e rotação: indisponíveis (esta versão não cria chave de operador) |
 
-Sem `piu-node` (site, prévia), tudo funciona com os dados de exemplo.
+Também reais: pareamento, sessões, ajustes, transferência com aprovação no celular e pacotes assinados.
+
+Indisponível com o piu-node (dito na tela, sem simular sucesso): busca e pareamento automáticos e teste real no assistente (o equipamento entra "registrado"), atualizar e reiniciar equipamento, backup e rotação da chave de operador, verificação/assinatura do nome público na malha.
+
+Sem `piu-node` (site, prévia, selo "demonstração"), tudo funciona com os dados de exemplo de `src/data/`.
 
 ## Diferenças em relação ao protótipo
 - O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Largura mínima: 1180px.

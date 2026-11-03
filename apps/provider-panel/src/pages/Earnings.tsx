@@ -2,12 +2,18 @@ import { Icon, growX } from '../components/ui';
 import { LOTS, PAID_TOTAL, PENDING, PERIOD, RATES, REJECTED } from '../data/seed';
 import { fmt } from '../lib/format';
 import { useStore } from '../state/store';
+import { EarningsLive } from './EarningsLive';
 
 const RATE_COLS = 'minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1fr) 90px';
 const LOT_COLS = '110px minmax(0,1fr) minmax(0,1fr) 120px minmax(0,1.2fr) minmax(0,1fr)';
 const head = { padding: '10px 18px', background: 'var(--bg2)', fontSize: 11, fontWeight: 500, letterSpacing: '.05em', color: 'var(--ink2)' } as const;
 
+/** Com piu-node, recibos reais e pagamentos reais; sem ele, a demonstração. */
 export function Earnings() {
+  return useStore().nodeMode === 'node' ? <EarningsLive /> : <EarningsDemo />;
+}
+
+function EarningsDemo() {
   const { devices, totals } = useStore();
   const tiles: [string, string, string, boolean, number][] = [
     ['Pagos até hoje', PAID_TOTAL, '3 lotes · desde julho', true, 1],

@@ -5,6 +5,7 @@ import { parentName } from '../lib/devices';
 import { copyText } from '../lib/io';
 import { checkPub, sanitizePub } from '../lib/pubName';
 import { HOURS } from '../pages/Settings';
+import { relayOn } from '../lib/live';
 import { useStore } from '../state/store';
 import type { DeviceFamily, HoursPolicy, RelayNode } from '../types';
 
@@ -20,7 +21,10 @@ const SCAN_MS = 1600;
 const CHECK_MS = 700;
 
 export function AddDeviceWizard() {
-  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode } = useStore();
+  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode, live } = useStore();
+  /** Com piu-node: busca, pareamento e teste real ainda não existem; o assistente diz isso em vez de simular. */
+  const real = nodeMode === 'node';
+  const neighbors = relayOn(live)?.neighbors.length ?? 0;
   const parents = devices.filter(d => !d.passive && d.cls !== 'Super Node');
   const [activating, setActivating] = useState(false);
   const [w, setW] = useState<WizState>(() => ({
@@ -32,7 +36,7 @@ export function AddDeviceWizard() {
   const fam = FAMILIES.find(f => f.id === w.fam) ?? FAMILIES[0];
   const isAp = !!fam.isAp;
   const parent = parentName(devices, w.parent);
-  const pub = checkPub(w.pub, devices.map(d => d.pub.replace(/^piu\./, '')));
+  const pub = checkPub(w.pub, devices.map(d => d.pub.replace(/^piu\./, '')), real);
   const done = w.n >= TOTAL_CHECKS;
 
   const close = useCallback(() => setWizardOpen(false), [setWizardOpen]);
@@ -40,6 +44,7 @@ export function AddDeviceWizard() {
 
   // Etapa 1: procurar o equipamento na rede local. Etapa 2: teste real, uma checagem por vez.
   useEffect(() => {
+    if (real) return;
     if (w.step === 1) {
       const t = window.setTimeout(() => setW(s => ({ ...s, scan: 'found' })), SCAN_MS);
       return () => window.clearTimeout(t);
@@ -51,9 +56,9 @@ export function AddDeviceWizard() {
       }), CHECK_MS);
       return () => window.clearInterval(t);
     }
-  }, [w.step]);
+  }, [w.step, real]);
 
-  const canNext = w.step === 0 ? true : w.step === 1 ? w.paired : w.step === 2 ? done : pub.ok;
+  const canNext = w.step === 0 ? true : w.step === 1 ? w.paired : w.step === 2 ? done || real : pub.ok;
   const next = () => {
     if (!canNext) return;
     if (w.step === 0) patch({ step: 1, scan: 'searching', paired: false });
@@ -83,14 +88,16 @@ export function AddDeviceWizard() {
     if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
     navigate('devices', id);
-    showToast({ icon: fam.icon, title: dev.name + ' entrou na malha', body: isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
+    showToast(real
+      ? { icon: fam.icon, title: dev.name + ' registrado', body: dev.pub + ' · as estatísticas aparecem quando ele se conectar a este nó.' }
+      : { icon: fam.icon, title: dev.name + ' entrou na malha', body: isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
   };
 
   const hint = [
     'Escolha o tipo de equipamento',
-    w.paired ? (isAp ? 'Vínculo confirmado' : 'Pareado') : isAp ? 'Confirme o vínculo para continuar' : 'Confirme o código para continuar',
-    done ? 'Teste concluído' : 'Testando com vizinhos…',
-    'Revise e ative',
+    w.paired ? (isAp ? 'Vínculo confirmado' : real ? 'Instalação confirmada' : 'Pareado') : isAp ? 'Confirme o vínculo para continuar' : real ? 'Confirme a instalação para continuar' : 'Confirme o código para continuar',
+    real ? 'Teste real indisponível nesta versão' : done ? 'Teste concluído' : 'Testando com vizinhos…',
+    real ? 'Revise e registre' : 'Revise e ative',
   ][w.step];
 
   return (
@@ -129,7 +136,11 @@ export function AddDeviceWizard() {
                             <Icon name="deployed_code" size={22} wght={300} />
                             <div className="col grow" style={{ gap: 2 }}>
                               <div className="mono ellipsis" style={{ fontSize: 12.5, fontWeight: 500 }}>{fam.pkg}</div>
-                              <div style={{ fontSize: 11.5, color: 'var(--ink2)' }}>2,1 MB · assinado Lunes · 4C9A…E1F0</div>
+                              <div style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{(() => {
+                                if (!real) return '2,1 MB · assinado Lunes · 4C9A…E1F0';
+                                const m = packages.find(p => p.file === fam.pkg);
+                                return m ? `${(m.size / 1024 / 1024).toFixed(1).replace('.', ',')} MB · assinado Lunes · ${m.sha256.slice(0, 4).toUpperCase()}…${m.sha256.slice(-4).toUpperCase()}` : 'este nó ainda não oferece este pacote (sem manifesto assinado)';
+                              })()}</div>
                             </div>
                           </div>
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Sem internet: este Mini-PC serve o pacote na rede local, por HTTPS. Abra a interface do equipamento e aponte para piu-node.local.</div>
@@ -143,8 +154,8 @@ export function AddDeviceWizard() {
                               </div>
                             );
                           })()}
-                          <button type="button" className="btn btn-outline" onClick={() => { const url = `https://${nodeMode === 'node' ? window.location.host : NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
-                            style={{ height: 36, borderRadius: 18, fontSize: 13 }}>Copiar link local do pacote</button>
+                          {(!real || packages.some(p => p.file === fam.pkg)) && <button type="button" className="btn btn-outline" onClick={() => { const url = `https://${nodeMode === 'node' ? window.location.host : NODE.host}/pkg/${fam.pkg}`; void copyText(url); showToast({ icon: 'link', title: 'Link local copiado', body: url }); }}
+                            style={{ height: 36, borderRadius: 18, fontSize: 13 }}>Copiar link local do pacote</button>}
                         </div>
                       ) : (
                         <>
@@ -184,7 +195,19 @@ export function AddDeviceWizard() {
                     {isAp ? '2 · Encontre e vincule' : '2 · Encontre e pareie'}
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ink)', animation: 'piuBreath 1.4s ease-in-out infinite' }} />
                   </div>
-                  {w.scan === 'searching' ? (
+                  {real && !isAp ? (
+                    // Sem busca nem código de pareamento ainda: o operador confirma a instalação e o nó novo aparece como vizinho.
+                    <div className="col" style={{ padding: 16, borderRadius: 18, border: '1px dashed var(--line2)', gap: 12 }}>
+                      <div className="row" style={{ gap: 10, fontSize: 14, fontWeight: 600 }}><Icon name="info" size={20} />Busca automática ainda não disponível</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>Quando o Piu Node subir no equipamento, ele se anuncia na rede local e aparece como vizinho na Malha deste nó. Agora: {neighbors} {neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'}.</div>
+                      <button type="button" role="checkbox" aria-checked={w.paired} onClick={() => patch({ paired: !w.paired })} className="btn" style={{ justifyContent: 'flex-start', gap: 10, fontSize: 13.5, fontWeight: 550, padding: 0, minHeight: 44 }}>
+                        <span style={{ width: 20, height: 20, borderRadius: 6, border: '1.5px solid var(--ink)', background: w.paired ? 'var(--ink)' : 'transparent', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}>
+                          <Icon name="check" size={15} style={{ opacity: w.paired ? 1 : 0 }} />
+                        </span>
+                        {fam.isRadio ? 'Liguei o rádio a um equipamento meu' : 'Instalei o Piu Node no equipamento'}
+                      </button>
+                    </div>
+                  ) : w.scan === 'searching' && !real ? (
                     <div className="row" aria-live="polite" style={{ gap: 14, padding: 16, borderRadius: 16, border: '1px dashed var(--line2)' }}>
                       <div style={{ position: 'relative', width: 36, height: 36, flex: 'none' }}>
                         <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 1.8s ease-out infinite' }} />
@@ -197,8 +220,8 @@ export function AddDeviceWizard() {
                       <div className="row" style={{ gap: 12 }}>
                         <div style={{ width: 40, height: 40, borderRadius: 12, background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none' }}><Icon name={fam.icon} size={21} /></div>
                         <div className="col grow" style={{ gap: 2 }}>
-                          <div style={{ fontSize: 14.5, fontWeight: 600 }}>{fam.found}</div>
-                          <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{fam.addr}</div>
+                          <div style={{ fontSize: 14.5, fontWeight: 600 }}>{real ? fam.name : fam.found}</div>
+                          <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{real ? 'sem software do Piu: vínculo só registrado neste nó' : fam.addr}</div>
                         </div>
                       </div>
                       {!isAp && (
@@ -242,7 +265,16 @@ export function AddDeviceWizard() {
                 </div>
               </div>
             )}
-            {w.step === 2 && <StepTest fam={fam} parent={parent} n={w.n} />}
+            {w.step === 2 && (real ? (
+              <div className="col" style={{ gap: 12, padding: 18, borderRadius: 18, border: '1px dashed var(--line2)' }}>
+                <div className="row" style={{ gap: 10, fontSize: 15, fontWeight: 650 }}><Icon name="info" size={21} />Teste real ainda não disponível</div>
+                <div style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.5 }}>
+                  O teste com vizinhos independentes (banda, latência, encaminhamento) ainda não existe nesta versão. O equipamento entra registrado, sem classe aprovada,
+                  e as estatísticas dele aparecem quando ele se conectar a este nó.
+                </div>
+                <div className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>agora: {neighbors} {neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'} a este nó</div>
+              </div>
+            ) : <StepTest fam={fam} parent={parent} n={w.n} />)}
             {w.step === 3 && (
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="col" style={{ gap: 14 }}>
@@ -260,7 +292,8 @@ export function AddDeviceWizard() {
                     </div>
                     <div id="wiz-pub-msg" aria-live="polite" style={{ fontSize: 12, lineHeight: 1.4, color: pub.tone === 'strong' ? 'var(--ink)' : 'var(--ink2)' }}>{pub.msg}</div>
                   </div>
-                  {!isAp && (
+                  {real && !isAp && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>Os limites globais de Configurações (banda, armazenamento, horário) valem para este equipamento.</div>}
+                  {!isAp && !real && (
                     <>
                       <WizLimit title="Banda para a rede"><Segmented variant="bg2" label="Banda" value={w.bw} onChange={bw => patch({ bw })} options={[5, 20, 50].map(v => ({ value: v, label: `${v} Mbps` }))} /></WizLimit>
                       <WizLimit title="Armazenamento para terceiros"><Segmented variant="bg2" label="Armazenamento" value={w.sto} onChange={sto => patch({ sto })} options={[1, 4, 8].map(v => ({ value: v, label: `${v} GB` }))} /></WizLimit>
@@ -269,7 +302,13 @@ export function AddDeviceWizard() {
                   )}
                 </div>
                 <div className="col" style={{ gap: 12 }}>
-                  {!isAp && (
+                  {!isAp && real && (
+                    <div style={{ padding: 16, borderRadius: 16, background: 'var(--bg2)', display: 'flex', gap: 12 }}>
+                      <Icon name="account_balance_wallet" size={21} wght={300} />
+                      <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)' }}>Carteira de recebimento: ainda não configurável neste nó. Os créditos ficam no operador até a liquidação.</div>
+                    </div>
+                  )}
+                  {!isAp && !real && (
                     <>
                       <div style={fieldLabel}>Carteira de recebimento</div>
                       <div role="radiogroup" aria-label="Carteira de recebimento" className="col" style={{ gap: 12 }}>
@@ -292,7 +331,7 @@ export function AddDeviceWizard() {
                       <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)', textWrap: 'pretty' }}>Pontos de acesso não geram créditos próprios. As entregas que passam por ele contam para o {parent}, que assina os recibos.</div>
                     </div>
                   )}
-                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{fam.result} · aprovado no teste real. Os limites globais de Configurações continuam valendo.</div>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real.` : `${fam.result} · aprovado no teste real.`} Os limites globais de Configurações continuam valendo.</div>
                 </div>
               </div>
             )}
@@ -302,7 +341,7 @@ export function AddDeviceWizard() {
             <button type="button" className="btn btn-outline" disabled={w.step === 0} onClick={back} style={{ height: 44, padding: '0 18px', borderRadius: 22, fontSize: 14, opacity: w.step > 0 ? 1 : 0.35 }}>Voltar</button>
             <div className="mono" aria-live="polite" style={{ flex: 1, fontSize: 12, color: 'var(--ink2)' }}>{hint}</div>
             <button type="button" className="btn btn-primary" aria-disabled={!canNext} onClick={next} style={{ height: 44, padding: '0 22px', borderRadius: 22, fontSize: 14, opacity: canNext ? 1 : 0.35, transition: 'opacity .25s,transform .15s' }}>
-              {w.step === 3 ? (activating ? 'Ativando…' : 'Ativar equipamento') : 'Continuar'}
+              {w.step === 3 ? (activating ? (real ? 'Registrando…' : 'Ativando…') : real ? 'Registrar equipamento' : 'Ativar equipamento') : 'Continuar'}
             </button>
           </div>
         </div>

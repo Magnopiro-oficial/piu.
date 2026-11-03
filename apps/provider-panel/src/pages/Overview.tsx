@@ -4,8 +4,14 @@ import { DAILY, FEED, KPIS, PENDING, PERIOD, RATES, REJECTED, TRANSPORTS, WALLET
 import { fmt } from '../lib/format';
 import { deviceLabels } from '../lib/devices';
 import { useStore } from '../state/store';
+import { OverviewLive } from './OverviewLive';
 
+/** Com piu-node, os dados reais do nó; sem ele (site, prévia), a demonstração. */
 export function Overview() {
+  return useStore().nodeMode === 'node' ? <OverviewLive /> : <OverviewDemo />;
+}
+
+function OverviewDemo() {
   const { devices, totals, navigate } = useStore();
   const bars = [...DAILY, totals.today];
   const mx = Math.max(...bars);

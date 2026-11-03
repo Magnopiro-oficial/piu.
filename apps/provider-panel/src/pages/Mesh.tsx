@@ -2,8 +2,14 @@ import { Icon } from '../components/ui';
 import { PEERS } from '../data/seed';
 import { LEGEND, LINE_STYLE, LINKS, MAP_H, MAP_W, NODES, POS } from '../data/topology';
 import { useStore } from '../state/store';
+import { MeshLive } from './MeshLive';
 
+/** Com piu-node, a topologia real (este nó e os vizinhos LNNP); sem ele, a demonstração. */
 export function Mesh() {
+  return useStore().nodeMode === 'node' ? <MeshLive /> : <MeshDemo />;
+}
+
+function MeshDemo() {
   const { devices } = useStore();
   const byId = new Map(devices.map(d => [d.id, d]));
   // Nós próprios/AP só aparecem se o equipamento ainda existe.

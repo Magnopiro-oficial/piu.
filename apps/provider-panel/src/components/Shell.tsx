@@ -1,6 +1,7 @@
 import { NODE, OPERATOR, PERIOD } from '../data/seed';
 import { downloadCsv } from '../lib/io';
 import { fmt } from '../lib/format';
+import { dayLabel, fullDate, historyOn, relayOn } from '../lib/live';
 import { useStore } from '../state/store';
 import type { PageId } from '../types';
 import { Icon, Segmented } from './ui';
@@ -38,7 +39,7 @@ const NAV: [PageId, string, string][] = [
 ];
 
 export function Sidebar() {
-  const { page, navigate, devices, theme, setTheme, operatorName } = useStore();
+  const { page, navigate, devices, theme, setTheme, operatorName, nodeMode } = useStore();
   // Com o piu-node, o nome do operador pareado; na demonstração, o do exemplo.
   const opName = operatorName ?? OPERATOR.name;
   return (
@@ -70,7 +71,7 @@ export function Sidebar() {
       <div style={{ flex: 1 }} />
       <div className="col" style={{ padding: 12, borderRadius: 14, border: '1px dashed var(--line2)', gap: 6 }}>
         <div className="row" style={{ gap: 8, fontSize: 13, fontWeight: 600 }}><Icon name="cloud_off" size={17} />Mainnet fora de alcance</div>
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>Última sincronização {PERIOD.lastSync}. Créditos ficam guardados aqui até lá.</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{nodeMode === 'node' ? 'Este nó ainda não sincronizou. Recibos ficam guardados aqui até lá.' : `Última sincronização ${PERIOD.lastSync}. Créditos ficam guardados aqui até lá.`}</div>
       </div>
       <Segmented label="Tema" value={theme} onChange={setTheme} height={30} fontSize={12.5}
         options={[{ value: 'light', label: 'Claro', icon: 'light_mode' }, { value: 'dark', label: 'Escuro', icon: 'dark_mode' }]} />
@@ -89,15 +90,26 @@ const HEADERS: Record<PageId, [string, string, string]> = {
 
 export function PageHeader() {
   const store = useStore();
-  const { page, devices, setWizardOpen, showToast } = store;
+  const { page, devices, setWizardOpen, showToast, nodeMode, live } = store;
+  const real = nodeMode === 'node';
   const [crumb, title, sub] = HEADERS[page];
-  const subtitle = page === 'overview' ? `${PERIOD.today} · ${devices.length} equipamentos na malha do bairro` : sub;
+  const nb = relayOn(live)?.neighbors.length ?? 0;
+  const vz = `${nb} ${nb === 1 ? 'vizinho conectado' : 'vizinhos conectados'}`;
+  const subtitle = page === 'overview'
+    ? (real ? `${fullDate()} · ${devices.length} ${devices.length === 1 ? 'equipamento' : 'equipamentos'} · ${vz}` : `${PERIOD.today} · ${devices.length} equipamentos na malha do bairro`)
+    : page === 'mesh' && real ? `${vz} agora · enlaces LNNP autenticados`
+    : page === 'earnings' && real ? 'Recibos comprovados por este nó; LUNES só depois da validação e da liquidação' : sub;
   const showExport = page === 'earnings' || page === 'wallet';
 
   const exportCsv = () => {
     if (page === 'wallet') {
       downloadCsv('movimentacoes-provider.csv', [['movimentacao', 'data', 'estado', 'lunes'], ...store.txs.map(t => [t.title, t.date, t.status, t.value])]);
       showToast({ icon: 'download', title: 'Extrato exportado', body: 'movimentacoes-provider.csv salvo neste computador.' });
+    } else if (real) {
+      const h = historyOn(live);
+      downloadCsv('recibos-por-dia.csv', [['dia', 'recebidos', 'guardados', 'encaminhados', 'duplicatas', 'recusados', 'recibos'],
+        ...(h?.days ?? []).map(d => [d.day, String(d.received), String(d.stored), String(d.forwarded), String(d.duplicates), String(d.rejected), String(d.receipts)])]);
+      showToast({ icon: 'download', title: 'Extrato exportado', body: `recibos-por-dia.csv salvo neste computador${h?.days.length ? ` (desde ${dayLabel(h.days[0]!.day)})` : ''}.` });
     } else {
       downloadCsv(`ganhos-${PERIOD.month}.csv`, [
         ['equipamento', 'classe', 'nome_publico', 'lunes_hoje', `lunes_${PERIOD.month}`],

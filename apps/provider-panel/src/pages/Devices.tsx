@@ -82,12 +82,18 @@ export function Devices() {
 }
 
 function DeviceDetail({ d }: { d: RelayNode }) {
-  const { devices, navigate, togglePause, revokeDevice, showToast } = useStore();
+  const { devices, navigate, togglePause, revokeDevice, showToast, nodeMode } = useStore();
+  const real = nodeMode === 'node';
   const [confirmRevoke, setConfirmRevoke] = useState(false);
   const paused = d.status === 'paused';
   const parent = parentName(devices, d.parent);
-  const statusLabel = d.status === 'active' ? (d.passive ? 'Vinculado à malha' : 'Ativo na malha') : paused ? (d.passive ? 'Desvinculado' : 'Pausado por você') : 'Aquecendo';
-  const metrics = d.passive
+  const statusLabel = d.telemetry === 'none' && !paused ? 'Registrado · sem contato com este nó'
+    : d.status === 'active' ? (d.passive ? 'Vinculado à malha' : 'Ativo na malha') : paused ? (d.passive ? 'Desvinculado' : 'Pausado por você') : 'Aquecendo';
+  const metrics = d.telemetry === 'live'
+    ? [[fmtInt(d.receiptsToday ?? 0), 'recibos hoje'], [paused ? '0' : fmtInt(d.pph), 'encaminhados/h'], [String(d.neighbors), 'vizinhos']]
+    : d.telemetry === 'none'
+    ? [['—', 'recibos hoje'], ['—', 'encaminhados/h'], ['—', 'vizinhos']]
+    : d.passive
     ? [['—', 'LUNES próprios'], [String(d.neighbors), 'celulares'], [parent.split(' ')[0], 'nó pai']]
     : [['+' + fmt(d.today), 'LUNES hoje'], [paused ? '0' : d.pph ? fmtInt(d.pph) : '—', 'pacotes/h'], [String(d.neighbors), 'vizinhos']];
 
@@ -95,7 +101,7 @@ function DeviceDetail({ d }: { d: RelayNode }) {
     setConfirmRevoke(false);
     if (!(await revokeDevice(d.id))) return; // o erro já foi mostrado
     navigate('devices');
-    showToast({ icon: 'key_off', title: 'Credencial revogada', body: d.name + ' saiu da sua operação.' });
+    showToast(real ? { icon: 'delete', title: 'Registro removido', body: d.name + ' saiu deste painel.' } : { icon: 'key_off', title: 'Credencial revogada', body: d.name + ' saiu da sua operação.' });
   };
 
   const rowStyle = { display: 'flex', alignItems: 'center', gap: 12, padding: '11px 13px', borderTop: '1px solid var(--line)', cursor: 'pointer', fontSize: 13.5, fontWeight: 550 } as const;
@@ -115,14 +121,19 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         <div className="row" style={{ gap: 7, padding: '6px 11px', borderRadius: 99, background: d.status === 'active' ? 'var(--ink)' : 'var(--bg2)', color: d.status === 'active' ? 'var(--invink)' : 'var(--ink)', fontSize: 12.5, fontWeight: 600, transition: 'background .2s,color .2s' }}>
           <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'currentColor', animation: paused ? 'none' : 'piuBreath 1.6s ease-in-out infinite' }} />{statusLabel}
         </div>
-        <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls} · ligado há {d.uptime}</div>
+        <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.uptime !== '—' ? ` · ligado há ${d.uptime}` : ''}</div>
       </div>
 
-      <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)' }}>
-        <Icon name="wifi" size={17} wght={300} />
-        <span className="mono ellipsis grow" style={{ fontSize: 13, fontWeight: 500 }}>{d.pub}</span>
-        <span className="row" style={{ gap: 4, fontSize: 12, fontWeight: 600 }}><Icon name="verified" size={15} fill={1} />nome verificado</span>
-      </div>
+      {d.pub ? (
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)' }}>
+          <Icon name="wifi" size={17} wght={300} />
+          <span className="mono ellipsis grow" style={{ fontSize: 13, fontWeight: 500 }}>{d.pub}</span>
+          {/* Com piu-node, o nome é só registrado aqui: a assinatura pela chave de operador ainda não existe. */}
+          <span className="row" style={{ gap: 4, fontSize: 12, fontWeight: 600 }}><Icon name={real ? 'badge' : 'verified'} size={15} fill={1} />{real ? 'registrado' : 'nome verificado'}</span>
+        </div>
+      ) : real && (
+        <div style={{ padding: '10px 12px', borderRadius: 12, border: '1px dashed var(--line2)', fontSize: 12.5, color: 'var(--ink2)' }}>Sem nome público. {d.telemetry === 'live' ? 'Este nó anuncia só a identidade técnica na malha.' : ''}</div>
+      )}
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
         {metrics.map(([v, l]) => (
@@ -138,9 +149,10 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         {d.ifaces.map(i => (
           <div key={i.name} className="col" style={{ gap: 6 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, fontSize: 13 }}><span style={{ fontWeight: 550 }}>{i.name}</span><span style={{ color: 'var(--ink2)', fontSize: 12 }}>{i.detail}</span></div>
-            <div className="track" style={{ height: 4, borderRadius: 2 }}><div style={{ width: (paused ? 0 : i.load) + '%', animation: growX(), transition: 'width .3s' }} /></div>
+            {i.load !== null && <div className="track" style={{ height: 4, borderRadius: 2 }}><div style={{ width: (paused ? 0 : i.load) + '%', animation: growX(), transition: 'width .3s' }} /></div>}
           </div>
         ))}
+        {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Este equipamento ainda não manda estatísticas a este nó. Quando o Piu Node dele se conectar, ele aparece como vizinho na Malha.</div>}
       </div>
 
       <div className="col" style={{ gap: 8 }}>
@@ -148,13 +160,15 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         {d.receipts.map((r, i) => (
           <div key={i} className="mono" style={{ display: 'flex', gap: 10, fontSize: 11.5, opacity: r.state === 'confirmado' ? 1 : 0.5 }}>
             <span style={{ color: 'var(--ink2)' }}>{r.time}</span>
-            <span className="ellipsis grow">{r.kind} · {r.hops}</span>
+            <span className="ellipsis grow">{r.hops ? `${r.kind} · ${r.hops}` : r.kind}</span>
             <span style={{ fontWeight: 500 }}>{r.state}</span>
           </div>
         ))}
         {!d.receipts.length && (
           <div style={{ padding: 12, borderRadius: 12, border: '1px dashed var(--line2)', fontSize: 12.5, color: 'var(--ink2)', textAlign: 'center' }}>
-            {d.passive ? `Pontos de acesso não assinam recibos. As entregas por ele contam para o ${parent}.` : 'Primeiros recibos em alguns minutos.'}
+            {d.passive ? `Pontos de acesso não assinam recibos. As entregas por ele contam para o ${parent}.`
+              : d.telemetry === 'live' ? 'Nenhum recibo ainda: o nó assina um a cada envelope de terceiro que repassa.'
+              : d.telemetry === 'none' ? 'Sem recibos deste equipamento neste nó.' : 'Primeiros recibos em alguns minutos.'}
           </div>
         )}
       </div>
@@ -164,7 +178,26 @@ function DeviceDetail({ d }: { d: RelayNode }) {
           <div style={{ flex: 1, fontSize: 13.5, fontWeight: 550 }}>{d.passive ? 'Desvincular da malha' : 'Pausar retransmissão'}</div>
           <Toggle on={paused} onChange={() => togglePause(d.id)} label={d.passive ? 'Desvincular da malha' : 'Pausar retransmissão'} />
         </div>
-        {!d.passive && (
+        {real && d.telemetry === 'none' && (
+          <div style={{ padding: '0 13px 11px', fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Fica registrado aqui; vale no equipamento quando ele se conectar a este nó.</div>
+        )}
+        {real ? (
+          <>
+            {/* Atualizar e reiniciar pela malha ainda não existem: sem simular sucesso. */}
+            <div aria-disabled="true" style={{ ...rowStyle, cursor: 'default', opacity: 0.55 }}>
+              <div className="col" style={{ flex: 1, gap: 1 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 550 }}>Atualizar Piu Node</span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>Ainda não disponível pelo painel: instale o pacote assinado no equipamento.</span>
+              </div>
+            </div>
+            <div aria-disabled="true" style={{ ...rowStyle, cursor: 'default', opacity: 0.55 }}>
+              <div className="col" style={{ flex: 1, gap: 1 }}>
+                <span style={{ fontSize: 13.5, fontWeight: 550 }}>Reiniciar</span>
+                <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>Ainda não disponível pelo painel: reinicie no próprio equipamento.</span>
+              </div>
+            </div>
+          </>
+        ) : !d.passive && (
           <div {...pressable(() => showToast({ icon: 'system_update_alt', title: 'Atualização assinada aplicada', body: d.name + ' · Piu Node 0.4.3' }))} style={rowStyle}>
             <div className="col" style={{ flex: 1, gap: 1 }}>
               <span style={{ fontSize: 13.5, fontWeight: 550 }}>Atualizar Piu Node</span>
@@ -173,16 +206,19 @@ function DeviceDetail({ d }: { d: RelayNode }) {
             <span style={{ fontSize: 12, fontWeight: 600, padding: '6px 11px', borderRadius: 13, background: 'var(--ink)', color: 'var(--invink)' }}>Atualizar</span>
           </div>
         )}
-        <div {...pressable(() => showToast({ icon: 'restart_alt', title: 'Reiniciando ' + d.name, body: 'Mensagens guardadas continuam no armazenamento local.' }))} style={rowStyle}>Reiniciar</div>
-        <div {...pressable(() => setConfirmRevoke(true))} style={{ ...rowStyle, fontWeight: 650 }}>{d.passive ? 'Revogar nome público e remover' : 'Revogar credencial e remover'}</div>
+        {!real && <div {...pressable(() => showToast({ icon: 'restart_alt', title: 'Reiniciando ' + d.name, body: 'Mensagens guardadas continuam no armazenamento local.' }))} style={rowStyle}>Reiniciar</div>}
+        {d.telemetry === 'live'
+          ? <div style={{ ...rowStyle, cursor: 'default', fontSize: 12, fontWeight: 400, color: 'var(--ink2)' }}>Este é o equipamento que serve o painel: para tirá-lo da malha, pause a retransmissão.</div>
+          : <div {...pressable(() => setConfirmRevoke(true))} style={{ ...rowStyle, fontWeight: 650 }}>{d.passive ? 'Revogar nome público e remover' : real ? 'Remover deste painel' : 'Revogar credencial e remover'}</div>}
       </div>
 
       {confirmRevoke && (
-        <Dialog icon="key_off" title={`Revogar ${d.name}?`}
+        <Dialog icon="key_off" title={real ? `Remover ${d.name}?` : `Revogar ${d.name}?`}
           body={d.passive
             ? `O nome ${d.pub} deixa de ser reconhecido como seu. O roteador continua funcionando como Wi-Fi comum.`
+            : real ? 'O registro sai deste nó. A revogação na malha inteira ainda não existe: se o Piu Node continuar instalado nele, desinstale no próprio equipamento.'
             : 'A credencial é revogada em toda a malha e o equipamento deixa de retransmitir como seu. Créditos pendentes dele continuam sendo validados.'}
-          primaryLabel="Revogar e remover" onPrimary={revoke} onClose={() => setConfirmRevoke(false)} />
+          primaryLabel={real ? 'Remover' : 'Revogar e remover'} onPrimary={revoke} onClose={() => setConfirmRevoke(false)} />
       )}
     </aside>
   );

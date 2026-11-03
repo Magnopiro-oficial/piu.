@@ -4,8 +4,8 @@ export type DeviceStatus = 'active' | 'paused' | 'warming';
 export type DeviceFilter = 'all' | DeviceStatus;
 export type NodeClass = 'Home Node' | 'Super Node' | 'Gateway Local' | 'Ponto de Acesso';
 
-/** Uso de uma interface do equipamento. `load` em % (0–100). */
-export interface Iface { name: string; detail: string; load: number }
+/** Uso de uma interface do equipamento. `load` em % (0–100); `null` quando não há medição. */
+export interface Iface { name: string; detail: string; load: number | null }
 
 /** RelayReceipt resumido, como aparece no detalhe do equipamento. */
 export interface Receipt { time: string; kind: string; hops: string; state: string }
@@ -39,9 +39,20 @@ export interface RelayNode {
   parent?: string;
   /** Recém-adicionado: anima a entrada na tabela. */
   fresh?: boolean;
+  /**
+   * Com piu-node: `live` = o nó que serve o painel (estatísticas reais do motor); `none` = registro
+   * do assistente, que ainda não manda estatísticas a este nó. Ausente: dados de demonstração.
+   */
+  telemetry?: 'live' | 'none';
+  /** Recibos assinados hoje (só `live`). */
+  receiptsToday?: number;
 }
 
-export interface WalletTx { id: string; icon: string; title: string; date: string; status: string; value: string; fresh?: boolean }
+export interface WalletTx {
+  id: string; icon: string; title: string; date: string; status: string; value: string; fresh?: boolean;
+  /** Com piu-node: valor com sinal (entrada positiva) e horário (ms). */
+  amount?: number; at?: number;
+}
 
 export type HoursPolicy = 'always' | 'night' | 'day';
 
