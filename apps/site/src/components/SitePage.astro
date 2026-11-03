@@ -42,7 +42,7 @@ const panelSrc = url('/painel/');
         </div>
         <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px">
           {t.hero.facts.map(f => (
-            <div class="col" style="gap:2px"><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em">{f.v}</div><div style="font-size:13px;color:var(--ink2)">{f.l}</div></div>
+            <div class="col" style="gap:2px"><div data-count style="font-size:24px;font-weight:650;letter-spacing:-0.03em;font-variant-numeric:tabular-nums">{f.v}</div><div style="font-size:13px;color:var(--ink2)">{f.l}</div></div>
           ))}
         </div>
       </div>
@@ -263,6 +263,61 @@ const panelSrc = url('/painel/');
     };
     new ResizeObserver(fit).observe(desk);
     fit();
+  }
+
+  // Micro-animações (respeitam "reduzir movimento"):
+  // - entrada suave ao rolar, em cascata dentro de cada grupo;
+  // - contadores do topo sobem até o valor;
+  // - barra do topo ganha sombra ao rolar.
+  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const REVEAL = [
+    '.band-in > *', 'main > section:not(#topo) .kicker', 'main > section:not(#topo) .h2', 'main > section:not(#topo) .lead',
+    '.hops-grid > li', '.step', '.feature', '#privacidade li', '.cls', '.desk-card', '#lunes > div', '.dl', '.faq details',
+  ].join(',');
+  if (!still && 'IntersectionObserver' in window) {
+    const els = [...document.querySelectorAll<HTMLElement>(REVEAL)];
+    const vh = innerHeight;
+    const io = new IntersectionObserver(entries => {
+      for (const e of entries) {
+        if (!e.isIntersecting) continue;
+        const el = e.target as HTMLElement;
+        io.unobserve(el);
+        el.classList.add('in');
+        // Depois da entrada, sai do estado de animação (o hover fica livre do atraso da cascata).
+        setTimeout(() => el.classList.remove('rv', 'in'), 900 + Number(el.style.getPropertyValue('--i') || 0) * 80);
+      }
+    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
+    for (const el of els) {
+      // O que já está na tela ao abrir fica como está (sem piscar).
+      if (el.getBoundingClientRect().top < vh * 0.92) continue;
+      const sibs = el.parentElement ? [...el.parentElement.children].filter(c => c.matches(REVEAL)) : [];
+      el.style.setProperty('--i', String(Math.min(6, Math.max(0, sibs.indexOf(el)))));
+      el.classList.add('rv');
+      io.observe(el);
+    }
+  }
+  if (!still) {
+    for (const el of document.querySelectorAll<HTMLElement>('[data-count]')) {
+      const m = /^(\D*)(\d+)(.*)$/.exec(el.textContent?.trim() ?? '');
+      if (!m) continue;
+      const [, pre, num, post] = m;
+      const end = Number(num);
+      if (!end) continue;
+      const t0 = performance.now() + 250;
+      const step = (now: number) => {
+        const k = Math.min(1, Math.max(0, (now - t0) / 1100));
+        el.textContent = pre + Math.round(end * (1 - Math.pow(1 - k, 3))) + post;
+        if (k < 1) requestAnimationFrame(step);
+      };
+      el.textContent = pre + '0' + post;
+      requestAnimationFrame(step);
+    }
+  }
+  const nav = document.querySelector<HTMLElement>('.nav');
+  if (nav) {
+    const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
+    addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
   }
 
   // Downloads: ainda não há arquivos publicados; mostra a orientação de cada opção.

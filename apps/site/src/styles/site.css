@@ -144,3 +144,43 @@ section[id], div[id] { scroll-margin-top: 68px; }
 @keyframes piuMsgIn { from { opacity: 0; transform: translateY(12px) scale(.9) } to { opacity: 1; transform: none } }
 @keyframes piuTick { 0% { transform: scale(.3); opacity: 0 } 60% { transform: scale(1.3); opacity: 1 } 100% { transform: scale(1) } }
 .phone-row:hover { background: var(--bg2) !important; opacity: 1; }
+
+/* ── micro-animações ── (desligadas por "reduzir movimento" na regra global acima e no script) */
+:root { --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-pop: cubic-bezier(.3, 1.5, .5, 1); }
+.rv { opacity: 0; transform: translateY(18px); }
+.rv.in { opacity: 1; transform: none; transition: opacity .65s var(--ease-out), transform .65s var(--ease-out); transition-delay: calc(var(--i, 0) * 80ms); }
+.hops-grid > li.rv .hop-face { transform: scale(.55); }
+.hops-grid > li.rv.in .hop-face { transform: none; transition: transform .6s var(--ease-pop) calc(var(--i, 0) * 120ms + 120ms); }
+.band-in > .rv { transform: translateX(-10px); }
+.nav { transition: box-shadow .3s; }
+.nav.scrolled { box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .35); }
+.hero .dot8 { animation: piuBreath 2.6s ease-in-out infinite; }
+.pill { transition: transform .18s var(--ease-out), opacity .2s, background .2s, border-color .2s; }
+.pill:active, .dl button:active { transform: scale(.96); }
+.lang a, .icon-btn { transition: transform .18s var(--ease-out), opacity .2s; }
+.icon-btn:active { transform: scale(.92) rotate(-12deg); }
+@media (hover: hover) {
+  .step, .cls, .dl, #lunes > div { transition: transform .3s var(--ease-out), border-color .3s, box-shadow .3s; }
+  .step:hover, .cls:hover, .dl:hover, #lunes > div:hover { transform: translateY(-4px); }
+  .cls:hover, #lunes > div:hover { border-color: var(--ink) !important; }
+  .dl:hover { box-shadow: 0 0 0 1px var(--ink) inset; }
+  .feature { transition: background .3s; }
+  .feature:hover { background: var(--bg2); }
+  .feature .ic, .cls .ic, .dl > .ic, .step .mono { transition: transform .4s var(--ease-pop); }
+  .feature:hover .ic, .cls:hover .ic, .dl:hover > .ic { transform: translateY(-3px) scale(1.1); }
+  .step:hover .mono { transform: translateX(4px); }
+  .hop-face { transition: transform .35s var(--ease-pop); }
+  .hops-grid > li:hover .hop-face { transform: scale(1.08); }
+  #privacidade li .ic { transition: transform .4s var(--ease-pop); }
+  #privacidade li:hover .ic { transform: scale(1.15) rotate(-6deg); }
+  .pill:hover { opacity: 1; transform: translateY(-1px); }
+  .pill:hover > .ic:last-child { transform: translateX(3px); }
+  .pill > .ic { transition: transform .25s var(--ease-out); }
+  .band-in > span .ic { transition: transform .35s var(--ease-pop); }
+  .band-in > span:hover .ic { transform: translateY(-2px) scale(1.15); }
+  .faq summary { transition: padding-left .25s var(--ease-out); }
+  .faq summary:hover { padding-left: 6px; }
+  .nav-links a { position: relative; }
+  .nav-links a::after { content: ''; position: absolute; left: 0; right: 0; bottom: -4px; height: 1.5px; background: currentColor; transform: scaleX(0); transform-origin: left; transition: transform .3s var(--ease-out); }
+  .nav-links a:hover::after { transform: scaleX(1); }
+}
