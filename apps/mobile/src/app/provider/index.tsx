@@ -11,8 +11,8 @@ import { T } from '../../ui/T';
 
 /**
  * Painel do provider no celular: os equipamentos com piu-node pareados com este celular (pareamento
- * real pelo QR do painel). Ganhos, recibos e o teste real ficam no painel de cada equipamento: o
- * celular não lê a API local do nó, então não mostra números que não tem.
+ * real pelo QR do painel). O estado, os recibos e a pausa de cada um vêm da API local do nó, na tela
+ * do equipamento (HTTPS com o certificado fixado). Ganhos em LUNES dependem do validador.
  */
 export default function Provider() {
   const { c } = useTheme();
@@ -34,7 +34,7 @@ export default function Provider() {
             <T size={50} w={650} ls={-0.055} tabular color={c.invink} style={{ lineHeight: 52 }}>{nodes ? String(list.length) : '…'}</T>
             <T size={15} w={600} color={c.invink} style={{ opacity: 0.75 }}>{list.length === 1 ? 'equipamento' : 'equipamentos'}</T>
           </View>
-          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>Este celular aprova as transferências pedidas no painel de cada um. Ganhos e recibos ficam no painel do equipamento.</T>
+          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>Este celular aprova as transferências pedidas no painel de cada um. Abra um equipamento para ver o estado, os recibos e pausar.</T>
         </View>
 
         <Pressable onPress={() => router.push('/provider/earnings')} accessibilityRole="button"

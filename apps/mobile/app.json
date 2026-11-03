@@ -10,7 +10,8 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "O Piu usa o Bluetooth para trocar mensagens cifradas com aparelhos por perto, sem internet."
+        "NSBluetoothAlwaysUsageDescription": "O Piu usa o Bluetooth para trocar mensagens cifradas com aparelhos por perto, sem internet.",
+        "NSLocalNetworkUsageDescription": "O Piu usa a rede local só para conversar com o seu Piu Node pareado (estado, recibos e pausa)."
       }
     },
     "android": {
