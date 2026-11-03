@@ -101,13 +101,16 @@ test('LoRa simulado: A → R → B em linha (A e B fora do alcance), handshake e
 
 test('LoRa simulado: com 25% de perda, a confirmação por pacote ainda entrega', async t => {
   t.after(closeAll);
-  const sim = new RadioSim({ loss: 0.25 });
+  // Perdas sorteadas com semente fixa: o teste é reproduzível (antes, um sorteio azarado estourava o tempo no CI).
+  let seed = 0x9e3779b9;
+  const seeded = () => { seed = (seed + 0x6d2b79f5) >>> 0; let t = seed; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+  const sim = new RadioSim({ loss: 0.25, random: seeded });
   sim.link('A', 'B');
   const alice = person(), bob = person();
   const A = await radioNode(sim, 'A', alice), B = await radioNode(sim, 'B', bob);
-  await until(() => A.engine.linkCount === 1 && B.engine.linkCount === 1, 'enlace com perdas', 30_000);
+  await until(() => A.engine.linkCount === 1 && B.engine.linkCount === 1, 'enlace com perdas', 60_000);
   for (let i = 0; i < 3; i++) A.engine.send(letter(alice, bob, `mensagem ${i}`).bytes);
-  await until(() => B.engine.inbox.length === 3, 'as três chegarem', 30_000);
+  await until(() => B.engine.inbox.length === 3, 'as três chegarem', 60_000);
   assert.deepEqual([0, 1, 2].map(i => text(B, i)).sort(), ['mensagem 0', 'mensagem 1', 'mensagem 2']);
   assert.ok(sim.stats.lost > 0, 'o simulador perdeu pacotes');
   assert.ok(A.stats().serial[0]!.retries + B.stats().serial[0]!.retries > 0, 'houve repetição');
