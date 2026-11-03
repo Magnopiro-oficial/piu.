@@ -7,12 +7,13 @@
  *   Notificações → O que avisar ficam de fora, como nas notificações do sistema.
  * - Pré-visualização: só "Sempre" mostra remetente e texto na tela bloqueada; "Desbloqueado" e
  *   "Nunca" mostram "Piu" e o texto neutro (o mesmo de lib/notifications.ts).
- * - Alertas oficiais severos e extremos da região (lib/alertsCore.ts) sempre mostram o conteúdo:
- *   são públicos, e é o mesmo que a notificação crítica faz.
+ * - Alertas da comunidade (messaging/communityAlerts.ts): os Graves vigentes, não contestados nem
+ *   encerrados, no topo e destacados. Vêm de um grupo (não são públicos): seguem a mesma
+ *   pré-visualização e o tipo "Alertas da comunidade".
  */
 import type { NotifKey, Preview } from '../data/settings';
 import type { Chat } from '../data/types';
-import { alertTitle, areaLine, type AlertRegion, isUrgent, type OfficialAlert, visibleAlerts } from './alertsCore';
+import { type AlertView, lockAlerts } from '../messaging/communityAlerts';
 import { msgSummary } from './chatCore';
 
 export interface LockItem {
@@ -36,13 +37,19 @@ export const notifKindOf = (c: Pick<Chat, 'kind'>): NotifKey => (c.kind === 'gro
 
 export function lockItems(o: {
   chats: Chat[]; preview: Preview; notifs: Record<NotifKey, boolean>;
-  alerts?: OfficialAlert[]; region?: AlertRegion; now: number;
+  alerts?: AlertView[]; now: number;
 }): LockItem[] {
   const hide = o.preview !== 'always';
   const out: LockItem[] = [];
-  if (o.alerts && o.region) {
-    for (const a of visibleAlerts(o.alerts, o.region, o.now).filter(isUrgent)) {
-      out.push({ id: 'alert:' + a.id, critical: true, title: alertTitle(a), body: areaLine(a) || a.info.description, more: 0, at: a.receivedAt, hm: '', href: `/alert?id=${encodeURIComponent(a.id)}` });
+  if (o.alerts && o.notifs.alert) {
+    for (const a of lockAlerts(o.alerts)) {
+      if (a.until * 1000 <= o.now) continue;
+      out.push({
+        id: 'alert:' + a.id, critical: true,
+        title: hide ? 'Piu' : `Alerta grave · ${a.communityName || 'comunidade'}`,
+        body: hide ? 'Alerta da comunidade' : a.area ? `${a.title} · ${a.area}` : a.title,
+        more: 0, at: a.at * 1000, hm: '', href: `/alert?id=${encodeURIComponent(a.id)}`,
+      });
     }
   }
   const msgs: LockItem[] = [];

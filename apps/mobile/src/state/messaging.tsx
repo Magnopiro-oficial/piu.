@@ -12,6 +12,8 @@ import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
 import { type Contact, Messenger, type NearPeer, type NearRequest } from '../messaging/messenger';
 import { canPost, type GroupState, memberCount } from '../messaging/groups';
+import { policyHours } from '../messaging/hours';
+import { type AlertCategory, type AlertNotice, type AlertSeverity, type AlertView, categoryOf, OFFICIAL_NOTE, severityLabel, type Vote } from '../messaging/communityAlerts';
 import { GroupRate, groupShouldNotify } from '../messaging/mentions';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import type { EvidenceFile } from '../messaging/evidence';
@@ -90,6 +92,22 @@ interface Messaging {
   joinFromLink: (text: string) => string;
   /** Muda quando grupos ou pedidos mudam (para as telas se atualizarem). */
   groupEpoch: number;
+  /**
+   * Alertas da comunidade (messaging/communityAlerts.ts): publicados e classificados pelos membros,
+   * no grupo da própria comunidade. `null` antes das chaves. Erros em português.
+   */
+  alerts: {
+    /** Das minhas comunidades (ou de uma), na ordem da lista. */
+    list: (communityId?: string) => AlertView[];
+    get: (id: string) => AlertView | null;
+    publish: (communityId: string, d: { cat: AlertCategory; sev: AlertSeverity; title: string; text: string; area?: string; durSec: number }) => AlertView;
+    vote: (id: string, v: Vote) => AlertView;
+    close: (id: string) => AlertView;
+    /** Por que não posso publicar agora (limite), ou `null`. */
+    limit: (communityId: string) => string | null;
+  } | null;
+  /** Muda quando um alerta chega, muda de estado ou vence. */
+  alertEpoch: number;
   /** Métricas e créditos deste aparelho (null antes das chaves). */
   stats: () => Stats | null;
   /** Arquivo de evidências deste aparelho (formato do validador), ou null antes das chaves. */
@@ -154,6 +172,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [inviteEpoch, setInviteEpoch] = useState(0);
   const [groupEpoch, setGroupEpoch] = useState(0);
   const [nearEpoch, setNearEpoch] = useState(0);
+  const [alertEpoch, setAlertEpoch] = useState(0);
   const wallet = useWallet();
   const walletRef = useRef(wallet); walletRef.current = wallet;
   const rotationEpoch = useSessionRotationEpoch();
@@ -282,6 +301,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           if (!chatsRef.current.some(x => x.id === cid)) handlers.current.addChat(nearChat(c, privRef.current.temp, `${c.name || 'A pessoa'} aceitou seu convite de Por perto. A conversa é cifrada de ponta a ponta.`));
           handlers.current.showToast({ kind: 'nearby', href: `/chat/${cid}`, icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
             hidden: { title: 'Convite aceito', body: 'Abra Por perto para ver.' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+        },
+        // Alertas da comunidade: a lista atualiza; Grave notifica (crítica), Atenção notifica normal.
+        communityAlert: (v, notice) => {
+          setAlertEpoch(e => e + 1);
+          if (!notice) return;
+          const ch = chatsRef.current.find(c => c.id === chatIdForGroup(v.community));
+          if (ch?.muted) return; // comunidade silenciada
+          handlers.current.showToast(alertToast(v, notice));
         },
         // Grupos: entrar, mudanças, remoção e mensagens.
         groupUpdated: (g, change) => {
@@ -431,10 +458,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       retentionSec: Number(sto.retention) * 3600,
       dailyBytes: bat.traffic * 1024 * 1024,
       bytesPerSec: bat.bw === 'max' ? Infinity : (Number(bat.bw) * 1_000_000) / 8,
-      // "Personalizado" ainda não tem horário definido no design: vale como "Sempre".
-      hours: bat.hours === 'night' ? 'night' : 'always',
+      // Sempre, 22h–7h ou a faixa Personalizada (reavaliada a cada `tick`, como as outras).
+      hours: policyHours(bat.hours, bat.custom),
     });
-  }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours]);
+  }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours, bat.custom]);
   // Armazenamento → "Baixar mídia automaticamente".
   useEffect(() => { messenger?.setAutoDownload(sto.auto); }, [messenger, sto.auto]);
   useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
@@ -604,6 +631,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return String(j.n ?? 'grupo').slice(0, 60);
     },
     groupEpoch,
+    alerts: messenger ? {
+      list: gid => messenger.communityAlerts(gid),
+      get: id => messenger.communityAlert(id),
+      publish: (gid, d) => { const v = messenger.publishAlert(gid, d); setAlertEpoch(e => e + 1); return v; },
+      vote: (id, v) => { const out = messenger.voteAlert(id, v); setAlertEpoch(e => e + 1); return out; },
+      close: id => { const out = messenger.closeAlert(id); setAlertEpoch(e => e + 1); return out; },
+      limit: gid => messenger.alertLimit(gid),
+    } : null,
+    alertEpoch,
     nearby: messenger ? {
       profiles: messenger.nearbyProfiles(),
       requests: messenger.nearRequests(),
@@ -645,9 +681,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       usage: { activeDays: messenger.deliveryDays.activeDays(), accepted: messenger.acceptedInvites() },
     } : null),
     evidence: () => (messenger ? messenger.evidence() : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+}
+
+/** Banner e notificação de um alerta da comunidade (com a rota para a tela do alerta). */
+function alertToast(v: AlertView, n: AlertNotice) {
+  const title = n.update ? `Confirmado pela comunidade · ${v.title}` : `${severityLabel(v.sev)} · ${v.title}`;
+  const body = `${v.communityName || 'Comunidade'} · ${v.area || categoryOf(v.cat).label}. ${OFFICIAL_NOTE}`;
+  const go = () => router.push({ pathname: '/alert', params: { id: v.id } });
+  return { kind: 'alert' as const, critical: n.level === 'critical', icon: 'warning', title, body, action: 'Ver', href: `/alert?id=${encodeURIComponent(v.id)}`,
+    hidden: { title: 'Alerta da comunidade', body: 'Abra o Piu para ver.' }, go };
 }
 
 /** Prefixo do link de convite de grupo, canal ou comunidade. */

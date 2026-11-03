@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, View } from 'react-native';
+import { customLabel, DAY_LETTER, DAY_MIN, DAY_NAME, hm, HOURS_STEP, type HoursWindow, NIGHT_WINDOW } from '../../messaging/hours';
 import { confirmDevice } from '../../lib/deviceAuth';
 import { fmtBytes } from '../../lib/networkCore';
 import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
@@ -176,7 +177,10 @@ function Battery() {
         <ToggleRow name="Só quando estiver carregando" on={chargingOnly} onChange={() => setChargingOnly(!chargingOnly)} />
       </SetGroup>
       <SetGroup title="HORÁRIO E TRÁFEGO">
-        <SegRow name="Horário" value={bat.hours} onChange={hours => setBat({ hours })} options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', 'Personalizado']]} />
+        <SegRow name="Horário" desc={bat.hours === 'custom' ? 'Retransmite e guarda mensagens de terceiros só dentro da faixa (hora deste aparelho).' : undefined} value={bat.hours}
+          onChange={hours => setBat(hours === 'custom' ? { hours, custom: bat.custom ?? NIGHT_WINDOW } : { hours })}
+          options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', customLabel(bat.custom)]]} />
+        {bat.hours === 'custom' && bat.custom && <CustomHours w={bat.custom} onChange={custom => setBat({ hours: 'custom', custom })} />}
         <SegRow name="Tráfego de terceiros por dia" value={String(bat.traffic)} onChange={v => setBat({ traffic: Number(v) as 50 | 200 | 500 })} options={[['50', '50 MB'], ['200', '200 MB'], ['500', '500 MB']]} />
         <SegRow name="Banda máxima para a rede" value={bat.bw} onChange={bw => setBat({ bw })} options={[['1', '1 Mbps'], ['5', '5 Mbps'], ['max', 'Sem limite']]} />
       </SetGroup>
@@ -185,5 +189,61 @@ function Battery() {
       </SetGroup>
       <FootNote icon="smartphone">Android e iPhone limitam o que roda em segundo plano. O Piu nunca promete retransmissão 24 h pelo celular.</FootNote>
     </>
+  );
+}
+
+/**
+ * Faixa do horário "Personalizado": início e fim de 30 em 30 min (pode atravessar a meia-noite) e,
+ * se quiser, os dias da semana em que a faixa começa. Início e fim nunca ficam iguais (faixa vazia).
+ */
+function CustomHours({ w, onChange }: { w: HoursWindow; onChange: (w: HoursWindow) => void }) {
+  const { c } = useTheme();
+  const step = (min: number, dir: 1 | -1, other: number) => {
+    let next = (min + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    if (next === other) next = (next + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    return next;
+  };
+  const days = w.days ?? [0, 1, 2, 3, 4, 5, 6];
+  const toggleDay = (d: number) => {
+    const next = days.includes(d) ? days.filter(x => x !== d) : [...days, d];
+    if (!next.length) return; // ao menos um dia
+    onChange({ start: w.start, end: w.end, ...(next.length < 7 ? { days: [...next].sort((a, b) => a - b) } : {}) });
+  };
+  return (
+    <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 12 }}>
+      <TimeStepper label="Início" value={w.start} set={dir => onChange({ ...w, start: step(w.start, dir, w.end) })} />
+      <TimeStepper label="Fim" value={w.end} set={dir => onChange({ ...w, end: step(w.end, dir, w.start) })} />
+      <View style={{ gap: 8 }}>
+        <T size={12.5} lh={1.4} color={c.ink2}>{w.start > w.end ? 'Atravessa a meia-noite: a madrugada conta para o dia em que a faixa começou. Dias da semana (opcional):' : 'Dias da semana (opcional):'}</T>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {DAY_LETTER.map((l, d) => {
+            const on = days.includes(d);
+            return (
+              <Pressable key={d} onPress={() => toggleDay(d)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={DAY_NAME[d]}
+                style={{ flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.bg3 }}>
+                <T size={13} w={600} color={on ? c.invink : c.ink}>{l}</T>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TimeStepper({ label, value, set }: { label: string; value: number; set: (dir: 1 | -1) => void }) {
+  const { c } = useTheme();
+  const btn = { width: 44, height: 44, borderRadius: 22, backgroundColor: c.bg3, alignItems: 'center' as const, justifyContent: 'center' as const };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <T size={14} w={550} style={{ flex: 1 }}>{label}</T>
+      <Pressable onPress={() => set(-1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos antes`} style={btn}>
+        <Icon name="remove" size={20} />
+      </Pressable>
+      <T size={17} w={650} mono style={{ width: 64, textAlign: 'center' }} accessibilityLiveRegion="polite">{hm(value)}</T>
+      <Pressable onPress={() => set(1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos depois`} style={btn}>
+        <Icon name="add" size={20} />
+      </Pressable>
+    </View>
   );
 }

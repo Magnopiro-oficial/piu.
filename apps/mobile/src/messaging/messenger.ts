@@ -10,6 +10,8 @@
  * - Estado salvo (`export`): sessões, fila própria, ids vistos (contra replay) e contatos.
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
+import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, type Vote } from './communityAlerts';
+import { hoursAllow, type HoursPolicy } from './hours';
 import { isJpegBase64 } from './photo';
 import { mentionIds } from './mentions';
 import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
@@ -99,6 +101,11 @@ export interface MessengerEvents {
   groupUpdated(g: GroupState, change: 'joined' | 'updated' | 'removed'): void;
   /** Mensagem nova num grupo, canal ou comunidade. */
   groupMessage(groupId: string, fromId: string, fromName: string, m: IncomingText): void;
+  /**
+   * Alerta da comunidade novo ou mudado (classificação, encerramento, validade). `notice`: o que
+   * merece aviso (communityAlerts.ts, `noticeFor`); `null` só atualiza a lista.
+   */
+  communityAlert(v: AlertView, notice: AlertNotice | null): void;
   /** Pedido para entrar num grupo meu que exige aprovação. */
   joinRequest(groupId: string, who: { id: string; name: string }): void;
   /**
@@ -139,7 +146,8 @@ const MAX_NEAR_PENDING = 50;
 
 /**
  * Limites do nó escolhidos pela pessoa (FUN-017). Valem para mensagens de TERCEIROS: as próprias
- * sempre saem. `hours`: 'night' = só das 22h às 7h (hora local).
+ * sempre saem. `hours`: 'night' = só das 22h às 7h; uma faixa (messaging/hours.ts) = só dentro dela
+ * (hora local, reavaliada no `tick`).
  */
 export interface NodePolicy {
   maxBytes: number;
@@ -148,7 +156,7 @@ export interface NodePolicy {
   dailyBytes: number;
   /** Banda para terceiros (bytes por segundo); `Infinity` = sem limite. */
   bytesPerSec: number;
-  hours: 'always' | 'night';
+  hours: HoursPolicy;
 }
 
 export interface MessengerOptions {
@@ -299,8 +307,10 @@ export class Messenger {
   /** Bytes de terceiros enviados hoje (dia local) e o balde de banda. */
   private relayDay = { day: '', bytes: 0 };
   private bw = { tokens: 0, at: 0 };
-  /** Hora local (0–23) e dia; injetáveis nos testes. */
-  clock = { hour: () => new Date().getHours(), day: () => new Date().toDateString() };
+  /** Hora local (0–23), minuto, dia da semana (0 = domingo) e dia; injetáveis nos testes. */
+  clock: { hour: () => number; day: () => string; minute?: () => number; weekday?: () => number } = {
+    hour: () => new Date().getHours(), day: () => new Date().toDateString(), minute: () => new Date().getMinutes(), weekday: () => new Date().getDay(),
+  };
   private o: MessengerOptions;
   /** Nome enviado na primeira mensagem para quem ainda não nos conhece. */
   displayName = '';
@@ -316,6 +326,7 @@ export class Messenger {
     this.credits = new CreditBook(st?.cr);
     this.deliveryDays = new DeliveryDays(st?.ud);
     this.accepted = new AcceptedInvites(st?.ia);
+    this.alertBook = new AlertBook(st?.ca);
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
     this.nodeDay = Math.floor(o.now() / 86400);
     this.routerOpts = {
@@ -323,8 +334,10 @@ export class Messenger {
       identities: [o.identities.public, o.identities.anon],
       relay: o.relay,
       acceptDest: (d, e) => this.managers.public.acceptsDest(d, e) || this.managers.anon.acceptsDest(d, e),
-      // Grupo: só abre mensagem de quem ainda é membro e pode publicar (canal e comunidade: só admins).
-      isMember: (fromId, gid) => { const g = this.groups.get(gid); return !!g && canPost(g, fromId); },
+      // Grupo: só abre mensagem de quem ainda é membro e pode publicar (canal: só admins). Comunidade:
+      // qualquer membro, porque alertas e classificações vêm de todos; o texto dos avisos continua só
+      // de admins (conferido em `onGroupEnvelope`).
+      isMember: (fromId, gid) => { const g = this.groups.get(gid); return !!g && (g.kind === 'community' ? isMemberOf(g, fromId) : canPost(g, fromId)); },
     };
     this.router = new Router(this.routerOpts);
     if (!st) return;
@@ -387,16 +400,22 @@ export class Messenger {
   relayStatus() {
     this.rollDay();
     const p = this.policy;
-    const reason = !this.wantRelay ? 'off' : p && p.hours === 'night' && !this.isNight() ? 'hours' : p && this.relayDay.bytes >= p.dailyBytes ? 'daily' : null;
+    const reason = !this.wantRelay ? 'off' : p && !this.inHours() ? 'hours' : p && this.relayDay.bytes >= p.dailyBytes ? 'daily' : null;
     return { relaying: this.router.relay, reason: reason as null | 'off' | 'hours' | 'daily', bytesToday: this.relayDay.bytes };
   }
 
-  private isNight() { const h = this.clock.hour(); return h >= 22 || h < 7; }
+  /** Dentro do horário escolhido (Sempre, 22h–7h ou Personalizado)? */
+  private inHours() {
+    const p = this.policy;
+    if (!p) return true;
+    const c = this.clock;
+    return hoursAllow(p.hours, { weekday: c.weekday?.() ?? new Date().getDay(), minutes: c.hour() * 60 + (c.minute?.() ?? 0) });
+  }
   private rollDay() { const d = this.clock.day(); if (d !== this.relayDay.day) this.relayDay = { day: d, bytes: 0 }; }
   private applyRelay() {
     this.rollDay();
     const p = this.policy;
-    const allowed = this.wantRelay && (!p || ((p.hours === 'always' || this.isNight()) && this.relayDay.bytes < p.dailyBytes));
+    const allowed = this.wantRelay && (!p || (this.inHours() && this.relayDay.bytes < p.dailyBytes));
     this.router.relay = allowed;
   }
 
@@ -1093,7 +1112,7 @@ export class Messenger {
       const c = this.contacts.get(m.id) ?? { id: m.id, via: g.via, pub: m.pub, name: m.name };
       this.enqueue(c, { t: 'gl', g: gid }, null, Priority.High);
     }
-    this.groups.delete(gid); this.prevKeys.delete(gid);
+    this.groups.delete(gid); this.prevKeys.delete(gid); this.alertBook.dropCommunity(gid);
     this.refreshGroupKeys();
     this.o.events.changed?.();
   }
@@ -1313,6 +1332,7 @@ export class Messenger {
 
   private dropGroup(gid: string, cur: GroupState | undefined) {
     this.groups.delete(gid); this.prevKeys.delete(gid);
+    this.alertBook.dropCommunity(gid);
     this.refreshGroupKeys();
     if (cur) this.o.events.groupUpdated?.(cur, 'removed');
     this.o.events.changed?.();
@@ -1322,8 +1342,14 @@ export class Messenger {
     const gid = m.group?.id;
     const g = gid ? this.groups.get(gid) : undefined;
     if (!g || m.type !== MsgType.Text) return;
+    if (g.kind === 'community') {
+      const w = decodeAlertPayload(m.body);
+      if (w) { this.onAlertPayload(g, m.fromId, m.sentAt, w); return; }
+    }
     const t = decodeGroupText(m.body);
     if (!t) return;
+    // Comunidade: o roteador abre de qualquer membro (alertas); texto dos avisos, só de quem publica.
+    if (!canPost(g, m.fromId)) return;
     const key = `${gid}|${m.fromId}|${t.i}`;
     if (this.deliveredSet.has(key)) return;
     this.markDelivered(key);
@@ -1333,6 +1359,157 @@ export class Messenger {
     const loc = readWireLocation(t.l);
     this.o.events.groupMessage?.(g.id, m.fromId, who?.name || 'Membro', { msgId: t.i, text: t.x, sentAt: m.sentAt, ...(mentioned ? { mentioned } : {}), ...(loc ? { loc } : {}), ...(this.rx ? { route: this.rx } : {}) });
     this.o.events.changed?.();
+  }
+
+  // ── alertas da comunidade (communityAlerts.ts) ───────────────────────
+
+  private alertBook: AlertBook;
+  /** Estado de cada alerta na última vez que avisei a tela (para saber o que mudou). */
+  private alertSeen = new Map<string, AlertStatus>();
+
+  private alertView(id: string): AlertView | null {
+    const a = this.alertBook.get(id);
+    const g = a ? this.groups.get(a.community) : undefined;
+    return a && g ? this.alertBook.view(id, g.members, this.myId(g.via), this.o.now(), g.name) : null;
+  }
+
+  /** Recalcula e avisa a tela do alerta (com o que merece notificação). */
+  private emitAlert(id: string, fresh: boolean) {
+    const v = this.alertView(id);
+    if (!v) return;
+    const prev = fresh ? null : this.alertSeen.get(id) ?? v.status;
+    this.alertSeen.set(id, v.status);
+    this.o.events.communityAlert?.(v, noticeFor(prev, v));
+  }
+
+  private onAlertPayload(g: GroupState, from: string, sentAt: number, w: NonNullable<ReturnType<typeof decodeAlertPayload>>) {
+    const key = `${g.id}|${from}|${w.i}`;
+    if (this.deliveredSet.has(key)) return;
+    this.markDelivered(key);
+    const now = this.o.now();
+    if (w.kind === 'alert') {
+      const who = g.members.find(x => x.id === from);
+      const r = this.alertBook.addAlert({ id: w.i, community: g.id, author: from, authorName: who?.name || 'Membro', cat: w.cat, sev: w.sev, title: w.title, text: w.text, area: w.area, at: sentAt, until: sentAt + w.dur }, now, g.members);
+      if (r !== 'ok') return;
+      this.o.events.changed?.();
+      if (from !== this.myId(g.via)) this.emitAlert(w.i, true);
+      return;
+    }
+    const a = this.alertBook.get(w.alert);
+    if (a && a.community !== g.id) return; // voto para alerta de outra comunidade
+    const ok = w.kind === 'vote' ? this.alertBook.addVote(w.alert, from, w.v, sentAt, w.i, g.members, w.n) : this.alertBook.addClose(w.alert, from, sentAt, g.members);
+    if (!ok) return;
+    this.o.events.changed?.();
+    if (a) this.emitAlert(a.id, false);
+  }
+
+  private sealAlert(g: GroupState, body: Uint8Array, ttlSec: number, priority: Priority) {
+    const me = this.o.identities[g.via];
+    const now = this.o.now();
+    const sealed = sealGroup({ from: me, group: groupKeyOf(g), type: MsgType.Text, body, now, ttlSec: Math.max(60, Math.min(TTL_SEC, ttlSec)), priority, pad: this.o.pad?.() ?? true });
+    const delaySec = this.o.randomDelay?.() ? randomDelaySec() : 0;
+    this.router.send(sealed.bytes, now, { delaySec });
+    this.o.events.changed?.();
+    this.flushAll();
+  }
+
+  private assertCommunity(gid: string) {
+    const g = this.groups.get(gid);
+    if (!g || g.kind !== 'community') throw new Error('Comunidade desconhecida.');
+    return g;
+  }
+
+  /**
+   * Publica um alerta na comunidade (qualquer membro). Vai no grupo da comunidade, cifrado com a
+   * chave dela e com prioridade Alta. Limite: 3 ativos por membro e 1 a cada 10 min.
+   */
+  publishAlert(gid: string, d: { cat: AlertCategory; sev: AlertSeverity; title: string; text: string; area?: string; durSec: number }): AlertView {
+    const g = this.assertCommunity(gid);
+    const me = this.myId(g.via);
+    const bad = checkDraft({ ...d, dur: d.durSec });
+    if (bad) throw new Error(bad);
+    const now = this.o.now();
+    const limit = this.alertBook.canPublish(g.id, me, now, g.members);
+    if (limit) throw new Error(limit);
+    const id = randomHex(16);
+    const title = d.title.trim(), text = d.text.trim(), area = (d.area ?? '').trim();
+    const name = g.members.find(m => m.id === me)?.name || (g.via === 'public' ? this.displayName : '') || 'Você';
+    if (this.alertBook.addAlert({ id, community: g.id, author: me, authorName: name, cat: d.cat, sev: d.sev, title, text, area, at: now, until: now + d.durSec }, now, g.members) !== 'ok')
+      throw new Error('Não foi possível publicar o alerta.');
+    this.markDelivered(`${g.id}|${me}|${id}`);
+    this.sealAlert(g, encodeAlertPayload({ kind: 'alert', i: id, cat: d.cat, sev: d.sev, title, text, area, dur: d.durSec }), d.durSec, Priority.High);
+    const v = this.alertView(id)!;
+    this.alertSeen.set(id, v.status);
+    return v;
+  }
+
+  /** "Confirmo" ou "Não procede" (um voto por membro; pode mudar). O autor não classifica o próprio. */
+  voteAlert(alertId: string, v: Vote): AlertView {
+    const cur = this.alertView(alertId);
+    if (!cur) throw new Error('Alerta não encontrado.');
+    if (!cur.canVote) throw new Error(cur.mine ? 'Você publicou este alerta: quem classifica são os outros membros.' : 'Este alerta não aceita mais classificação.');
+    if (cur.myVote === v) return cur;
+    const g = this.groups.get(cur.community)!;
+    const me = this.myId(g.via);
+    const now = this.o.now();
+    const i = randomHex(16);
+    const n = this.alertBook.nextVoteRev(alertId, me);
+    this.alertBook.addVote(alertId, me, v, now, i, g.members, n);
+    this.markDelivered(`${g.id}|${me}|${i}`);
+    this.sealAlert(g, encodeAlertPayload({ kind: 'vote', i, alert: alertId, v, n }), cur.until - now, Priority.Normal);
+    const out = this.alertView(alertId)!;
+    this.alertSeen.set(alertId, out.status);
+    return out;
+  }
+
+  /** Encerra o alerta (o autor, ou admin/moderador da comunidade). */
+  closeAlert(alertId: string): AlertView {
+    const cur = this.alertView(alertId);
+    if (!cur) throw new Error('Alerta não encontrado.');
+    if (!cur.canClose) throw new Error('Só quem publicou, admins e moderadores encerram o alerta.');
+    const g = this.groups.get(cur.community)!;
+    const me = this.myId(g.via);
+    const now = this.o.now();
+    const i = randomHex(16);
+    this.alertBook.addClose(alertId, me, now, g.members);
+    this.markDelivered(`${g.id}|${me}|${i}`);
+    this.sealAlert(g, encodeAlertPayload({ kind: 'close', i, alert: alertId }), cur.until - now, Priority.Normal);
+    const out = this.alertView(alertId)!;
+    this.alertSeen.set(alertId, out.status);
+    return out;
+  }
+
+  /** Um alerta (de uma comunidade em que estou). */
+  communityAlert(id: string) { return this.alertView(id); }
+
+  /** Alertas das minhas comunidades (ou de uma), na ordem da lista. */
+  communityAlerts(gid?: string): AlertView[] {
+    const out: AlertView[] = [];
+    for (const a of this.alertBook.all()) {
+      if (gid && a.community !== gid) continue;
+      const v = this.alertView(a.id);
+      if (v) out.push(v);
+    }
+    return sortViews(out);
+  }
+
+  /** Posso publicar agora nesta comunidade? Motivo, ou `null`. */
+  alertLimit(gid: string): string | null {
+    const g = this.groups.get(gid);
+    if (!g || g.kind !== 'community') return 'Comunidade desconhecida.';
+    return this.alertBook.canPublish(g.id, this.myId(g.via), this.o.now(), g.members);
+  }
+
+  /** Vencidos há mais de 24 h saem do aparelho; quem venceu agora atualiza a tela (sem notificar). */
+  private tickAlerts() {
+    const now = this.o.now();
+    if (this.alertBook.prune(now)) this.o.events.changed?.();
+    for (const a of this.alertBook.all()) {
+      const before = this.alertSeen.get(a.id);
+      if (!before) { const v = this.alertView(a.id); if (v) this.alertSeen.set(a.id, v.status); continue; }
+      if (before !== 'expired' && before !== 'closed' && now >= a.until) this.emitAlert(a.id, false);
+    }
+    for (const id of [...this.alertSeen.keys()]) if (!this.alertBook.get(id)) this.alertSeen.delete(id);
   }
 
   // ── créditos, provas de entrega e métricas ───────────────────────────
@@ -1440,6 +1617,7 @@ export class Messenger {
     if (ct.changed) this.o.events.changed?.();
     this.router.purge(this.o.now());
     this.pruneOwn();
+    this.tickAlerts();
     // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
     let changed = false;
     for (const [k, q] of this.outbox) {
@@ -1646,6 +1824,7 @@ export class Messenger {
       gp: [...this.prevKeys],
       gv: [...this.vouched],
       rk: this.rotatedFor,
+      ca: this.alertBook.export(),
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],

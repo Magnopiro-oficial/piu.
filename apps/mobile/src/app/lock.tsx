@@ -2,8 +2,8 @@ import { router, type Href } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
-import { useOfficialAlerts } from '../lib/alerts';
 import { lockItems, lockTime } from '../lib/lockFeed';
+import { useMessaging } from '../state/messaging';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -12,18 +12,20 @@ import { T } from '../ui/T';
 
 /**
  * Prévia da tela bloqueada: as notificações reais recentes (mensagens recebidas ainda não lidas e
- * alertas oficiais severos da região), como aparecem com a pré-visualização escolhida
- * (lib/lockFeed.ts). Alertas oficiais são públicos e sempre mostram o conteúdo. Sem nada novo, vazio.
+ * alertas Graves da comunidade vigentes e não contestados), como aparecem com a pré-visualização
+ * escolhida (lib/lockFeed.ts). Sem nada novo, vazio.
  */
 export default function Lock() {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
   const { preview, notifs } = useSettings();
   const { chats } = useStore();
-  const { alerts, region } = useOfficialAlerts();
+  const { alerts: ops, alertEpoch } = useMessaging();
+  void alertEpoch;
+  const alerts = ops?.list() ?? [];
   const hidden = preview !== 'always';
   const now = new Date();
-  const items = lockItems({ chats, preview, notifs, alerts, region, now: now.getTime() });
+  const items = lockItems({ chats, preview, notifs, alerts, now: now.getTime() });
   const date = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
   const time = now.toLocaleTimeString('pt-BR', { hour: 'numeric', minute: '2-digit' });
 

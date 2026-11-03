@@ -198,7 +198,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    */
   const showToast = useCallback((t: ToastData) => {
     if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
-    if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.href ? { data: { href: t.href } } : {}) });
+    if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.critical ? { critical: true } : {}), ...(t.href ? { data: { href: t.href } } : {}) });
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
     setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });

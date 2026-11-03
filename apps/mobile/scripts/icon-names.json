@@ -160,5 +160,15 @@
   "wifi_tethering",
   "workspaces",
   "map",
-  "ios_share"
+  "ios_share",
+  "thunderstorm",
+  "flood",
+  "local_fire_department",
+  "traffic",
+  "medical_services",
+  "power_off",
+  "thumb_up",
+  "thumb_down",
+  "remove",
+  "report"
 ]

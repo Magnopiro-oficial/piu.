@@ -58,7 +58,9 @@ export interface ToastData {
   /** Ícone de moeda girando (LUNES recebidos). */
   coin?: boolean;
   /** Tipo de notificação (Ajustes → Notificações): desligado ou em silêncio, o banner não aparece. */
-  kind?: 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network';
+  kind?: 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network' | 'alert';
+  /** Notificação crítica (alerta Grave da comunidade): canal de importância máxima. */
+  critical?: boolean;
   /**
    * Versão sem remetente nem conteúdo, usada com a pré-visualização "Nunca" ("Nunca mostra remetente
    * nem conteúdo, nem com o aparelho desbloqueado"). Banner sem isto não mostra nada de conversa.
