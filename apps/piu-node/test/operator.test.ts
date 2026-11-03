@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -93,6 +93,11 @@ test('chave de operador: backup cifrado com senha, restauração e rotação (ar
     assert.equal(v.info('op1')!.rotations, 1);
     // Reabre do disco igual.
     assert.equal(toHex(new OperatorVault(dir).keyPair('op1')!.pk), r.current);
+    // Arquivo ilegível: o nó sobe, e o arquivo antigo fica guardado de lado (nunca sobrescrito).
+    writeFileSync(join(dir, 'operator', 'keys.json'), '{quebrado', { mode: 0o600 });
+    const broken = new OperatorVault(dir);
+    assert.ok(broken.setAside && existsSync(broken.setAside));
+    assert.equal(broken.has('op1'), false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

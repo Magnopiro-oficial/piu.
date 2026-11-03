@@ -73,6 +73,8 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   const pairing = new Pairing();
   const issueCode = () => pairing.issue(Date.now());
   const store = new Store(config.dataDir);
+  const vault = new OperatorVault(config.dataDir);
+  if (vault.setAside) o.log?.(`Chaves de operador ilegíveis: arquivo guardado em ${vault.setAside}. Restaure o backup cifrado em Configurações (API /api/operator/restore).`);
 
   // Retransmissão: um erro aqui (porta ocupada, por exemplo) não derruba o painel; o operador vê no log.
   let relay: RelayHandle | null = null;
@@ -94,7 +96,7 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
 
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay, selfDevice, vault: new OperatorVault(config.dataDir),
+    config, store, pairing, packages, packagesDir, relay, selfDevice, vault,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).

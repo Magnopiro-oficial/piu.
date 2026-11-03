@@ -17,7 +17,7 @@
 import { xchacha20poly1305 } from '@noble/ciphers/chacha.js';
 import { scryptAsync } from '@noble/hashes/scrypt.js';
 import { randomBytes } from 'node:crypto';
-import { chmodSync, existsSync, readFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeFileAtomic } from './fsutil.js';
 import { toHex, utf8 } from './protocol/bytes.js';
@@ -73,12 +73,21 @@ export class OperatorVault {
     this.file = dataDir ? join(dataDir, 'operator', 'keys.json') : null;
     if (this.file && existsSync(this.file)) {
       chmodSync(this.file, 0o600);
-      // Ilegível: erro ao subir, nunca uma chave nova por cima (sobrescrever perderia a chave do operador).
-      const j = JSON.parse(readFileSync(this.file, 'utf8')) as FileShape;
-      if (j?.v !== 1 || typeof j.keys !== 'object') throw new Error(`Chaves de operador ilegíveis em ${this.file}.`);
-      this.s = j;
+      try {
+        const j = JSON.parse(readFileSync(this.file, 'utf8')) as FileShape;
+        if (j?.v !== 1 || typeof j.keys !== 'object' || !j.keys) throw new Error('formato');
+        this.s = j;
+      } catch {
+        // Ilegível: o nó sobe (o painel continua acessível), mas o arquivo antigo é guardado de lado,
+        // nunca sobrescrito: ele pode ser a única cópia da chave. Restaure o backup cifrado.
+        this.setAside = `${this.file}.corrompido-${Date.now()}`;
+        renameSync(this.file, this.setAside);
+      }
     }
   }
+
+  /** Arquivo de chaves ilegível posto de lado ao subir (para o log local). */
+  setAside: string | null = null;
 
   private save() { if (this.file) writeFileAtomic(this.file, JSON.stringify(this.s)); }
 
