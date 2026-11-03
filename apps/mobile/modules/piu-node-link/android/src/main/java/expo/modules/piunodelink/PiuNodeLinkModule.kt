@@ -43,7 +43,9 @@ class PiuNodeLinkModule : Module() {
     val expected = pin.replace(":", "").lowercase()
     if (expected.length != 64) throw IllegalArgumentException("Impressão digital inválida.")
     val trust = object : X509TrustManager {
-      override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) = throw CertificateException()
+      override fun checkClientTrusted(chain: Array<X509Certificate>, authType: String) {
+        throw CertificateException("Sem certificado de cliente.")
+      }
       override fun checkServerTrusted(chain: Array<X509Certificate>, authType: String) {
         val leaf = chain.firstOrNull() ?: throw CertificateException("O equipamento não mandou certificado.")
         val got = MessageDigest.getInstance("SHA-256").digest(leaf.encoded).joinToString("") { "%02x".format(it) }

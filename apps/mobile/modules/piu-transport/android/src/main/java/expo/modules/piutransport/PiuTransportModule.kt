@@ -22,6 +22,7 @@ import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.exception.Exceptions
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
+import java.util.concurrent.ConcurrentHashMap
 
 private class NotRunningException : CodedException("ERR_NOT_RUNNING", "O transporte não está ativo.", null)
 private class PeerNotConnectedException(id: String) : CodedException("ERR_PEER", "Vizinho $id não está conectado.", null)
@@ -47,14 +48,15 @@ class PiuTransportModule : Module() {
 
   @Volatile private var running = false
   private var localName = ""
-  private val names = mutableMapOf<String, String>()
-  private val connected = mutableSetOf<String>()
+  // Escritos pelos callbacks do Nearby (thread principal) e lidos nas AsyncFunctions (fila do módulo).
+  private val names = ConcurrentHashMap<String, String>()
+  private val connected: MutableSet<String> = ConcurrentHashMap.newKeySet()
   private var ble: BleEngine? = null
   private var serviceId = ""
   /** "Procurar vizinhos" (NFR-004): Econômica 60 s, Normal 20 s, Rápida 5 s. */
   private var discoveryIntervalMs = 20_000L
   private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
-  private var discovering = false
+  @Volatile private var discovering = false
   /** Nearby: descobre por `NEARBY_WINDOW_MS` a cada intervalo (ou sem parar, se o intervalo for curto). */
   private val discoveryCycle = object : Runnable {
     override fun run() {
@@ -104,6 +106,7 @@ class PiuTransportModule : Module() {
           medium(NEARBY, false, e.message ?: "Falha ao iniciar o Nearby Connections.")
           promise.resolve(null)
         }
+      Unit // o retorno da lambda não importa: a resposta vai pela `promise`
     }
 
     AsyncFunction("stop") {
@@ -124,6 +127,7 @@ class PiuTransportModule : Module() {
       discoveryIntervalMs = (seconds * 1000).toLong().coerceAtLeast(1_000L)
       ble?.setScanInterval(discoveryIntervalMs)
       if (running && nearbyOk == true) mainHandler.post { restartDiscoveryCycle() }
+      Unit
     }
 
     AsyncFunction("setBackground") { on: Boolean, title: String, text: String ->
