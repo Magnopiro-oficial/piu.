@@ -49,7 +49,8 @@ async function setup() {
   const pairing = new Pairing();
   const spent: string[] = [];
   const packages = loadPackages(pkgDir, releaseKey(spki));
-  const app = await buildApp({ config, store: new Store(null), pairing, packages, packagesDir: pkgDir, now: () => clock, onCodeSpent: r => spent.push(r) });
+  const store = new Store(null);
+  const app = await buildApp({ config, store, pairing, packages, packagesDir: pkgDir, now: () => clock, onCodeSpent: r => spent.push(r), selfDevice: { name: 'Nó de teste', cls: 'Home Node' } });
 
   const req = (method: string, url: string, o: { cookie?: string; csrf?: string; origin?: string | null; body?: unknown; host?: string; ip?: string } = {}) =>
     app.inject({
@@ -73,7 +74,9 @@ async function setup() {
 
   /** Código emitido no relógio do teste (como o console do nó faria). */
   const issueCode = () => pairing.issue(clock);
-  return { app, req, pair, pairing, issueCode, spent, packages, pkgDir, spki, advance: (ms: number) => { clock += ms; }, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  /** Saldo vem só de liquidação: os testes de transferência creditam um lote antes. */
+  const fund = (a: { body: unknown }, amount: number) => store.credit((a.body as { operator: { id: string } }).operator.id, amount, clock, 'lote de teste');
+  return { app, req, pair, fund, store, pairing, issueCode, spent, packages, pkgDir, spki, advance: (ms: number) => { clock += ms; }, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 test('headers de segurança (Helmet) em todas as respostas, sem fingerprinting', async () => {
@@ -166,13 +169,15 @@ test('IDOR: um operador não vê nem mexe nos equipamentos de outro (404, sem re
   const t = await setup();
   const a = await t.pair('Dono');
   const b = await t.pair('Vizinho', '10.0.0.7');
+  const made = await t.req('POST', '/api/devices', { cookie: a.cookie, csrf: a.csrf, body: { name: 'Roteador da sala', cls: 'Home Node', family: 'router' } });
+  assert.equal(made.statusCode, 201);
   const devsA = (await t.req('GET', '/api/devices', { cookie: a.cookie })).json() as { id: string }[];
-  assert.equal(devsA.length, 3);
+  assert.equal(devsA.length, 2, 'o próprio nó e o criado');
   assert.deepEqual((await t.req('GET', '/api/devices', { cookie: b.cookie, ip: '10.0.0.7' })).json(), []);
-  const target = devsA[0]!.id;
+  const target = (made.json() as { id: string }).id;
   assert.equal((await t.req('POST', `/api/devices/${target}/pause`, { cookie: b.cookie, csrf: b.csrf, ip: '10.0.0.7' })).statusCode, 404);
   assert.equal((await t.req('DELETE', `/api/devices/${target}`, { cookie: b.cookie, csrf: b.csrf, ip: '10.0.0.7' })).statusCode, 404);
-  assert.equal((await t.req('GET', '/api/devices', { cookie: a.cookie })).json().length, 3, 'nada foi alterado');
+  assert.equal((await t.req('GET', '/api/devices', { cookie: a.cookie })).json().length, 2, 'nada foi alterado');
   assert.equal((await t.req('DELETE', `/api/devices/${target}`, { cookie: a.cookie, csrf: a.csrf })).statusCode, 204);
   t.cleanup();
 });
@@ -183,7 +188,7 @@ test('IDs não previsíveis e respostas sem dados internos', async () => {
   const devs = (await t.req('GET', '/api/devices', { cookie: a.cookie })).json() as Record<string, unknown>[];
   for (const d of devs) {
     assert.match(String(d.id), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, 'UUID v4');
-    assert.deepEqual(Object.keys(d).sort(), ['cls', 'id', 'name', 'status', 'today'], 'sem ownerId nem campos internos');
+    assert.deepEqual(Object.keys(d).sort(), ['cls', 'id', 'name', 'self', 'status'], 'sem ownerId nem campos internos');
   }
   assert.equal((await t.req('POST', '/api/devices/1/pause', { cookie: a.cookie, csrf: a.csrf })).statusCode, 400, 'id fora do formato');
   const s = (await t.req('GET', '/api/session', { cookie: a.cookie })).json() as Record<string, unknown>;
@@ -194,6 +199,7 @@ test('IDs não previsíveis e respostas sem dados internos', async () => {
 test('transferência de LUNES: exige reautenticação recente e valida o valor', async () => {
   const t = await setup();
   const a = await t.pair('Cardeal');
+  t.fund(a, 1284.6);
   const transfer = (amount: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount } });
   assert.equal((await transfer(10.5)).statusCode, 200, 'logo depois do pareamento');
   assert.equal((await transfer(1.234)).statusCode, 400, 'mais de 2 casas');
@@ -209,7 +215,7 @@ test('transferência de LUNES: exige reautenticação recente e valida o valor',
   assert.equal((await transfer(10)).statusCode, 200);
   const w = (await t.req('GET', '/api/wallet', { cookie: a.cookie })).json() as { balance: number; txs: unknown[] };
   assert.equal(w.balance, 1264.1);
-  assert.equal(w.txs.length, 2);
+  assert.equal(w.txs.length, 3, 'a liquidação e as duas saídas');
   t.cleanup();
 });
 
@@ -229,6 +235,7 @@ test('sessão expira por inatividade e o logout a invalida no servidor', async (
 test('limites por rota são independentes (hooks não vazam entre rotas)', async () => {
   const t = await setup();
   const a = await t.pair('Cardeal');
+  t.fund(a, 10);
   const r = await t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1 } });
   assert.equal(r.headers['x-ratelimit-limit'], '10', 'transferência: 10/min');
   const d = await t.req('GET', '/api/devices', { cookie: a.cookie });
@@ -338,6 +345,7 @@ test('novo equipamento: campos validados, fica com o operador que criou', async 
 test('transferência para outro endereço: formato LUNES validado', async () => {
   const t = await setup();
   const a = await t.pair('Ana');
+  t.fund(a, 10);
   const send = (to: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1, to } });
   for (const bad of ['lunes:0OIl', 'lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 'lunes:3P8xK2mVt9abcdefghijkmnopqr<script>', 42])
     assert.equal((await send(bad)).statusCode, 400, String(bad));
@@ -365,6 +373,7 @@ test('celular que aprova: pareamento com código, transferência só com a aprov
   const { approvalCode, pairCode } = await import('../src/security/approval.js');
   const t = await setup();
   const a = await t.pair('Ana');
+  t.fund(a, 100);
   const b = await t.pair('Beto', '10.0.7.2');
   // Pareamento: QR com segredo; o celular devolve um código de 6 dígitos.
   const start = await t.req('POST', '/api/phones', { cookie: a.cookie, csrf: a.csrf, body: { name: 'Celular da Ana' } });

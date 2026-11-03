@@ -106,7 +106,7 @@ app.on('web-contents-created', (_e, contents) => {
 // ── janela ────────────────────────────────────────────────
 function createWindow() {
   win = new BrowserWindow({
-    width: 1320, height: 880, minWidth: 1180, minHeight: 720,
+    width: 1320, height: 880, minWidth: 760, minHeight: 600,
     title: 'Piu Provider', show: false, backgroundColor: '#F7F7F5',
     icon: asset('icon.png'),
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, webviewTag: false, spellcheck: false, devTools: !app.isPackaged },

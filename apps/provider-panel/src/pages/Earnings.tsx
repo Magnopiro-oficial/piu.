@@ -2,12 +2,18 @@ import { Icon, growX } from '../components/ui';
 import { LOTS, PAID_TOTAL, PENDING, PERIOD, RATES, REJECTED } from '../data/seed';
 import { fmt } from '../lib/format';
 import { useStore } from '../state/store';
+import { EarningsLive } from './EarningsLive';
 
 const RATE_COLS = 'minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1fr) 90px';
 const LOT_COLS = '110px minmax(0,1fr) minmax(0,1fr) 120px minmax(0,1.2fr) minmax(0,1fr)';
 const head = { padding: '10px 18px', background: 'var(--bg2)', fontSize: 11, fontWeight: 500, letterSpacing: '.05em', color: 'var(--ink2)' } as const;
 
+/** Com piu-node, recibos reais e pagamentos reais; sem ele, a demonstração. */
 export function Earnings() {
+  return useStore().nodeMode === 'node' ? <EarningsLive /> : <EarningsDemo />;
+}
+
+function EarningsDemo() {
   const { devices, totals } = useStore();
   const tiles: [string, string, string, boolean, number][] = [
     ['Pagos até hoje', PAID_TOTAL, '3 lotes · desde julho', true, 1],
@@ -29,12 +35,12 @@ export function Earnings() {
 
       <section className="span7 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>
         <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>Créditos por tipo de entrega · {PERIOD.month}</h2>
-        <div className="mono" style={{ display: 'grid', gridTemplateColumns: RATE_COLS, gap: 12, ...head }}><span>TIPO</span><span>REGRA</span><span>VOLUME</span><span style={{ textAlign: 'right' }}>LUNES</span></div>
+        <div className="mono tbl-head" style={{ display: 'grid', gridTemplateColumns: RATE_COLS, gap: 12, ...head }}><span>TIPO</span><span>REGRA</span><span>VOLUME</span><span style={{ textAlign: 'right' }}>LUNES</span></div>
         {RATES.map(r => (
-          <div key={r.title} style={{ display: 'grid', gridTemplateColumns: RATE_COLS, gap: 12, alignItems: 'center', padding: '13px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
+          <div key={r.title} className="tbl-row" style={{ display: 'grid', gridTemplateColumns: RATE_COLS, gap: 12, alignItems: 'center', padding: '13px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
             <span className="row" style={{ gap: 10, fontWeight: 600 }}><Icon name={r.icon} size={19} wght={300} />{r.title}</span>
-            <span className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>{r.rule}</span>
-            <span className="mono" style={{ fontSize: 12 }}>{r.volume}</span>
+            <span className="mono" data-label="regra" style={{ fontSize: 12, color: 'var(--ink2)' }}>{r.rule}</span>
+            <span className="mono" data-label="volume" style={{ fontSize: 12 }}>{r.volume}</span>
             <span className="tnum" style={{ textAlign: 'right', fontWeight: 650 }}>{fmt(r.lunes)}</span>
           </div>
         ))}
@@ -62,15 +68,15 @@ export function Earnings() {
 
       <section className="span12 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>
         <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>Lotes de liquidação</h2>
-        <div className="mono" style={{ display: 'grid', gridTemplateColumns: LOT_COLS, gap: 12, ...head }}><span>LOTE</span><span>PERÍODO</span><span>ENTREGAS</span><span style={{ textAlign: 'right' }}>LUNES</span><span>ESTADO</span><span>TRANSAÇÃO</span></div>
+        <div className="mono tbl-head" style={{ display: 'grid', gridTemplateColumns: LOT_COLS, gap: 12, ...head }}><span>LOTE</span><span>PERÍODO</span><span>ENTREGAS</span><span style={{ textAlign: 'right' }}>LUNES</span><span>ESTADO</span><span>TRANSAÇÃO</span></div>
         {LOTS.map(l => (
-          <div key={l.id} style={{ display: 'grid', gridTemplateColumns: LOT_COLS, gap: 12, alignItems: 'center', padding: '13px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
+          <div key={l.id} className="tbl-row" style={{ display: 'grid', gridTemplateColumns: LOT_COLS, gap: 12, alignItems: 'center', padding: '13px 18px', borderTop: '1px solid var(--line)', fontSize: 13.5 }}>
             <span className="mono" style={{ fontSize: 12.5, fontWeight: 500 }}>{l.id}</span>
-            <span>{l.period}</span>
-            <span className="mono" style={{ fontSize: 12 }}>{l.deliveries}</span>
+            <span data-label="período">{l.period}</span>
+            <span className="mono" data-label="entregas" style={{ fontSize: 12 }}>{l.deliveries}</span>
             <span className="tnum" style={{ textAlign: 'right', fontWeight: 650 }}>{l.value ?? fmt(totals.month)}</span>
             <span className="row" style={{ gap: 7 }}><Icon name={l.icon} size={17} fill={l.done ? 1 : 0} />{l.state}</span>
-            <span className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>{l.tx}</span>
+            <span className="mono" data-label="transação" style={{ fontSize: 12, color: 'var(--ink2)' }}>{l.tx}</span>
           </div>
         ))}
       </section>

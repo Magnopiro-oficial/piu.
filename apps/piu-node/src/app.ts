@@ -11,7 +11,7 @@ import type { Pairing } from './security/pairing.js';
 import { APPROVAL_TTL_MS, approvalMatches, checkCode, newSecret, PAIR_TTL_MS, pairCode, pairPayload, requestPayload } from './security/approval.js';
 import { cookieOptions, createSession, csrfMatches, endSession, findSession, SESSION_COOKIE, sessionLabel, STEP_UP_MS } from './security/session.js';
 import { readPanelFile } from './static.js';
-import type { Session, Settings, Store } from './store.js';
+import type { Device, Session, Settings, Store } from './store.js';
 
 declare module 'fastify' {
   interface FastifyRequest { piuSession: Session | null }
@@ -29,7 +29,17 @@ export interface AppOptions {
   /** Código consumido ou bloqueado: o nó gera outro e mostra só no console local. */
   onCodeSpent?: (reason: 'used' | 'locked') => void;
   /** Motor de retransmissão LNNP (ausente: `GET /api/relay` responde `enabled: false`). */
-  relay?: { stats(): object; applySettings(s: Settings): void } | null;
+  relay?: {
+    stats(): object; applySettings(s: Settings): void;
+    /** Pausar retransmissão do equipamento que serve o painel. */
+    setPaused?(paused: boolean): void;
+    /** Histórico das estatísticas (amostras de 24 h e totais por dia). */
+    history?(): object;
+    /** Recibos guardados para o validador (só horário e se são deste nó). */
+    receipts?(): object;
+  } | null;
+  /** O próprio nó, registrado como equipamento do dono no primeiro pareamento. Ausente: não registra. */
+  selfDevice?: { name: string; cls: string };
 }
 
 /** CSP igual à do painel (a mesma política vale para o HTML servido aqui). */
@@ -38,7 +48,7 @@ const CSP = {
   'img-src': ["'self'", 'data:'], 'font-src': ["'self'"], 'connect-src': ["'self'"], 'manifest-src': ["'self'"],
   'base-uri': ["'none'"], 'form-action': ["'none'"], 'frame-ancestors': ["'none'"], 'object-src': ["'none'"],
 };
-const PERMISSIONS = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), bluetooth=(), interest-cohort=()';
+const PERMISSIONS = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(), interest-cohort=()';
 const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
 const fail = (reply: FastifyReply, code: number, error: string, extra: Record<string, unknown> = {}) => reply.code(code).send({ error, ...extra });
@@ -119,6 +129,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     // O código prova acesso físico ao equipamento. Com um nome que já existe, a sessão é da mesma conta
     // (sessão expirada, outro navegador); com um nome novo, cria outro operador.
     const op = store.operatorByName(req.body.name) ?? store.addOperator(req.body.name.trim(), now());
+    if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
     const { token, session } = createSession(store, op.id, now(), sessionLabel(req.headers['user-agent']));
     reply.setCookie(SESSION_COOKIE, token, cookieOptions);
     return { operator: { id: op.id, name: op.name }, csrf: session.csrf };
@@ -185,10 +196,15 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   // ── retransmissão (LNNP) ──────────────────────────────
   /** Estatísticas reais do motor: vizinhos, envelopes guardados e encaminhados, duplicatas, recibos. */
   app.get('/api/relay', authed(), async () => (o.relay ? o.relay.stats() : { enabled: false }));
+  /** Histórico para os gráficos: amostras das últimas 24 h e totais por dia (contagens, sem LUNES). */
+  app.get('/api/relay/history', authed(), async () => (o.relay?.history ? { enabled: true, ...o.relay.history() } : { enabled: false }));
+  /** Recibos de retransmissão guardados para o validador: quantos e os horários dos mais recentes. */
+  app.get('/api/relay/receipts', authed(), async () => (o.relay?.receipts ? { enabled: true, ...o.relay.receipts() } : { enabled: false }));
 
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
-  app.get('/api/devices', authed(), async req =>
-    store.devicesOf(req.piuSession!.operatorId).map(({ id, name, cls, status, today }) => ({ id, name, cls, status, today })));
+  /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
+  const deviceView = ({ id, name, cls, status, self, pub }: Device) => ({ id, name, cls, status, self: !!self, ...(pub ? { pub } : {}) });
+  app.get('/api/devices', authed(), async req => store.devicesOf(req.piuSession!.operatorId).map(deviceView));
 
   /** Equipamento ativado pelo assistente "Adicionar equipamento". */
   app.post<{ Body: { name: string; cls: string; family: string; pub?: string } }>('/api/devices', {
@@ -204,7 +220,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (store.devicesOf(s.operatorId).length >= 100) return fail(reply, 400, 'Limite de equipamentos atingido.');
     const { name, cls, family, pub } = req.body;
     const d = store.addDevice({ ownerId: s.operatorId, name: name.trim(), cls, family, pub, createdAt: now() });
-    return reply.code(201).send({ id: d.id, name: d.name, cls: d.cls, status: d.status, today: d.today });
+    return reply.code(201).send(deviceView(d));
   });
 
   app.post<{ Params: { id: string } }>('/api/devices/:id/pause', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
@@ -212,12 +228,15 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     // 404 também para equipamento de outro operador: não revela que o id existe.
     if (!d) return fail(reply, 404, 'Não encontrado.');
     const u = store.setDeviceStatus(d.id, d.status === 'paused' ? 'active' : 'paused')!;
+    // O equipamento que serve o painel: pausar vale no motor na hora (não guarda nem repassa terceiros).
+    if (u.self) o.relay?.setPaused?.(u.status === 'paused');
     return { id: u.id, status: u.status };
   });
 
   app.delete<{ Params: { id: string } }>('/api/devices/:id', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
     const d = store.ownedDevice(req.piuSession!.operatorId, req.params.id);
     if (!d) return fail(reply, 404, 'Não encontrado.');
+    if (d.self) return fail(reply, 409, 'Este é o equipamento que serve o painel. Para tirá-lo da malha, pause a retransmissão ou desinstale o Piu Node nele.');
     store.removeDevice(d.id);
     return reply.code(204).send();
   });

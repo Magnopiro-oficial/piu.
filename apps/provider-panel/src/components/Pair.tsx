@@ -37,7 +37,7 @@ export function PairScreen() {
 
   return (
     <main style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
-      <form onSubmit={submit} className="col" aria-labelledby="pair-title" style={{ width: 420, gap: 18, padding: 32, borderRadius: 28, boxShadow: '0 0 0 1px var(--line2) inset' }}>
+      <form onSubmit={submit} className="col pair-form" aria-labelledby="pair-title" style={{ width: 420, maxWidth: 'calc(100vw - 32px)', boxSizing: 'border-box', gap: 18, padding: 32, borderRadius: 28, boxShadow: '0 0 0 1px var(--line2) inset' }}>
         <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
           <div style={{ fontSize: 30, fontWeight: 750, letterSpacing: '-0.07em', lineHeight: 1 }}>piu<span style={{ color: 'var(--ink3)' }}>.</span></div>
           <div className="mono" style={{ fontSize: 10.5, fontWeight: 500, letterSpacing: '.06em', padding: '2px 7px', borderRadius: 6, border: '1px solid var(--line2)', color: 'var(--ink2)' }}>PROVIDER</div>
@@ -88,7 +88,7 @@ export function StepUpDialog({ onConfirm, onClose }: { onConfirm: (code: string)
   return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45 }} />
-      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="stepup-title" className="col"
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="stepup-title" className="col dlg"
         style={{ position: 'fixed', left: '50%', top: '50%', width: 400, marginLeft: -200, transform: 'translateY(-50%)', zIndex: 46, borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '26px 24px 20px', gap: 14 }}>
         <div className="row" style={{ gap: 10 }}><Icon name="lock_clock" size={26} wght={300} /><h2 id="stepup-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Confirme no equipamento</h2></div>
         <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>Transferências exigem uma confirmação recente. Digite o código novo que aparece na tela do equipamento.</p>

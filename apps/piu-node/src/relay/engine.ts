@@ -108,11 +108,16 @@ export class RelayEngine {
   private now: () => number;
   private log: (msg: string) => void;
   private allow: Set<string> | null;
+  /** Pausado pelo operador no painel (Equipamentos → Pausar retransmissão). */
+  private paused = false;
+  /** Quando o motor subiu (ms), para o painel mostrar há quanto tempo o nó está ligado. */
+  readonly startedAt: number;
 
   constructor(private o: EngineOptions) {
     this.node = o.node;
     this.tag = nodeTag(o.node.pk);
     this.now = o.now ?? Date.now;
+    this.startedAt = this.now();
     this.log = o.log ?? (() => {});
     this.allow = o.allow ? new Set(o.allow.map(x => x.toLowerCase())) : null;
     this.router = new Router({ node: o.node, identities: o.identities ?? [], relay: o.relay });
@@ -137,7 +142,17 @@ export class RelayEngine {
   /** Retransmite agora? Modo nó ligado E dentro do horário do operador. */
   get relaying() { return this.router.relay; }
 
-  private updateRelay() { this.router.relay = this.o.relay && inWindow(this.settings.hours, this.now()); }
+  private updateRelay() { this.router.relay = this.o.relay && !this.paused && inWindow(this.settings.hours, this.now()); }
+
+  /** Pausa (ou retoma) a retransmissão de terceiros; os enlaces continuam abertos e os vizinhos ficam sabendo. */
+  setPaused(paused: boolean) {
+    const before = this.relaying;
+    this.paused = paused;
+    this.updateRelay();
+    if (this.relaying !== before) { this.log(`LNNP: retransmissão ${this.relaying ? 'retomada' : 'pausada'} pelo operador`); this.announceCaps(); }
+  }
+
+  get isPaused() { return this.paused; }
 
   caps(over: Partial<Capabilities> = {}): Capabilities {
     const free = Math.max(0, this.router.limits.maxBytes - this.router.stats().bytes);
@@ -320,6 +335,19 @@ export class RelayEngine {
 
   get inbox() { return this.router.inbox; }
 
+  /**
+   * Recibos guardados para o validador, do mais novo ao mais antigo: só o horário e se foi assinado
+   * por este nó. Sem id de envelope, segredo de entrega nem chave de quem assinou.
+   */
+  receiptsView(limit = 20) {
+    const me = toHex(this.node.pk);
+    const own = this.receiptLog.filter(r => toHex(r.nodePk) === me).length;
+    return {
+      kept: this.receiptLog.length, keptOwn: own, max: RECEIPT_LOG,
+      recent: this.receiptLog.slice(-limit).reverse().map(r => ({ at: r.at * 1000, own: toHex(r.nodePk) === me })),
+    };
+  }
+
   /** Estatísticas para o painel (`GET /api/relay`). Sem conteúdo, sem destino, sem chave secreta. */
   stats() {
     const r = this.router.stats();
@@ -327,6 +355,8 @@ export class RelayEngine {
       enabled: true,
       relayMode: this.o.relay,
       relaying: this.relaying,
+      paused: this.paused,
+      startedAt: this.startedAt,
       lnnp: { version: LNNP_VERSION, minVersion: LNNP_MIN_VERSION },
       node: toHex(this.node.pk).slice(0, 16),
       neighbors: [...this.links.values()].map(l => ({

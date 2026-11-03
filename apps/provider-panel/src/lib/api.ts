@@ -7,8 +7,31 @@
  * Nada de dado sensível em log: o painel não usa console.
  */
 export interface Operator { id: string; name: string }
-export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; today: number }
-export interface ApiWallet { balance: number; txs: { id: string; amount: number; at: number; to: 'personal' }[] }
+/** `self`: o nó que serve o painel (com estatísticas reais); os outros são registros do assistente. */
+export interface ApiDevice { id: string; name: string; cls: string; status: 'active' | 'paused'; self: boolean; pub?: string }
+/** `kind` ausente (versões antigas) = saída. Entrada (`in`) é liquidação recebida, com o lote em `from`. */
+export interface ApiWalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
+export interface ApiWallet { balance: number; txs: ApiWalletTx[] }
+
+/** Contadores do motor (os mesmos nomes de `GET /api/relay`). */
+export interface ApiTotals { received: number; stored: number; forwarded: number; duplicates: number; rejected: number; relayOff: number; full: number; expired: number; receipts: number; receiptsReceived: number }
+export interface ApiNeighbor { id: string; address: string; link: string; inbound: boolean; since: number; version: number; relay: boolean; mtu: number; media: string[] }
+export interface ApiSerial { label: string; kind: 'lora' | 'usb'; packetsSent: number; packetsReceived: number; retries: number; lost: number; dutyPercent?: number; dutyUsedPercent?: number }
+/** `GET /api/relay`. Com o motor desligado: `{ enabled: false }`. */
+export type ApiRelay = { enabled: false } | {
+  enabled: true; relayMode: boolean; relaying: boolean; paused?: boolean; startedAt?: number;
+  lnnp: { version: number; minVersion: number }; node: string; neighbors: ApiNeighbor[];
+  store: { envelopes: number; bytes: number; maxBytes: number; seen: number };
+  counters: ApiTotals & { delivered: number; handshakesOk: number; handshakesFailed: number };
+  limits: { bwMbps: number; stoGB: number; hours: string; media: boolean };
+  lan?: { port: number; discoveryPort: number | null }; serial?: ApiSerial[];
+};
+export interface ApiSample extends ApiTotals { at: number; neighbors: number; storedBytes: number }
+export interface ApiDay extends ApiTotals { day: string }
+/** `GET /api/relay/history`: amostras de 24 h, totais por dia (hoje já em tempo real) e o que ainda não virou amostra. */
+export type ApiHistory = { enabled: false } | { enabled: true; sampleMs: number; today: string; samples: ApiSample[]; days: ApiDay[]; unsampled: ApiTotals };
+/** `GET /api/relay/receipts`: recibos guardados para o validador (só horário e se são deste nó). */
+export type ApiReceipts = { enabled: false } | { enabled: true; kept: number; keptOwn: number; max: number; recent: { at: number; own: boolean }[] };
 export interface ApiSession { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }
 export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
 export interface ApiPending { id: string; request: string; code: string; phone: string; expiresAt: number }
@@ -92,5 +115,8 @@ export class NodeApi {
   revokeOtherSessions = () => this.call<{ revoked: number }>('POST', '/api/sessions/revoke-others');
   reauth = (code: string) => this.call<{ ok: true }>('POST', '/api/reauth', { code });
   packages = () => this.call<ApiPackage[]>('GET', '/api/packages');
+  relay = () => this.call<ApiRelay>('GET', '/api/relay');
+  history = () => this.call<ApiHistory>('GET', '/api/relay/history');
+  receipts = () => this.call<ApiReceipts>('GET', '/api/relay/receipts');
   logout = () => this.call<{ ok: true }>('POST', '/api/logout');
 }

@@ -10,7 +10,7 @@ function Shell({ title, body, onClose, children }: { title: string; body: string
   return createPortal(
     <>
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45, animation: 'piuFade .2s ease-out both' }} />
-      <div role="dialog" aria-modal="true" aria-labelledby="phone-title" style={{ position: 'fixed', left: '50%', top: '50%', width: 460, marginLeft: -230, transform: 'translateY(-50%)', zIndex: 46 }}>
+      <div role="dialog" aria-modal="true" aria-labelledby="phone-title" className="dlg" style={{ position: 'fixed', left: '50%', top: '50%', width: 460, marginLeft: -230, transform: 'translateY(-50%)', zIndex: 46 }}>
         <div className="col" style={{ borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '28px 24px 20px', alignItems: 'center', gap: 14, textAlign: 'center', animation: 'piuDialog .3s cubic-bezier(.2,.9,.3,1.2) both' }}>
           <div style={{ position: 'relative', width: 62, height: 62 }}>
             <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 1.8s ease-out infinite' }} />
