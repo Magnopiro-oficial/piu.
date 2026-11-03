@@ -7,6 +7,8 @@ import { defineConfig } from 'astro/config';
 export default defineConfig({
   // Defina o domínio final aqui para gerar URLs canônicas e hreflang absolutos.
   site: process.env.SITE_URL || undefined,
+  // Caminho base (GitHub Pages sem domínio: /piu./). Com domínio próprio, fica '/'.
+  base: process.env.BASE_PATH || '/',
   integrations: [react()],
   i18n: { defaultLocale: 'pt', locales: ['pt', 'en'], routing: { prefixDefaultLocale: false } },
   // CSS sempre em arquivo (nada de <style> inline) e nenhum recurso embutido como data:,

@@ -106,7 +106,7 @@ export const pt = {
     cols: [
       { t: 'PRODUTO', links: [['Como funciona', '#como'], ['Privacidade', '#privacidade'], ['Baixar', '#baixar']] },
       { t: 'PROVIDER', links: [['Seja provider', '#provider'], ['Painel do provider', '/painel/'], ['Piu Node', '#baixar']] },
-      { t: 'PROJETO', links: [['Telas do app', 'https://github.com/lunes-platform/piu./tree/main/design'], ['Especificação LNNP', '#faq'], ['Documento de requisitos v1.1', 'https://github.com/lunes-platform/piu./tree/main/docs/requisitos']] },
+      { t: 'PROJETO', links: [['Telas do app', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['Especificação LNNP', '#faq'], ['Documento de requisitos v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
     ] as { t: string; links: [string, string][] }[],
     legal: '© 2026 Lunes Network · Sem servidor central · Mensagens nunca vão para a blockchain',
   },

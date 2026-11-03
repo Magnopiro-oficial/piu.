@@ -5,10 +5,11 @@ import '@fontsource/geist-mono/500.css';
 import 'material-symbols/rounded.css';
 import '../styles/site.css';
 import type { Dict } from '../i18n/pt';
+import { url } from '../lib/url';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
-const abs = (p: string) => (Astro.site ? new URL(p, Astro.site).href : null);
+const abs = (p: string) => (Astro.site ? new URL(url(p), Astro.site).href : null);
 const canonical = abs(t.path);
 const alternates = [t, alt].map(d => ({ lang: d.lang, href: abs(d.path) })).filter(a => a.href);
 ---
@@ -20,7 +21,7 @@ const alternates = [t, alt].map(d => ({ lang: d.lang, href: abs(d.path) })).filt
     <title>{t.title}</title>
     <meta name="description" content={t.description} />
     <meta name="color-scheme" content="light dark" />
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="icon" href={url("/favicon.svg")} type="image/svg+xml" />
     <meta property="og:type" content="website" />
     <meta property="og:title" content={t.title} />
     <meta property="og:description" content={t.description} />
@@ -28,7 +29,7 @@ const alternates = [t, alt].map(d => ({ lang: d.lang, href: abs(d.path) })).filt
     {canonical && <link rel="canonical" href={canonical} />}
     {alternates.map(a => <link rel="alternate" hreflang={a.lang} href={a.href} />)}
     <!-- Tema antes da primeira pintura: script externo e bloqueante (compatível com CSP sem 'unsafe-inline'). -->
-    <script is:inline src="/theme-init.js"></script>
+    <script is:inline src={url("/theme-init.js")}></script>
     <meta name="referrer" content="strict-origin-when-cross-origin" />
   </head>
   <body>
