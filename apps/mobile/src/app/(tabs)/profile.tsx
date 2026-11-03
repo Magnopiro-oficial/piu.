@@ -1,7 +1,10 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { MY_DEVICES, PROFILE_NOTES } from '../../data/settings';
+import { PROFILE_NOTES } from '../../data/settings';
+import { useActiveDeviceCount } from '../../lib/devices';
+import { fmtBytes } from '../../lib/networkCore';
+import { useStorageUsage } from '../../lib/storageUsage';
 import { persistedBytes } from '../../lib/persist';
 import { handleOf, initialsOf } from '../../lib/text';
 import { fingerprintOf, useKeys } from '../../state/keys';
@@ -19,13 +22,15 @@ import { ActionRow, SetGroup } from '../../ui/Settings';
 import { T } from '../../ui/T';
 
 /** Espaço ocupado pelos dados do Piu neste aparelho (conversas, contatos, sessões), em pt-BR. */
-const fmtBytes = (n: number) => (n < 1024 * 1024 ? `${Math.max(1, Math.round(n / 1024))} KB` : `${(n / 1048576).toFixed(1).replace('.', ',')} MB`);
 
 /** Perfil: identidade pública/anônima, impressão digital da chave e ajustes. */
 export default function Profile() {
   const { c } = useTheme();
   const { identity, setIdentity, profile } = useStore();
-  const { backupDone, dropped } = useSettings();
+  const { backupDone } = useSettings();
+  // Mesmos números das telas Aparelhos e Armazenamento (registro real e medição real).
+  const devices = useActiveDeviceCount();
+  const [storage] = useStorageUsage();
   const reset = useResetApp();
   const [del, setDel] = useState(false);
   const pub = identity === 'public';
@@ -39,12 +44,11 @@ export default function Profile() {
   const p = pub
     ? { name: pubName || 'Sem nome público', initials: pubName ? initialsOf(pubName) : fp[0].slice(0, 2), handle: pubName ? handleOf(pubName) : short, radius: 'circle', note: PROFILE_NOTES.public, fp }
     : { name: `Anônimo · ${fp[0]}`, initials: fp[0].slice(0, 2), handle: short, radius: 'square', note: PROFILE_NOTES.anon, fp };
-  const devices = MY_DEVICES.filter(d => !d.revoked && !dropped[d.id]).length;
 
   const rows: [IconName, string, string, () => void, boolean?][] = [
     ['shield_lock', 'Privacidade', '', () => router.push('/settings/privacy')],
     ['notifications', 'Notificações', '', () => router.push('/notifications')],
-    ['database', 'Armazenamento', fmtBytes(persistedBytes()), () => router.push('/settings/storage')],
+    ['database', 'Armazenamento', storage ? fmtBytes(storage.total) : fmtBytes(persistedBytes()), () => router.push('/settings/storage')],
     ['battery_saver', 'Bateria e limites', '', () => router.push('/settings/battery')],
     ['devices', 'Aparelhos', String(devices), () => router.push('/devices')],
     ['router', 'Painel do provider', '', () => router.push('/provider')],
