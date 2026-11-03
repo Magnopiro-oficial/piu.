@@ -51,6 +51,14 @@ export interface ApiOperatorKey {
 /** `GET /api/payout-claims`: épocas que dá para declarar (esta semana e a próxima) e as já declaradas. */
 export interface ApiClaims { enabled: boolean; epochs: string[]; claims: { epoch: string; address: string; at: number }[] }
 
+/**
+ * `GET /api/wallet/lunes`: carteira de provider na Lunes Mainnet (só leitura). `onchain` em planck
+ * (texto; 1 LUNES = 10^8 planck), lido no último bloco finalizado; `error` quando a rede falhou
+ * (com `onchain` sendo a última leitura, se houver).
+ */
+export interface ApiLunesReading { address: string; exists: boolean; free: string; reserved: string; frozen: string; block: number; blockHash: string; endpoint: string; at: number }
+export interface ApiLunesWallet { address: string | null; setAt: number | null; explorer: string; endpoints: string[]; onchain: ApiLunesReading | null; error: string | null; cached: boolean }
+
 export class AuthLost extends Error {}
 export class NeedsReauth extends Error {}
 export class ApiError extends Error {
@@ -115,6 +123,10 @@ export class NodeApi {
   revoke = (id: string) => this.call<{ revoked: boolean; appliedHere: boolean } | undefined>('DELETE', `/api/devices/${encodeURIComponent(id)}`);
   setDeviceLimits = (id: string, limits: ApiDeviceLimits | null) => this.call<ApiDevice>('PUT', `/api/devices/${encodeURIComponent(id)}/limits`, limits ?? { clear: true });
   wallet = () => this.call<ApiWallet>('GET', '/api/wallet');
+  lunesWallet = () => this.call<ApiLunesWallet>('GET', '/api/wallet/lunes');
+  /** Exige step-up (NeedsReauth); endereço inválido: ApiError 400 com o motivo. */
+  setLunesAddress = (address: string) => this.call<{ address: string; setAt: number }>('PUT', '/api/wallet/lunes', { address });
+  clearLunesAddress = () => this.call<void>('DELETE', '/api/wallet/lunes');
   /** `to`: 'personal' ou um endereço `lunes:…`. */
   /** Com celular pareado, devolve `pending` (aprovar no celular); sem celular, executa na hora. */
   transfer = (amount: number, to = 'personal') => this.call<{ id: string } | { pending: ApiPending }>('POST', '/api/wallet/transfer', { amount, to });
