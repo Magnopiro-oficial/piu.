@@ -1,4 +1,5 @@
 import { DeviceStatusCell } from '../components/DeviceBits';
+import type { ApiAlert, ApiAlerts } from '../lib/api';
 import { Bar, Icon, growX, pressable } from '../components/ui';
 import { deviceLabels } from '../lib/devices';
 import { fmtInt } from '../lib/format';
@@ -175,6 +176,54 @@ export function OverviewLive() {
         ))}
         <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 6 }}>O nó não lê o conteúdo: o tipo de entrega e o valor em LUNES vêm do validador.</div>
       </section>
+
+      <OfficialAlerts alerts={live?.alerts ?? null} loading={loading} />
     </div>
+  );
+}
+
+const SEVERITY: Record<ApiAlert['info']['severity'], string> = { Extreme: 'extrema', Severe: 'severa', Moderate: 'moderada', Minor: 'baixa', Unknown: 'sem gravidade informada' };
+const MSG: Record<ApiAlert['msgType'], string> = { Alert: 'alerta', Update: 'atualização', Cancel: 'cancelamento' };
+const until = (iso: string) => { const t = Date.parse(iso); return Number.isFinite(t) ? new Date(t).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }) : null; };
+const host = (url: string) => { try { return new URL(url).host; } catch { return url; } };
+
+/**
+ * Alertas oficiais (CAP) vigentes que este nó leu dos feeds configurados (`GET /api/alerts`), com a
+ * origem de cada um. O nó só repassa o que o órgão publicou: não há assinatura do órgão para conferir.
+ */
+function OfficialAlerts({ alerts, loading }: { alerts: ApiAlerts | null; loading: boolean }) {
+  const list = alerts?.alerts ?? [];
+  const failing = (alerts?.feeds ?? []).filter(f => f.lastError);
+  return (
+    <section className="span12 card-line col" style={{ borderRadius: 22, padding: '16px 18px', gap: 4 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, paddingBottom: 6, flexWrap: 'wrap' }}>
+        <h2 className="h-card" style={{ margin: 0 }}>Alertas oficiais</h2>
+        <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>
+          {!alerts ? (loading ? 'lendo…' : 'indisponível') : !alerts.enabled ? 'desligados neste nó' : `${fmtInt(list.length)} ${list.length === 1 ? 'vigente' : 'vigentes'} · ${alerts.feeds.length} ${alerts.feeds.length === 1 ? 'fonte' : 'fontes'}`}
+        </div>
+      </div>
+      {alerts && !alerts.enabled && (
+        <div style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.45 }}>Nenhuma fonte de alertas configurada (PIU_ALERT_FEEDS vazio). Com uma fonte CAP (por exemplo, a da Defesa Civil ou do INMET), os alertas vigentes aparecem aqui.</div>
+      )}
+      {list.slice(0, 6).map((a, i) => {
+        const exp = until(a.info.expires);
+        return (
+          <div key={a.id} style={{ display: 'flex', gap: 12, padding: '10px 0', borderTop: `1px solid ${i ? 'var(--line)' : 'transparent'}` }}>
+            <Icon name={a.msgType === 'Cancel' ? 'notifications_off' : 'campaign'} size={20} wght={300} />
+            <div className="col grow" style={{ gap: 3, minWidth: 0 }}>
+              <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.35 }}>{a.info.headline || a.info.event || 'Alerta sem título'}</div>
+              <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>
+                {[MSG[a.msgType], `gravidade ${SEVERITY[a.info.severity]}`, a.info.areas.map(x => x.areaDesc).filter(Boolean).slice(0, 3).join(', '), exp ? `até ${exp}` : ''].filter(Boolean).join(' · ')}
+              </div>
+              <div className="mono ellipsis" style={{ fontSize: 11, color: 'var(--ink2)' }}>{a.info.senderName || a.sender} · via {host(a.source.feed)}</div>
+            </div>
+          </div>
+        );
+      })}
+      {alerts?.enabled && !list.length && <div style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.45 }}>Nenhum alerta vigente nas fontes configuradas.</div>}
+      {list.length > 6 && <div style={{ fontSize: 12, color: 'var(--ink2)' }}>+ {fmtInt(list.length - 6)} alertas vigentes não mostrados.</div>}
+      {failing.length > 0 && <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>Sem leitura recente de {failing.map(f => host(f.url)).join(', ')}: {failing[0]!.lastError}</div>}
+      {alerts?.enabled && <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 4 }}>O nó repassa o que o órgão publicou na fonte; o alerta não traz assinatura do órgão para conferir aqui.</div>}
+    </section>
   );
 }

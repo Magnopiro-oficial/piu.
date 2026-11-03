@@ -3,11 +3,11 @@
  * Nada aqui inventa número: o que o nó não mede vira `null`/"—" e a tela diz por quê.
  */
 import { CLASS_ICON } from '../data/seed';
-import type { ApiDay, ApiDevice, ApiHistory, ApiReceipts, ApiRelay, ApiTotals, ApiWalletTx } from './api';
+import type { ApiAlerts, ApiDay, ApiDevice, ApiHistory, ApiReceipts, ApiRelay, ApiTotals, ApiWalletTx } from './api';
 import { fmt, fmtInt } from './format';
 import type { Iface, NodeClass, RelayNode, WalletTx } from '../types';
 
-export interface Live { relay: ApiRelay | null; history: ApiHistory | null; receipts: ApiReceipts | null }
+export interface Live { relay: ApiRelay | null; history: ApiHistory | null; receipts: ApiReceipts | null; alerts?: ApiAlerts | null }
 export type RelayOn = Extract<ApiRelay, { enabled: true }>;
 export type HistoryOn = Extract<ApiHistory, { enabled: true }>;
 export type ReceiptsOn = Extract<ApiReceipts, { enabled: true }>;
@@ -92,9 +92,10 @@ export function liveDevice(d: ApiDevice, live: Live | null): RelayNode {
   const cls = (d.cls in CLASS_ICON ? d.cls : 'Home Node') as NodeClass;
   const base: RelayNode = {
     id: d.id, name: d.name, cls, short: '', pub: d.pub ?? '', icon: CLASS_ICON[cls], status: d.status,
-    model: 'Registrado pelo assistente · ainda não manda estatísticas a este nó',
+    model: 'Registrado pelo assistente',
     pph: 0, today: 0, month: 0, neighbors: 0, storage: null, uptime: '—', ifaces: [], receipts: [], passive: cls === 'Ponto de Acesso', telemetry: 'none',
     ...(d.nodeId ? { nodeId: d.nodeId, signed: !!d.signed } : {}), ...(d.limits ? { limits: d.limits } : {}),
+    ...(d.parent ? { parent: d.parent } : {}), ...(d.report ? { report: d.report } : {}), ...(d.policy ? { policy: d.policy } : {}),
   };
   if (!d.self && d.nodeId) {
     // Vinculado a um vizinho: o enlace real (o nó diz se está conectado e quando foi visto por último).
@@ -103,6 +104,11 @@ export function liveDevice(d: ApiDevice, live: Live | null): RelayNode {
     const link = on ? { online: true, lastSeen: Date.now(), address: on.address } : d.link ?? null;
     if (link) base.link = link;
     base.model = link?.online ? `Identidade ${d.nodeId} · enlace LNNP com este nó (${link.address ?? 'endereço desconhecido'})` : `Identidade ${d.nodeId} · sem enlace com este nó agora`;
+    // Resumo assinado pelo próprio equipamento (chega pela malha quando ele é do mesmo operador).
+    if (d.report) {
+      base.uptime = ago(d.report.startedAt);
+      base.neighbors = d.report.neighbors;
+    }
   } else if (!d.self) {
     base.model = cls === 'Ponto de Acesso'
       ? 'Sem software do Piu · só registro neste nó, sem enlace nem estatísticas'

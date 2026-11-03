@@ -95,6 +95,24 @@ export function MeshLive() {
         ))}
         {!nb.length && <div style={{ padding: '10px 0', borderTop: '1px solid var(--line)', fontSize: 13, color: 'var(--ink2)' }}>Sem vizinhos ainda.</div>}
         {(r?.lan?.peers?.length ?? 0) > 0 && <FixedPeers peers={r!.lan!.peers!} />}
+        {r && (
+          // Contadores reais do motor: revogação aplicada aqui e o que voltou do disco quando o nó subiu.
+          <div className="col" style={{ gap: 6, paddingTop: 10, marginTop: 6, borderTop: '1px solid var(--line)' }}>
+            <div className="row" style={{ gap: 10, fontSize: 12.5 }}>
+              <Icon name="key_off" size={17} wght={300} />
+              <span className="grow">Conexões recusadas por credencial revogada</span>
+              <span className="tnum" style={{ fontWeight: 650 }}>{fmtInt(r.counters.revokedRefused ?? 0)}</span>
+            </div>
+            <div className="row" style={{ gap: 10, fontSize: 12.5, alignItems: 'flex-start' }}>
+              <Icon name="restore" size={17} wght={300} />
+              <span className="grow" style={{ lineHeight: 1.4 }}>
+                {r.store.restored
+                  ? `Ao ligar, voltaram do armazenamento local ${fmtInt(r.store.restored.envelopes)} ${r.store.restored.envelopes === 1 ? 'mensagem guardada' : 'mensagens guardadas'} e ${fmtInt(r.store.restored.receipts)} ${r.store.restored.receipts === 1 ? 'recibo' : 'recibos'}${r.startedAt ? ` (${clock(r.startedAt)})` : ''}.`
+                  : 'Este nó não informa o que voltou do armazenamento local.'}
+              </span>
+            </div>
+          </div>
+        )}
         <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 10 }}>
           O código de cada vizinho sai do handshake e é o mesmo no painel do outro nó: serve para conferir, nos dois, que o enlace é com o equipamento certo.
           Enlaces autenticados e cifrados (LNNP v{r?.lnnp.version ?? 1}){r ? ` · ${fmtInt(r.counters.handshakesFailed)} conexões recusadas` : ''}. A qualidade do enlace ainda não é medida. Mídia nunca é enviada por LoRa.

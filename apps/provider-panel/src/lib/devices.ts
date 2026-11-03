@@ -8,7 +8,11 @@ export const statusShort = (d: RelayNode) =>
 
 /** Rótulos de exibição usados nas tabelas. Com piu-node, "hoje" é contagem de recibos (LUNES só depois da liquidação). */
 export function deviceLabels(d: RelayNode) {
-  if (d.telemetry === 'none') return { pph: '—', today: '—', stoPct: '0%', stoLabel: d.passive ? 'não guarda mensagens' : 'sem dados neste nó' };
+  if (d.telemetry === 'none') {
+    // Resumo assinado pelo próprio equipamento: contadores desde que ele ligou (não são "por hora" nem "hoje").
+    if (d.report) return { pph: '—', today: '—', stoPct: '0%', stoLabel: `${fmtInt(d.report.forwarded)} encaminhados desde que ligou` };
+    return { pph: '—', today: '—', stoPct: '0%', stoLabel: d.passive ? 'não guarda mensagens' : 'sem dados neste nó' };
+  }
   if (d.telemetry === 'live') {
     const n = d.receiptsToday ?? 0;
     return {

@@ -96,10 +96,11 @@ export function AddDeviceWizard() {
     if (isAp) dev.model = `Repetidor comum · firmware original · ligado ao ${parent}`;
     setActivating(true);
     const linkable = real && !isAp && !fam.isRadio;
-    const id = await addDevice(dev, fam.id, real && !isAp ? {
+    // Ponto de Acesso: o nó pai escolhido vai junto (o nó confere que é um equipamento seu com o Piu Node).
+    const id = await addDevice(dev, fam.id, !real ? {} : isAp ? (w.parent && parents.some(p => p.id === w.parent) ? { parent: w.parent } : {}) : {
       ...(linkable && w.nodePk ? { nodePk: w.nodePk } : {}),
       limits: { bw: w.bw, sto: w.sto, hours: w.hours },
-    } : {});
+    });
     setActivating(false);
     if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
@@ -320,8 +321,10 @@ export function AddDeviceWizard() {
               <div className="col" style={{ gap: 12, padding: 18, borderRadius: 18, border: '1px dashed var(--line2)' }}>
                 <div className="row" style={{ gap: 10, fontSize: 15, fontWeight: 650 }}><Icon name="info" size={21} />Teste real ainda não disponível</div>
                 <div style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.5 }}>
-                  O teste com vizinhos independentes (banda, latência, encaminhamento) ainda não existe nesta versão. O equipamento entra registrado, sem classe aprovada,
-                  e as estatísticas dele aparecem quando ele se conectar a este nó.
+                  O teste com vizinhos independentes (banda, latência, encaminhamento) ainda não existe nesta versão. O equipamento entra registrado, sem classe aprovada.
+                  {isAp || fam.isRadio
+                    ? ' Sem o Piu Node nele, este nó só guarda o registro: não há estatísticas dele aqui.'
+                    : ' Com a identidade técnica escolhida e a sua chave de operador nele (backup restaurado), ele manda a este nó um resumo assinado (encaminhados, guardados, vizinhos, pausa) e recebe daqui a pausa e as regras.'}
                 </div>
                 <div className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>agora: {neighbors} {neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'} a este nó</div>
               </div>
@@ -381,7 +384,11 @@ export function AddDeviceWizard() {
                       <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)', textWrap: 'pretty' }}>Pontos de acesso não geram créditos próprios. As entregas que passam por ele contam para o {parent}, que assina os recibos.</div>
                     </div>
                   )}
-                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real${w.nodePk ? ', com identidade técnica assinada por você' : ''}.` : `${fam.result} · aprovado no teste real.`} Os limites globais de Configurações continuam valendo.{real && !isAp ? ' As regras ficam registradas; o equipamento ainda não as recebe deste nó.' : ''}</div>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real${w.nodePk ? ', com identidade técnica assinada por você' : ''}.` : `${fam.result} · aprovado no teste real.`}{real
+                    ? isAp ? ' Pontos de acesso não recebem regras: não têm o Piu Node.'
+                      : w.nodePk ? ' As regras saem assinadas pela sua chave de operador e valem nele quando ele receber pela malha, junto com os limites do próprio equipamento (fica o mais restrito).'
+                      : ' Sem identidade técnica, as regras ficam só registradas neste painel.'
+                    : ' Os limites globais de Configurações continuam valendo.'}</div>
                 </div>
               </div>
             )}

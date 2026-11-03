@@ -141,3 +141,57 @@ export function PasswordDialog({ onConfirm, onClose }: { onConfirm: (password: s
     document.body,
   );
 }
+
+/** Tamanho máximo do arquivo de backup que o nó aceita (`POST /api/operator/restore`). */
+const MAX_BACKUP_BYTES = 256 * 1024;
+
+/**
+ * Restaurar o backup cifrado da chave de operador neste nó (`piu-operador.backup` + a senha dele).
+ * O nó confere a senha e o arquivo; a chave deste operador neste nó passa a ser a do arquivo. A
+ * confirmação recente (step-up) é pedida por quem abre o diálogo, quando o nó exigir.
+ */
+export function RestoreDialog({ onConfirm, onClose }: { onConfirm: (backup: string, password: string) => Promise<string | null>; onClose: () => void }) {
+  const [file, setFile] = useState<{ name: string; text: string } | null>(null);
+  const [pw, setPw] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const pick = async (f: File | undefined) => {
+    setErr(null); setFile(null);
+    if (!f) return;
+    if (f.size > MAX_BACKUP_BYTES) { setErr('Arquivo grande demais para um backup de operador.'); return; }
+    try { setFile({ name: f.name, text: await f.text() }); } catch { setErr('Não foi possível ler o arquivo.'); }
+  };
+  const problem = !file ? 'Escolha o arquivo do backup.' : !pw ? 'Digite a senha do backup.' : null;
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (problem || busy || !file) return;
+    setBusy(true);
+    const p = await onConfirm(file.text, pw);
+    setBusy(false);
+    if (p) setErr(p);
+  };
+  return createPortal(
+    <>
+      <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45 }} />
+      <form onSubmit={submit} role="dialog" aria-modal="true" aria-labelledby="restore-title" className="col dlg"
+        style={{ position: 'fixed', left: '50%', top: '50%', width: 420, marginLeft: -210, transform: 'translateY(-50%)', zIndex: 46, borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '26px 24px 20px', gap: 12 }}>
+        <div className="row" style={{ gap: 10 }}><Icon name="settings_backup_restore" size={26} wght={300} /><h2 id="restore-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>Restaurar backup da chave</h2></div>
+        <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>
+          A chave de operador deste nó passa a ser a do arquivo. Use para pôr outro nó seu sob a mesma chave, ou para trazer a chave nova depois de uma rotação feita em outro equipamento. Os equipamentos registrados aqui são assinados de novo.
+        </p>
+        <label className="col" style={{ gap: 6 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 600 }}>Arquivo do backup (piu-operador.backup)</span>
+          <input type="file" accept=".backup,application/octet-stream,application/json,text/plain" onChange={e => void pick(e.target.files?.[0])}
+            style={{ fontSize: 13, color: 'var(--ink)', maxWidth: '100%' }} />
+        </label>
+        <input type="password" value={pw} onChange={e => { setPw(e.target.value); setErr(null); }} autoComplete="current-password" aria-label="Senha do backup" placeholder="Senha do backup" style={field} />
+        <div aria-live="polite" style={{ fontSize: 12.5, color: 'var(--ink2)', minHeight: 17 }}>{err ?? (file ? `${file.name} · ${Math.max(1, Math.ceil(file.text.length / 1024))} KB` : '')}</div>
+        <div className="row" style={{ gap: 8, justifyContent: 'flex-end' }}>
+          <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 40, padding: '0 16px', borderRadius: 20 }}>Cancelar</button>
+          <button type="submit" className="btn btn-primary" disabled={!!problem || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: problem ? 0.4 : 1 }}>{busy ? 'Conferindo…' : 'Restaurar'}</button>
+        </div>
+      </form>
+    </>,
+    document.body,
+  );
+}
