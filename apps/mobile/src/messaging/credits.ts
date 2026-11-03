@@ -4,13 +4,18 @@
  * - Prova de entrega: o destino revela o `ackSecret` (estava dentro do conteúdo cifrado e não diz quem
  *   é o destino); a prova circula pela malha. hash(segredo) = ackHash do envelope ⇒ entrega comprovada.
  * - Estados: pendente → validado (com prova) ou rejeitado (sem prova até vencer, duplicata, teto
- *   diário); validado → pago quando o lote da semana fecha.
+ *   diário); validado → em lote quando o lote da semana fecha neste aparelho (aguardando liquidação);
+ *   em lote → pago SÓ com liquidação real, que o celular ainda não tem (nenhuma transição para
+ *   `pago` existe aqui). Versões antigas marcavam o lote local como `pago` (`simulated`): ao abrir,
+ *   esses créditos voltam para `em_lote`.
  * - Valor ESTIMADO: créditos por entrega conforme o tamanho e o meio (proposta econômica, valores
  *   PROVISÓRIOS para teste), DIVIDIDOS entre os relays da entrega, como no validador (seção 3.2);
  *   100 créditos = 1 LUNES (texto do design). O aparelho só conhece os relays até ele (pelo contador
  *   de saltos), então a estimativa é um teto. O teto de 2% do orçamento por nó e por época não entra
  *   aqui: o orçamento da época é da Lunes e não chega ao aparelho. O valor final é o do validador.
- * - Validade: validado e não liquidado em 180 dias expira (seção 3.4) e fica 30 dias na lista.
+ * - Validade: validado (ou em lote) e não liquidado em 180 dias expira (seção 3.4) e fica 30 dias na lista.
+ * - Evidências: o recibo e o segredo da prova (`ackSecret`) ficam guardados para exportar no formato
+ *   `EvidenceFile` v1 do validador (messaging/evidence.ts).
  *
  * LOTE SEM PAGAMENTO: o app já lê a Lunes Mainnet (lib/lunesRpc.ts: saldo, blocos), mas não paga
  * lotes. O pagamento é da liquidação (apps/settlement), ainda não ligada ao app; um lote fechado aqui
@@ -22,7 +27,7 @@ import type { TransportClass } from '../protocol/router';
 import { hash } from '../protocol/suite';
 import { b64url, unb64url } from './card';
 
-export type CreditState = 'pendente' | 'validado' | 'rejeitado' | 'pago';
+export type CreditState = 'pendente' | 'validado' | 'em_lote' | 'rejeitado' | 'pago';
 
 /** Parâmetros PROVISÓRIOS (docs/economia/proposta-modelo-economico.md, seção 3), para teste. */
 export const CREDIT_PARAMS = {
@@ -43,7 +48,7 @@ export const CREDIT_PARAMS = {
   validitySec: 180 * 86400,
   /** Quanto tempo o expirado continua na lista antes de sair do aparelho. */
   keepExpiredSec: 30 * 86400,
-  /** Pendentes, rejeitados e pagos ficam guardados por este tempo. */
+  /** Pendentes e rejeitados ficam guardados por este tempo. */
   keepSec: 90 * 86400,
 };
 
@@ -57,9 +62,15 @@ export interface Credit {
   relays?: number;
   /** Quando expirou sem liquidação (s). */
   expiredAt?: number;
+  /** Segredo da prova de entrega (hex), guardado ao validar: vai no arquivo de evidências. */
+  proof?: string;
   receipt: { ackHash: string; nodePk: string; sig: string };
 }
-export interface Lot { id: string; closedAt: number; credits: number; lunes: number; count: number; simulated: true }
+/**
+ * Lote fechado neste aparelho. `settled: false`: aguardando liquidação (nenhum LUNES foi pago). Só uma
+ * liquidação real poderia mudar isso, e ela ainda não chega ao celular.
+ */
+export interface Lot { id: string; closedAt: number; credits: number; lunes: number; count: number; settled: false }
 
 /** Semana (segunda a domingo, hora local) como `AAAA-Sn`. */
 export function weekOf(sec: number): string {
@@ -78,9 +89,14 @@ export class CreditBook {
 
   constructor(state?: string) {
     if (!state) return;
-    const j = JSON.parse(state) as { c: Credit[]; l: Lot[] };
-    for (const c of j.c ?? []) this.credits.set(c.envelopeId, c);
-    this.lots = j.l ?? [];
+    const j = JSON.parse(state) as { c: Credit[]; l: (Lot | (Omit<Lot, 'settled'> & { simulated?: true }))[] };
+    // Migração: lotes antigos eram "pagos" por simulação. Nada foi pago de verdade: voltam a "em lote".
+    const simulated = new Set((j.l ?? []).filter(l => 'simulated' in l && l.simulated).map(l => l.id));
+    for (const c of j.c ?? []) {
+      if (c.state === 'pago' && (!c.lot || simulated.has(c.lot))) c.state = 'em_lote';
+      this.credits.set(c.envelopeId, c);
+    }
+    this.lots = (j.l ?? []).map(({ id, closedAt, credits, lunes, count }) => ({ id, closedAt, credits, lunes, count, settled: false as const }));
   }
 
   list() { return [...this.credits.values()].sort((a, b) => b.at - a.at); }
@@ -88,7 +104,7 @@ export class CreditBook {
 
   /** Totais por estado (créditos). */
   totals(): Record<CreditState, number> {
-    const t: Record<CreditState, number> = { pendente: 0, validado: 0, rejeitado: 0, pago: 0 };
+    const t: Record<CreditState, number> = { pendente: 0, validado: 0, em_lote: 0, rejeitado: 0, pago: 0 };
     for (const c of this.credits.values()) t[c.state] += c.credits;
     return t;
   }
@@ -114,6 +130,7 @@ export class CreditBook {
     if (!c || c.state !== 'pendente') return false;
     if (!equal(hash(ackSecret).slice(0, 16), Uint8Array.from(c.receipt.ackHash.match(/../g)!.map(x => parseInt(x, 16))))) return false;
     c.state = 'validado';
+    c.proof = toHex(ackSecret);
     return true;
   }
 
@@ -125,8 +142,8 @@ export class CreditBook {
     let changed = false;
     for (const c of this.credits.values()) {
       if (c.state === 'pendente' && now > c.expiresAt + CREDIT_PARAMS.proofGraceSec) { c.state = 'rejeitado'; c.reason = 'sem prova de entrega até vencer'; changed = true; }
-      // Validado que não entrou em lote em 180 dias: expira (não acumula passivo eterno).
-      if (c.state === 'validado' && now - c.at > CREDIT_PARAMS.validitySec) { c.state = 'rejeitado'; c.reason = EXPIRED_REASON; c.expiredAt = now; changed = true; }
+      // Validado ou em lote e não liquidado em 180 dias: expira (não acumula passivo eterno).
+      if ((c.state === 'validado' || c.state === 'em_lote') && now - c.at > CREDIT_PARAMS.validitySec) { c.state = 'rejeitado'; c.reason = EXPIRED_REASON; c.expiredAt = now; changed = true; }
     }
     const thisWeek = weekOf(now);
     const lastWeek = weekOf(now - 7 * 86400);
@@ -134,8 +151,9 @@ export class CreditBook {
     const sum = due.reduce((a, c) => a + c.credits, 0);
     const lotId = `lote-${thisWeek}`;
     if (due.length && sum >= CREDIT_PARAMS.minLotLunes * CREDIT_PARAMS.creditsPerLunes && !this.lots.some(l => l.id === lotId)) {
-      for (const c of due) { c.state = 'pago'; c.lot = lotId; }
-      const lot: Lot = { id: lotId, closedAt: now, credits: Math.round(sum * 10) / 10, lunes: Math.round((sum / CREDIT_PARAMS.creditsPerLunes) * 100) / 100, count: due.length, simulated: true };
+      // Em lote, aguardando liquidação: nada foi pago (o celular não liquida).
+      for (const c of due) { c.state = 'em_lote'; c.lot = lotId; }
+      const lot: Lot = { id: lotId, closedAt: now, credits: Math.round(sum * 10) / 10, lunes: Math.round((sum / CREDIT_PARAMS.creditsPerLunes) * 100) / 100, count: due.length, settled: false };
       this.lots.unshift(lot);
       return { changed: true, lot };
     }
@@ -148,12 +166,12 @@ export class CreditBook {
   }
 
   /**
-   * Guarda 90 dias de créditos (validados ainda não pagos: até expirarem, em 180 dias; expirados: mais
+   * Guarda 90 dias de créditos (validados e em lote: até expirarem, em 180 dias; expirados: mais
    * 30 dias, para aparecerem na lista) e 52 lotes.
    */
   export(now: number): string {
     const keep = [...this.credits.values()].filter(c =>
-      c.state === 'validado' ? now - c.at <= CREDIT_PARAMS.validitySec + 86400
+      c.state === 'validado' || c.state === 'em_lote' ? now - c.at <= CREDIT_PARAMS.validitySec + 86400
         : c.expiredAt ? now - c.expiredAt < CREDIT_PARAMS.keepExpiredSec
           : now - c.at < CREDIT_PARAMS.keepSec);
     return JSON.stringify({ c: keep, l: this.lots.slice(0, 52) });

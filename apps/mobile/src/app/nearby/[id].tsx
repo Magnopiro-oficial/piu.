@@ -63,7 +63,7 @@ function ProfileView({ p }: { p: NearProfile }) {
             : <T size={64} w={650} ls={-0.04} color={c.ink2}>{initialsOf(p.name)}</T>}
           <View style={{ position: 'absolute', top: insets.top + 8, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
             <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar" style={round}><Icon name="arrow_back_ios_new" size={20} /></Pressable>
-            <Pressable onPress={() => { hide(p.id); showToast({ icon: 'flag', title: 'Denúncia registrada', body: `${p.name || 'Este perfil'} não aparece mais para você em Por perto.` }); router.back(); }} accessibilityRole="button" accessibilityLabel={`Denunciar perfil de ${p.name}`} style={round}><Icon name="flag" size={20} /></Pressable>
+            <Pressable onPress={() => { hide(p.id); showToast({ icon: 'visibility_off', title: 'Perfil ocultado', body: `${p.name || 'Este perfil'} não aparece mais para você em Por perto, só neste aparelho. A denúncia não é enviada a ninguém nesta versão.` }); router.back(); }} accessibilityRole="button" accessibilityLabel={`Ocultar perfil de ${p.name} (denúncia só local)`} style={round}><Icon name="flag" size={20} /></Pressable>
           </View>
         </Stripes>
 
