@@ -13,9 +13,17 @@ const viaIcon = (v: string): IconName =>
   /LoRa/.test(v) ? 'settings_input_antenna' : /Bluetooth/.test(v) ? 'bluetooth' : /Direct/.test(v) ? 'wifi_tethering' : /aguard/.test(v) ? 'schedule' : 'hub';
 const utf8Len = (s: string) => new TextEncoder().encode(s).length;
 
-/** Rota de uma mensagem: saltos, transporte por salto, etapa atual e metadados do envelope. */
+/** Validade do envelope na fila (messenger.ts, TTL_SEC). */
+const TTL_H = 72;
+
+/**
+ * Rota de uma mensagem: saltos, transporte por salto, etapa atual e metadados do envelope.
+ * Os nós intermediários não se identificam para quem envia (o envelope é selado): sem a rota
+ * gravada, mostra só as pontas, ligadas pelo meio por onde a conversa anda.
+ */
 export function buildRoute(chat: Chat, msg: Msg): RouteView {
-  const r = chat.route ?? { nodes: [{ n: 'Você', k: 'Este aparelho' }, { n: 'Galpão · OpenWrt', k: 'Home Node' }, { n: chat.name, k: 'Destino' }], vias: ['Bluetooth LE', 'Wi-Fi Mesh'] };
+  const dest = chat.kind === 'direct' ? chat.name : `${chat.name} · membros`;
+  const r = chat.route ?? { nodes: [{ n: 'Você', k: 'Este aparelho' }, { n: dest, k: 'Destino' }], vias: [chat.via ?? 'Por perto'] };
   let nodes = r.nodes, vias = r.vias;
   const mine = msg.from === 'me';
   if (!mine) {
@@ -32,7 +40,8 @@ export function buildRoute(chat: Chat, msg: Msg): RouteView {
   if (bad) reached = 1;
 
   const labels = ['Criada', 'Aguardando rota', 'Encaminhada', bad ? (st === 'expirada' ? 'Expirou' : 'Falhou') : 'Entregue'];
-  const ttl = bad ? '48 h esgotadas' : st === 'entregue' ? 'removida' : st === 'encaminhada' ? '36 h' : '47 h';
+  const left = msg.at ? Math.max(0, Math.ceil(TTL_H - (Date.now() - msg.at) / 3_600_000)) : TTL_H;
+  const ttl = bad ? (st === 'expirada' ? `${TTL_H} h esgotadas` : 'não saiu') : st === 'entregue' ? 'removida' : `${left} h`;
   return {
     text: msg.text,
     steps: labels.map((label, i) => ({ label, done: i <= si, current: i === si })),

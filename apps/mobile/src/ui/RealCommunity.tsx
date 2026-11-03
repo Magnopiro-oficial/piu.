@@ -39,7 +39,7 @@ export function RealCommunity({ chat }: { chat: Chat }) {
           <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={24} w={650} color={c.invink}>{initialsOf(g.name)}</T></View>
           <View style={{ gap: 6 }}>
             <T size={28} w={700} ls={-0.04} accessibilityRole="header">{g.name}</T>
-            <T size={14} color={c.ink2}>{`${g.members.length} membros · ${kids.length} grupos e canais`}</T>
+            <T size={14} color={c.ink2}>{`${g.members.length} ${g.members.length === 1 ? 'membro' : 'membros'} · ${kids.length} ${kids.length === 1 ? 'grupo ou canal' : 'grupos e canais'}`}</T>
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>

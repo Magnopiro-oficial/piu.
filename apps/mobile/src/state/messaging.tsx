@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Chat } from '../data/types';
+import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { persistNow, readPersisted } from '../lib/persist';
 import { initialsOf, nowHM } from '../lib/text';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
@@ -104,8 +105,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const { setProfile, setVerified, addChat: addChatRestore } = useStore();
   const importRestored = useRef((d: Record<string, unknown>) => {
     if (d.profile && typeof d.profile === 'object') setProfile(d.profile as never);
-    if (Array.isArray(d.chats)) for (const ch of d.chats as Chat[]) addChatRestore(ch);
-    if (d.verified && typeof d.verified === 'object') for (const [k, v] of Object.entries(d.verified as Record<string, boolean>)) setVerified(k, !!v);
+    // Backups antigos podem trazer as conversas de exemplo: só as reais entram.
+    for (const ch of cleanChats(d.chats)) addChatRestore(ch);
+    for (const k of Object.keys(cleanVerified(d.verified, cleanChats(d.chats)))) setVerified(k, true);
   });
 
   // Referências para os eventos do mensageiro (que vivem fora do React).
@@ -399,7 +401,6 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 /** Prefixo do link de convite de grupo, canal ou comunidade. */
 export const GROUP_LINK = 'piug:';
 export const chatIdForGroup = (gid: string) => 'g' + gid.slice(0, 20);
-const KIND_LABEL = { group: 'grupo', channel: 'canal', community: 'comunidade' } as const;
 function groupSub(g: GroupState) {
   const n = g.members.length;
   if (g.kind === 'channel') return `canal ${g.visibility === 'public' ? 'público' : g.visibility === 'secret' ? 'secreto' : 'privado'} · ${n} ${n === 1 ? 'inscrito' : 'inscritos'}`;
@@ -411,7 +412,7 @@ function chatForGroup(g: GroupState, myId: string): Chat {
     id: chatIdForGroup(g.id), group: g.id, ident: g.via, kind: g.kind === 'community' ? 'community' : g.kind, name: g.name, initials: initialsOf(g.name),
     time: nowHM(), unread: 0, owner: canPost(g, myId) || undefined,
     sub: groupSub(g), via: 'Por perto', viaIcon: 'hub',
-    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${KIND_LABEL[g.kind][0].toUpperCase() + KIND_LABEL[g.kind].slice(1)} cifrado de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
+    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${g.kind === 'community' ? 'Comunidade cifrada' : g.kind === 'channel' ? 'Canal cifrado' : 'Grupo cifrado'} de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
   };
 }
 
