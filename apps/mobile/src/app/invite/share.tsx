@@ -4,6 +4,7 @@ import type { ReactNode } from 'react';
 import { ScrollView, Share, View } from 'react-native';
 import { hasStoreLinks, inviteLink, inviteShareText } from '../../lib/inviteLink';
 import { APP_SCHEME, STORE_LINKS, useInviter } from '../../lib/inviter';
+import { useSendApp } from '../../lib/sendApp';
 import { useMyCard } from '../../state/messaging';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -32,6 +33,7 @@ export default function ShareInvite() {
     try { await Share.share({ message }); }
     catch { showToast({ icon: 'error', title: 'Não foi possível compartilhar', body: 'Copie o link e envie por onde preferir.' }); }
   };
+  const { canSend, sending, send: sendApp } = useSendApp();
   const copy = async () => {
     if (!link) return;
     await Clipboard.setStringAsync(link);
@@ -64,12 +66,23 @@ export default function ShareInvite() {
           </Step>
         </View>
 
+        {canSend && (
+          <View style={{ borderRadius: 22, backgroundColor: c.bg2, padding: 16, gap: 10 }}>
+            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+              <Icon name="bluetooth" size={20} />
+              <T size={14.5} w={600} style={{ flex: 1 }}>A pessoa ainda não tem o Piu?</T>
+            </View>
+            <T size={12.5} lh={1.45} color={c.ink2}>Envie o instalador do seu celular para o dela, sem internet: escolha Bluetooth ou Quick Share. No celular dela, abra o arquivo recebido e permita instalar. Depois, mande o convite acima.</T>
+            <Button label={sending ? 'Preparando…' : 'Enviar o Piu'} height={44} fontSize={14} disabled={sending} onPress={sendApp} left={<Icon name="upload" size={18} color={c.invink} />} />
+          </View>
+        )}
+
         <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, flexDirection: 'row', gap: 10 }}>
           <Icon name="install_mobile" size={17} />
           <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>
             {stores
               ? 'A mensagem também leva o link da loja, para quem ainda não tem o Piu instalar antes de abrir o convite.'
-              : 'Quem recebe precisa ter o Piu instalado para abrir o convite. Os links da App Store e do Google Play entram nesta mensagem quando o app for publicado nas lojas.'}
+              : `Quem recebe precisa ter o Piu instalado para abrir o convite. Como o app ainda não está nas lojas, ${canSend ? 'envie o instalador pelo botão acima' : 'envie também o instalador'}. Se o link não abrir no celular dela, a mensagem explica como colar o convite em Nova conversa.`}
           </T>
         </View>
 

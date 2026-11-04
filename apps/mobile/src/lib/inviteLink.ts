@@ -7,7 +7,7 @@
  * link direto na tela de aceitar. O cartão também é aceito colado em "Adicionar contato".
  *
  * Links das lojas: `expo.extra.storeLinks.ios` / `.android` em app.json. Vazios até o app ser
- * publicado: o texto de compartilhamento leva só o convite.
+ * publicado: o texto pede o instalador a quem convidou e explica como colar o convite se o link não abrir.
  */
 import { CARD_PREFIX } from '../messaging/card';
 import { utf8 } from '../protocol/bytes';
@@ -48,11 +48,17 @@ export const hasStoreLinks = (l: StoreLinks) => !!(l.ios || l.android);
 /** Texto para o Share do sistema: quem convida, o link e, se houver, onde baixar o app. */
 export function inviteShareText(o: { name: string; link: string; store: StoreLinks }): string {
   const who = o.name && o.name !== 'Você' ? `${o.name} convidou você para conversar no Piu.` : 'Você foi convidado para conversar no Piu.';
-  const lines = [who, '', `Com o Piu instalado, abra este convite (vale uma vez, por 24 h):`, o.link];
+  const lines = [who, '', `Com o Piu instalado, abra este convite (vale uma vez, por 24 h):`, o.link,
+    // Muitos apps não tornam `piu://` clicável e o navegador faz uma busca com ele.
+    '', 'Se o link não abrir, copie esta mensagem inteira, abra o Piu e cole em Nova conversa.'];
+  lines.push('', 'Ainda não tem o Piu?');
   if (hasStoreLinks(o.store)) {
-    lines.push('', 'Ainda não tem o Piu?');
     if (o.store.android) lines.push(`Android: ${o.store.android}`);
     if (o.store.ios) lines.push(`iPhone: ${o.store.ios}`);
+  } else {
+    // Antes das lojas, o instalador só vem de quem já tem o app.
+    const from = o.name && o.name !== 'Você' ? o.name : 'quem convidou';
+    lines.push(`O app ainda não está nas lojas: peça o instalador a ${from}.`);
   }
   return lines.join('\n');
 }

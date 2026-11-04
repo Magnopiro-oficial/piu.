@@ -60,7 +60,11 @@ test('links das lojas: vazios em app.json (sem ids inventados); só https entra 
   const link = 'piu://invite/accept?c=piu1%3Axyz';
   const plain = inviteShareText({ name: 'Cardeal', link, store });
   assert.ok(plain.includes(link));
-  assert.ok(!/loja|Android:|iPhone:|https?:/i.test(plain), 'sem link de loja enquanto não houver');
+  // piu:// não vira link clicável em muitos apps (cai numa busca): a mensagem diz o caminho de colar.
+  assert.match(plain, /não abrir.*copie.*Nova conversa/s);
+  assert.match(plain, /Ainda não tem o Piu\?.*peça o instalador a Cardeal/s, 'sem loja: o instalador vem de quem convidou');
+  assert.match(inviteShareText({ name: 'Você', link, store }), /peça o instalador a quem convidou/);
+  assert.ok(!/Android:|iPhone:|https?:/i.test(plain), 'sem link de loja enquanto não houver');
   assert.equal(hasStoreLinks(storeLinksFrom({ storeLinks: { ios: 'javascript:x', android: 'http://inseguro' } })), false);
   const withStores = inviteShareText({ name: 'Você', link, store: { ios: 'https://loja.example/ios', android: 'https://loja.example/android' } });
   assert.match(withStores, /Você foi convidado/);

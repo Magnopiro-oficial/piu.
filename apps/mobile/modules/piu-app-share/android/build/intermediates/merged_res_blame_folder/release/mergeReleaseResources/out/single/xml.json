@@ -1,0 +1,6 @@
+[
+    {
+        "merged": "expo.modules.piuappshare.piu-app-share-release-2:/xml/piu_share_paths.xml",
+        "source": "expo.modules.piuappshare.piu-app-share-main-3:/xml/piu_share_paths.xml"
+    }
+]

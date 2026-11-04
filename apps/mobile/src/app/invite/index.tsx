@@ -7,6 +7,7 @@ import { fingerprintOf, useKeys } from '../../state/keys';
 import { useMyCard } from '../../state/messaging';
 import { inviteLink } from '../../lib/inviteLink';
 import { APP_SCHEME } from '../../lib/inviter';
+import { useSendApp } from '../../lib/sendApp';
 import { QrCode } from '../../ui/QrCode';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
@@ -24,6 +25,7 @@ export default function Invite() {
   const me = useKeys().identities?.[identity];
   const fp = me ? fingerprintOf(me) : null;
   const inviter = identity === 'public' && profile.name.trim() ? profile.name.trim() : '';
+  const { canSend, sending, send } = useSendApp();
   return (
     <Screen>
       <BackHeader title="Convidar" />
@@ -48,6 +50,20 @@ export default function Invite() {
           <T size={13} lh={1.4} color={c.ink2} style={{ flex: 1 }}><T size={13} w={600}>+25 LUNES</T> para você quando a pessoa ficar ativa por 7 dias. Ela ganha 10 de boas-vindas.</T>
           <Icon name="chevron_right" size={20} color={c.ink2} />
         </Pressable>
+        {canSend && (
+          <>
+            <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 10, paddingHorizontal: 4 }}>ESTÁ PERTO E AINDA NÃO TEM O PIU?</T>
+            <Pressable onPress={() => void send()} disabled={sending} accessibilityRole="button" accessibilityLabel="Enviar o Piu por Bluetooth"
+              style={({ pressed }) => ({ flexDirection: 'row', gap: 14, alignItems: 'flex-start', padding: 16, borderRadius: 20, backgroundColor: c.ink, opacity: sending ? 0.6 : 1, transform: [{ scale: pressed ? 0.99 : 1 }] })}>
+              <Icon name="bluetooth" size={24} w={300} color={c.invink} />
+              <View style={{ flex: 1, gap: 3 }}>
+                <T size={15.5} w={600} color={c.invink}>{sending ? 'Preparando o instalador…' : 'Enviar o Piu por Bluetooth'}</T>
+                <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.8 }}>Sem internet: o app vai do seu celular para o dela por Bluetooth ou Quick Share. Ela abre o arquivo recebido, permite instalar e depois escaneia o código acima.</T>
+              </View>
+              <Icon name="chevron_right" size={20} color={c.invink} style={{ marginTop: 2 }} />
+            </Pressable>
+          </>
+        )}
         <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 10, paddingHorizontal: 4 }}>A PESSOA JÁ TEM O PIU?</T>
         <View style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', padding: 16, borderRadius: 20, backgroundColor: c.bg2 }}>
           <Icon name="qr_code_scanner" size={24} w={300} />
