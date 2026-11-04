@@ -18,26 +18,35 @@ npm run typecheck
 - `src/data/seed.ts` e `src/data/topology.ts`: dados de exemplo do protótipo (**ilustrativos**).
 
 ## O que vem do piu-node e o que ainda é simulado
-Servido pelo `piu-node` (com sessão), estes dados e ações são **reais**:
-- equipamentos: lista, pausar, revogar e **ativar pelo assistente** (`POST /api/devices`);
-- **limites globais e política de tráfego**: carregados e salvos no nó, por operador;
-- **acessos a este painel**: a lista real de sessões ("Chrome · Linux", "App Piu Provider · macOS") e **Encerrar outras sessões** (pede um código novo do equipamento se a última confirmação passou de 15 min);
-- carteira: saldo e **transferência para a carteira pessoal ou para um endereço `lunes:…` colado** (com step-up);
-- **aprovação no celular**: em Configurações → Parear celular, o app Piu lê o QR e devolve 6 dígitos. Depois disso, "Assinar no celular" mostra o QR do pedido e o código de conferência, e a transferência só sai com o código de aprovação que o celular mostra depois da biometria (ver `apps/piu-node/README.md`);
-- pacotes assinados do instalador.
+Servido pelo `piu-node` (com sessão), o painel **não usa dados de exemplo**: o que o nó mede aparece; o que depende de terceiros (validador, Mainnet, preço do LUNES) ou de hardware ainda não suportado aparece como indisponível, nunca como número inventado. As estatísticas são lidas a cada 10 s (`src/lib/live.ts`).
 
-Ainda **simulados** (dados de `src/data/`, também com o `piu-node`):
-- Visão geral, Malha e Ganhos (métricas, topologia, créditos e lotes), que ainda não leem `GET /api/relay`;
-- movimentações da carteira (só o saldo é real). Na demonstração, sem nó, a aprovação no celular continua simulada;
-- busca, pareamento e teste real no assistente (temporizadores);
-- atualizar e reiniciar equipamento, backup e rotação da chave de operador (só aviso).
+| Tela | De onde vem |
+|---|---|
+| Visão geral | recibos assinados no mês e por dia (`GET /api/relay/history`), recebidos/encaminhados/duplicatas de hoje, vizinhos por meio (`GET /api/relay`), recibos guardados para o validador (`GET /api/relay/receipts`), atividade real (vizinhos, recibos, transferências). Sem LUNES: o valor sai do validador |
+| Malha | este nó no centro e os vizinhos LNNP de verdade (meio, MTU, versão, se retransmite, desde quando); "sem vizinhos ainda" quando não há. Conexões recusadas por credencial revogada (`counters.revokedRefused`) e o que voltou do armazenamento local ao ligar (`store.restored`) |
+| Ganhos | recibos por dia e por semana, pagos = entradas reais da carteira; lotes só quando houver liquidação; rejeitados "—" (o validador ainda não respondeu). **Carteira do lote**: o nó assina a carteira LUNES desta semana ou da próxima (`POST /api/payout-claims`, com step-up; endereço SS58 conferido pelo nó), e os botões baixam as evidências (`EvidenceFile`) e a declaração (`ClaimFile`) para levar ao validador |
+| Carteira | saldo e movimentações registrados no nó (`GET /api/wallet`); operador novo começa com 0. Carteira de provider na Lunes Mainnet (`GET /api/wallet/lunes`): o operador configura o endereço Lunes (SS58, conferido no nó, com código novo do equipamento), e o painel mostra o endereço (copiar), o saldo on-chain lido pelo nó com bloco, endereço WebSocket que respondeu e horário (a cada 30 s ou no botão), e "Receber" com QR, copiar e link para o explorador. Sem rede, mostra a última leitura e o motivo. O pagamento dos lotes continua pendente da liquidação |
+| Equipamentos | o próprio nó (`self`) com estatísticas reais (encaminhados na última hora, recibos de hoje, vizinhos, memória usada, interfaces, recibos recentes); pausar ele pausa o motor. Os outros são registros do assistente: com identidade técnica e a chave de operador neles, mostram o **resumo assinado** que mandam pela malha (encaminhados e guardados desde que ligaram, vizinhos, pausado) e recebem a **pausa e as regras** daqui (assinadas pela chave de operador; "aplicado" quando o resumo confirma); sem isso, "sem dados neste nó". Ponto de Acesso mostra o nó pai. **Reiniciar** o próprio nó (dono, com código novo do equipamento). Identidade técnica e se está assinada pela chave de operador; **regras do equipamento** (banda, armazenamento, horário), que no próprio nó valem no motor; **revogar** um equipamento com identidade técnica põe a chave dele na lista de revogação do operador (os nós do operador recusam a conexão dele) |
+| Assistente | no passo "Conectar", o operador escolhe qual vizinho LNNP conectado é o equipamento novo (a identidade técnica dele é assinada pela chave de operador); no passo "Regras", banda, armazenamento e horário vão para o nó; num Ponto de Acesso, o nó pai escolhido vai junto (`parent`) |
+| Configurações | limites, políticas, sessões e celulares reais. **Chave de operador**: impressão digital real, backup cifrado com senha (`piu-operador.backup`), rotação e **restaurar backup** (arquivo + senha), os três com um código novo do equipamento. Quem não é o dono do nó vê os limites travados (o nó recusa). "Limitar remetentes desconhecidos" e "Só comunidades que sigo" aparecem desligadas: ainda sem efeito no motor |
 
-Sem `piu-node` (site, prévia), tudo funciona com os dados de exemplo.
+Também reais: pareamento, sessões, ajustes, transferência com aprovação no celular e pacotes assinados.
+
+Indisponível com o piu-node (dito na tela, sem simular sucesso): busca e pareamento automáticos e teste real no assistente (o equipamento entra "registrado"; o vínculo com a identidade técnica é a escolha de um vizinho conectado), atualizar equipamento, reiniciar outro equipamento que não o nó do painel, verificação/assinatura do nome público na malha, histórico por dia dos outros equipamentos (só o último resumo).
+
+Sem `piu-node` (site, prévia, selo "demonstração"), tudo funciona com os dados de exemplo de `src/data/`.
 
 ## Diferenças em relação ao protótipo
-- O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Largura mínima: 1180px.
+- O painel ocupa a janela inteira, em vez de um quadro fixo de 1280×820 com cantos arredondados. As “bolinhas” falsas da janela foram removidas; a faixa superior continua mostrando qual nó serve o painel e o estado “sem internet”. Abaixo de 1180 px o layout se adapta (ver "Responsivo").
 - O mapa da Malha fica centralizado no cartão em telas largas, e os nós de um equipamento revogado somem do mapa.
 - Controles com papéis acessíveis (`switch`, `radio`, `checkbox`, `aria-current`), foco visível, Esc fecha diálogos e o assistente.
+
+## Responsivo
+- **≥ 1180 px**: como o design (barra lateral completa).
+- **760–1179 px** (tablet, janela estreita do app desktop): barra lateral só com ícones (rótulo acessível e dica), cartões em 2 colunas, detalhe do equipamento abaixo da tabela, mapa da Malha acima da lista de vizinhos. O tema troca pelo botão da faixa superior.
+- **< 760 px** (celular no navegador da rede local): marca e operador na faixa superior, navegação embaixo, cartões em 1 coluna, tabelas viram lista (cada valor com o próprio rótulo), colunas secundárias escondidas, diálogos e assistente com 16 px de margem, alvos de toque ≥ 44 px.
+- As regras ficam no fim de `src/styles.css` (os componentes usam estilo inline; as classes trocam só o que muda por largura).
+- Conferência: `npm run build && npm run check:responsive` mede `scrollWidth <= clientWidth` em 360, 390, 768, 1024 e 1280 px, em todas as rotas, nos temas claro e escuro, no painel embutido (iframe) e no assistente, e tira capturas (`responsive-shots/`). Com piu-node: `node scripts/check-responsive.mjs --url https://localhost:8420 --code <código do console> --name <operador>`.
 
 ## Segurança
 - **CSP estrita** em `<meta>` no `index.html` (vale em qualquer servidor, inclusive o `piu-node`) e por header em `public/_headers` (Cloudflare Pages / Netlify): só recursos do próprio painel (`'self'`), sem scripts inline, sem `eval`, sem `data:` para fontes (`build.assetsInlineLimit: 0`). Estilos por atributo (`style=`) são liberados com `style-src-attr`.

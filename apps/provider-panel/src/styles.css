@@ -141,3 +141,78 @@ a:hover { opacity: .7; }
 [aria-checked='true'] .radio > span { opacity: 1; }
 
 .scroll-thin { scrollbar-width: thin; }
+
+/* ── responsivo ─────────────────────────────────────────
+   ≥ 1180 px: como o design. 760–1179: barra lateral só com ícones, cartões em 2 colunas.
+   < 760 (celular na rede local): navegação embaixo, 1 coluna, tabelas viram lista, toque ≥ 44 px.
+   Os componentes usam estilo inline; aqui o `!important` troca só o que muda por largura. */
+.only-phone, .only-compact { display: none !important; }
+
+@media (max-width: 1179px) {
+  .only-compact { display: inline-flex !important; }
+  .hide-tablet { display: none !important; }
+  .sidebar { width: 72px !important; padding: 18px 10px 16px !important; align-items: center; }
+  .side-hide, .nav-label, .nav-count { display: none !important; }
+  .side-brand { padding: 0 !important; }
+  .side-op { padding: 6px !important; background: transparent !important; }
+  .side-nav { width: 100%; }
+  .nav-btn { justify-content: center; padding: 0 !important; height: 44px !important; }
+  .page-head { padding: 24px 24px 0 !important; }
+  .page-body { padding: 20px 24px 32px !important; }
+  .span3 { grid-column: span 6; }
+  .span4, .span5, .span7, .span8 { grid-column: span 12; }
+  .devices-layout { flex-direction: column; align-items: stretch !important; }
+  .dev-detail { width: auto !important; }
+  .mesh-grid { grid-template-columns: minmax(0, 1fr) !important; }
+}
+
+@media (max-width: 759px) {
+  .only-phone { display: block !important; }
+  .hide-phone, .hide-sm, .col-sec { display: none !important; }
+  .topbar { height: 52px !important; gap: 10px !important; padding: 0 12px !important; }
+  .topbar-addr { display: none !important; }
+  .shell-body { flex-direction: column-reverse; }
+  /* Navegação inferior: seis ícones, cada um com rótulo acessível. */
+  .sidebar { width: 100% !important; height: 60px; flex: none; flex-direction: row !important; padding: 0 4px env(safe-area-inset-bottom) !important; border-right: none !important; border-top: 1px solid var(--line); gap: 0 !important; }
+  .side-brand, .side-op { display: none !important; }
+  .side-nav { flex-direction: row !important; justify-content: space-around; }
+  .nav-btn { flex: 1; height: 48px !important; min-width: 44px; border-radius: 12px !important; }
+  .page-head { padding: 18px 16px 0 !important; gap: 12px !important; }
+  .page-title { font-size: 28px !important; }
+  .page-actions { width: 100%; }
+  .page-actions > .btn { flex: 1; min-height: 44px; }
+  .page-body { padding: 16px 16px 28px !important; }
+  .grid12 { gap: 12px; }
+  .span3, .span4, .span5, .span6, .span7, .span8 { grid-column: span 12; }
+  .settings-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  .settings-wide { grid-column: auto !important; grid-template-columns: minmax(0, 1fr) !important; }
+  .lot-wallet { grid-template-columns: minmax(0, 1fr) !important; }
+  .dev-row { grid-template-columns: minmax(0, 1fr) auto auto !important; gap: 10px !important; padding: 12px 14px !important; }
+  .dev-table { grid-template-columns: minmax(0, 1fr) auto auto !important; gap: 10px !important; padding-left: 14px !important; padding-right: 14px !important; }
+  .dev-filters > button { min-height: 44px; }
+  .dev-filters > label { max-width: none !important; flex-basis: 100% !important; min-height: 44px; }
+  /* Tabelas viram lista: o cabeçalho some e cada célula mostra o próprio rótulo. */
+  .tbl-head { display: none !important; }
+  .tbl-row { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) !important; gap: 6px 12px !important; padding: 14px 16px !important; }
+  .tbl-row > :first-child { grid-column: 1 / -1; }
+  .tbl-row > [data-label] { text-align: left !important; }
+  .tbl-row > [data-label]::before { content: attr(data-label); display: block; font: 500 10.5px var(--mono); letter-spacing: .05em; color: var(--ink2); text-transform: uppercase; }
+  .tx-row { grid-template-columns: 36px minmax(0, 1fr) auto !important; gap: 10px !important; padding: 12px 14px !important; }
+  .tx-date, .tx-status { display: none !important; }
+  .mesh-map { height: 320px !important; }
+  .mesh-canvas { transform: scale(.58); transform-origin: 50% 0; }
+  .mesh-legend { left: 10px !important; right: 10px; bottom: 10px !important; gap: 8px 12px !important; padding: 8px 10px !important; font-size: 11px !important; }
+  .hero-num { font-size: 46px !important; }
+  /* Diálogos e assistente ocupam a largura, com 16 px de margem. */
+  .dlg { left: 16px !important; right: 16px; width: auto !important; margin-left: 0 !important; max-height: calc(100vh - 32px); overflow-y: auto; }
+  .wiz { width: calc(100vw - 32px) !important; height: calc(100vh - 32px) !important; }
+  .wiz-2col { grid-template-columns: minmax(0, 1fr) !important; }
+  .wiz-pad { padding-left: 16px !important; padding-right: 16px !important; }
+  .wiz-steps { padding: 12px 16px !important; gap: 6px !important; }
+  .wiz-steps > li > div:last-child { font-size: 11px !important; }
+  .wiz-foot > .btn { min-height: 44px; }
+  .toast { left: 16px !important; right: 16px !important; width: auto !important; bottom: 76px !important; }
+  .pair-form { padding: 24px 20px !important; }
+  .btn, .seg > button, .choice { min-height: 44px; }
+  .btn-round { min-width: 44px; }
+}

@@ -17,6 +17,7 @@ npm run dist:mac    # release/: .dmg e .zip — rodar num Mac
 - A janela abre `https://localhost:<porta>` e **pareia sozinha**: o processo principal faz o papel da tela do equipamento, gera o código e entra com o nome do usuário do sistema. Parear de novo com o mesmo nome volta à mesma conta.
 - **Nó → Mostrar código de pareamento** (Ctrl/⌘ K): para entrar por outro navegador da rede ou confirmar operações sensíveis (transferir LUNES, encerrar sessões). O código nunca vai para a rede.
 - **Nó → Permitir acesso pela rede local**: o nó passa a responder também em `piu-node.local`, `<computador>.local` e nos IPs da rede (reinicia o app). Desligado por padrão: só este computador acessa.
+- **Equipamentos → Reiniciar** (painel, com step-up): o app fecha o nó embutido limpo (mensagens guardadas e histórico gravados), sobe de novo no mesmo processo e recarrega a janela.
 - Fechar a janela no Linux deixa o nó ligado na **bandeja** (Abrir painel, Mostrar código, Sair). No macOS, como de costume, o app continua no Dock; "Abrir ao iniciar a sessão" fica no menu Nó.
 
 ## Segurança

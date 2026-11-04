@@ -42,7 +42,7 @@ function makeQuiz(phrase: string[]): [number, string[], string][] {
 export default function Backup() {
   const { c } = useTheme();
   const { showToast } = useStore();
-  const { setBackupDone } = useSettings();
+  const { setBackupDone, setBackupAt } = useSettings();
   const { phrase: words } = useKeys();
   const PHRASE = words ?? [];
   const [QUIZ] = useState(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')));
@@ -67,14 +67,15 @@ export default function Backup() {
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
   const [saveErr, setSaveErr] = useState<string | null>(null);
-  const done = (body: string) => {
+  const done = (how: 'phrase' | 'file', body: string) => {
     setBackupDone(true);
+    setBackupAt({ at: Date.now(), how });
     router.back();
     showToast({ icon: 'key', title: 'Backup concluído', body });
   };
   /** Passo 3: arquivo cifrado com senha, outro aparelho (pareamento) ou só a frase no papel. */
   const finish = async () => {
-    if (save === 'paper') { done('Guarde a frase longe do celular. Você pode refazer quando quiser.'); return; }
+    if (save === 'paper') { done('phrase', 'Guarde a frase longe do celular. Você pode refazer quando quiser.'); return; }
     if (save === 'device') { router.replace({ pathname: '/devices', params: { add: '1' } }); return; }
     if (!words) return;
     setBusy(true); setSaveErr(null); setProgress(0);
@@ -83,7 +84,7 @@ export default function Backup() {
       const r = await saveBackupFile(backupFileName(), text);
       if (r === 'cancelled') { setSaveErr('Nenhuma pasta escolhida. O arquivo não foi salvo.'); return; }
       setPw(''); setPw2('');
-      done('Arquivo cifrado salvo. Guarde a senha e a frase longe dele.');
+      done('file', 'Arquivo cifrado salvo. Guarde a senha e a frase longe dele.');
     } catch (e) {
       setSaveErr((e as Error).message || 'Não foi possível salvar o arquivo.');
     } finally { setBusy(false); }
@@ -101,7 +102,7 @@ export default function Backup() {
       <ScrollView contentContainerStyle={{ paddingTop: 20, paddingBottom: 32 }}>
         {step === 'phrase' && (
           <>
-            <StepHeader step="PASSO 1 DE 3" title="Sua frase de recuperação" sub="Estas 12 palavras recuperam suas identidades, contatos e carteira em outro aparelho. Quem tiver a frase tem tudo." />
+            <StepHeader step="PASSO 1 DE 3" title="Sua frase de recuperação" sub="Estas 12 palavras recuperam suas identidades e a carteira em outro aparelho. Contatos e conversas só vêm no arquivo de backup. Quem tiver a frase tem tudo." />
             <Pressable onPress={() => { if (!shown) void reveal(); }} accessibilityRole={shown ? undefined : 'button'}
               accessibilityLabel={shown ? 'Frase: ' + PHRASE.map((w, i) => `${i + 1} ${w}`).join(', ') : 'Frase oculta. Toque para mostrar'}
               style={{ marginTop: 4, marginHorizontal: 20, padding: 14, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>

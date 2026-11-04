@@ -1,7 +1,8 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
-import { fmtLunes, REQUESTS } from '../../data/wallet';
+import { fmtLunes } from '../../data/wallet';
+import { chatIdFor, useMessaging } from '../../state/messaging';
 import { initialsOf } from '../../lib/text';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -18,7 +19,9 @@ export default function Match() {
   const { c, reduceMotion } = useTheme();
   const { profile } = useStore();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const r = REQUESTS.find(x => x.id === id) ?? REQUESTS[0];
+  const { nearby } = useMessaging();
+  const req = nearby?.requests.find(x => x.id === id);
+  const r = { name: req?.name ?? 'Contato', initials: initialsOf(req?.name ?? ''), fee: req?.fee ?? 0, chat: req ? chatIdFor(req.from) : null };
   const t = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
     if (reduceMotion) return;
@@ -44,11 +47,11 @@ export default function Match() {
         <T size={15} lh={1.45} color={c.invink} align="center" style={{ opacity: 0.75 }}>{`Você e ${r.name} podem conversar agora, cifrado de ponta a ponta.`}</T>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 7, paddingHorizontal: 14, borderRadius: 99, borderWidth: 1, borderColor: 'rgba(127,127,127,0.45)' }}>
           <Icon name="toll" size={17} color={c.invink} />
-          <T size={13} w={600} mono color={c.invink}>+{fmtLunes(r.fee)} LUNES na sua carteira</T>
+          <T size={13} w={600} mono color={c.invink}>+{fmtLunes(r.fee)} LUNES a receber</T>
         </View>
       </View>
       <View style={{ paddingHorizontal: 20, paddingBottom: 20, gap: 10 }}>
-        <Button label="Enviar mensagem" variant="inverse" onPress={() => router.replace({ pathname: '/chat/[id]', params: { id: 'near-' + r.id } })} />
+        <Button label="Enviar mensagem" variant="inverse" disabled={!r.chat} onPress={() => r.chat && router.replace({ pathname: '/chat/[id]', params: { id: r.chat } })} />
         <Button label="Depois" variant="ghostInverse" onPress={() => router.back()} />
       </View>
     </Screen>

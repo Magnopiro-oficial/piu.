@@ -13,10 +13,11 @@
  *   um admin confirma cada pedido.
  */
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
-import type { GroupKey } from '../protocol/envelope';
+import { type GroupKey, Priority } from '../protocol/envelope';
 import type { IdentityKind, PublicIdentity } from '../protocol/keys';
 import { random } from '../protocol/suite';
 import { b64url, unb64url } from './card';
+import { cleanMentions } from './mentions';
 
 export type GroupKind = 'group' | 'channel' | 'community';
 export type ChannelVisibility = 'public' | 'private' | 'secret';
@@ -52,7 +53,21 @@ export interface GroupState {
   parent?: string;
   /** Convite atual do grupo (só os admins guardam o código). */
   invite?: { code: string; expiresAt: number; uses: number };
+  /**
+   * Total de membros quando `members` é só a parte visível (inscrito de canal privado ou secreto, que
+   * recebe só admins, moderadores e a si mesmo). Ausente: `members.length`.
+   */
+  count?: number;
+  /**
+   * Prioridade das publicações (canal de alerta, design: "Prioridade Alta"). Definida pelo admin na
+   * criação; ausente = Normal. Vai no cabeçalho de cada envelope do canal.
+   */
+  prio?: GroupPriority;
 }
+
+/** Opções de prioridade do design: Normal (padrão) e Alta. */
+export type GroupPriority = 'high';
+export const groupPriority = (g: Pick<GroupState, 'kind' | 'prio'>): Priority => (g.kind === 'channel' && g.prio === 'high' ? Priority.High : Priority.Normal);
 
 export const GROUP_INVITE_TTL_SEC = 7 * 24 * 3600;
 export const GROUP_INVITE_MAX_USES = 50;
@@ -70,13 +85,33 @@ export const canPost = (g: GroupState, id: string) =>
 export const groupKeyOf = (g: { id: string; keyV: number; key: string }): GroupKey =>
   ({ groupId: Uint8Array.from(g.id.match(/../g)!.map(x => parseInt(x, 16))), version: g.keyV, key: unb64url(g.key) });
 
-/** Forma enviada aos membros: sem o código de convite (só admins guardam), chaves públicas em base64url. */
-export function encodeState(g: GroupState, forAdmin: boolean): string {
-  const { invite, ...rest } = g;
+/**
+ * Canal privado ou secreto: "Entra só com convite. Inscritos não veem uns aos outros" (design, tipo
+ * de canal). O secreto é mais fechado que o privado, então vale o mesmo.
+ */
+export const hidesSubscribers = (g: Pick<GroupState, 'kind' | 'visibility'>) => g.kind === 'channel' && (g.visibility === 'private' || g.visibility === 'secret');
+
+/** Quantos membros (ou inscritos) o grupo tem, mesmo quando a lista recebida é só a parte visível. */
+export const memberCount = (g: Pick<GroupState, 'members' | 'count'>) => Math.max(g.count ?? 0, g.members.length);
+
+/**
+ * Forma serializada do estado, com as chaves públicas em base64url.
+ * - `store`: tudo, para guardar neste aparelho.
+ * - `admin`: para outro admin (lista completa e código de convite).
+ * - `member`: sem o código de convite (só admins guardam). Em canal privado ou secreto, o inscrito
+ *   `to` recebe só admins, moderadores e ele mesmo, mais o total (`count`): ids e chaves dos outros
+ *   inscritos não saem do aparelho do admin. A troca de chave continua igual: o estado novo vai, pela
+ *   sessão 1:1, a cada um que ficou, e quem recebe confere que veio de um admin que já conhece.
+ */
+export function encodeState(g: GroupState, view: 'store' | 'admin' | 'member', to?: string): string {
+  const { invite, count, ...rest } = g;
+  const reduced = view === 'member' && hidesSubscribers(g);
+  const members = reduced ? g.members.filter(m => m.role !== 'member' || m.id === to) : g.members;
   return JSON.stringify({
     ...rest,
-    ...(forAdmin && invite ? { invite } : {}),
-    members: g.members.map(m => ({ id: m.id, name: m.name, role: m.role, s: b64url(m.pub.signPk), a: b64url(m.pub.agreePk), b: b64url(m.pub.binding) })),
+    ...(view !== 'member' && invite ? { invite } : {}),
+    ...(reduced ? { count: memberCount(g) } : view === 'store' && count !== undefined ? { count } : {}),
+    members: members.map(m => ({ id: m.id, name: m.name, role: m.role, s: b64url(m.pub.signPk), a: b64url(m.pub.agreePk), b: b64url(m.pub.binding) })),
   });
 }
 
@@ -102,14 +137,23 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
       visibility: ['public', 'private', 'secret'].includes(j.visibility) ? j.visibility : undefined,
       children, parent: typeof j.parent === 'string' && /^[0-9a-f]{32}$/.test(j.parent) ? j.parent : undefined,
       invite: j.invite && typeof j.invite.code === 'string' ? { code: j.invite.code, expiresAt: Number(j.invite.expiresAt), uses: Number(j.invite.uses) || 0 } : undefined,
+      count: Number.isInteger(j.count) && j.count > members.length && j.count <= MAX_GROUP_MEMBERS ? j.count : undefined,
+      ...(j.kind === 'channel' && j.prio === 'high' ? { prio: 'high' as const } : {}),
     };
   } catch {
     return null;
   }
 }
 
-/** Conteúdo de uma mensagem de grupo (dentro do envelope de grupo). */
-export const encodeGroupText = (msgId: string, text: string) => utf8(JSON.stringify({ i: msgId, x: text }));
-export function decodeGroupText(b: Uint8Array): { i: string; x: string } | null {
-  try { const j = JSON.parse(fromUtf8(b)); return typeof j.i === 'string' && j.i.length <= 64 && typeof j.x === 'string' ? { i: j.i, x: j.x.slice(0, 4000) } : null; } catch { return null; }
+/** Conteúdo de uma mensagem de grupo (dentro do envelope de grupo). `m`: ids mencionados com `@Nome` (messaging/mentions.ts). */
+/** `l`: localização em texto curto ([lat, lon]), conferida por quem recebe. */
+export const encodeGroupText = (msgId: string, text: string, mentions?: string[], l?: [number, number]) =>
+  utf8(JSON.stringify({ i: msgId, x: text, ...(mentions?.length ? { m: mentions } : {}), ...(l ? { l } : {}) }));
+export function decodeGroupText(b: Uint8Array): { i: string; x: string; m?: string[]; l?: unknown } | null {
+  try {
+    const j = JSON.parse(fromUtf8(b));
+    if (typeof j.i !== 'string' || j.i.length > 64 || typeof j.x !== 'string') return null;
+    const m = cleanMentions(j.m);
+    return { i: j.i, x: j.x.slice(0, 4000), ...(m ? { m } : {}), ...(j.l !== undefined ? { l: j.l } : {}) };
+  } catch { return null; }
 }

@@ -18,6 +18,12 @@ declare class PiuTransportNativeModule extends NativeModule<PiuTransportEvents> 
    * segundo plano enquanto o Modo nó estiver ligado. iPhone: sem efeito.
    */
   setBackground?(on: boolean, title: string, text: string): Promise<void>;
+  /**
+   * "Procurar vizinhos" (NFR-004): intervalo entre varreduras, em segundos. Cada varredura dura poucos
+   * segundos; intervalos curtos (Rápida) varrem sem parar. Conexões abertas não são afetadas.
+   * Ausente em binários antigos.
+   */
+  setDiscoveryInterval?(seconds: number): void;
 }
 
 /**

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PiuNodeLinkModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.piunodelink.PiuNodeLinkModule"]
+  }
+}

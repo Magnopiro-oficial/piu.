@@ -234,8 +234,56 @@ export class Router {
     while (this.seen.size > this.limits.maxSeen) this.seen.delete(this.seen.keys().next().value!);
   }
 
+  /**
+   * Envelopes guardados, para salvar em disco (um nó que reinicia não perde o que guardava: o
+   * conteúdo continua cifrado de ponta a ponta, o nó só guarda os bytes). Leva também a quem cada
+   * um já foi e quantas cópias saíram, para o reinício não repetir envio nem recibo.
+   */
+  exportStored(): StoredEnvelope[] {
+    return [...this.store.values()].map(e => ({ bytes: e.bytes, from: e.from, own: e.own, storedAt: e.storedAt, dropAt: e.dropAt, sentTo: [...e.sentTo], copies: e.copies, releaseAt: e.releaseAt }));
+  }
+
+  /**
+   * Restaura envelopes salvos com `exportStored`. Cada um é conferido de novo como se tivesse
+   * acabado de chegar: cabeçalho válido, tamanho, TTL (vencido é descartado), retenção, espaço e
+   * quantidade (`maxBytes`, `maxCount`). O id passa a contar como visto (deduplicação).
+   * Devolve quantos voltaram.
+   */
+  importStored(list: StoredEnvelope[], now: number): number {
+    let n = 0;
+    // Do mais importante ao menos: se o limite diminuiu, o que fica de fora é o que valeria menos.
+    const parsed: { s: StoredEnvelope; h: Header; id: string }[] = [];
+    for (const s of list) {
+      if (!(s.bytes instanceof Uint8Array) || s.bytes.length > this.limits.maxEnvelopeBytes) continue;
+      let h: Header;
+      try { h = parseHeader(s.bytes); } catch { continue; }
+      if (h.expiresAt <= now || h.expiresAt > now + MAX_TTL_SEC + CLOCK_SKEW_SEC) continue;
+      parsed.push({ s, h, id: envelopeId(s.bytes) });
+    }
+    parsed.sort((a, b) => Number(b.s.own) - Number(a.s.own) || b.h.priority - a.h.priority || a.h.expiresAt - b.h.expiresAt);
+    for (const { s, h, id } of parsed) {
+      if (this.store.has(id)) continue;
+      const own = !!s.own;
+      const dropAt = own ? h.expiresAt : Math.min(h.expiresAt, s.dropAt, s.storedAt + this.limits.maxRetentionSec);
+      if (dropAt <= now) continue;
+      if (this.keep(id, s.bytes, h, own ? null : s.from, own, s.storedAt) !== 'stored') continue;
+      const e = this.store.get(id)!;
+      e.dropAt = dropAt;
+      e.sentTo = new Set(s.sentTo);
+      e.copies = Math.max(0, Math.min(s.copies, this.limits.maxCopies));
+      e.releaseAt = s.releaseAt;
+      if (!this.seen.has(id)) this.seen.set(id, h.expiresAt);
+      n++;
+    }
+    while (this.seen.size > this.limits.maxSeen) this.seen.delete(this.seen.keys().next().value!);
+    return n;
+  }
+
   stats() { return { stored: this.store.size, bytes: this.bytesUsed, seen: this.seen.size, nodePk: toHex(this.o.node.pk).slice(0, 8) }; }
 }
+
+/** Envelope guardado, na forma em que sai de `exportStored` (para salvar em disco e restaurar). */
+export interface StoredEnvelope { bytes: Uint8Array; from: string | null; own: boolean; storedAt: number; dropAt: number; sentTo: string[]; copies: number; releaseAt: number }
 
 /** Atraso uniforme de 0 a `maxSec` segundos, com aleatoriedade criptográfica. */
 export function randomDelaySec(maxSec = 30): number {

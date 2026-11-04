@@ -35,7 +35,7 @@ O `SERVICE_ID = 'net.piu.lnnp.v1'` (`src/transport/types.ts`) identifica o **LNN
 - Ela assina o handshake e os recibos de retransmissão (`receipts.ts`).
 - **Id do vizinho**: os 16 primeiros caracteres hex da chave pública (para logs, estatísticas e o roteador).
 - **Etiqueta** (descoberta): `SHA-256("piu/lnnp/v1/tag" ‖ chave)[0..8]`.
-- Revogação (INF-012): um nó PODE recusar chaves revogadas ou aceitar só uma lista de permitidos (seção 6); a distribuição autenticada dessas listas fica para a especificação de atualização.
+- Revogação (INF-012): um nó PODE recusar chaves revogadas ou aceitar só uma lista de permitidos. A revogação feita pelo operador dos equipamentos e a distribuição dela entre os nós do mesmo operador estão na seção 8.1. A revogação pela Lunes (chave de release, nós de toda a rede) continua para a especificação de atualização.
 
 ## 3. Descoberta (adapter LAN)
 
@@ -196,6 +196,69 @@ contador u32 · XChaCha20-Poly1305(chave do sentido, nonce = prefixo (20) ‖ co
 | `0x30` | `CAPS_UPDATE` | capacidades (TLV) atualizadas, por exemplo quando o horário do operador liga ou desliga a retransmissão; exige o recurso 4 |
 | `0x7e` | `CLOSE` | vazio ou código u8 |
 | `0x7f` | `ERROR` | igual ao da seção 10 |
+| `0x40` | `OPERATOR_CERT` | certificado do nó assinado pelo operador (seção 8.1) |
+| `0x41` | `REVOCATION_LIST` | lista de revogação assinada pelo operador (seção 8.1) |
+| `0x42` | `DEVICE_POLICY` | pausa e regras de um equipamento, assinadas pelo operador (seção 8.2) |
+| `0x43` | `DEVICE_REPORT` | resumo das estatísticas de um nó, assinado por ele (seção 8.2) |
+
+### 8.1 Extensão de operador: certificado, rotação e revogação
+
+O operador dos equipamentos (quem instala e paga a infraestrutura) tem uma **chave de operador** Ed25519 própria, separada da identidade de conversa, da carteira e da chave técnica de cada nó. Ela assina a identidade técnica de cada equipamento e a lista de revogação. Implementação de referência: `apps/piu-node/src/relay/operator-frames.ts` (quadros) e `apps/piu-node/src/operator.ts` (chave, backup e rotação).
+
+Os dois tipos são uma **extensão compatível** da v1: não mudam o handshake, não ganham bit em `FEATURES` e um nó que não os conhece os ignora (regra do tipo desconhecido, acima). Eles só circulam depois do handshake, cifrados como qualquer registro.
+
+Mensagens assinadas (`H` = SHA-256, inteiros big-endian):
+
+```
+certificado = H("piu/lnnp/v1/operator-cert"     ‖ chave do operador (32) ‖ chave do nó (32) ‖ emitido u32)
+rotação     = H("piu/lnnp/v1/operator-rotation" ‖ chave antiga (32) ‖ chave nova (32) ‖ horário u32)   assinada pela antiga
+revogação   = H("piu/lnnp/v1/revocation"        ‖ chave do operador (32) ‖ número u32 ‖ emitida u32 ‖ quantidade u16 ‖ chaves de nó (32 cada))
+```
+
+Corpos:
+
+| Tipo | Corpo |
+|---|---|
+| `0x40` `OPERATOR_CERT` | `chave do operador (32) · chave do nó (32) · emitido u32 · assinatura (64) · passos u8 · passo*`, com `passo = chave antiga (32) · chave nova (32) · horário u32 · assinatura da antiga (64)`; no máximo 16 passos |
+| `0x41` `REVOCATION_LIST` | `chave do operador (32) · número u32 · emitida u32 · quantidade u16 · chave de nó (32)* · assinatura (64)`; no máximo 1024 chaves, em ordem crescente e sem repetição |
+
+Bytes depois do fim do corpo são reservados e DEVEM ser ignorados. Corpo truncado ou acima dos limites é descartado (conta como recusado), sem fechar o enlace.
+
+Regras:
+
+- **Linhagem**: cada nó conhece as chaves do seu operador, da primeira à atual. Um certificado é **do mesmo operador** se a chave dele está na linhagem, ou se os passos de rotação que ele traz a estendem **a partir da chave atual** (cada passo assinado pela chave anterior). Assim a linhagem cresce. Um ramo que parte de uma chave antiga NÃO DEVE ser aceito, porque essa chave pode ter vazado.
+- **Depois do handshake**, o nó que tem certificado DEVE mandar `OPERATOR_CERT` com o seu. Se o vizinho é um equipamento que ele certificou, PODE mandar também o certificado do vizinho (assinado pela chave atual). É assim que os equipamentos **recebem a nova chave na próxima sincronização**. Quem recebe o próprio certificado, ligado à linhagem e assinado pela chave atual, passa a anunciá-lo.
+- O certificado só vale se `chave do nó` for a chave do vizinho autenticada no handshake (ou a do próprio nó que recebe). Assinatura que não confere é descartada.
+- Ao reconhecer um vizinho do mesmo operador pela primeira vez no enlace, o nó DEVE devolver o seu certificado (o vizinho pode ter acabado de receber a chave) e mandar a lista de revogação em vigor.
+- **Lista de revogação**: completa (não incremental), numerada. Só é aceita de um vizinho do mesmo operador, assinada pela **chave atual** da linhagem e com número **maior** que o da lista em vigor. Aceita, ela substitui a anterior e DEVE ser repassada aos outros vizinhos do mesmo operador (o número maior evita laço). Ao rotacionar a chave, o operador emite de novo a lista com a chave nova e número maior.
+- **Efeito**: o nó DEVE recusar o handshake de uma chave revogada com `UNAUTHORIZED` (seção 10) e fechar o enlace que já existia com ela.
+- O nó guarda o que aprendeu (passos de rotação, o próprio certificado, a lista) para valer depois de reiniciar.
+
+Limites desta extensão: ela só alcança os nós do **mesmo operador** que estão conectados (direta ou indiretamente, por nós do mesmo operador). Um nó de outro operador continua aceitando a chave revogada, e um equipamento revogado que tinha uma cópia da chave de operador continua podendo assinar: nesse caso o operador DEVE rotacionar a chave. Revogar na rede inteira depende de uma autoridade comum (a Lunes) e fica para a especificação de atualização.
+
+### 8.2 Ajustes e resumo dos equipamentos do operador
+
+Também extensão compatível (sem bit em `FEATURES`; quem não conhece ignora), só entre vizinhos que se reconheceram como do **mesmo operador** (seção 8.1). Implementação de referência: `apps/piu-node/src/relay/operator-frames.ts` e `engine.ts`.
+
+Mensagens assinadas:
+
+```
+ajustes = H("piu/lnnp/v1/device-policy" ‖ corpo sem a assinatura)   assinada pela chave de operador
+resumo  = H("piu/lnnp/v1/device-report" ‖ corpo sem a assinatura)   assinada pela chave do nó que resume
+```
+
+| Tipo | Corpo |
+|---|---|
+| `0x42` `DEVICE_POLICY` | `chave do operador (32) · chave do nó (32) · número u32 · emitido u32 · sinais u8 · banda u8 · armazenamento u8 · horário u8 · assinatura (64)`; sinais: bit 0 = pausado, bit 1 = tem regras. Com regras: banda 5, 20 ou 50 (Mbps), armazenamento 1, 4 ou 8 (GB), horário 0 = sempre, 1 = 22h–7h, 2 = 8h–18h; outro valor é malformado. Sem regras, os três bytes vão em zero |
+| `0x43` `DEVICE_REPORT` | `chave do nó (32) · horário u32 · sequência u32 · ligado desde u32 · encaminhados u32 · guardados u32 · recibos u32 · vizinhos u16 · sinais u8 · ajuste em vigor u32 · assinatura (64)`; sinais: bit 0 = pausado, bit 1 = retransmitindo. Contadores desde que o nó ligou, saturados em 2^32−1 |
+
+Regras:
+
+- **Ajustes**: um por equipamento (chave do nó), numerados por quem emite; o de número maior substitui o anterior. Só é aceito de um vizinho do mesmo operador, assinado pela **chave atual** da linhagem, com número **maior** que o conhecido para aquele equipamento (anti-replay) e `emitido` não mais que a tolerância do relógio (5 min) no futuro. Aceito, é guardado (para valer depois de reiniciar), repassado aos outros vizinhos do mesmo operador e, se a chave do nó é a do próprio nó, aplicado: pausado não guarda nem repassa terceiros; as regras valem junto com os limites locais (fica o mais restrito; todos os horários ao mesmo tempo). Depois de reconhecer um vizinho do mesmo operador, o nó DEVE mandar os ajustes que conhece. Um nó guarda no máximo 256.
+- **Resumo**: cada nó manda o seu periodicamente (a referência usa 30 s) e quando a pausa muda, só a vizinhos do mesmo operador. Só é aceito se a chave que assina é a do vizinho autenticado no handshake ou a de um equipamento que o nó certificou, se `(horário, sequência)` é maior que o do último resumo daquela chave (a sequência recomeça quando o nó liga; o horário não volta) e se o horário não está mais que 5 min no futuro. Pode ser repassado aos outros vizinhos do mesmo operador. Não leva conteúdo, destino, ids de envelope nem chave secreta.
+- O número do ajuste em vigor no resumo permite ao operador ver que o equipamento aplicou o que foi emitido.
+
+Limites: alcança só equipamentos ligados (direta ou indiretamente) a nós do mesmo operador; um equipamento desligado recebe os ajustes quando voltar. O resumo é o último estado, não um histórico.
 
 ## 9. Encaminhamento, deduplicação e recibos
 
@@ -247,7 +310,7 @@ Antes do handshake terminar, o erro vai **em claro**: `0x7f · código u8 · tam
 
 1. **A chave do nó vai em claro no HELLO**: um observador passivo na mesma rede liga anúncios e handshakes ao mesmo nó. Num Home Node isto é aceitável (ele é infraestrutura fixa); no celular, o índice de `deriveNodeKey` DEVERIA girar (por exemplo, por dia). Um handshake no estilo Noise XX, que esconde as identidades, é candidato para a v2.
 2. **O anúncio UDP não é autenticado**: serve só para achar o endereço. Um atacante pode gastar conexões (há limite de handshakes simultâneos), mas não consegue se passar por outro nó.
-3. **Listas de revogação**: o nó aceita uma lista de permitidos local; a distribuição autenticada de revogações (INF-012) ainda não foi especificada.
+3. **Listas de revogação**: a do operador, entre os nós do mesmo operador, está na seção 8.1. A distribuição autenticada para a rede inteira (INF-012) ainda não foi especificada.
 4. **Recibos não provam a transmissão física** (como diz a seção 11 do documento): precisam ser combinados com auditoria por amostragem.
 5. **Registros com contador estritamente crescente** pressupõem um meio ordenado. No TCP isso é dado; no adapter serial, a confirmação para e espera por vizinho mantém a ordem, e lacunas são aceitas. Para meios sem ordem nenhuma, a v2 deve definir uma janela de anti-replay.
 6. **O adapter serial não é autenticado antes do handshake**: um ERRO "sem sessão" forjado no rádio derruba um enlace, que é refeito no anúncio seguinte. Quem consegue transmitir na faixa também consegue simplesmente interferir no canal.
@@ -259,3 +322,5 @@ Antes do handshake terminar, o erro vai **em claro**: `0x7f · código u8 · tam
 |---|---|
 | 1 | Primeira versão: HELLO/AUTH simétricos, capacidades TLV, registros XChaCha20-Poly1305, `ENVELOPE`, `FRAGMENT`, `RELAY_RECEIPT`, `PING`/`PONG`, `CAPS_UPDATE`, `CLOSE`, `ERROR`; descoberta LAN por UDP |
 | 1 (adapter) | Adapter serial (LoRa e USB): KISS, pacote com endereço curto e confirmação, handshake em sequência (seção 3.1). Não muda o protocolo LNNP. |
+| 1 (extensão de operador) | `OPERATOR_CERT` (`0x40`) e `REVOCATION_LIST` (`0x41`): certificado do nó, rotação e revogação pelo operador (seção 8.1). Compatível: quem não conhece ignora. |
+| 1 (ajustes e resumo) | `DEVICE_POLICY` (`0x42`) e `DEVICE_REPORT` (`0x43`): pausa e regras de cada equipamento assinadas pelo operador e resumo assinado de cada nó, entre nós do mesmo operador (seção 8.2). Compatível: quem não conhece ignora. |

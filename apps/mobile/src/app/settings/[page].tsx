@@ -1,9 +1,14 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
-import { STORAGE_USE } from '../../data/settings';
+import { Animated, Easing, Platform, Pressable, ScrollView, View } from 'react-native';
+import { customLabel, DAY_LETTER, DAY_MIN, DAY_NAME, hm, HOURS_STEP, type HoursWindow, NIGHT_WINDOW } from '../../messaging/hours';
 import { confirmDevice } from '../../lib/deviceAuth';
+import { fmtBytes } from '../../lib/networkCore';
+import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
+import { previewBytes } from '../../lib/storageCore';
+import { useStats } from '../../state/messaging';
 import { useResetApp } from '../../state/reset';
+import { useBattery } from '../../lib/battery';
 import { useNetwork } from '../../state/network';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
@@ -32,14 +37,21 @@ export default function SettingsPage() {
   );
 }
 
+/** O que "Quem pode me encontrar" controla de fato (identidade pública; não há busca por nome). */
+const FIND_DESC: Record<'all' | 'contacts' | 'none', string> = {
+  all: 'Identidade pública · aparece em Por perto quando visível e recebe pedidos de quem tem seu código',
+  contacts: 'Identidade pública · fora de Por perto · pedidos só de quem tem seu código',
+  none: 'Identidade pública · fora de Por perto · pedidos pelo seu código são descartados',
+};
+
 function Privacy() {
   const { priv, setPriv } = useSettings();
-  const { showToast } = useStore();
+  const { showToast, blocked } = useStore();
   const t = (k: 'read' | 'typing' | 'delay' | 'pad' | 'noRoutes' | 'lock') => () => setPriv({ [k]: !priv[k] });
   return (
     <>
       <SetGroup title="VISIBILIDADE">
-        <SegRow name="Quem pode me encontrar" desc="Pela identidade pública" value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
+        <SegRow name="Quem pode me encontrar" desc={FIND_DESC[priv.find]} value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
         <SegRow name="Por perto começa" value={priv.near} onChange={near => setPriv({ near })} options={[['off', 'Invisível'], ['1h', 'Visível por 1 h']]} />
       </SetGroup>
       <SetGroup title="CONVERSAS">
@@ -61,7 +73,7 @@ function Privacy() {
             if (r === 'ok') setPriv({ lock: !priv.lock });
             else if (r === 'unavailable') showToast({ icon: 'lock', title: 'Sem bloqueio no aparelho', body: 'Ative a biometria ou um PIN/senha nos ajustes do aparelho para usar esta opção.' });
           }} />
-        <ActionRow name="Contatos bloqueados" value="2" onPress={() => showToast({ icon: 'block', title: '2 contatos bloqueados', body: 'Eles não conseguem iniciar conversa nem ver seu status.' })} />
+        <ActionRow name="Contatos bloqueados" value={blocked.length ? String(blocked.length) : 'Nenhum'} onPress={() => router.push('/blocked')} />
       </SetGroup>
       <FootNote icon="info">Relays nunca veem conteúdo. Estas opções reduzem o que dá para inferir pelo tráfego, sem prometer anonimato absoluto.</FootNote>
     </>
@@ -70,36 +82,45 @@ function Privacy() {
 
 function Storage() {
   const { c, reduceMotion } = useTheme();
-  const { sto, setSto, mediaCleared, clearMedia } = useSettings();
+  const { sto, setSto } = useSettings();
   const { storage, setStorage } = useNetwork();
-  const { showToast } = useStore();
+  const { showToast, chats, purgeMediaPreviews } = useStore();
   const reset = useResetApp();
   const [del, setDel] = useState(false);
-  const use = STORAGE_USE.map(([l, mb, v, op]) => (l === 'Mídia' && mediaCleared ? [l, 0, '0 MB', op] as const : [l, mb, v, op] as const));
-  const total = use.reduce((a, [, mb]) => a + mb, 0);
+  const st = useStats(10_000);
+  // Tamanhos que o mensageiro informa (terceiros e recibos ficam dentro do estado dele).
+  const thirdPartyBytes = st?.metrics.thirdPartyBytes ?? 0;
+  const creditsBytes = st ? JSON.stringify(st.credits.list).length + JSON.stringify(st.credits.lots).length : 0;
+  const [use, refresh] = useStorageUsage({ thirdPartyBytes, creditsBytes });
+  // Cache de mídia: arquivos recebidos na memória + prévias de fotos embutidas nas conversas.
+  const [, setCleared] = useState(0);
+  const cache = receivedCacheBytes() + previewBytes(chats);
+  const parts = (use?.parts ?? []).filter(([l, n]) => n > 0 || l !== 'Ajustes e registros');
+  const total = use?.total ?? 0;
+  const OP = [1, 0.55, 0.3, 0.15, 0.08];
   const grow = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => { if (!reduceMotion) Animated.timing(grow, { toValue: 1, duration: 700, easing: Easing.bezier(0.2, 0.9, 0.3, 1), useNativeDriver: false }).start(); }, [reduceMotion, grow]);
 
   return (
     <>
-      <View style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
+      <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 6, flexWrap: 'wrap' }}>
-          <T size={32} w={650} ls={-0.04}>{mediaCleared ? '0,9 GB' : '1,2 GB'}</T>
+          <T size={32} w={650} ls={-0.04}>{use ? fmtBytes(total) : '…'}</T>
           <T size={13.5} color={c.ink2}>neste aparelho · cifrados</T>
         </View>
-        <Animated.View accessibilityLabel="Uso por tipo" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }}>
-          {use.filter(([, mb]) => mb > 0).map(([l, mb, , op]) => <View key={l} style={{ flex: mb, backgroundColor: c.ink, opacity: op }} />)}
+        <Animated.View accessibilityLabel="Uso por tipo" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: total ? 'transparent' : c.bg3, width: grow.interpolate({ inputRange: [0, 1], outputRange: ['0%', '100%'] }) }}>
+          {parts.map(([l, n], i) => (n > 0 ? <View key={l} style={{ flex: n, backgroundColor: c.ink, opacity: OP[i] }} /> : null))}
         </Animated.View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 }}>
-          {use.map(([l, , v, op]) => (
+          {parts.map(([l, n], i) => (
             <View key={l} style={{ width: '50%', flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingRight: 10 }}>
-              <View style={{ width: 8, height: 8, marginTop: 4, borderRadius: 2, backgroundColor: c.ink, opacity: op }} />
+              <View style={{ width: 8, height: 8, marginTop: 4, borderRadius: 2, backgroundColor: c.ink, opacity: OP[i] }} />
               <T size={12.5} lh={1.3} color={c.ink2} style={{ flex: 1 }}>{l}</T>
-              <T size={12.5} w={600}>{v}</T>
+              <T size={12.5} w={600}>{fmtBytes(n)}</T>
             </View>
           ))}
         </View>
-        <T size={11} mono color={c.ink2}>{`${total.toLocaleString('pt-BR')} MB no total`}</T>
+        <T size={11} mono color={c.ink2}>medido agora · tamanho cifrado no disco</T>
       </View>
       <SetGroup title="MÍDIA">
         <SegRow name="Baixar mídia automaticamente" value={sto.auto} onChange={auto => setSto({ auto })} options={[['wifi', 'Wi-Fi e cabo'], ['always', 'Sempre'], ['never', 'Nunca']]} />
@@ -111,8 +132,15 @@ function Storage() {
       </SetGroup>
       <SetGroup title="LIMPEZA">
         <LockedRow name="Armazenamento cifrado" desc="Sempre ativo · chave protegida pelo aparelho" />
-        <ActionRow name="Limpar cache de mídia" value={mediaCleared ? '0 MB' : '310 MB'} onPress={() => {
-          if (!mediaCleared) { clearMedia(); showToast({ icon: 'cleaning_services', title: 'Cache limpo', body: '310 MB liberados. Conversas continuam intactas.' }); }
+        {/* Arquivos recebidos (memória) e prévias embutidas nas conversas (disco): o balão passa a dizer que a mídia foi apagada. */}
+        <ActionRow name="Limpar cache de mídia" value={fmtBytes(cache)} onPress={() => {
+          const freed = clearReceivedCache() + purgeMediaPreviews();
+          setCleared(n => n + 1);
+          // Mede de novo depois que as conversas forem regravadas (persist.ts grava em ~250 ms).
+          setTimeout(refresh, 700);
+          showToast(freed
+            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. As mensagens continuam nas conversas.` }
+            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Nenhuma foto ou arquivo recebido guardado neste aparelho.' });
         }} />
         <ActionRow name="Apagar dados locais" strong onPress={() => setDel(true)} />
       </SetGroup>
@@ -130,16 +158,17 @@ function Battery() {
   const { c } = useTheme();
   const { bat, setBat } = useSettings();
   const { battery, setBattery, chargingOnly, setChargingOnly } = useNetwork();
-  // Estimativa local do gasto como nó (% da bateria por dia), como no protótipo.
-  const est = ((bat.bg ? 2.2 : 0.6) + { eco: 0.4, normal: 1.1, fast: 2.6 }[bat.disc] + (chargingOnly ? -1 : 0) + bat.traffic / 500).toFixed(1).replace('.', ',');
+  // Bateria real do aparelho. O gasto como nó não é medido: o sistema não separa esse consumo.
+  const { level, charging } = useBattery();
+  const pct = level < 0 ? null : Math.round(level * 100);
   const DISC = { eco: 'Bluetooth a cada 60 s', normal: 'Bluetooth a cada 20 s', fast: 'Bluetooth a cada 5 s' };
   return (
     <>
       <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
         <Icon name="battery_charging_80" size={34} w={300} color={c.invink} />
         <View style={{ flex: 1, gap: 2 }}>
-          <T size={26} w={650} ls={-0.03} color={c.invink}>{`~${est}%`}</T>
-          <T size={12.5} color={c.invink} style={{ opacity: 0.75 }}>da bateria por dia como nó · estimativa local</T>
+          <T size={26} w={650} ls={-0.03} color={c.invink}>{pct == null ? '—' : `${pct}%`}</T>
+          <T size={12.5} lh={1.35} color={c.invink} style={{ opacity: 0.75 }}>{`${pct == null ? 'Bateria sem leitura neste aparelho' : charging ? 'Bateria agora · carregando' : 'Bateria agora'}. O gasto como nó não é medido: o sistema não separa esse consumo.`}</T>
         </View>
       </View>
       <SetGroup title="RETRANSMISSÃO">
@@ -148,7 +177,10 @@ function Battery() {
         <ToggleRow name="Só quando estiver carregando" on={chargingOnly} onChange={() => setChargingOnly(!chargingOnly)} />
       </SetGroup>
       <SetGroup title="HORÁRIO E TRÁFEGO">
-        <SegRow name="Horário" value={bat.hours} onChange={hours => setBat({ hours })} options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', 'Personalizado']]} />
+        <SegRow name="Horário" desc={bat.hours === 'custom' ? 'Retransmite e guarda mensagens de terceiros só dentro da faixa (hora deste aparelho).' : undefined} value={bat.hours}
+          onChange={hours => setBat(hours === 'custom' ? { hours, custom: bat.custom ?? NIGHT_WINDOW } : { hours })}
+          options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', customLabel(bat.custom)]]} />
+        {bat.hours === 'custom' && bat.custom && <CustomHours w={bat.custom} onChange={custom => setBat({ hours: 'custom', custom })} />}
         <SegRow name="Tráfego de terceiros por dia" value={String(bat.traffic)} onChange={v => setBat({ traffic: Number(v) as 50 | 200 | 500 })} options={[['50', '50 MB'], ['200', '200 MB'], ['500', '500 MB']]} />
         <SegRow name="Banda máxima para a rede" value={bat.bw} onChange={bw => setBat({ bw })} options={[['1', '1 Mbps'], ['5', '5 Mbps'], ['max', 'Sem limite']]} />
       </SetGroup>
@@ -157,5 +189,61 @@ function Battery() {
       </SetGroup>
       <FootNote icon="smartphone">Android e iPhone limitam o que roda em segundo plano. O Piu nunca promete retransmissão 24 h pelo celular.</FootNote>
     </>
+  );
+}
+
+/**
+ * Faixa do horário "Personalizado": início e fim de 30 em 30 min (pode atravessar a meia-noite) e,
+ * se quiser, os dias da semana em que a faixa começa. Início e fim nunca ficam iguais (faixa vazia).
+ */
+function CustomHours({ w, onChange }: { w: HoursWindow; onChange: (w: HoursWindow) => void }) {
+  const { c } = useTheme();
+  const step = (min: number, dir: 1 | -1, other: number) => {
+    let next = (min + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    if (next === other) next = (next + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    return next;
+  };
+  const days = w.days ?? [0, 1, 2, 3, 4, 5, 6];
+  const toggleDay = (d: number) => {
+    const next = days.includes(d) ? days.filter(x => x !== d) : [...days, d];
+    if (!next.length) return; // ao menos um dia
+    onChange({ start: w.start, end: w.end, ...(next.length < 7 ? { days: [...next].sort((a, b) => a - b) } : {}) });
+  };
+  return (
+    <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 12 }}>
+      <TimeStepper label="Início" value={w.start} set={dir => onChange({ ...w, start: step(w.start, dir, w.end) })} />
+      <TimeStepper label="Fim" value={w.end} set={dir => onChange({ ...w, end: step(w.end, dir, w.start) })} />
+      <View style={{ gap: 8 }}>
+        <T size={12.5} lh={1.4} color={c.ink2}>{w.start > w.end ? 'Atravessa a meia-noite: a madrugada conta para o dia em que a faixa começou. Dias da semana (opcional):' : 'Dias da semana (opcional):'}</T>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {DAY_LETTER.map((l, d) => {
+            const on = days.includes(d);
+            return (
+              <Pressable key={d} onPress={() => toggleDay(d)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={DAY_NAME[d]}
+                style={{ flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.bg3 }}>
+                <T size={13} w={600} color={on ? c.invink : c.ink}>{l}</T>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TimeStepper({ label, value, set }: { label: string; value: number; set: (dir: 1 | -1) => void }) {
+  const { c } = useTheme();
+  const btn = { width: 44, height: 44, borderRadius: 22, backgroundColor: c.bg3, alignItems: 'center' as const, justifyContent: 'center' as const };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <T size={14} w={550} style={{ flex: 1 }}>{label}</T>
+      <Pressable onPress={() => set(-1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos antes`} style={btn}>
+        <Icon name="remove" size={20} />
+      </Pressable>
+      <T size={17} w={650} mono style={{ width: 64, textAlign: 'center' }} accessibilityLiveRegion="polite">{hm(value)}</T>
+      <Pressable onPress={() => set(1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos depois`} style={btn}>
+        <Icon name="add" size={20} />
+      </Pressable>
+    </View>
   );
 }

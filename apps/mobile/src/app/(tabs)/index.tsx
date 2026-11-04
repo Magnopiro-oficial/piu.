@@ -4,13 +4,16 @@ import { Animated, FlatList, Pressable, ScrollView, TextInput, View } from 'reac
 import type { Chat, Kind } from '../../data/types';
 import { STATUS_ICON } from '../../lib/status';
 import { initialsOf } from '../../lib/text';
+import { fingerprintOf, useKeys } from '../../state/keys';
 import { useStore } from '../../state/store';
+import { useTransport } from '../../state/transport';
 import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
 import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { msgSummary } from '../../lib/chatCore';
 
 type Filter = 'all' | Kind;
 const FILTERS: [Filter, string][] = [['all', 'Todas'], ['direct', 'Pessoas'], ['group', 'Grupos'], ['channel', 'Canais'], ['community', 'Comunidades']];
@@ -20,6 +23,10 @@ const KIND_ICON: Partial<Record<Kind, IconName>> = { group: 'group', channel: 'c
 export default function Chats() {
   const { c } = useTheme();
   const { chats, identity, toggleIdentity, profile } = useStore();
+  const { identities } = useKeys();
+  const { peers } = useTransport();
+  // Vizinhos conectados agora (o transporte por perto), sem internet.
+  const nodes = peers.filter(p => p.connected).length;
   const [filter, setFilter] = useState<Filter>('all');
   const [q, setQ] = useState('');
   const mine = useMemo(() => chats.filter(x => x.ident === identity), [chats, identity]);
@@ -38,7 +45,7 @@ export default function Chats() {
           accessibilityLabel={`Identidade ${pub ? 'pública' : 'anônima'}. Toque para trocar`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4, paddingLeft: 4, paddingRight: 10, borderRadius: 20, backgroundColor: c.bg2 }}>
           <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
-            <T size={11} w={600} color={c.invink}>{pub ? initialsOf(profile.name || 'Você') : '7F'}</T>
+            <T size={11} w={600} color={c.invink}>{pub ? initialsOf(profile.name.trim() || 'Você') : identities ? fingerprintOf(identities.anon)[0].slice(0, 2) : '··'}</T>
           </View>
           <T size={13} w={550}>{pub ? 'Pública' : 'Anônima'}</T>
           <Icon name="swap_horiz" size={16} />
@@ -49,10 +56,11 @@ export default function Chats() {
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
         <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">Conversas</T>
-        <View accessibilityLabel="6 nós alcançáveis, sem internet" style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 99, borderWidth: 1, borderColor: c.line2 }}>
-          <Breath />
-          <T size={12} w={500} color={c.ink2}>6 nós · offline</T>
-        </View>
+        <Pressable onPress={() => router.push('/(tabs)/network')} accessibilityRole="button" accessibilityLabel={`${nodes} ${nodes === 1 ? 'nó alcançável' : 'nós alcançáveis'}, sem internet. Abrir Rede`}
+          style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 99, borderWidth: 1, borderColor: c.line2 }}>
+          <Breath on={nodes > 0} />
+          <T size={12} w={500} color={c.ink2}>{nodes} {nodes === 1 ? 'nó' : 'nós'} · offline</T>
+        </Pressable>
       </View>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.bg2 }}>
         <Icon name="search" size={20} color={c.ink2} />
@@ -85,7 +93,7 @@ export default function Chats() {
   );
 
   return (
-    <Screen edges={['top']}>
+    <Screen edges={['top']} enter="tab">
       <FlatList
         data={list}
         keyExtractor={x => x.id}
@@ -94,7 +102,7 @@ export default function Chats() {
         contentContainerStyle={{ paddingBottom: 16 }}
         keyboardShouldPersistTaps="handled"
         renderItem={({ item }) => <ChatRow chat={item} onPress={() => open(item)} />}
-        ListEmptyComponent={<T size={14} color={c.ink2} align="center" style={{ padding: 28 }}>Nenhuma conversa neste filtro.</T>}
+        ListEmptyComponent={mine.length ? <T size={14} color={c.ink2} align="center" style={{ padding: 28 }}>Nenhuma conversa neste filtro.</T> : <Empty pub={pub} />}
       />
     </Screen>
   );
@@ -104,13 +112,13 @@ function ChatRow({ chat, onPress }: { chat: Chat; onPress: () => void }) {
   const { c } = useTheme();
   const last = chat.msgs?.[chat.msgs.length - 1];
   const fromMe = last?.from === 'me';
-  const preview = chat.preview ?? (last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + last.text : '');
+  const preview = chat.preview ?? (last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + msgSummary(last) : '');
   const kindIcon = KIND_ICON[chat.kind];
   return (
     <Pressable onPress={onPress} accessibilityRole="button"
       accessibilityLabel={`${chat.name}. ${preview}${chat.unread ? `. ${chat.unread} não lidas` : ''}`}
       style={({ pressed, hovered }: { pressed: boolean; hovered?: boolean }) => ({ flexDirection: 'row', alignItems: 'center', gap: 13, paddingVertical: 9, paddingHorizontal: 20, backgroundColor: pressed || hovered ? c.bg2 : 'transparent' })}>
-      <Avatar initials={chat.initials} square={chat.kind !== 'direct'} inverted={chat.inv} />
+      <Avatar initials={chat.initials} square={chat.kind !== 'direct'} inverted={chat.inv} photo={chat.photo} />
       <View style={{ flex: 1, minWidth: 0, gap: 3, paddingVertical: 4 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           {kindIcon && <Icon name={kindIcon} size={16} />}
@@ -138,19 +146,49 @@ function Badge({ n }: { n: number }) {
   );
 }
 
-/** Ponto “respirando” da pílula de rede (2,4 s). */
-function Breath() {
+/**
+ * Lista vazia (primeira abertura ou identidade sem conversas): as conversas começam pessoalmente,
+ * trocando o código, no mesmo cartão dos estados vazios do app (Contatos bloqueados).
+ */
+function Empty({ pub }: { pub: boolean }) {
+  const { c } = useTheme();
+  return (
+    <View style={{ marginHorizontal: 20, marginTop: 8, paddingVertical: 32, paddingHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, alignItems: 'center', gap: 8 }}>
+      <Icon name="edit_square" size={34} w={300} color={c.ink2} />
+      <T size={15} w={600} align="center">{pub ? 'Nenhuma conversa ainda' : 'Nenhuma conversa anônima ainda'}</T>
+      <T size={13} lh={1.4} color={c.ink2} align="center">
+        {pub ? 'Troque o código com alguém pessoalmente para começar. Sem telefone, sem servidor: a conversa já começa cifrada.'
+          : 'Esta lista é separada da pública. Mostre o código da identidade anônima para conversar sem vínculo com o seu perfil.'}
+      </T>
+      <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
+        <Pressable onPress={() => router.push('/scan')} accessibilityRole="button"
+          style={({ pressed }) => ({ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: c.ink, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.8 : 1 })}>
+          <Icon name="qr_code_scanner" size={18} color={c.invink} />
+          <T size={14} w={600} color={c.invink}>Escanear código</T>
+        </Pressable>
+        <Pressable onPress={() => router.push('/my-code')} accessibilityRole="button"
+          style={({ pressed }) => ({ height: 40, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderColor: c.line2, flexDirection: 'row', alignItems: 'center', gap: 6, opacity: pressed ? 0.7 : 1 })}>
+          <Icon name="qr_code_2" size={18} />
+          <T size={14} w={550}>Meu código</T>
+        </Pressable>
+      </View>
+    </View>
+  );
+}
+
+/** Ponto “respirando” da pílula de rede (2,4 s); parado quando não há nenhum nó. */
+function Breath({ on }: { on: boolean }) {
   const { c, reduceMotion } = useTheme();
   const o = useRef(new Animated.Value(1)).current;
   useEffect(() => {
-    if (reduceMotion) return;
+    if (reduceMotion || !on) { o.setValue(on ? 1 : 0.3); return; }
     const loop = Animated.loop(Animated.sequence([
       Animated.timing(o, { toValue: 0.3, duration: 1200, useNativeDriver: true }),
       Animated.timing(o, { toValue: 1, duration: 1200, useNativeDriver: true }),
     ]));
     loop.start();
     return () => loop.stop();
-  }, [reduceMotion, o]);
+  }, [reduceMotion, on, o]);
   return (
     <View style={{ width: 13, height: 13, borderRadius: 6.5, backgroundColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
       <Animated.View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: c.ink, opacity: o }} />

@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { router, useLocalSearchParams } from 'expo-router';
-import { ScrollView, View } from 'react-native';
-import { handleOf } from '../../lib/text';
+import { Image, Pressable, ScrollView, View } from 'react-native';
 import { useStore } from '../../state/store';
 import { useLayout } from '../../lib/responsive';
-import { cachedSafetyCode, safetyCodeFor } from '../../lib/demoContacts';
 import { useKeys } from '../../state/keys';
 import { useMessaging, useMyCard } from '../../state/messaging';
 import { safetyNumber, toPublic } from '../../protocol';
@@ -12,7 +10,9 @@ import { QrCode } from '../../ui/QrCode';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
+import { Dialog } from '../../ui/Dialog';
 import { Icon, type IconName } from '../../ui/Icon';
+import { routeLabel } from '../../lib/routeCore';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
@@ -21,40 +21,72 @@ export default function Contact() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const { compact } = useLayout();
-  const { chats, verified, setVerified, showToast } = useStore();
+  const { chats, verified, setVerified, showToast, block, isBlocked, patchChat } = useStore();
+  const [deleting, setDeleting] = useState(false);
   const { identities } = useKeys();
   const ident = chats.find(x => x.id === id)?.ident ?? 'public';
-  const { contactKeys } = useMessaging();
+  const { contactKeys, lastRouteOf, deleteChat } = useMessaging();
   const [myCard] = useMyCard(ident);
-  // Contato real: chaves que vieram no cartão ou na primeira mensagem. Demonstração: chaves fixas do exemplo.
+  // Chaves do contato: vieram no cartão (QR) ou na primeira mensagem (pedido de conversa).
   const real = id ? contactKeys(id) : null;
-  // Código real: chaves da identidade usada nesta conversa × chaves do contato (hash iterado: calcula uma vez).
+  // Código: chaves da identidade usada nesta conversa × chaves do contato.
   const mine = identities?.[ident];
-  const [code, setCode] = useState<string[] | null>(() => (mine && id && !real ? cachedSafetyCode(mine, id, ident) : null));
-  // Calcula depois de desenhar a tela (não trava a navegação) e guarda em cache.
+  const [code, setCode] = useState<string[] | null>(null);
+  // Hash iterado (~25 ms): calcula depois de desenhar a tela, para não travar a navegação.
   useEffect(() => {
-    if (!mine || !id) return;
-    const t = setTimeout(() => setCode(real ? safetyNumber(toPublic(mine), real) : safetyCodeFor(mine, id, ident)), 0);
+    if (!mine || !real) return;
+    const t = setTimeout(() => setCode(safetyNumber(toPublic(mine), real)), 0);
     return () => clearTimeout(t);
-  }, [mine, id, ident, real]);
+  }, [mine, real]);
   const shown = code ?? Array<string>(12).fill('·····');
-  const chat = chats.find(x => x.id === id);
-  if (!chat) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
+  const chat = chats.find(x => x.id === id && x.peer);
+  if (!chat?.peer) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Contato não encontrado.</T></Screen>;
 
   const ver = !!verified[chat.id];
 
   const first = chat.name.split(' ')[0];
-  const handle = chat.peer
-    ? `${chat.peer.slice(0, 8)}…${chat.peer.slice(-4)} · ${chat.ident === 'anon' ? 'anônima' : 'pública'}`
-    : chat.ident === 'anon' ? 'piu:b2d9…7a10 · anônima' : `${handleOf(first)} · pública`;
-  const rows: [IconName, string, string, number][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', 'Desligado', 450], ['block', `Bloquear ${first}`, '', 650]];
+  const handle = `${chat.peer.slice(0, 8)}…${chat.peer.slice(-4)} · ${chat.ident === 'anon' ? 'anônima' : 'pública'}`;
+  // Bloqueio (design): pelo id da chave do contato.
+  const blockId = chat.peer;
+  const isBl = isBlocked(blockId);
+  const blockAct = isBl
+    ? () => router.push({ pathname: '/blocked', params: { sel: blockId } })
+    : () => {
+      block({ id: blockId, chatId: chat.id, name: chat.name, initials: chat.initials, how: 'pela conversa', reported: false });
+      showToast({ icon: 'block', title: `${first} bloqueado(a)`, body: 'Não é avisado(a). Desfaça em Privacidade → Contatos bloqueados.' });
+    };
+  // Mensagens temporárias desta conversa (começa com o padrão de Privacidade): toque troca
+  // Desligado → 7 dias → 24 h. Vale para as próximas mensagens, nos dois aparelhos.
+  const temp = chat.temp ?? 'off';
+  const tempLabel = { off: 'Desligado', '7d': '7 dias', '24h': '24 h' }[temp];
+  const nextTemp = ({ off: '7d', '7d': '24h', '24h': 'off' } as const)[temp];
+  const tempAct = () => {
+    patchChat(chat.id, { temp: nextTemp });
+    showToast(nextTemp === 'off'
+      ? { icon: 'timer_off', title: 'Mensagens temporárias desligadas', body: 'As próximas mensagens ficam na conversa.' }
+      : { icon: 'timer', title: `Mensagens temporárias · ${nextTemp === '7d' ? '7 dias' : '24 h'}`, body: 'As próximas mensagens somem dos dois aparelhos nesse prazo.' });
+  };
+  // Silenciar: as mensagens continuam chegando, sem banner nem notificação (store.tsx respeita `muted`).
+  const muteAct = () => {
+    patchChat(chat.id, { muted: !chat.muted });
+    showToast(chat.muted
+      ? { icon: 'notifications', title: 'Conversa com notificações', body: 'Novas mensagens voltam a aparecer como banner.' }
+      : { icon: 'notifications_off', title: 'Conversa silenciada', body: 'As mensagens continuam chegando, sem banner.' });
+  };
+  const last = lastRouteOf(chat.id);
+  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', last ? routeLabel(last) : '—', 450], ['timer', 'Mensagens temporárias', tempLabel, 450, tempAct],
+    [chat.muted ? 'notifications_off' : 'notifications', chat.muted ? 'Reativar notificações' : 'Silenciar conversa', chat.muted ? 'Silenciada' : '', 450, muteAct],
+    [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct],
+    ['delete', 'Apagar conversa e contato', '', 650, () => setDeleting(true)]];
 
   return (
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={{ paddingHorizontal: 24, paddingBottom: 8, alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={28} w={650} color={c.invink}>{chat.initials}</T></View>
+          {chat.photo
+            ? <Image source={{ uri: chat.photo }} accessibilityLabel={`Foto de ${chat.name}`} style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.bg2 }} />
+            : <View style={{ width: 88, height: 88, borderRadius: 44, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={28} w={650} color={c.invink}>{chat.initials}</T></View>}
           <T size={24} w={700} ls={-0.03} align="center" accessibilityRole="header">{chat.name}</T>
           <T size={12.5} mono color={c.ink2}>{handle}</T>
           <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: ver ? c.ink : c.bg2 }}>
@@ -74,24 +106,28 @@ export default function Contact() {
           <T size={13} lh={1.45} color={c.ink2}>Compare com a tela de {first} ou escaneie o QR dela pessoalmente. Se bater, ninguém está no meio da conversa.</T>
           <View style={{ flexDirection: compact ? 'column' : 'row', gap: 8 }}>
             <Button label="Escanear QR" variant="outline" height={44} fontSize={14} style={[!compact && { flex: 1 }, { paddingHorizontal: 4 }]}
-              onPress={() => {
-                if (chat.peer) { router.push({ pathname: '/scan', params: { verify: chat.id } }); return; }
-                setVerified(chat.id, true); showToast({ icon: 'qr_code_scanner', title: 'Código confere', body: `${chat.name} verificado pessoalmente.` });
-              }} />
+              onPress={() => router.push({ pathname: '/scan', params: { verify: chat.id } })} />
             <Button label={ver ? 'Remover verificação' : 'Marcar como verificado'} height={44} fontSize={13.5} style={[!compact && { flex: 1.3 }, { paddingHorizontal: 4 }]} onPress={() => setVerified(chat.id, !ver)} />
           </View>
         </View>
 
         <View style={{ marginTop: 14, marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
-          {rows.map(([icon, l, v, w], i) => (
-            <View key={l} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+          {rows.map(([icon, l, v, w, act], i) => (
+            <Pressable key={l} disabled={!act} onPress={act} accessibilityRole={act ? 'button' : undefined}
+              style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 14, paddingHorizontal: 16, borderTopWidth: i ? 1 : 0, borderTopColor: c.line, opacity: pressed ? 0.6 : 1 })}>
               <Icon name={icon} size={21} w={300} />
               <T size={15} w={w} style={{ flex: 1 }}>{l}</T>
               <T size={12.5} color={c.ink2}>{v}</T>
-            </View>
+            </Pressable>
           ))}
         </View>
       </ScrollView>
+      {deleting && (
+        <Dialog icon="delete" title={`Apagar ${first}?`} primary="Apagar" primaryIcon="delete"
+          body="A conversa e o contato saem deste aparelho, e mensagens ainda na fila para esta pessoa são descartadas. Para conversar de novo, troquem os códigos outra vez."
+          onClose={() => setDeleting(false)}
+          onPrimary={() => { setDeleting(false); deleteChat(chat.id); showToast({ icon: 'delete', title: 'Conversa apagada', body: 'O contato saiu deste aparelho.' }); router.dismissTo('/(tabs)'); }} />
+      )}
     </Screen>
   );
 }

@@ -204,11 +204,11 @@ test('API: GET /api/relay exige sessão e mostra as estatísticas reais; PUT /ap
   const s = r.json() as { enabled: boolean; relaying: boolean; lnnp: { version: number }; neighbors: unknown[]; counters: Record<string, number>; store: { envelopes: number } };
   assert.equal(s.enabled, true);
   assert.equal(s.lnnp.version, LNNP_VERSION);
-  assert.deepEqual(Object.keys(s.counters).sort(), ['delivered', 'duplicates', 'expired', 'forwarded', 'full', 'handshakesFailed', 'handshakesOk', 'received', 'receipts', 'receiptsReceived', 'rejected', 'relayOff', 'stored'].sort());
+  assert.deepEqual(Object.keys(s.counters).sort(), ['delivered', 'duplicates', 'expired', 'forwarded', 'full', 'handshakesFailed', 'handshakesOk', 'received', 'receipts', 'receiptsReceived', 'rejected', 'relayOff', 'revokedRefused', 'stored'].sort());
   // Nada de chave secreta nem conteúdo na resposta.
   assert.equal(r.body.includes('"sk"'), false);
   const put = await app.inject({ method: 'PUT', url: '/api/settings', headers: { ...headers, cookie, 'x-csrf-token': csrf }, payload: { limits: { bw: 20, sto: 4, hours: 'always' }, policies: { media: false, unknown: true, community: false } } });
   assert.equal(put.statusCode, 200, put.body);
   assert.equal(R.engine.router.limits.maxBytes, 16 * 1024 ** 2); // teto de memória do teste (16 MiB) < 4 GB
-  assert.deepEqual(R.engine.stats().limits, { bwMbps: 20, stoGB: 4, hours: 'always', media: false });
+  assert.deepEqual(R.engine.stats().limits, { bwMbps: 20, stoGB: 4, hours: 'always', media: false, device: null, operator: null, effective: { bwMbps: 20, stoGB: 4, hours: ['always'] } });
 });

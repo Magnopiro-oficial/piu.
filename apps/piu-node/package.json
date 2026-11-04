@@ -15,7 +15,8 @@
     "protocol:sync": "node scripts/sync-protocol.mjs",
     "test": "node --import tsx --test test/*.test.ts",
     "release:keygen": "tsx scripts/release.ts keygen",
-    "release:sign": "tsx scripts/release.ts sign"
+    "release:sign": "tsx scripts/release.ts sign",
+    "lunes:sync": "node scripts/sync-lunes.mjs"
   },
   "dependencies": {
     "@fastify/cookie": "^11.1.5",

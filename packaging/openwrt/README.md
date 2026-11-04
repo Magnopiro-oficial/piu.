@@ -101,9 +101,12 @@ uci commit piu-node        # o procd reinicia o serviço (reload trigger)
 | `lnnp.broadcast`, `lnnp.peer`, `lnnp.allow` (listas) | `PIU_LNNP_BROADCAST`, `PIU_LNNP_PEERS`, `PIU_LNNP_ALLOW` | `255.255.255.255`, —, — |
 | `lnnp.memory_mb`, `lnnp.beacon_ms` | `PIU_LNNP_MEMORY_MB`, `PIU_LNNP_BEACON_MS` | `16`, `5000` |
 | `serial.device` | `PIU_SERIAL` | (seção comentada) |
+| `lunes.endpoint` (lista) | `PIU_LUNES_ENDPOINTS` | os 4 de produção (seção comentada) |
 | `serial.lora_sf`, `serial.lora_bw_khz`, `serial.lora_cr`, `serial.lora_duty`, `serial.max_envelope` | `PIU_LORA_SF`, `PIU_LORA_BW_KHZ`, `PIU_LORA_CR`, `PIU_LORA_DUTY`, `PIU_LORA_MAX_ENVELOPE` | (seção comentada) |
 
 Listas aceitam `list` do UCI ou uma `option` com valores separados por vírgula. Para uma variável nova: uma linha em `piu_env_map` no `files/piu-node.init` e a opção comentada em `files/piu-node.config`; o teste confere que toda variável lida em `apps/piu-node/src/config.ts` tem opção UCI e que toda opção da config é usada pelo init.
+
+No Node 20 o init acrescenta `--experimental-websocket` (a leitura da Lunes Mainnet usa WebSocket); no Node 22 ele já vem ligado.
 
 Com 128 MB de RAM, acrescente `--lite-mode` em `node_args` (menos memória; o JS fica mais lento).
 

@@ -1,41 +1,123 @@
-import { router } from 'expo-router';
-import { View } from 'react-native';
+import { router, useLocalSearchParams } from 'expo-router';
+import { useMemo, useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import { cardFromText, fingerprintOfId, inviteWords } from '../../lib/inviteLink';
+import type { ContactCard } from '../../messaging/card';
+import { useKeys } from '../../state/keys';
+import { useMessaging } from '../../state/messaging';
+import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
+import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
-/** Aceitar o convite: troca de chaves frente a frente e 10 LUNES de boas-vindas (liberados com 7 dias de uso). */
+/**
+ * Aceitar um convite aberto pelo link `piu://invite/accept?c=…`: confere o cartão assinado (o mesmo
+ * do QR de contato) e adiciona o contato pelo mesmo caminho de "Adicionar contato" (scan.tsx).
+ * Antes de criar a identidade, o convite fica guardado e esta tela volta depois (app/_layout.tsx).
+ */
 export default function AcceptInvite() {
   const { c } = useTheme();
+  const { c: raw } = useLocalSearchParams<{ c?: string }>();
+  const { readCard, addFromCard, ready } = useMessaging();
+  const { chats, showToast } = useStore();
+  const identities = useKeys().identities;
+  const [error, setError] = useState<string | null>(null);
+
+  const parsed = useMemo((): { card: ContactCard } | { error: string } | null => {
+    if (!ready) return null;
+    const text = cardFromText(typeof raw === 'string' ? raw : '');
+    if (!text) return { error: 'Este link não traz um convite do Piu. Peça para a pessoa enviar de novo.' };
+    try { return { card: readCard(text) }; } catch (e) { return { error: (e as Error).message }; }
+  }, [raw, ready, readCard]);
+
+  const card = parsed && 'card' in parsed ? parsed.card : null;
+  const mine = !!card && !!identities && (card.id === identities.public.id || card.id === identities.anon.id);
+  const exists = card ? chats.find(x => x.peer === card.id) : undefined;
+  const fp = card ? fingerprintOfId(card.id) : [];
+  const words = card ? inviteWords(card.pub.signPk) : [];
+  const who = card?.name || 'Identidade anônima';
+
+  const accept = () => {
+    if (!card) return;
+    if (exists) { router.replace({ pathname: '/chat/[id]', params: { id: exists.id } }); return; }
+    try {
+      const id = addFromCard(card);
+      showToast({ icon: 'key', title: 'Contato adicionado', body: 'Confira o código de segurança pessoalmente.' });
+      router.replace({ pathname: '/chat/[id]', params: { id } });
+    } catch (e) { setError((e as Error).message); }
+  };
+  const leave = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
+
+  if (!parsed) return <Screen style={{ paddingHorizontal: 24, paddingTop: 66 }}><T size={15} color={c.ink2}>Abrindo o convite…</T></Screen>;
+
+  if (!card) {
+    return (
+      <Screen style={{ paddingHorizontal: 24 }}>
+        <View style={{ flex: 1, paddingTop: 66, gap: 18 }}>
+          <Icon name="gpp_bad" size={34} w={300} />
+          <T size={28} w={650} ls={-0.035} lh={1.08} accessibilityRole="header">Convite não pode ser usado</T>
+          <T size={15} lh={1.45} color={c.ink2} accessibilityRole="alert">{'error' in parsed ? parsed.error : ''}</T>
+          <View style={{ flex: 1 }} />
+          <Button label="Fechar" variant="soft" style={{ marginBottom: 16 }} onPress={leave} />
+        </View>
+      </Screen>
+    );
+  }
+
   const rows: [string, string, boolean?][] = [
-    ['Convite', 'uso único · expira em 23 h'], ['Assinado por', '7F3A 91C2 … C19E', true], ['Recebido por', 'Wi-Fi Direct'], ['Boas-vindas', '10 LUNES · liberados em 7 dias de uso'],
+    ['Identidade', card.kind === 'anon' ? 'anônima · assinatura confere' : 'pública · assinatura confere'],
+    ['Chave', `${fp[0] ?? ''} ${fp[1] ?? ''} … ${fp.at(-1) ?? ''}`, true],
+    ['Convite', `uso único · vale até ${new Date(card.expiresAt * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`],
+    ['Você conversa', card.kind === 'anon' ? 'pela sua identidade anônima' : 'pela sua identidade pública'],
   ];
+
   return (
     <Screen style={{ paddingHorizontal: 24 }}>
-      <View style={{ flex: 1, paddingTop: 66, gap: 26 }}>
+      <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: 66, gap: 22, paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
-          <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: c.ink, borderWidth: 4, borderColor: c.bg, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}><T size={26} w={650} color={c.invink}>C</T></View>
+          <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: c.ink, borderWidth: 4, borderColor: c.bg, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}><T size={26} w={650} color={c.invink}>{card.name ? card.name.slice(0, 1).toUpperCase() : '?'}</T></View>
           <View style={{ width: 84, height: 84, borderRadius: 42, marginLeft: -18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.ink, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><T size={13} w={500} color={c.ink2}>você</T></View>
         </View>
         <View style={{ gap: 10 }}>
-          <T size={32} w={650} ls={-0.035} lh={1.05} accessibilityRole="header">Cardeal convidou você</T>
-          <T size={15} lh={1.45} color={c.ink2}>Ao aceitar, vocês trocam chaves aqui, frente a frente. A primeira conversa já começa cifrada.</T>
+          <T size={30} w={650} ls={-0.035} lh={1.06} accessibilityRole="header">{mine ? 'Este convite é seu' : card.name ? `${card.name} convidou você` : 'Você recebeu um convite'}</T>
+          <T size={15} lh={1.45} color={c.ink2}>{mine ? 'Envie o link para outra pessoa. Ela abre no Piu e vocês viram contatos.' : 'Ao aceitar, as chaves públicas do convite entram nos seus contatos e a primeira conversa já começa cifrada.'}</T>
         </View>
         <View style={{ borderRadius: 20, backgroundColor: c.bg2, padding: 16, gap: 10 }}>
+          <T size={15} w={600}>{who}</T>
           {rows.map(([l, v, mono]) => (
             <View key={l} style={{ flexDirection: 'row', gap: 16 }}>
-              <T size={13.5} color={c.ink2} style={{ width: 96 }}>{l}</T>
+              <T size={13.5} color={c.ink2} style={{ width: 104 }}>{l}</T>
               <T size={mono ? 12.5 : 13.5} w={mono ? 500 : 550} mono={mono} style={{ flex: 1 }}>{v}</T>
             </View>
           ))}
         </View>
+        {!mine && (
+          <View style={{ padding: 16, borderRadius: 20, borderWidth: 1, borderColor: c.line2, gap: 10 }}>
+            <T size={11.5} w={500} mono ls={0.05} color={c.ink2}>CÓDIGO DE SEGURANÇA</T>
+            <View accessibilityLabel={'Código: ' + words.join(', ')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+              {words.map((w, i) => (
+                <View key={`${w}-${i}`} style={{ width: '48.5%', flexGrow: 1, height: 40, borderRadius: 12, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
+                  <T size={17} w={650} ls={-0.02}>{w}</T>
+                </View>
+              ))}
+            </View>
+            <T size={12.5} lh={1.4} color={c.ink2}>{`Se puder, confira com ${card.name || 'quem convidou'} (ligação ou pessoalmente): a tela de convite dela mostra as mesmas 4 palavras. Diferentes, não aceite.`}</T>
+          </View>
+        )}
+        {error && (
+          <View accessibilityRole="alert" style={{ flexDirection: 'row', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.ink }}>
+            <Icon name="gpp_bad" size={20} />
+            <T size={13.5} lh={1.4} style={{ flex: 1 }}>{error}</T>
+          </View>
+        )}
         <View style={{ flex: 1 }} />
-        <View style={{ gap: 10, paddingBottom: 16 }}>
-          <Button label="Criar identidade e aceitar" onPress={() => router.push('/identity')} />
-          <Button label="Agora não" variant="ghost" height={46} onPress={() => router.replace('/')} />
+        <View style={{ gap: 10 }}>
+          {!mine && <Button label={exists ? 'Já é seu contato · abrir' : 'Aceitar e conversar'} onPress={accept} />}
+          <Button label={mine ? 'Fechar' : 'Agora não'} variant="ghost" height={46} onPress={leave} />
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

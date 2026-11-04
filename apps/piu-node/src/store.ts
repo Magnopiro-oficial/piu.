@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { CertJson } from './relay/operator-frames.js';
 
 export interface Operator { id: string; name: string; createdAt: number }
 export interface Session {
@@ -11,9 +12,32 @@ export interface Session {
   label: string;
 }
 export type DeviceStatus = 'active' | 'paused';
-export interface Device { id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today: number; family?: string; pub?: string; createdAt?: number }
-/** Destino: a carteira pessoal do operador ou outro endereço `lunes:…`. */
-export interface WalletTx { id: string; amount: number; at: number; to: string }
+/**
+ * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais).
+ * Os outros são registros do assistente; com identidade técnica, recebem pausa e regras pela malha
+ * (`DEVICE_POLICY`) e mandam um resumo assinado (`DEVICE_REPORT`) quando estão ligados a este nó.
+ * `today` é legado (versões antigas guardavam um valor de referência) e não sai mais pela API.
+ */
+export interface Device {
+  id: string; ownerId: string; name: string; cls: string; status: DeviceStatus; today?: number; family?: string; pub?: string; createdAt?: number; self?: boolean;
+  /** Identidade técnica do nó (chave LNNP em hex). O próprio nó sempre tem; os outros, quando vinculados a um vizinho. */
+  nodePk?: string;
+  /** Certificado da identidade técnica, assinado pela chave de operador (ver relay/operator-frames.ts). */
+  cert?: CertJson;
+  /** Regras do equipamento (assistente, passo "Regras"). Ausente: só os limites globais. */
+  limits?: DeviceLimits;
+  /** Ponto de Acesso: id do equipamento (do mesmo operador) que é o nó pai dele. */
+  parent?: string;
+}
+/** Regras de um equipamento: banda (Mbps), armazenamento para terceiros (GB) e horário. */
+export interface DeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy }
+/** Carteira declarada para um lote, assinada pela chave do nó (`PayoutClaim`, binários em hex). */
+export interface PayoutClaimRecord { epoch: string; address: string; nodePk: string; sig: string; at: number }
+/**
+ * Movimentação da carteira. Saída (`out`, ou sem `kind` nas versões antigas): para a carteira pessoal
+ * ou outro endereço `lunes:…`. Entrada (`in`): liquidação recebida, com a referência do lote em `from`.
+ */
+export interface WalletTx { id: string; amount: number; at: number; to: string; kind?: 'in' | 'out'; from?: string }
 export interface Wallet { balance: number; txs: WalletTx[] }
 
 export type HoursPolicy = 'always' | 'night' | 'day';
@@ -29,9 +53,14 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[] }
+/** Endereço Lunes (SS58) da carteira de provider do operador, configurado no painel. Só leitura do saldo. */
+export interface LunesAddress { address: string; at: number }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [] });
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[];
+  /** Vizinhos fixos do enlace LNNP adicionados pelo painel (`host:porta`), somados aos de `PIU_LNNP_PEERS`. */
+  relayPeers: string[]; lunes: Record<string, LunesAddress> }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {} });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -63,13 +92,8 @@ export class Store {
   addOperator(name: string, now: number): Operator {
     const op: Operator = { id: randomUUID(), name, createdAt: now };
     this.s.operators.push(op);
-    this.s.wallets[op.id] = { balance: 1284.6, txs: [] };
-    // Referência: o primeiro operador recebe os equipamentos de demonstração do painel.
-    if (this.s.operators.length === 1) {
-      for (const [name, cls] of [['Mini-PC da garagem', 'Gateway Local'], ['Antena do telhado', 'Super Node'], ['Roteador da sala', 'Home Node']] as const) {
-        this.s.devices.push({ id: randomUUID(), ownerId: op.id, name, cls, status: 'active', today: 4.12 });
-      }
-    }
+    // Saldo começa em zero: LUNES só entram com uma liquidação de verdade (nada de valor de exemplo).
+    this.s.wallets[op.id] = { balance: 0, txs: [] };
     this.save();
     return op;
   }
@@ -103,7 +127,44 @@ export class Store {
     this.save();
     return dev;
   }
-  removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+  /** Tira o equipamento; pontos de acesso ligados a ele ficam sem nó pai. */
+  removeDevice(id: string) {
+    this.s.devices = this.s.devices.filter(d => d.id !== id);
+    for (const d of this.s.devices) if (d.parent === id) delete d.parent;
+    this.save();
+  }
+  /** Muda campos de um equipamento (identidade técnica, certificado, regras). */
+  updateDevice(id: string, p: Partial<Pick<Device, 'nodePk' | 'cert' | 'limits'>>) {
+    const d = this.s.devices.find(x => x.id === id);
+    if (d) { Object.assign(d, p); for (const k of Object.keys(p) as (keyof typeof p)[]) if (p[k] === undefined) delete d[k]; this.save(); }
+    return d ?? null;
+  }
+  /** Algum equipamento (de qualquer operador) já tem esta identidade técnica? */
+  deviceByNodePk(nodePk: string) { return this.s.devices.find(d => d.nodePk === nodePk) ?? null; }
+  /** Dono do equipamento (o primeiro operador pareado). */
+  owner() { return this.s.operators[0] ?? null; }
+
+  relayPeers() { return [...this.s.relayPeers]; }
+  addRelayPeer(address: string) { if (!this.s.relayPeers.includes(address)) { this.s.relayPeers.push(address); this.save(); } }
+  removeRelayPeer(address: string) { const before = this.s.relayPeers.length; this.s.relayPeers = this.s.relayPeers.filter(a => a !== address); if (this.s.relayPeers.length !== before) this.save(); return before !== this.s.relayPeers.length; }
+
+  claims() { return [...this.s.claims]; }
+  /** Uma carteira por época: declarar de novo troca a anterior. */
+  setClaim(c: PayoutClaimRecord) { this.s.claims = [...this.s.claims.filter(x => x.epoch !== c.epoch), c].sort((a, b) => a.epoch.localeCompare(b.epoch)); this.save(); return c; }
+  /** O equipamento que serve o painel, se já tem dono. */
+  selfDevice() { return this.s.devices.find(d => d.self) ?? null; }
+  /**
+   * Registra o próprio nó como equipamento do dono (o primeiro operador), uma vez. Chamado ao subir
+   * e no primeiro pareamento. Sem dono ainda, não faz nada.
+   */
+  ensureSelfDevice(info: { name: string; cls: string }, now: number) {
+    const owner = this.s.operators[0];
+    if (!owner || this.selfDevice()) return this.selfDevice();
+    const dev: Device = { id: randomUUID(), ownerId: owner.id, name: info.name, cls: info.cls, status: 'active', family: 'linux', createdAt: now, self: true };
+    this.s.devices.unshift(dev);
+    this.save();
+    return dev;
+  }
 
   settings(operatorId: string): Settings { return this.s.settings[operatorId] ?? DEFAULT_SETTINGS; }
   /**
@@ -124,12 +185,34 @@ export class Store {
   pendingTx(id: string, now: number) { return this.s.pendingTx.find(t => t.id === id && t.expiresAt > now) ?? null; }
   removePendingTx(id: string) { this.s.pendingTx = this.s.pendingTx.filter(t => t.id !== id); this.save(); }
 
+  /** Endereço Lunes da carteira de provider do operador (null se ainda não configurado). */
+  lunesAddress(operatorId: string): LunesAddress | null { return this.s.lunes[operatorId] ?? null; }
+  setLunesAddress(operatorId: string, address: string | null, now: number): LunesAddress | null {
+    if (address == null) delete this.s.lunes[operatorId];
+    else this.s.lunes[operatorId] = { address, at: now };
+    this.save();
+    return this.lunesAddress(operatorId);
+  }
+
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {
     const w = this.s.wallets[operatorId];
     if (!w) throw new Error('sem carteira');
-    const tx: WalletTx = { id: randomUUID(), amount, at: now, to };
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to, kind: 'out' };
     w.balance = Math.round((w.balance - amount) * 100) / 100;
+    w.txs.unshift(tx);
+    this.save();
+    return tx;
+  }
+  /**
+   * Entrada na carteira: liquidação de um lote (`from` é a referência do lote). Não há caminho pela
+   * API: só quem liquida de verdade (ferramenta local, testes) credita.
+   */
+  credit(operatorId: string, amount: number, now: number, from: string): WalletTx {
+    const w = this.s.wallets[operatorId];
+    if (!w) throw new Error('sem carteira');
+    const tx: WalletTx = { id: randomUUID(), amount, at: now, to: 'provider', kind: 'in', from };
+    w.balance = Math.round((w.balance + amount) * 100) / 100;
     w.txs.unshift(tx);
     this.save();
     return tx;

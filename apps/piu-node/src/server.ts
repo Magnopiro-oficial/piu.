@@ -1,5 +1,6 @@
 import { X509Certificate } from 'node:crypto';
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { generate } from 'selfsigned';
@@ -8,6 +9,7 @@ import type { Config } from './config.js';
 import { loadPackages, type Manifest, releaseKey } from './packages.js';
 import { loadNodeKey, type RelayHandle, startRelay } from './relay/index.js';
 import { Pairing } from './security/pairing.js';
+import { OperatorVault } from './operator.js';
 import { Store } from './store.js';
 
 export interface NodeServer {
@@ -33,7 +35,16 @@ export interface StartOptions {
   log?: (msg: string) => void;
   /** Código novo depois que o anterior foi usado ou bloqueado (mostrar só localmente). */
   onCode?: (code: string, reason: 'used' | 'locked') => void;
+  /**
+   * O dono pediu para reiniciar pelo painel (`POST /api/devices/:id/restart`). Quem sobe o nó decide
+   * como: a linha de comando fecha e sai com `RESTART_EXIT_CODE` para o supervisor subir de novo; o
+   * app desktop fecha e sobe o nó outra vez no mesmo processo. Ausente: a rota responde 409.
+   */
+  onRestart?: () => void;
 }
+
+/** Código de saída do reinício pedido pelo painel (EX_TEMPFAIL): procd e systemd (`Restart=on-failure`) sobem de novo. */
+export const RESTART_EXIT_CODE = 75;
 
 /** TLS na rede local: certificado próprio do nó (P-256), gerado na primeira execução; chave com 0600. */
 async function tls(config: Config) {
@@ -71,19 +82,30 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   const pairing = new Pairing();
   const issueCode = () => pairing.issue(Date.now());
   const store = new Store(config.dataDir);
+  const vault = new OperatorVault(config.dataDir);
+  if (vault.setAside) o.log?.(`Chaves de operador ilegíveis: arquivo guardado em ${vault.setAside}. Restaure o backup cifrado em Configurações (API /api/operator/restore).`);
 
   // Retransmissão: um erro aqui (porta ocupada, por exemplo) não derruba o painel; o operador vê no log.
   let relay: RelayHandle | null = null;
   if (config.lnnp?.enabled) {
     try {
-      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), { log: o.log });
+      relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), {
+        log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json'), storeFile: join(config.dataDir, 'lnnp', 'relay-store.bin'),
+        trustFile: join(config.dataDir, 'lnnp', 'operator-trust.json'),
+      });
     } catch (e) {
       o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
     }
   }
 
+  // O próprio nó é um equipamento do dono: com rádio ou cabo serial ligado, é um Gateway Local.
+  const selfDevice = { name: (hostname().trim() || 'piu-node').slice(0, 40), cls: config.lnnp?.serial?.length ? 'Gateway Local' : 'Home Node' };
+  store.ensureSelfDevice(selfDevice, Date.now());
+  // Pausado no painel antes de reiniciar: continua pausado.
+  if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
+
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay,
+    config, store, pairing, packages, packagesDir, relay, selfDevice, vault, restart: o.onRestart,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).

@@ -9,13 +9,20 @@
 import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { unb64url } from '../messaging/card';
+import { normalizePin } from './nodeApi';
 
 export const PAIR_PREFIX = 'piup:';
 export const REQUEST_PREFIX = 'piut:';
 const B32 = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const te = new TextEncoder();
 
-export interface PairedNode { phoneId: string; secret: string; node: string; operator: string; at: number }
+/**
+ * `pin` e `url` (opcionais): impressão digital SHA-256 do certificado TLS do nó e o endereço completo
+ * (https://host:porta). O QR atual do piu-node ainda não os traz (proposta: campos `f` e `u` em
+ * `pairPayload`, docs/regras/mapa-regras-negocio.md, nota da 9.1). Sem `pin`, o app não conversa
+ * com a API do nó: não há como confiar no certificado autoassinado.
+ */
+export interface PairedNode { phoneId: string; secret: string; node: string; operator: string; at: number; pin?: string; url?: string }
 export interface TransferRequest { raw: string; txId: string; amount: number; to: string; phoneId: string; expiresAt: number; node: string }
 
 const u32 = (b: Uint8Array) => ((b[0]! << 24) | (b[1]! << 16) | (b[2]! << 8) | b[3]!) >>> 0;
@@ -29,7 +36,9 @@ export function parsePair(text: string, now = Date.now()): PairedNode {
   try { j = json(t.slice(PAIR_PREFIX.length)); } catch { throw new Error('QR incompleto ou corrompido.'); }
   const secret = typeof j.s === 'string' ? j.s : '';
   if (j.v !== 1 || typeof j.i !== 'string' || unb64url(secret).length !== 32) throw new Error('QR de pareamento inválido.');
-  return { phoneId: j.i, secret, node: String(j.n ?? 'piu-node').slice(0, 40), operator: String(j.o ?? '').slice(0, 40), at: now };
+  const pin = normalizePin(j.f);
+  const url = typeof j.u === 'string' && /^https:\/\/[^/?#\s]{1,80}$/.test(j.u) ? j.u : undefined;
+  return { phoneId: j.i, secret, node: String(j.n ?? 'piu-node').slice(0, 40), operator: String(j.o ?? '').slice(0, 40), at: now, ...(pin ? { pin } : {}), ...(url ? { url } : {}) };
 }
 
 /** Código de 6 dígitos que este celular mostra ao parear (o operador digita no painel). */

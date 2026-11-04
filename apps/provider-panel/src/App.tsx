@@ -25,11 +25,11 @@ function Panel() {
   const { page, wizardOpen } = useStore();
   const Page = PAGES[page];
   return (
-    <div style={{ height: '100%', minWidth: 1180, display: 'flex', flexDirection: 'column', background: 'var(--bg)', color: 'var(--ink)', position: 'relative', overflow: 'hidden' }}>
+    <div className="shell" style={{ height: '100%', display: 'flex', flexDirection: 'column', background: 'var(--bg)', color: 'var(--ink)', position: 'relative', overflow: 'hidden' }}>
       <TopBar />
-      <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+      <div className="shell-body" style={{ flex: 1, minHeight: 0, display: 'flex' }}>
         <Sidebar />
-        <main className="scroll-thin" style={{ flex: 1, minWidth: 0, overflowY: 'auto' }}>
+        <main className="scroll-thin shell-main" style={{ flex: 1, minWidth: 0, overflowY: 'auto', overflowX: 'hidden' }}>
           <PageHeader />
           <Page key={page} />
         </main>

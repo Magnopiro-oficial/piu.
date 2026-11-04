@@ -1,0 +1,620 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,300,0..1,0&display=block" rel="stylesheet">
+<style>
+:root{--t-hero:300px;--t-section:132px;--t-title:72px;--t-sub:44px;--t-body:34px;--t-small:28px;--t-mono:24px;--pad-top:100px;--pad-bottom:80px;--pad-x:100px;--gap-title:60px;--gap-item:28px;}
+html,body{margin:0;background:#0a0a0a;font-family:'Geist',system-ui,sans-serif;-webkit-font-smoothing:antialiased;}
+a{color:inherit;text-decoration:underline;text-underline-offset:4px;}
+a:hover{opacity:.7;}
+</style>
+</helmet>
+<x-import component-from-global-scope="deck-stage" from="./deck-stage.js" width="1920" height="1080" hint-size="100%,100%">
+
+<section data-label="Title" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;overflow:hidden;">
+  <div style="position:absolute;left:1000px;top:90px;width:900px;height:900px;">
+    <div style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:1.5px solid rgba(255,255,255,.18);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:200px;top:200px;width:500px;height:500px;border-radius:50%;border:1.5px solid rgba(255,255,255,.14);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:100px;top:100px;width:700px;height:700px;border-radius:50%;border:1.5px solid rgba(255,255,255,.1);box-sizing:border-box;"></div>
+    <div style="position:absolute;left:0;top:0;width:900px;height:900px;border-radius:50%;border:1.5px solid rgba(255,255,255,.07);box-sizing:border-box;"></div>
+    <div data-loop="pulse" style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:2px solid rgba(255,255,255,.35);box-sizing:border-box;opacity:0;"></div>
+    <div data-loop="pulse" data-delay="1600" style="position:absolute;left:300px;top:300px;width:300px;height:300px;border-radius:50%;border:2px solid rgba(255,255,255,.35);box-sizing:border-box;opacity:0;"></div>
+    <div style="position:absolute;left:420px;top:420px;width:60px;height:60px;border-radius:50%;background:#f4f4f2;"></div>
+    <div data-anim="500" data-kind="scale" style="position:absolute;left:560px;top:170px;display:flex;align-items:center;gap:14px;">
+      <div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.praca</span>
+    </div>
+    <div data-anim="650" data-kind="scale" style="position:absolute;left:150px;top:300px;display:flex;align-items:center;gap:14px;">
+      <div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.cafe</span>
+    </div>
+    <div data-anim="800" data-kind="scale" style="position:absolute;left:660px;top:640px;display:flex;align-items:center;gap:14px;">
+      <div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.escola</span>
+    </div>
+    <div data-anim="950" data-kind="scale" style="position:absolute;left:230px;top:720px;display:flex;align-items:center;gap:14px;">
+      <div style="width:18px;height:18px;border-radius:50%;background:#f4f4f2;"></div>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;">piu.feira</span>
+    </div>
+  </div>
+  <div style="position:absolute;left:var(--pad-x);top:var(--pad-top);bottom:var(--pad-bottom);width:900px;display:flex;flex-direction:column;justify-content:space-between;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">LUNES NETWORK · 2026</span>
+    <div style="display:flex;flex-direction:column;gap:36px;">
+      <div data-anim="100" style="display:flex;align-items:baseline;font-size:var(--t-hero);font-weight:750;letter-spacing:-0.07em;line-height:.85;">
+        <span>piu</span>
+        <span style="color:#6c6c69;">.</span>
+      </div>
+      <p data-anim="250" style="margin:0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;line-height:1.15;max-width:780px;text-wrap:pretty;">A messenger that works without the internet.</p>
+    </div>
+    <span data-anim="400" style="font-size:var(--t-small);color:#a2a29e;">Project overview</span>
+  </div>
+</section>
+
+<section data-label="The Problem" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">WHY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The Problem</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:64px;">
+    <div data-anim="200" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">01</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">Every message goes through a server</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">Today's messengers route every word through a company's data center. If it goes down or gets blocked, everyone goes quiet.</p>
+    </div>
+    <div data-anim="340" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">02</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">No internet, no conversation</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">Blackouts, floods, packed stadiums, rural areas. The moments people most need to talk are when the network fails.</p>
+    </div>
+    <div data-anim="480" style="display:flex;flex-direction:column;gap:28px;border-top:2px solid #0c0c0c;padding-top:36px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">03</span>
+      <h3 style="margin:0;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;text-wrap:pretty;">Your metadata belongs to someone else</h3>
+      <p style="margin:0;font-size:var(--t-small);line-height:1.4;color:#5f5f5c;text-wrap:pretty;">Even with encryption, a central server knows who you talk to, when, and from where. Signing up usually needs a phone number.</p>
+    </div>
+  </div>
+</section>
+
+<section data-label="Meet Piu" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;align-items:center;gap:120px;overflow:hidden;">
+  <div style="flex:1;display:flex;flex-direction:column;align-self:stretch;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">WHAT</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Meet Piu</h2>
+    <p data-anim="200" style="margin:var(--gap-title) 0 0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;line-height:1.2;text-wrap:pretty;">An offline-first messenger. Messages hop from device to device — over Bluetooth, Wi-Fi or radio — until they reach the person you wrote to.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:22px;">
+      <div data-anim="360" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);">
+        <span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">cloud_off</span>
+        <span>No central server</span>
+      </div>
+      <div data-anim="460" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);">
+        <span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">lock</span>
+        <span>End-to-end encrypted</span>
+      </div>
+      <div data-anim="560" style="display:flex;align-items:center;gap:22px;font-size:var(--t-body);">
+        <span style="font-family:'Material Symbols Rounded';font-size:44px;font-variation-settings:'wght' 300;color:#a2a29e;">schedule_send</span>
+        <span>Waits and forwards when there's no route yet</span>
+      </div>
+    </div>
+  </div>
+  <div data-om-raster="" data-anim="250" data-kind="scale" style="width:400px;height:839px;flex:none;position:relative;">
+    <img src="export/shots/chats-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:62px;">
+  </div>
+</section>
+
+<section data-label="Part 01" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;gap:36px;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">PART 01</span>
+  <h2 data-anim="100" style="margin:0;font-size:var(--t-section);font-weight:700;letter-spacing:-0.055em;line-height:.95;">How It Works</h2>
+  <div data-anim="250" data-kind="grow" style="height:2px;background:#f4f4f2;transform-origin:0 50%;"></div>
+  <p data-anim="350" style="margin:0;font-size:var(--t-body);color:#a2a29e;">Routing, transports and privacy</p>
+</section>
+
+<section data-label="How a Message Travels" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">01 · HOW IT WORKS</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">How a Message Travels</h2>
+  <div style="margin-top:auto;display:flex;align-items:flex-start;">
+    <div data-anim="200" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;background:#0c0c0c;color:#ffffff;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">You</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">sender</span>
+    </div>
+    <div data-anim="300" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Bluetooth</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;">
+        <div style="width:100%;border-top:2px dotted #0c0c0c;"></div>
+        <div data-loop="travel" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div>
+      </div>
+    </div>
+    <div data-anim="400" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">A stranger's phone</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">relay</span>
+    </div>
+    <div data-anim="500" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Wi-Fi Mesh</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;">
+        <div style="width:100%;border-top:2px solid #0c0c0c;"></div>
+        <div data-loop="travel" data-delay="600" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div>
+      </div>
+    </div>
+    <div data-anim="600" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">router</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Café router</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">piu.cafe</span>
+    </div>
+    <div data-anim="700" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">LoRa radio</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;">
+        <div style="width:100%;border-top:2px dashed #0c0c0c;"></div>
+        <div data-loop="travel" data-delay="1200" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div>
+      </div>
+    </div>
+    <div data-anim="800" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;border:2px solid #0c0c0c;box-sizing:border-box;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">cell_tower</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Piu Node</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">piu.praca</span>
+    </div>
+    <div data-anim="900" data-kind="fade" style="flex:1;display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:30px;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Wi-Fi Direct</span>
+      <div style="position:relative;width:100%;height:16px;display:flex;align-items:center;">
+        <div style="width:100%;border-top:2px dotted #0c0c0c;"></div>
+        <div data-loop="travel" data-delay="1800" style="position:absolute;left:0;top:0;width:16px;height:16px;border-radius:50%;background:#0c0c0c;"></div>
+      </div>
+    </div>
+    <div data-anim="1000" data-kind="scale" style="width:200px;flex:none;display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+      <div style="width:140px;height:140px;border-radius:50%;background:#0c0c0c;color:#ffffff;display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:60px;font-variation-settings:'wght' 300;">smartphone</div>
+      <span style="font-size:var(--t-body);font-weight:650;">Your friend</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">recipient</span>
+    </div>
+  </div>
+  <div style="margin-top:auto;display:flex;align-items:flex-end;justify-content:space-between;gap:60px;border-top:1px solid rgba(0,0,0,.16);padding-top:36px;">
+    <div data-anim="1100" style="display:flex;align-items:center;gap:20px;font-family:'Geist Mono';font-size:var(--t-mono);">
+      <span>Created</span>
+      <span style="color:#5f5f5c;">→</span>
+      <span>Queued</span>
+      <span style="color:#5f5f5c;">→</span>
+      <span>Forwarded</span>
+      <span style="color:#5f5f5c;">→</span>
+      <span style="background:#0c0c0c;color:#ffffff;padding:6px 16px;border-radius:999px;">Delivered</span>
+    </div>
+    <p data-anim="1200" style="margin:0;font-size:var(--t-small);color:#5f5f5c;max-width:640px;text-align:right;text-wrap:pretty;">Every hop carries a sealed envelope. Relays can't read it.</p>
+  </div>
+</section>
+
+<section data-label="Five Ways to Connect" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">01 · HOW IT WORKS</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Five Ways to Connect</h2>
+  <div style="margin-top:var(--gap-title);display:flex;flex-direction:column;">
+    <div data-anim="160" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:0 0 18px;border-bottom:2px solid #0c0c0c;font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">
+      <span>TRANSPORT</span>
+      <span>GOOD FOR</span>
+      <span>CARRIES</span>
+    </div>
+    <div data-anim="240" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:26px 0;border-bottom:1px solid rgba(0,0,0,.16);align-items:center;font-size:var(--t-small);">
+      <span style="font-size:var(--t-body);font-weight:650;">Bluetooth LE</span>
+      <span style="color:#5f5f5c;">Phones in the same room or street</span>
+      <span>Text</span>
+    </div>
+    <div data-anim="320" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:26px 0;border-bottom:1px solid rgba(0,0,0,.16);align-items:center;font-size:var(--t-small);">
+      <span style="font-size:var(--t-body);font-weight:650;">Wi-Fi Direct</span>
+      <span style="color:#5f5f5c;">Fast phone-to-phone transfers</span>
+      <span>Text, files, the app itself</span>
+    </div>
+    <div data-anim="400" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:26px 0;border-bottom:1px solid rgba(0,0,0,.16);align-items:center;font-size:var(--t-small);">
+      <span style="font-size:var(--t-body);font-weight:650;">Wi-Fi Mesh</span>
+      <span style="color:#5f5f5c;">Routers covering a block or neighborhood</span>
+      <span>Everything</span>
+    </div>
+    <div data-anim="480" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:26px 0;border-bottom:1px solid rgba(0,0,0,.16);align-items:center;font-size:var(--t-small);">
+      <span style="font-size:var(--t-body);font-weight:650;">LoRa radio</span>
+      <span style="color:#5f5f5c;">Long distances, very little bandwidth</span>
+      <span>Text and alerts only</span>
+    </div>
+    <div data-anim="560" style="display:grid;grid-template-columns:440px minmax(0,1fr) 420px;gap:40px;padding:26px 0;border-bottom:1px solid rgba(0,0,0,.16);align-items:center;font-size:var(--t-small);">
+      <span style="font-size:var(--t-body);font-weight:650;">USB / Ethernet</span>
+      <span style="color:#5f5f5c;">Wired links between nodes</span>
+      <span>Everything</span>
+    </div>
+  </div>
+  <p data-anim="700" style="margin:auto 0 0;font-size:var(--t-small);color:#5f5f5c;">Photos and files never go over LoRa — they pause and wait for a faster link.</p>
+</section>
+
+<section data-label="Privacy by Design" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">01 · HOW IT WORKS</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Privacy by Design</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:100px;">
+    <div style="display:flex;flex-direction:column;gap:26px;">
+      <span data-anim="160" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-bottom:18px;border-bottom:2px solid #f4f4f2;">WHAT PIU DOES</span>
+      <div data-anim="240" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">check</span><span>End-to-end encryption on every message</span></div>
+      <div data-anim="320" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">check</span><span>No phone number or email — keys are created on your device</span></div>
+      <div data-anim="400" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">check</span><span>Separate public and anonymous identities</span></div>
+      <div data-anim="480" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">check</span><span>No messages on the blockchain, ever</span></div>
+      <div data-anim="560" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">check</span><span>Diagnostics stay on your phone</span></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:26px;">
+      <span data-anim="640" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-bottom:18px;border-bottom:2px dashed rgba(255,255,255,.4);">WHAT WE DON'T PROMISE</span>
+      <div data-anim="720" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;color:#a2a29e;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">remove</span><span>Perfect anonymity — radio can reveal that you're nearby</span></div>
+      <div data-anim="800" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;color:#a2a29e;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">remove</span><span>24/7 relaying on iPhone — only while the app is open</span></div>
+      <div data-anim="880" style="display:flex;gap:22px;font-size:var(--t-small);line-height:1.35;color:#a2a29e;"><span style="font-family:'Material Symbols Rounded';font-size:38px;font-variation-settings:'wght' 300;">remove</span><span>Instant delivery — offline messages wait for a route</span></div>
+    </div>
+  </div>
+</section>
+
+<section data-label="Part 02" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;gap:36px;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">PART 02</span>
+  <h2 data-anim="100" style="margin:0;font-size:var(--t-section);font-weight:700;letter-spacing:-0.055em;line-height:.95;">The App</h2>
+  <div data-anim="250" data-kind="grow" style="height:2px;background:#f4f4f2;transform-origin:0 50%;"></div>
+  <p data-anim="350" style="margin:0;font-size:var(--t-body);color:#a2a29e;">Conversations, network, wallet and growth</p>
+</section>
+
+<section data-label="Inside the App" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) 60px;box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">02 · THE APP</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Inside the App</h2>
+  <div style="margin-top:auto;display:flex;justify-content:space-between;align-items:flex-end;">
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div data-om-raster="" data-anim="200" style="width:322px;height:675px;position:relative;">
+        <img src="export/shots/chats-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;">
+      </div>
+      <span data-anim="300" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Conversations</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div data-om-raster="" data-anim="320" style="width:322px;height:675px;position:relative;">
+        <img src="export/shots/network-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;">
+      </div>
+      <span data-anim="420" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Network &amp; node mode</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div data-om-raster="" data-anim="440" style="width:322px;height:675px;position:relative;">
+        <img src="export/shots/wallet-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;">
+      </div>
+      <span data-anim="540" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">LUNES wallet</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div data-om-raster="" data-anim="560" style="width:322px;height:675px;position:relative;">
+        <img src="export/shots/rewards-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;">
+      </div>
+      <span data-anim="660" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Network credits</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:20px;">
+      <div data-om-raster="" data-anim="680" style="width:322px;height:675px;position:relative;">
+        <img src="export/shots/profile-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:50px;">
+      </div>
+      <span data-anim="780" style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Profile &amp; settings</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="Spreading Phone to Phone" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:100px;">
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">02 · THE APP</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Spreading Phone to Phone</h2>
+    <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;line-height:1.3;text-wrap:pretty;">No app store or internet needed to install. A friend hands it to you.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;">
+      <div data-anim="260" style="display:grid;grid-template-columns:80px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid rgba(0,0,0,.16);font-size:var(--t-small);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">01</span><span>Show a signed invite QR — single use, valid 24 h</span></div>
+      <div data-anim="360" style="display:grid;grid-template-columns:80px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid rgba(0,0,0,.16);font-size:var(--t-small);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">02</span><span>Send the app over Wi-Fi Direct or Bluetooth</span></div>
+      <div data-anim="460" style="display:grid;grid-template-columns:80px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid rgba(0,0,0,.16);font-size:var(--t-small);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">03</span><span>Both confirm a 4-word security code</span></div>
+      <div data-anim="560" style="display:grid;grid-template-columns:80px minmax(0,1fr);gap:20px;padding:22px 0;border-top:1px solid rgba(0,0,0,.16);border-bottom:1px solid rgba(0,0,0,.16);font-size:var(--t-small);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">04</span><span>First launch runs 5 checks on the copy</span></div>
+      <span data-anim="660" style="margin-top:24px;font-size:var(--t-mono);color:#5f5f5c;">Android only. iPhone installs come from the App Store.</span>
+    </div>
+  </div>
+  <div style="display:flex;gap:36px;align-items:center;">
+    <div data-om-raster="" data-anim="300" data-kind="scale" style="width:358px;height:750px;position:relative;">
+      <img src="export/shots/invite-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:55px;">
+    </div>
+    <div data-om-raster="" data-anim="450" data-kind="scale" style="width:358px;height:750px;position:relative;">
+      <img src="export/shots/share-dark.png" alt="" style="width:100%;height:100%;display:block;border-radius:55px;">
+    </div>
+  </div>
+</section>
+
+<section data-label="Nearby" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:120px;">
+  <div style="display:flex;align-items:center;">
+    <div data-om-raster="" data-anim="200" data-kind="scale" style="width:400px;height:839px;position:relative;">
+      <img src="export/shots/nearby-light.png" alt="" style="width:100%;height:100%;display:block;border-radius:62px;">
+    </div>
+  </div>
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">02 · THE APP</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Nearby</h2>
+    <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;line-height:1.3;text-wrap:pretty;">Meet people around you. To open a conversation with a stranger, you pay a small fee — it keeps spam out.</p>
+    <div data-anim="300" style="margin-top:auto;display:flex;align-items:baseline;gap:28px;">
+      <span style="font-size:180px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">1–10</span>
+      <span style="font-family:'Geist Mono';font-size:var(--t-sub);color:#5f5f5c;">LUNES</span>
+    </div>
+    <span data-anim="360" style="margin-top:16px;font-size:var(--t-small);color:#5f5f5c;">per invite, set by the person receiving it</span>
+    <div style="margin-top:48px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:40px;">
+      <div data-anim="440" style="display:flex;flex-direction:column;gap:14px;border-top:2px solid #0c0c0c;padding-top:22px;"><span style="font-size:var(--t-small);font-weight:650;">Held, not spent</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Refunded if declined or after 24 h</span></div>
+      <div data-anim="520" style="display:flex;flex-direction:column;gap:14px;border-top:2px solid #0c0c0c;padding-top:22px;"><span style="font-size:var(--t-small);font-weight:650;">Rough distance</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Never an exact location</span></div>
+      <div data-anim="600" style="display:flex;flex-direction:column;gap:14px;border-top:2px solid #0c0c0c;padding-top:22px;"><span style="font-size:var(--t-small);font-weight:650;">Opt-in</span><span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Visibility turns off after 1 h</span></div>
+    </div>
+  </div>
+</section>
+
+<section data-label="Part 03" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:flex-end;gap:36px;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">PART 03</span>
+  <h2 data-anim="100" style="margin:0;font-size:var(--t-section);font-weight:700;letter-spacing:-0.055em;line-height:.95;">Network &amp; Economy</h2>
+  <div data-anim="250" data-kind="grow" style="height:2px;background:#f4f4f2;transform-origin:0 50%;"></div>
+  <p data-anim="350" style="margin:0;font-size:var(--t-body);color:#a2a29e;">Providers, credits, LUNES and what comes next</p>
+</section>
+
+<section data-label="Who Runs the Network" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">03 · NETWORK &amp; ECONOMY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Who Runs the Network</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;max-width:1300px;line-height:1.3;text-wrap:pretty;">Anyone can be a provider: plug in equipment, relay traffic for others, earn credits.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;">
+    <div data-anim="260" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:440px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">home</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;">Home Node</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">A small box at home relaying for the neighbors</span>
+      <span style="margin-top:auto;font-family:'Geist Mono';font-size:var(--t-mono);">Earns credits</span>
+    </div>
+    <div data-anim="360" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:440px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">hub</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;">Super Node</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">Always-on, several radios, stores and forwards for an area</span>
+      <span style="margin-top:auto;font-family:'Geist Mono';font-size:var(--t-mono);">Earns credits</span>
+    </div>
+    <div data-anim="460" style="background:#f3f3f1;border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:440px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">cell_tower</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;">Local Gateway</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">Links distant meshes when any connection is available</span>
+      <span style="margin-top:auto;font-family:'Geist Mono';font-size:var(--t-mono);">Earns credits</span>
+    </div>
+    <div data-anim="560" style="border:2px dashed rgba(0,0,0,.16);border-radius:28px;padding:40px 36px;display:flex;flex-direction:column;gap:22px;min-height:440px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">router</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;">Access Point</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">A regular router, no Piu software, linked to a parent node</span>
+      <span style="margin-top:auto;font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">Earnings go to the parent</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="How Providers Earn" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:120px;">
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">03 · NETWORK &amp; ECONOMY</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">How Providers Earn</h2>
+    <div style="margin-top:auto;display:flex;flex-direction:column;">
+      <div data-anim="200" style="display:flex;justify-content:space-between;padding:0 0 18px;border-bottom:2px solid #f4f4f2;font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;"><span>RELAYED</span><span>CREDITS</span></div>
+      <div data-anim="280" style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-bottom:1px solid rgba(255,255,255,.18);"><span style="font-size:var(--t-body);">Text message</span><span style="font-size:var(--t-sub);font-weight:650;font-variant-numeric:tabular-nums;">1</span></div>
+      <div data-anim="360" style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-bottom:1px solid rgba(255,255,255,.18);"><span style="font-size:var(--t-body);">File, per MB</span><span style="font-size:var(--t-sub);font-weight:650;font-variant-numeric:tabular-nums;">2</span></div>
+      <div data-anim="440" style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-bottom:1px solid rgba(255,255,255,.18);"><span style="font-size:var(--t-body);">Alert over radio</span><span style="font-size:var(--t-sub);font-weight:650;font-variant-numeric:tabular-nums;">3</span></div>
+      <div data-anim="520" style="display:flex;justify-content:space-between;align-items:baseline;padding:26px 0;border-bottom:1px solid rgba(255,255,255,.18);"><span style="font-size:var(--t-body);">New route opened</span><span style="font-size:var(--t-sub);font-weight:650;font-variant-numeric:tabular-nums;">10</span></div>
+    </div>
+  </div>
+  <div style="width:640px;flex:none;display:flex;flex-direction:column;justify-content:flex-end;gap:48px;">
+    <div data-anim="620" data-kind="scale" style="background:#f4f4f2;color:#0a0a0a;border-radius:28px;padding:48px;display:flex;flex-direction:column;gap:16px;">
+      <span style="font-size:120px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">100 : 1</span>
+      <span style="font-size:var(--t-small);">100 credits = 1 LUNES, paid in batches to a separate provider wallet</span>
+    </div>
+    <div data-anim="760" style="display:flex;flex-direction:column;gap:18px;font-size:var(--t-small);color:#a2a29e;line-height:1.35;">
+      <span>Duplicates and loops earn nothing.</span>
+      <span>Credits go pending → validated → paid.</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="The Provider Dashboard" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;gap:64px;">
+  <div style="flex:1;display:flex;flex-direction:column;">
+    <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">03 · NETWORK &amp; ECONOMY</span>
+    <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The Provider Dashboard</h2>
+    <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-small);color:#5f5f5c;line-height:1.4;text-wrap:pretty;">Runs on the node itself, on the local network. No cloud account.</p>
+    <div style="margin-top:auto;display:flex;flex-direction:column;gap:18px;font-size:var(--t-small);">
+      <span data-anim="300">Equipment</span>
+      <span data-anim="360">Live mesh map</span>
+      <span data-anim="420">Earnings &amp; batches</span>
+      <span data-anim="480">Payouts signed on your phone</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:center;">
+    <div data-om-raster="" data-anim="240" data-kind="scale" style="width:1216px;height:779px;position:relative;border-radius:14px;overflow:hidden;box-shadow:0 30px 70px -20px rgba(0,0,0,.3),0 0 0 1px rgba(0,0,0,.12);">
+      <img src="export/shots/desk-light.png" alt="" style="width:100%;height:100%;display:block;">
+    </div>
+  </div>
+</section>
+
+<section data-label="The LUNES Economy" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">03 · NETWORK &amp; ECONOMY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">The LUNES Economy</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#5f5f5c;max-width:1300px;line-height:1.3;text-wrap:pretty;">LUNES is the Lunes Network token. In Piu it rewards people who grow and power the network.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:48px;">
+    <div data-anim="260" style="display:flex;flex-direction:column;gap:20px;border-top:2px solid #0c0c0c;padding-top:30px;">
+      <span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">10</span>
+      <span style="font-size:var(--t-small);font-weight:650;">Welcome bonus</span>
+      <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">LUNES, unlocked in 4 steps</span>
+    </div>
+    <div data-anim="360" style="display:flex;flex-direction:column;gap:20px;border-top:2px solid #0c0c0c;padding-top:30px;">
+      <span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">25</span>
+      <span style="font-size:var(--t-small);font-weight:650;">Per active invitee</span>
+      <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Direct invites only, no pyramid</span>
+    </div>
+    <div data-anim="460" style="display:flex;flex-direction:column;gap:20px;border-top:2px solid #0c0c0c;padding-top:30px;">
+      <span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">1–10</span>
+      <span style="font-size:var(--t-small);font-weight:650;">Nearby invite</span>
+      <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Goes to the person who accepts</span>
+    </div>
+    <div data-anim="560" style="display:flex;flex-direction:column;gap:20px;border-top:2px solid #0c0c0c;padding-top:30px;">
+      <span style="font-size:136px;font-weight:700;letter-spacing:-0.06em;line-height:.9;font-variant-numeric:tabular-nums;">100:1</span>
+      <span style="font-size:var(--t-small);font-weight:650;">Provider credits</span>
+      <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.35;">Converted to LUNES in batches</span>
+    </div>
+  </div>
+  <span data-anim="700" style="margin-top:48px;font-size:var(--t-mono);color:#5f5f5c;">All values are illustrative and still being modeled.</span>
+</section>
+
+<section data-label="Business Model" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">03 · NETWORK &amp; ECONOMY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Business Model</h2>
+  <p data-anim="160" style="margin:36px 0 0;font-size:var(--t-body);color:#a2a29e;line-height:1.3;">Messaging stays free. Revenue comes from around it.</p>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:28px;">
+    <div data-anim="260" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:420px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">memory</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Piu Node hardware</span>
+      <span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">Ready-to-plug reference kits for providers</span>
+    </div>
+    <div data-anim="380" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:420px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">apartment</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Services for organizations</span>
+      <span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">Coverage and signed alerts for cities, events, campuses and civil defense</span>
+    </div>
+    <div data-anim="500" style="border:1.5px solid rgba(255,255,255,.18);border-radius:28px;padding:44px 40px;display:flex;flex-direction:column;gap:24px;min-height:420px;box-sizing:border-box;">
+      <span style="font-family:'Material Symbols Rounded';font-size:64px;font-variation-settings:'wght' 300;">toll</span>
+      <span style="font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Network fees</span>
+      <span style="font-size:var(--t-small);color:#a2a29e;line-height:1.35;">A small share of Nearby invites and credit settlements</span>
+    </div>
+  </div>
+  <span data-anim="640" style="margin-top:40px;font-size:var(--t-mono);color:#a2a29e;">Under study — not final.</span>
+</section>
+
+<section data-label="Roadmap" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">03 · NETWORK &amp; ECONOMY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Roadmap</h2>
+  <div style="margin-top:auto;position:relative;">
+    <div style="position:absolute;left:0;right:0;top:15px;height:2px;background:rgba(0,0,0,.16);"></div>
+    <div data-anim="200" data-kind="grow" style="position:absolute;left:0;width:22%;top:14px;height:4px;background:#0c0c0c;transform-origin:0 50%;"></div>
+    <div style="position:relative;display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:36px;">
+      <div data-anim="300" style="display:flex;flex-direction:column;gap:22px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#0c0c0c;"></div>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 1</span>
+        <span style="font-size:var(--t-body);font-weight:650;letter-spacing:-0.02em;line-height:1.15;">Product design</span>
+        <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">App, provider panel, site</span>
+        <span style="align-self:flex-start;font-family:'Geist Mono';font-size:var(--t-mono);background:#0c0c0c;color:#ffffff;padding:6px 16px;border-radius:999px;">Done</span>
+      </div>
+      <div data-anim="400" style="display:flex;flex-direction:column;gap:22px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:4px solid #0c0c0c;box-sizing:border-box;"></div>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 2</span>
+        <span style="font-size:var(--t-body);font-weight:650;letter-spacing:-0.02em;line-height:1.15;">Core prototype</span>
+        <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Bluetooth + Wi-Fi Direct on Android</span>
+        <span style="align-self:flex-start;font-family:'Geist Mono';font-size:var(--t-mono);border:1.5px solid #0c0c0c;padding:5px 15px;border-radius:999px;">Next</span>
+      </div>
+      <div data-anim="500" style="display:flex;flex-direction:column;gap:22px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:2px solid rgba(0,0,0,.3);box-sizing:border-box;"></div>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 3</span>
+        <span style="font-size:var(--t-body);font-weight:650;letter-spacing:-0.02em;line-height:1.15;">Closed beta</span>
+        <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Phone-to-phone install, real groups</span>
+      </div>
+      <div data-anim="600" style="display:flex;flex-direction:column;gap:22px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:2px solid rgba(0,0,0,.3);box-sizing:border-box;"></div>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 4</span>
+        <span style="font-size:var(--t-body);font-weight:650;letter-spacing:-0.02em;line-height:1.15;">Provider network</span>
+        <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">Piu Node, LoRa, credits on testnet</span>
+      </div>
+      <div data-anim="700" style="display:flex;flex-direction:column;gap:22px;">
+        <div style="width:32px;height:32px;border-radius:50%;background:#ffffff;border:2px solid rgba(0,0,0,.3);box-sizing:border-box;"></div>
+        <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">PHASE 5</span>
+        <span style="font-size:var(--t-body);font-weight:650;letter-spacing:-0.02em;line-height:1.15;">Public launch</span>
+        <span style="font-size:var(--t-mono);color:#5f5f5c;line-height:1.4;">iOS, Mainnet payouts</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section data-label="Open Questions" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#a2a29e;">03 · NETWORK &amp; ECONOMY</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">Open Questions</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));column-gap:100px;">
+    <div data-anim="200" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">01</span><span>Final token values and credit rates</span></div>
+    <div data-anim="280" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">02</span><span>Certified radio hardware</span></div>
+    <div data-anim="360" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">03</span><span>Encryption algorithms and routing protocol</span></div>
+    <div data-anim="440" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">04</span><span>Stopping fraud without exposing metadata</span></div>
+    <div data-anim="520" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);border-bottom:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">05</span><span>Reference equipment for providers</span></div>
+    <div data-anim="600" style="display:grid;grid-template-columns:70px minmax(0,1fr);gap:16px;padding:30px 0;border-top:1px solid rgba(255,255,255,.18);border-bottom:1px solid rgba(255,255,255,.18);font-size:var(--t-body);"><span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#a2a29e;padding-top:6px;">06</span><span>Recovering an identity when every device is lost</span></div>
+  </div>
+</section>
+
+<section data-label="What I'm Looking For" style="background:#ffffff;color:#0c0c0c;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;">
+  <span data-anim="0" style="font-family:'Geist Mono';font-size:var(--t-mono);letter-spacing:.06em;color:#5f5f5c;">NEXT</span>
+  <h2 data-anim="80" style="margin:18px 0 0;font-size:var(--t-title);font-weight:700;letter-spacing:-0.045em;line-height:1;">What I'm Looking For</h2>
+  <div style="margin-top:auto;display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:28px;">
+    <div data-anim="200" style="background:#0c0c0c;color:#ffffff;border-radius:28px;padding:44px 36px;display:flex;flex-direction:column;gap:24px;min-height:480px;box-sizing:border-box;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);opacity:.7;">01</span>
+      <span style="margin-top:auto;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Honest feedback</span>
+      <span style="font-size:var(--t-small);line-height:1.35;opacity:.8;">What's confusing, what you'd actually use</span>
+    </div>
+    <div data-anim="300" style="background:#f3f3f1;border-radius:28px;padding:44px 36px;display:flex;flex-direction:column;gap:24px;min-height:480px;box-sizing:border-box;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">02</span>
+      <span style="margin-top:auto;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Early testers</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">Android users willing to try the beta</span>
+    </div>
+    <div data-anim="400" style="background:#f3f3f1;border-radius:28px;padding:44px 36px;display:flex;flex-direction:column;gap:24px;min-height:480px;box-sizing:border-box;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">03</span>
+      <span style="margin-top:auto;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">First providers</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">People who'd run a node at home or work</span>
+    </div>
+    <div data-anim="500" style="background:#f3f3f1;border-radius:28px;padding:44px 36px;display:flex;flex-direction:column;gap:24px;min-height:480px;box-sizing:border-box;">
+      <span style="font-family:'Geist Mono';font-size:var(--t-mono);color:#5f5f5c;">04</span>
+      <span style="margin-top:auto;font-size:var(--t-sub);font-weight:650;letter-spacing:-0.03em;line-height:1.1;">Partners &amp; investors</span>
+      <span style="font-size:var(--t-small);color:#5f5f5c;line-height:1.35;">To build the core prototype and first nodes</span>
+    </div>
+  </div>
+</section>
+
+<section data-label="Closing" style="background:#0a0a0a;color:#f4f4f2;font-family:Geist;padding:var(--pad-top) var(--pad-x) var(--pad-bottom);box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;align-items:center;gap:40px;text-align:center;overflow:hidden;">
+  <div data-loop="pulse" style="position:absolute;left:660px;top:240px;width:600px;height:600px;border-radius:50%;border:2px solid rgba(255,255,255,.25);box-sizing:border-box;opacity:0;"></div>
+  <div data-loop="pulse" data-delay="1600" style="position:absolute;left:660px;top:240px;width:600px;height:600px;border-radius:50%;border:2px solid rgba(255,255,255,.25);box-sizing:border-box;opacity:0;"></div>
+  <div data-anim="0" data-kind="scale" style="display:flex;align-items:baseline;font-size:var(--t-hero);font-weight:750;letter-spacing:-0.07em;line-height:.85;">
+    <span>piu</span>
+    <span style="color:#6c6c69;">.</span>
+  </div>
+  <p data-anim="200" style="margin:0;font-size:var(--t-sub);font-weight:500;letter-spacing:-0.025em;">Thanks for reading.</p>
+</section>
+
+</x-import>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  componentDidMount() {
+    this.onChange = e => this.play(e.detail && e.detail.slide);
+    document.addEventListener('slidechange', this.onChange);
+    this.t = setTimeout(() => {
+      this.startLoops();
+      this.play(document.querySelector('deck-stage > [data-deck-active]'));
+    }, 300);
+  }
+  componentWillUnmount() {
+    document.removeEventListener('slidechange', this.onChange);
+    clearTimeout(this.t);
+  }
+  still() {
+    const st = document.querySelector('deck-stage');
+    return (st && st.hasAttribute('noscale')) || matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
+  startLoops() {
+    if (this.still()) return;
+    document.querySelectorAll('[data-loop]').forEach(el => {
+      if (el._loop) return;
+      const delay = +el.dataset.delay || 0;
+      if (el.dataset.loop === 'pulse') {
+        el._loop = el.animate([{ opacity: .9, transform: 'scale(.5)' }, { opacity: 0, transform: 'scale(3)' }], { duration: 3200, delay, iterations: Infinity, easing: 'cubic-bezier(.2,.6,.3,1)' });
+      } else if (el.dataset.loop === 'travel') {
+        el._loop = el.animate([{ left: '0%', opacity: 0 }, { opacity: 1, offset: .1 }, { opacity: 1, offset: .9 }, { left: 'calc(100% - 16px)', opacity: 0 }], { duration: 2400, delay, iterations: Infinity, easing: 'linear', fill: 'backwards' });
+      }
+    });
+  }
+  play(slide) {
+    if (!slide) return;
+    if (this.still()) {
+      document.getAnimations().forEach(a => a.cancel());
+      return;
+    }
+    this.startLoops();
+    slide.querySelectorAll('[data-anim]').forEach(el => {
+      const d = +el.dataset.anim || 0, k = el.dataset.kind || 'up';
+      const from = k === 'fade' ? { opacity: 0 }
+        : k === 'scale' ? { opacity: 0, transform: 'scale(.92)' }
+        : k === 'grow' ? { transform: 'scaleX(0)' }
+        : { opacity: 0, transform: 'translateY(32px)' };
+      const to = k === 'grow' ? { transform: 'scaleX(1)' } : { opacity: 1, transform: 'none' };
+      el.animate([from, to], { duration: k === 'grow' ? 900 : 700, delay: d, easing: 'cubic-bezier(.2,.9,.3,1)', fill: 'backwards' });
+    });
+  }
+}
+</script>
+</body>
+</html>

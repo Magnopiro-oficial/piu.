@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { PROV_FAMILIES } from '../../data/network';
-import { useNetwork } from '../../state/network';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader } from '../../ui/Controls';
@@ -10,21 +10,21 @@ import { Screen } from '../../ui/Screen';
 import { RadioDot, StepHeader } from '../../ui/StepHeader';
 import { T } from '../../ui/T';
 
-/** Passo 1 de 4: tipo de equipamento (o selo mostra o quanto cada suporte está pronto). */
+/** Passo 1: tipo de equipamento (o selo mostra o quanto cada suporte está pronto). */
 export default function ProvAdd() {
   const { c } = useTheme();
-  const { draft, setDraft } = useNetwork();
+  const [fam, setFam] = useState(PROV_FAMILIES[0].id);
   return (
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <StepHeader step="PASSO 1 DE 4 · EQUIPAMENTO" title="O que você vai conectar?" />
+        <StepHeader step="PASSO 1 · EQUIPAMENTO" title="O que você vai conectar?" />
         <View accessibilityRole="radiogroup" style={{ paddingHorizontal: 20, gap: 8 }}>
           {PROV_FAMILIES.map(f => {
-            const on = draft.fam === f.id;
+            const on = fam === f.id;
             return (
               <Pressable key={f.id} disabled={f.disabled} accessibilityRole="radio" accessibilityState={{ checked: on, disabled: f.disabled }} aria-checked={on}
-                onPress={() => setDraft({ fam: f.id, name: f.defName ?? '', ifaces: {}, pub: f.id === 'lora' ? 'serra-sul' : 'vila-esperanca-4' })}
+                onPress={() => setFam(f.id)}
                 style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent', opacity: f.disabled ? 0.45 : 1 }}>
                 <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={f.icon} size={22} w={300} /></View>
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
@@ -41,7 +41,7 @@ export default function ProvAdd() {
           })}
         </View>
         <View style={{ paddingTop: 20, paddingHorizontal: 20 }}>
-          <Button label="Continuar" onPress={() => router.push('/provider/connect')} />
+          <Button label="Continuar" onPress={() => router.push({ pathname: '/provider/connect', params: { fam } })} />
         </View>
       </ScrollView>
     </Screen>

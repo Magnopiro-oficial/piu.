@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
@@ -16,6 +17,11 @@ export interface Config {
   releasePubKey: string | null;
   /** Motor de retransmissão LNNP (adapter LAN). Ausente: o nó sobe sem retransmitir. */
   lnnp?: LnnpConfig;
+  /**
+   * Endereços WebSocket da Lunes Mainnet para ler o saldo da carteira de provider (`PIU_LUNES_ENDPOINTS`).
+   * Ausente: os de produção, na ordem confirmada (src/lunes/lunesRpc.ts).
+   */
+  lunesEndpoints?: string[];
 }
 
 export interface LnnpConfig {
@@ -37,6 +43,10 @@ export interface LnnpConfig {
   /** Só aceita estes nós (chave do nó em hex, 64 caracteres). `null`: qualquer nó LNNP. */
   allow: string[] | null;
   beaconMs: number;
+  /** Intervalo das amostras do histórico de retransmissão (ms): `PIU_RELAY_SAMPLE_MS`. */
+  sampleMs?: number;
+  /** Intervalo para gravar as mensagens guardadas quando mudam (ms): `PIU_RELAY_PERSIST_MS`. */
+  persistMs?: number;
   /** Portas seriais (rádio LoRa ou cabo USB): `PIU_SERIAL`. */
   serial?: { kind: 'lora' | 'usb'; path: string; baud: number }[];
   /** Rádio LoRa: parâmetros (para o tempo no ar), ocupação do canal, maior envelope e anúncio. */
@@ -75,6 +85,8 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     memoryMB: Number(env.PIU_LNNP_MEMORY_MB ?? 256),
     allow: allow.length ? allow : null,
     beaconMs: Number(env.PIU_LNNP_BEACON_MS ?? 5000),
+    sampleMs: num('PIU_RELAY_SAMPLE_MS', 300_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
+    persistMs: num('PIU_RELAY_PERSIST_MS', 30_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
   };
 }
 
@@ -89,5 +101,6 @@ export function loadConfig(env = process.env): Config {
     panelDir: resolve(env.PIU_NODE_PANEL ?? '../provider-panel/dist'),
     releasePubKey: env.PIU_RELEASE_PUBKEY?.trim() || null,
     lnnp: loadLnnpConfig(env),
+    lunesEndpoints: parseLunesEndpoints(env.PIU_LUNES_ENDPOINTS),
   };
 }

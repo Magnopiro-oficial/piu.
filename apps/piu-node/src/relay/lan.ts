@@ -6,12 +6,14 @@
  *   cada destino de `broadcast` (padrão 255.255.255.255 na porta de descoberta). Quem recebe conecta
  *   só se a SUA etiqueta for menor: assim os dois lados não abrem duas conexões.
  * - Vizinhos fixos (`peers`, host:porta): conectados e reconectados sem depender da descoberta
- *   (redes que bloqueiam broadcast, enlaces Ethernet ponto a ponto).
+ *   (redes que bloqueiam broadcast, enlaces Ethernet ponto a ponto). Os de `PIU_LNNP_PEERS` vêm na
+ *   configuração; os do painel (`addPeer`/`removePeer`) entram e saem sem reiniciar o nó. O estado
+ *   de cada um (conectando, conectado, falha e o motivo) fica em `peerStatus()`.
  * - Enlace: cada quadro vai com prefixo de tamanho u32. Handshake LNNP (HELLO/AUTH) em até 5 s;
  *   depois, só registros cifrados. Qualquer erro fecha a conexão (o vizinho reconecta).
  */
 import { createSocket, type Socket as UdpSocket } from 'node:dgram';
-import { connect, createServer, type Server, type Socket } from 'node:net';
+import { connect, createServer, isIPv4, isIPv6, type Server, type Socket } from 'node:net';
 import {
   compareBytes, decodeBeacon, encodeBeacon, errorFrame, Handshake, LNNP_MIN_VERSION, LNNP_VERSION, LnnpError, LnnpErrorCode,
   MAX_FRAME_BYTES, RECORD_OVERHEAD,
@@ -40,6 +42,65 @@ export interface LanOptions {
 }
 
 const HANDSHAKE_MAX = 4096;
+/** Vizinhos fixos adicionados pelo painel (além dos de `PIU_LNNP_PEERS`). */
+export const MAX_RUNTIME_PEERS = 32;
+
+const LABEL = '[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?';
+const HOSTNAME = new RegExp(`^(?=.{1,253}$)${LABEL}(?:\\.${LABEL})*$`);
+
+/**
+ * Endereço de vizinho digitado no painel: só `host:porta` (nome, IPv4 ou `[IPv6]`), porta 1–65535
+ * obrigatória. Sem esquema, caminho, usuário, espaço ou zona IPv6. Devolve a forma canônica
+ * (minúsculas, IPv6 entre colchetes) ou `null`.
+ */
+export function parsePeerAddress(raw: unknown): string | null {
+  if (typeof raw !== 'string') return null;
+  const s = raw.trim().toLowerCase();
+  if (!s || s.length > 262 || /[\s/@?#%\\]/.test(s)) return null;
+  const v6 = /^\[([0-9a-f:.]+)\]:([0-9]+)$/.exec(s);
+  const m = v6 ?? /^([^:[\]]+):([0-9]+)$/.exec(s);
+  if (!m) return null;
+  const host = m[1] ?? '', portStr = m[2] ?? '';
+  if (!/^[1-9][0-9]{0,4}$/.test(portStr) || Number(portStr) > 65535) return null;
+  if (v6) {
+    if (!isIPv6(host) || host === '::') return null;
+    return `[${host}]:${portStr}`;
+  }
+  if (/^[0-9.]+$/.test(host)) {
+    if (!isIPv4(host) || host === '0.0.0.0' || host === '255.255.255.255') return null;
+  } else if (!HOSTNAME.test(host)) return null;
+  return `${host}:${portStr}`;
+}
+
+export type PeerState = 'connecting' | 'connected' | 'failed';
+/** Estado de um vizinho fixo, para o painel. `nodeId`/`pk`: quem respondeu no handshake. */
+export interface PeerStatus {
+  address: string;
+  /** `config`: veio de `PIU_LNNP_PEERS` (só sai mudando a configuração); `panel`: adicionado pelo painel. */
+  source: 'config' | 'panel';
+  state: PeerState;
+  /** Último erro (conexão recusada, sem resposta, handshake recusado…) e quando (ms). */
+  error: string | null;
+  errorAt: number | null;
+  nodeId: string | null;
+  pk: string | null;
+  /** Desde quando o enlace atual está aberto (só `connected`). */
+  since: number | null;
+  /** Tentativas de conexão desde que entrou na lista. */
+  attempts: number;
+}
+
+/** Motivo legível para um erro de conexão TCP. */
+function connectError(e: NodeJS.ErrnoException): string {
+  switch (e.code) {
+    case 'ECONNREFUSED': return 'conexão recusada (nada escutando nessa porta)';
+    case 'ETIMEDOUT': return 'sem resposta (tempo esgotado)';
+    case 'EHOSTUNREACH': case 'ENETUNREACH': return 'endereço inalcançável a partir deste nó';
+    case 'ENOTFOUND': case 'EAI_AGAIN': return 'nome não encontrado na rede local';
+    case 'ECONNRESET': return 'conexão encerrada pelo outro lado';
+    default: return e.code ? `erro de rede (${e.code})` : e.message || 'erro de rede';
+  }
+}
 
 function splitHostPort(s: string, defPort: number): { host: string; port: number } {
   const m = /^\[?([^\]]+?)\]?(?::(\d+))?$/.exec(s.trim());
@@ -85,6 +146,10 @@ export class LanAdapter {
   private outbound = new Map<string, Socket>();
   /** Vizinho (id) que respondeu em cada destino: não redisca enquanto ele estiver conectado por outra via. */
   private peerOf = new Map<string, string>();
+  /** Vizinhos fixos adicionados pelo painel (forma canônica de `parsePeerAddress`). */
+  private runtime: string[] = [];
+  /** Último erro e tentativas por destino fixo. */
+  private dialInfo = new Map<string, { error: string | null; errorAt: number | null; attempts: number }>();
   private stopped = false;
   port = 0;
   discoveryPort: number | null = null;
@@ -116,8 +181,78 @@ export class LanAdapter {
     return { port: this.port, discoveryPort: this.discoveryPort };
   }
 
-  /** Troca os vizinhos fixos (ex.: depois de descobrir a porta de outro nó num teste). */
+  /** Troca os vizinhos fixos da configuração (ex.: depois de descobrir a porta de outro nó num teste). */
   setPeers(peers: string[]) { this.o.peers = peers; this.dialPeers(); }
+
+  /** Vizinhos fixos em vigor: os da configuração e os do painel, sem repetir. */
+  private fixedPeers(): { address: string; source: 'config' | 'panel' }[] {
+    const out: { address: string; source: 'config' | 'panel' }[] = this.o.peers.map(address => ({ address, source: 'config' }));
+    for (const address of this.runtime) if (!out.some(p => p.address === address)) out.push({ address, source: 'panel' });
+    return out;
+  }
+
+  isConfigPeer(address: string) { return this.o.peers.includes(address); }
+  hasPeerAddress(address: string) { return this.o.peers.includes(address) || this.runtime.includes(address); }
+
+  /**
+   * Adiciona um vizinho fixo (já validado por `parsePeerAddress`) e conecta na hora; a reconexão
+   * segue a cada `beaconMs`, como a dos de `PIU_LNNP_PEERS`.
+   */
+  addPeer(address: string) {
+    if (!this.hasPeerAddress(address)) {
+      if (this.runtime.length >= MAX_RUNTIME_PEERS) throw new Error(`No máximo ${MAX_RUNTIME_PEERS} vizinhos adicionados pelo painel.`);
+      this.runtime.push(address);
+      this.dialInfo.delete(address);
+    }
+    this.dial(address);
+  }
+
+  /** Tira um vizinho adicionado pelo painel: para de reconectar e fecha o enlace aberto até ele. */
+  removePeer(address: string): boolean {
+    const i = this.runtime.indexOf(address);
+    if (i < 0) return false;
+    this.runtime.splice(i, 1);
+    if (!this.o.peers.includes(address)) {
+      this.dialInfo.delete(address);
+      this.outbound.get(address)?.destroy();
+      this.outbound.delete(address);
+      this.peerOf.delete(address);
+    }
+    return true;
+  }
+
+  private noteError(address: string, reason: string) {
+    const d = this.dialInfo.get(address);
+    if (d) { d.error = reason; d.errorAt = Date.now(); }
+  }
+
+  private statusOf(address: string, source: 'config' | 'panel'): PeerStatus {
+    const d = this.dialInfo.get(address) ?? { error: null, errorAt: null, attempts: 0 };
+    const id = this.peerOf.get(address);
+    const link = id ? this.engine.linkInfo(id) : null;
+    const base = { address, source, error: d.error, errorAt: d.errorAt, attempts: d.attempts };
+    // Conectado também quando o enlace com o mesmo nó ficou pela conexão que ele abriu.
+    if (link && id) return { ...base, state: 'connected', nodeId: id, pk: link.pk, since: link.since };
+    const state: PeerState = this.outbound.has(address) || !d.error ? 'connecting' : 'failed';
+    return { ...base, state, nodeId: id ?? null, pk: null, since: null };
+  }
+
+  /** Estado de cada vizinho fixo (configuração e painel). */
+  peerStatus(): PeerStatus[] { return this.fixedPeers().map(p => this.statusOf(p.address, p.source)); }
+
+  /**
+   * Espera o handshake com um vizinho fixo terminar: conectado, ou uma falha a partir de `from`
+   * (quando foi adicionado). Desiste em `ms` e devolve o estado do momento.
+   */
+  async waitPeer(address: string, ms: number, from = Date.now()): Promise<PeerStatus | null> {
+    const end = Date.now() + ms;
+    for (;;) {
+      const p = this.peerStatus().find(x => x.address === address);
+      if (!p) return null;
+      if (p.state === 'connected' || (p.errorAt !== null && p.errorAt >= from) || Date.now() >= end || this.stopped) return p;
+      await new Promise(r => setTimeout(r, 50));
+    }
+  }
   setBroadcast(targets: string[]) { this.o.broadcast = targets; this.beacon(); }
 
   private beacon() {
@@ -141,19 +276,28 @@ export class LanAdapter {
     this.dial(`${address}:${b.port}`);
   }
 
-  private dialPeers() { for (const p of this.o.peers) this.dial(p); }
+  private dialPeers() { for (const p of this.fixedPeers()) this.dial(p.address); }
 
   private dial(target: string) {
     if (this.stopped || this.outbound.has(target)) return;
     const known = this.peerOf.get(target);
     if (known && this.engine.hasPeer(known)) return;
+    if (this.hasPeerAddress(target)) {
+      const d = this.dialInfo.get(target) ?? { error: null, errorAt: null, attempts: 0 };
+      d.attempts++;
+      this.dialInfo.set(target, d);
+    }
     let host: string, port: number;
-    try { ({ host, port } = splitHostPort(target, 8422)); } catch { return; }
+    try { ({ host, port } = splitHostPort(target, 8422)); } catch { this.noteError(target, 'endereço inválido'); return; }
     const sock = connect({ host, port });
     this.outbound.set(target, sock);
-    sock.once('close', () => { if (this.outbound.get(target) === sock) this.outbound.delete(target); });
-    sock.once('connect', () => this.handle(sock, false, target));
-    sock.on('error', () => {});
+    // Sem resposta ao SYN (endereço que não existe na rede): desiste no mesmo prazo do handshake.
+    const timer = setTimeout(() => { this.noteError(target, 'sem resposta (tempo esgotado)'); sock.destroy(); }, this.o.handshakeTimeoutMs ?? 5000);
+    timer.unref();
+    let connected = false;
+    sock.once('close', () => { clearTimeout(timer); if (this.outbound.get(target) === sock) this.outbound.delete(target); });
+    sock.once('connect', () => { connected = true; clearTimeout(timer); this.handle(sock, false, target); });
+    sock.on('error', (e: NodeJS.ErrnoException) => { if (!connected) this.noteError(target, connectError(e)); });
   }
 
   private handle(sock: Socket, inbound: boolean, address: string) {
@@ -171,9 +315,11 @@ export class LanAdapter {
     let state: 'hello' | 'auth' | 'open' | 'closed' = 'hello';
     let link: LinkPort | null = null;
     const endPending = () => { if (state === 'hello' || state === 'auth') this.pending--; };
+    let attached = false;
     const fail = (reason: string) => {
       if (state === 'closed') return;
       endPending();
+      if (!inbound) this.noteError(address, `handshake recusado: ${reason}`);
       if (!link) this.engine.handshakeFailed(reason);
       state = 'closed';
       sock.destroy();
@@ -201,8 +347,13 @@ export class LanAdapter {
             };
             link = l;
             if (!inbound) this.peerOf.set(address, session.peerId);
-            sock.once('close', () => this.engine.detach(l.id));
+            sock.once('close', () => {
+              this.engine.detach(l.id);
+              if (attached && !inbound && !this.stopped) this.noteError(address, 'enlace encerrado (o vizinho saiu ou a rede caiu)');
+            });
             if (!this.engine.attach(l)) { state = 'closed'; sock.end(); return; }
+            attached = true;
+            if (!inbound) { const d = this.dialInfo.get(address); if (d) { d.error = null; d.errorAt = null; } }
             continue;
           }
           if (state === 'open' && link) this.engine.receive(link.id, link.session.open(frame));

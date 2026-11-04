@@ -1,3 +1,4 @@
+import { Enter as ScreenEnter } from '../../ui/Enter';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View, type ScrollViewInstance } from 'react-native';
@@ -5,6 +6,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
 import type { Chat, Msg } from '../../data/types';
 import { STATUS_ICON, STATUS_LABEL } from '../../lib/status';
+import { useSettings } from '../../state/settings';
 import { useStore, useViewingChat } from '../../state/store';
 import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -15,19 +17,28 @@ import { FileBubble } from '../../ui/FileBubble';
 import { pickDocument, pickImage } from '../../lib/pickFile';
 import { MAX_FILE_BYTES } from '../../messaging/messenger';
 import { RouteSheet } from '../../ui/RouteSheet';
+import { LocationBubble, LocationSheet } from '../../ui/LocationSheet';
 import { T } from '../../ui/T';
+import { daySeparators, msgSummary } from '../../lib/chatCore';
+import { locationText } from '../../lib/locationCore';
+import { shareReceivedFile } from '../../lib/openFile';
+import { routeIcon, routeLabel } from '../../lib/routeCore';
+import { receivedFiles, useMessaging } from '../../state/messaging';
 
 /** Conversa: balões (enviado = ink, recebido = bub + borda), estados de entrega, rodapé com o transporte atual. */
 export default function ChatScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
-  const { chats, send, retry, typing, verified, sendFile, sendRealFile, toggleFilePause, showToast, patchChat } = useStore();
+  const { chats, send, retry, verified, sendRealFile, toggleFilePause, showToast, patchChat, typing, notifyTyping } = useStore();
+  const { sto } = useSettings();
+  const { lastRouteOf, routeFor, chatPriority } = useMessaging();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
   const [draft, setDraft] = useState('');
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
+  const [locOpen, setLocOpen] = useState(false);
   const scroller = useRef<ScrollViewInstance>(null);
   const toEnd = () => requestAnimationFrame(() => scroller.current?.scrollToEnd({ animated: true }));
 
@@ -41,47 +52,57 @@ export default function ChatScreen() {
   }
 
   const msgs = chat.msgs ?? [];
-  // Real (grupo/canal pelo protocolo): publica quem o estado do grupo permite. Exemplo: canal só do dono.
-  const readOnly = chat.group ? !chat.owner : chat.kind === 'channel' && !chat.owner;
+  // Grupo, canal ou comunidade: publica quem o estado do grupo permite (`owner` = pode publicar).
+  const readOnly = !!chat.group && !chat.owner;
   const canSend = draft.trim().length > 0;
   const submit = () => { if (!canSend) return; send(chat.id, draft.trim()); setDraft(''); toEnd(); };
   const selected = msgs.find(m => m.id === routeMsg);
-  // ⋯ abre o contato (conversa direta), o grupo, ou mostra os dados do canal.
+  // ⋯ abre o contato (conversa direta), os dados do grupo/canal ou a comunidade.
   const openInfo = () => {
     if (chat.kind === 'direct') router.push({ pathname: '/contact/[id]', params: { id: chat.id } });
-    else if (chat.kind === 'group' || (chat.group && chat.kind === 'channel')) router.push({ pathname: '/group/[id]', params: { id: chat.id } });
-    else if (chat.group && chat.kind === 'community') router.push({ pathname: '/community/[id]', params: { id: chat.id } });
-    else showToast({ icon: 'campaign', title: chat.name, body: chat.sub ?? '' });
+    else if (chat.kind === 'community') router.push({ pathname: '/community/[id]', params: { id: chat.id } });
+    else router.push({ pathname: '/group/[id]', params: { id: chat.id } });
+  };
+  // Rodapé e "Última rota": o meio real do último envio ou recebimento desta conversa.
+  const last = lastRouteOf(chat.id);
+  const viaText = last ? routeLabel(last) : 'nenhuma rota ainda';
+  const viaIcon: IconName = last ? routeIcon(last) : 'schedule';
+  const seps = daySeparators(msgs);
+  const openFile = (m: Msg) => {
+    const f = receivedFiles.get(m.id);
+    if (!f) return;
+    shareReceivedFile(f).catch(e => showToast({ icon: 'error', title: 'Não foi possível abrir', body: (e as Error).message || 'Tente de novo.' }));
   };
   const onAttach = (k: 'image' | 'doc' | 'location') => {
-    if (k === 'location') showToast({ icon: 'location_on', title: 'Localização', body: 'Envio de localização chega numa próxima versão.' });
-    else if (chat.peer) {
+    if (k === 'location') setLocOpen(true);
+    else if (!chat.peer) showToast({ icon: k === 'image' ? 'image' : 'description', title: 'Arquivos em grupos e canais', body: 'Por enquanto, fotos e documentos vão só nas conversas com uma pessoa.' });
+    else {
       // Conversa real: escolhe a foto ou o documento e envia em blocos pelo protocolo.
-      void (k === 'image' ? pickImage() : pickDocument()).then(f => {
+      void (k === 'image' ? pickImage(sto.quality) : pickDocument()).then(f => {
         if (!f) return;
         if (f.data.length > MAX_FILE_BYTES) { showToast({ icon: 'error', title: 'Arquivo grande demais', body: 'O limite por arquivo é 50 MB.' }); return; }
         sendRealFile(chat.id, f); toEnd();
       }).catch(() => showToast({ icon: 'error', title: 'Não foi possível abrir o arquivo', body: 'Tente outro arquivo.' }));
     }
-    else { sendFile(chat.id, k); toEnd(); }
   };
 
   return (
     <KeyboardAvoidingView style={{ flex: 1, backgroundColor: c.bg }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <ScreenEnter kind="push">
       {/* cabeçalho */}
       <View style={{ paddingTop: insets.top + 6, paddingBottom: 8, paddingHorizontal: 10, flexDirection: 'row', alignItems: 'center', gap: 8, borderBottomWidth: 1, borderBottomColor: c.line, backgroundColor: c.bg, zIndex: 2 }}>
         <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar para Conversas" style={{ width: 38, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="arrow_back_ios_new" size={22} />
         </Pressable>
-        <Avatar initials={chat.initials} size={40} square={chat.kind !== 'direct'} inverted={chat.inv} />
+        <Avatar initials={chat.initials} size={40} square={chat.kind !== 'direct'} inverted={chat.inv} photo={chat.photo} />
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
             <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, verificado` : chat.name}>{chat.name}</T>
             {verified[chat.id] && <Icon name="verified" size={16} fill />}
           </View>
-          <T size={12.5} color={c.ink2} numberOfLines={1}>{typing === chat.id ? 'digitando…' : chat.sub}</T>
+          <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? 'digitando…' : chat.sub}</T>
         </View>
-        <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? 'Ver contato e código de segurança' : chat.kind === 'group' ? 'Informações do grupo' : 'Informações do canal'} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+        <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? 'Ver contato e código de segurança' : chat.kind === 'group' ? 'Informações do grupo' : chat.kind === 'community' ? 'Informações da comunidade' : 'Informações do canal'} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="more_horiz" size={22} />
         </Pressable>
       </View>
@@ -94,21 +115,16 @@ export default function ChatScreen() {
             <Icon name="lock" size={14} />
             <T size={12} lh={1.35} color={c.ink2} style={{ flexShrink: 1 }}>Cifrado de ponta a ponta. Toque numa mensagem para ver a rota.</T>
           </View>
-          <T size={11.5} w={500} color={c.ink2} align="center" style={{ marginTop: 4, marginBottom: 6 }}>Hoje</T>
           {msgs.map((m, i) => (
-            <Bubble key={m.id} msg={m} chat={chat} gap={i > 0 && msgs[i - 1].from === m.from ? 0 : 8}
-              onPress={() => setRouteMsg(m.id)} onRetry={() => retry(chat.id, m.id)} onToggleFile={() => toggleFilePause(chat.id, m.id)} />
-          ))}
-          {typing === chat.id && <Typing />}
-          {chat.offline && (
-            <View style={{ alignSelf: 'center', marginTop: 12, maxWidth: 310, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, backgroundColor: c.bg, gap: 6 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <Icon name="schedule_send" size={18} />
-                <T size={14} w={600}>{chat.name.split(' ')[0]} está fora de alcance</T>
-              </View>
-              <T size={13} lh={1.4} color={c.ink2}>Sua mensagem está guardada no nó Galpão e será entregue quando uma rota surgir. Expira em 47 h.</T>
+            <View key={m.id}>
+              {seps[i] && <T size={11.5} w={500} color={c.ink2} align="center" accessibilityRole="header" style={{ marginTop: 10, marginBottom: 6 }}>{seps[i]}</T>}
+              <Bubble msg={m} chat={chat} gap={i > 0 && !seps[i] && msgs[i - 1].from === m.from ? 0 : 8}
+                onPress={() => setRouteMsg(m.id)} onRetry={() => retry(chat.id, m.id)} onToggleFile={() => toggleFilePause(chat.id, m.id)}
+                onOpenFile={m.file?.incoming && receivedFiles.has(m.id) ? () => openFile(m) : undefined}
+                onCopied={() => showToast({ icon: 'content_copy', title: 'Coordenadas copiadas', body: '' })} />
             </View>
-          )}
+          ))}
+          {typing[chat.id] && <Typing />}
         </ScrollView>
       </View>
 
@@ -117,7 +133,7 @@ export default function ChatScreen() {
         <View style={{ paddingTop: 10, paddingHorizontal: 16, paddingBottom: Math.max(insets.bottom, 16), borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.bg, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1, gap: 2 }}>
             <T size={13.5} w={550}>Somente administradores publicam</T>
-            <T size={11} mono color={c.ink2}>{chat.via}</T>
+            <T size={11} mono color={c.ink2}>{viaText}</T>
           </View>
           <Pressable onPress={() => { patchChat(chat.id, { muted: !chat.muted }); showToast({ icon: chat.muted ? 'notifications' : 'notifications_off', title: chat.muted ? 'Canal com notificações' : 'Canal silenciado', body: chat.muted ? 'Novas publicações voltam a aparecer como banner.' : 'As publicações continuam chegando, sem banner.' }); }}
             accessibilityRole="button" accessibilityState={{ selected: !!chat.muted }} accessibilityLabel={chat.muted ? 'Reativar notificações do canal' : 'Silenciar canal'}
@@ -129,14 +145,14 @@ export default function ChatScreen() {
       ) : (
         <View style={{ paddingTop: 8, paddingHorizontal: 10, paddingBottom: Math.max(insets.bottom, 12), borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.bg, gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Icon name={(chat.viaIcon ?? 'hub') as IconName} size={13} color={c.ink2} />
-            <T size={11} mono color={c.ink2}>{chat.via}</T>
+            <Icon name={viaIcon} size={13} color={c.ink2} />
+            <T size={11} mono color={c.ink2}>{viaText}</T>
           </View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable onPress={() => setAttachOpen(true)} accessibilityRole="button" accessibilityLabel="Anexar" style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="add" size={24} w={300} />
             </Pressable>
-            <TextInput value={draft} onChangeText={setDraft} placeholder="Mensagem" placeholderTextColor={c.ink3} accessibilityLabel="Mensagem"
+            <TextInput value={draft} onChangeText={t => { setDraft(t); if (t.trim()) notifyTyping(chat.id); }} placeholder="Mensagem" placeholderTextColor={c.ink3} accessibilityLabel="Mensagem"
               onSubmitEditing={submit} returnKeyType="send" blurOnSubmit={false}
               style={{ flex: 1, minWidth: 0, height: 42, borderRadius: 21, backgroundColor: c.bg2, paddingHorizontal: 16, fontSize: 15.5, color: c.ink, fontFamily: fontFamily(400) }} />
             <SendButton enabled={canSend} onPress={submit} />
@@ -144,8 +160,10 @@ export default function ChatScreen() {
         </View>
       )}
 
-      {selected && <RouteSheet chat={chat} msg={selected} onClose={() => setRouteMsg(null)} />}
+      {selected && <RouteSheet chat={chat} msg={selected} rec={routeFor(chat.id, selected.id)} prio={chatPriority(chat.id)} onClose={() => setRouteMsg(null)} />}
       {attachOpen && <AttachSheet onPick={onAttach} onClose={() => setAttachOpen(false)} />}
+      {locOpen && <LocationSheet onClose={() => setLocOpen(false)} onSend={(loc, label) => { send(chat.id, locationText(loc, label), loc); toEnd(); }} />}
+      </ScreenEnter>
     </KeyboardAvoidingView>
   );
 }
@@ -195,7 +213,7 @@ function Tick({ name, color, animate }: { name: IconName; color: string; animate
   return <Animated.View style={{ opacity, transform: [{ scale }] }}><Icon name={name} size={15} color={color} /></Animated.View>;
 }
 
-function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; chat: Chat; gap: number; onPress: () => void; onRetry: () => void; onToggleFile: () => void }) {
+function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile, onOpenFile, onCopied }: { msg: Msg; chat: Chat; gap: number; onPress: () => void; onRetry: () => void; onToggleFile: () => void; onOpenFile?: () => void; onCopied: () => void }) {
   const { c } = useTheme();
   if (msg.from === 'sys') {
     return (
@@ -207,7 +225,9 @@ function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; 
   }
   const me = msg.from === 'me';
   const failed = me && (msg.status === 'expirada' || msg.status === 'falha');
-  const content = msg.file ? `arquivo ${msg.file.name}` : msg.text;
+  const content = msg.file ? `arquivo ${msg.file.name}` : msgSummary(msg);
+  // Localização: o texto da mensagem é o nome do lugar (ou as coordenadas, para versões sem o balão).
+  const place = msg.loc ? (msg.text === locationText(msg.loc, '') ? '' : msg.text) : '';
   const label = me && msg.status ? `Você, ${STATUS_LABEL[msg.status]}, ${msg.time}: ${content}` : `${msg.sender ?? chat.name}, ${msg.time}: ${content}`;
   return (
     <View style={{ marginTop: gap }}>
@@ -217,8 +237,9 @@ function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; 
             ? { paddingTop: 8, paddingBottom: 6, paddingLeft: 14, paddingRight: 12, borderRadius: 20, borderBottomRightRadius: 6, backgroundColor: c.ink, gap: 2 }
             : { paddingTop: 8, paddingBottom: 6, paddingLeft: 12, paddingRight: 14, borderRadius: 20, borderBottomLeftRadius: 6, backgroundColor: c.bub, borderWidth: 1, borderColor: c.line, gap: 2 }}>
           {!me && chat.kind === 'group' && msg.sender && <T size={12.5} w={650}>{msg.sender}</T>}
-          {msg.file && <FileBubble file={msg.file} onToggle={onToggleFile} inverse={me} />}
-          {!!msg.text && <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>}
+          {msg.file && <FileBubble file={msg.file} onToggle={onToggleFile} onOpen={onOpenFile} inverse={me} />}
+          {msg.loc && <LocationBubble loc={msg.loc} label={place} inverse={me} onCopied={onCopied} />}
+          {!!msg.text && !msg.loc && <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>}
           {me ? (
             <View style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.72 }}>
               <T size={11} color={c.invink}>{msg.status ? STATUS_LABEL[msg.status] : ''} · </T>
@@ -241,7 +262,7 @@ function Bubble({ msg, chat, gap, onPress, onRetry, onToggleFile }: { msg: Msg; 
   );
 }
 
-/** Digitando…: 3 pontos, 1,1 s, defasagem de .15 s. */
+/** "digitando…" do contato: três pontos que sobem em sequência (design, `piuDot`). */
 function Typing() {
   const { c, reduceMotion } = useTheme();
   const dots = useRef([0, 1, 2].map(() => new Animated.Value(0))).current;

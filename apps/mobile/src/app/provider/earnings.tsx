@@ -1,29 +1,54 @@
-import { ScrollView, View } from 'react-native';
-import { PROV_PAID, PROV_PENDING, PROV_RATES, PROV_REJECTED } from '../../data/network';
-import { fmtL, useNetwork } from '../../state/network';
-import { useStore } from '../../state/store';
+import { router } from 'expo-router';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Pressable, ScrollView, View } from 'react-native';
+import { CREDIT_PARAMS } from '../../messaging/credits';
+import { type ProvNode, useProvNodes } from '../../lib/approvalNodes';
+import { NodeApiError } from '../../lib/nodeApi';
+import { linkBlocker, nodeApiFor } from '../../lib/nodeLink';
+import { nodeEarnings } from '../../lib/providerCore';
+import { lunes2 } from '../../lib/walletCore';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
 import { Icon, type IconName } from '../../ui/Icon';
+import { forgetSession, loadNode, type NodeLoad, NodeEarningsCard } from '../../ui/ProviderWallet';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
-const fmtPt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-/** Ganhos do provider: estados (pagos, validados, pendentes, rejeitados), créditos por tipo e lotes de liquidação. */
+/**
+ * Ganhos do provider no celular, lidos de cada equipamento pareado e conectado (API local do
+ * piu-node): recibos, saldo do nó e lotes liquidados que ele registrou, a carteira de provider na
+ * Lunes Mainnet e a declaração da carteira do lote. Sem equipamento conectado, não há número: a tela
+ * diz isso. Os créditos deste celular como nó ficam em Carteira → Créditos de rede.
+ */
 export default function ProvEarnings() {
   const { c } = useTheme();
-  const { devices } = useNetwork();
-  const { showToast } = useStore();
-  const month = devices.reduce((a, d) => a + d.month, 0);
-  const total = PROV_PAID + month + PROV_REJECTED;
-  const states: [string, number, number][] = [['Pagos', PROV_PAID, 1], ['Validados', month - PROV_PENDING, 0.6], ['Pendentes', PROV_PENDING, 0.32], ['Rejeitados', PROV_REJECTED, 0.14]];
-  const lots: [IconName, string, string, string][] = [
-    ['hourglass_top', 'Lote #0047 · outubro', 'em formação · aguardando Mainnet', fmtL(month)],
-    ['check_circle', 'Lote #0046 · setembro', 'liquidado · tx 7c1e…a90f', '512,08'],
-    ['check_circle', 'Lote #0045 · agosto', 'liquidado · tx 21bd…04c3', '448,44'],
-    ['check_circle', 'Lote #0044 · julho', 'liquidado · tx e09a…7b11', '324,08'],
+  const { nodes } = useProvNodes();
+  const [data, setData] = useState<Record<string, NodeLoad | { error: string }>>({});
+  // Sessão perdida (401): `epoch` refaz os clientes, que releem a sessão guardada.
+  const [epoch, setEpoch] = useState(0);
+  const linked = useMemo(() => (nodes ?? []).map(d => ({ d, api: nodeApiFor(d) })), [nodes, epoch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const connected = linked.filter(x => x.api?.session);
+
+  const load = useCallback(async (d: ProvNode) => {
+    const api = linked.find(x => x.d.phoneId === d.phoneId)?.api;
+    if (!api?.session) return;
+    try { const r = await loadNode(api); setData(m => ({ ...m, [d.phoneId]: r })); }
+    catch (e) {
+      if (e instanceof NodeApiError && e.status === 401) { await forgetSession(d); setEpoch(x => x + 1); }
+      setData(m => ({ ...m, [d.phoneId]: { error: (e as Error).message } }));
+    }
+  }, [linked]);
+  useEffect(() => { for (const x of linked) if (x.api?.session) void load(x.d); }, [linked, load]);
+
+  const loaded = connected.map(x => data[x.d.phoneId]).filter((v): v is NodeLoad => !!v && !('error' in v));
+  const sum = loaded.reduce((a, v) => { const e = nodeEarnings(v.wallet, v.receipts); return { received: a.received + e.received, lots: a.lots + e.lots.length }; }, { received: 0, lots: 0 });
+  const has = loaded.some(v => v.wallet);
+
+  const how: [IconName, string, string][] = [
+    ['verified_user', 'Recibo do seu nó', 'assinado a cada envelope de terceiro repassado'],
+    ['verified', 'Prova de entrega', 'o destino confirma sem revelar quem é'],
+    ['account_balance_wallet', 'Lote semanal', `mínimo de ${CREDIT_PARAMS.minLotLunes} LUNES · ${CREDIT_PARAMS.creditsPerLunes} créditos = 1 LUNES (provisório)`],
   ];
 
   return (
@@ -32,63 +57,57 @@ export default function ProvEarnings() {
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <View style={{ paddingTop: 4, paddingHorizontal: 20, gap: 4 }}>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <T size={44} w={650} ls={-0.05} tabular style={{ lineHeight: 46 }}>{fmtPt(PROV_PAID)}</T>
+            {/* Sem nenhum equipamento lido: traço, não um zero que pareça resultado. */}
+            <T size={44} w={650} ls={-0.05} tabular style={{ lineHeight: 46 }} accessibilityLiveRegion="polite">{has ? lunes2(sum.received) : '—'}</T>
             <T size={14} w={600} color={c.ink2}>LUNES recebidos</T>
           </View>
-          <T size={13.5} color={c.ink2}>desde julho · 3 lotes liquidados</T>
+          <T size={13.5} lh={1.4} color={c.ink2}>{!has
+            ? (connected.length ? 'Lendo os equipamentos conectados…' : 'Nenhum equipamento conectado a este celular: conecte um na tela dele para ver os ganhos.')
+            : sum.lots ? `${sum.lots} ${sum.lots === 1 ? 'lote liquidado' : 'lotes liquidados'} registrados ${loaded.length === 1 ? 'no equipamento' : `em ${loaded.length} equipamentos`}`
+              : 'Nenhum lote liquidado registrado nos equipamentos conectados'}</T>
         </View>
 
-        <View style={{ marginTop: 16, marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
-          <View accessibilityLabel="Proporção de créditos por estado" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2 }}>
-            {states.map(([l, n, op]) => <View key={l} style={{ width: `${(Math.max(0, n) / total) * 100}%`, backgroundColor: c.ink, opacity: op }} />)}
-          </View>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10, columnGap: 16 }}>
-            {states.map(([l, n, op]) => (
-              <View key={l} style={{ width: '46%', flexGrow: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: c.ink, opacity: op }} />
-                <T size={12.5} color={c.ink2} style={{ flex: 1 }}>{l}</T>
-                <T size={13} w={600} tabular>{fmtPt(n)}</T>
+        <SectionLabel>{`EQUIPAMENTOS CONECTADOS · ${connected.length}`}</SectionLabel>
+        <View style={{ gap: 12 }}>
+          {connected.map(({ d, api }) => {
+            const v = data[d.phoneId];
+            if (!v) return <T key={d.phoneId} size={13} color={c.ink2} style={{ marginHorizontal: 24 }}>{`Lendo ${d.node}…`}</T>;
+            if ('error' in v) return <T key={d.phoneId} size={13} color={c.ink2} style={{ marginHorizontal: 24 }}>{`${d.node}: ${v.error}`}</T>;
+            return <NodeEarningsCard key={d.phoneId} d={d} api={api!} data={v} onReload={() => void load(d)} onLost={() => { void forgetSession(d).then(() => setEpoch(x => x + 1)); }} />;
+          })}
+          {nodes && linked.filter(x => !x.api?.session).map(({ d }) => (
+            <Pressable key={d.phoneId} onPress={() => router.push({ pathname: '/provider/device/[id]', params: { id: d.phoneId } })} accessibilityRole="button"
+              style={{ marginHorizontal: 20, padding: 14, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <Icon name="dns" size={22} w={300} />
+              <View style={{ flex: 1, gap: 2 }}>
+                <T size={14} w={600}>{d.node}</T>
+                <T size={12.5} lh={1.35} color={c.ink2}>{linkBlocker(d) ?? 'Não conectado: abra o equipamento e digite o código dele para ler recibos e carteira.'}</T>
               </View>
-            ))}
-          </View>
+              <Icon name="chevron_right" size={20} w={300} color={c.ink2} />
+            </Pressable>
+          ))}
+          {nodes && nodes.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ marginHorizontal: 24 }}>Nenhum equipamento pareado. Pareie um pelo QR do painel do Piu Node.</T>}
         </View>
 
-        <SectionLabel>CRÉDITOS POR ENTREGA · OUTUBRO</SectionLabel>
+        <SectionLabel>COMO O CRÉDITO É FORMADO</SectionLabel>
         <View style={{ marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
-          {PROV_RATES.map(([icon, t, rule, n, v], i) => (
+          {how.map(([icon, t, d], i) => (
             <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
               <Icon name={icon} size={21} w={300} />
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <T size={14.5} w={550}>{t}</T>
-                <T size={11.5} mono color={c.ink2}>{rule} · {n}</T>
+                <T size={11.5} mono color={c.ink2}>{d}</T>
               </View>
-              <T size={14} w={650} tabular>{v} L</T>
-            </View>
-          ))}
-        </View>
-        <T size={11.5} mono color={c.ink2} style={{ marginTop: 8, marginHorizontal: 24 }}>100 créditos = 1 LUNES · valores ilustrativos</T>
-
-        <SectionLabel>LOTES DE LIQUIDAÇÃO</SectionLabel>
-        <View style={{ marginHorizontal: 20 }}>
-          {lots.map(([icon, t, s, v]) => (
-            <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: c.line }}>
-              <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={20} w={300} /></View>
-              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
-                <T size={14.5} w={550}>{t}</T>
-                <T size={12.5} color={c.ink2}>{s}</T>
-              </View>
-              <T size={14} w={600} tabular>{v}</T>
             </View>
           ))}
         </View>
 
         <View style={{ paddingTop: 20, paddingHorizontal: 20 }}>
-          <Button label="Transferir para carteira pessoal" variant="outline" height={50} left={<Icon name="swap_horiz" size={20} />}
-            onPress={() => showToast({ icon: 'swap_horiz', title: 'Transferência assinada', body: `${fmtPt(PROV_PAID)} LUNES para sua carteira pessoal · liquida na próxima conexão com a Mainnet` })} />
+          <Button label="Ver créditos deste celular" variant="outline" height={50} left={<Icon name="toll" size={20} />} onPress={() => router.push('/(tabs)/wallet')} />
         </View>
         <View style={{ marginTop: 16, marginHorizontal: 24, flexDirection: 'row', gap: 10 }}>
           <Icon name="policy" size={17} w={300} />
-          <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>Cada crédito combina recibo do seu nó, confirmação do destino e auditoria por amostragem. Duplicatas, rotas circulares e tráfego artificial são rejeitados.</T>
+          <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>Cada crédito combina recibo do seu nó, confirmação do destino e auditoria por amostragem. Duplicatas, rotas circulares e tráfego artificial são rejeitados. O pagamento dos lotes depende da liquidação na Lunes.</T>
         </View>
       </ScrollView>
     </Screen>

@@ -42,4 +42,21 @@ Oferta com nome, tamanho, tipo e SHA-256; blocos de 12 KB dentro da sessão, cad
 - Remover troca a chave para os demais; quem saiu é avisado e apaga o grupo. Sair avisa os admins, que trocam a chave.
 - Convite do grupo: link `piug:` com o cartão assinado do admin e um código que vale 7 dias e até 50 usos; com "Aprovar quem entra", o pedido espera um admin.
 - Comunidade: lista os grupos e canais criados nela; membros da comunidade pedem para entrar sem precisar de convite.
+- Canal privado e secreto: o inscrito recebe só admins, moderadores e a si mesmo, mais o total. Ids e chaves dos outros inscritos ficam com os admins.
+- "Quem pode convidar: Todos os membros" (só grupo): o membro indica contatos aos admins, que conferem a regra; o convidado aceita o primeiro estado só dos admins que quem o indicou apontou.
+- Aparelho revogado: o aviso assinado vai também aos admins dos meus grupos; um admin por grupo troca a chave, uma vez por aviso.
 
+## Conversa (mensagens diretas)
+- Prazo de 48 h sem rota (`MESSAGE_TTL_SEC`), o mesmo na tela da rota e no banner de mensagem expirada.
+- Confirmação de leitura (`r`) e "digitando…" (`ty`), dentro da sessão, só com os ajustes de Privacidade ligados. "digitando…" não entra na fila, vale 15 s e não publica prova de entrega (não gera crédito).
+- Mensagens temporárias: o prazo (`e`, 24 h ou 7 dias) vai na mensagem e na oferta de arquivo; os dois aparelhos apagam no prazo.
+
+## Créditos (`credits.ts`)
+Estimativa dividida entre os relays conhecidos até o aparelho; validado e não liquidado expira em 180 dias; horário do recibo arredondado para a hora antes de assinar (`protocol/receipts.ts`).
+
+
+## Alertas da comunidade (`communityAlerts.ts`)
+- Qualquer membro de uma comunidade publica; vai no envelope de grupo da própria comunidade (o grupo dos Avisos, `kind: 'community'`), cifrado com a chave atual dela e com prioridade Alta. O roteador abre envelopes da comunidade de qualquer membro; o texto dos Avisos continua aceito só de admins.
+- Conteúdo de grupo com campo próprio: `ca` (alerta), `cv` (classificação, com revisão `n`) e `cc` (encerramento). Versões antigas ignoram.
+- Limite: 3 ativos por membro por comunidade e 1 a cada 10 min, conferido ao publicar e ao receber.
+- Estado calculado em cada aparelho com os votos de membros atuais (o do autor não conta): Confirmado (≥ 2 e ≥ 2× "não procede"), Contestado ("não procede" ≥ 2 e ≥ confirmações), Não confirmado; Encerrado pelo autor, admin ou moderador; Vencido pela validade. Sai do estado salvo 24 h depois de vencer.

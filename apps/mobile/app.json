@@ -10,12 +10,13 @@
     "ios": {
       "supportsTablet": false,
       "infoPlist": {
-        "NSBluetoothAlwaysUsageDescription": "O Piu usa o Bluetooth para trocar mensagens cifradas com aparelhos por perto, sem internet."
+        "NSBluetoothAlwaysUsageDescription": "O Piu usa o Bluetooth para trocar mensagens cifradas com aparelhos por perto, sem internet.",
+        "NSLocalNetworkUsageDescription": "O Piu usa a rede local só para conversar com o seu Piu Node pareado (estado, recibos e pausa)."
       }
     },
     "android": {
       "adaptiveIcon": {
-        "backgroundColor": "#0C0C0C",
+        "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
@@ -57,12 +58,29 @@
         "expo-notifications",
         {
           "color": "#0C0C0C",
-          "enableRemoteNotifications": false
+          "enableRemoteNotifications": false,
+          "sounds": [
+            "./assets/sounds/piu.wav"
+          ]
+        }
+      ],
+      [
+        "expo-audio",
+        {
+          "microphonePermission": false,
+          "recordAudioAndroid": false,
+          "enableBackgroundPlayback": false
         }
       ]
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "storeLinks": {
+        "ios": "",
+        "android": ""
+      }
     }
   }
 }

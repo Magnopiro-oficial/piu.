@@ -121,20 +121,44 @@ export async function clearPersisted(): Promise<void> {
 }
 
 /**
+ * Apaga um campo que o app não usa mais (migração). Fica fora do disco, não só da memória.
+ */
+export async function forgetPersisted(key: string): Promise<void> {
+  clearTimeout(pending.get(key));
+  pending.delete(key);
+  if (!(key in snapshot)) return;
+  delete snapshot[key];
+  try { await AsyncStorage.removeItem(PREFIX + key); } catch { /* fica cifrado; some no próximo "Apagar dados locais" */ }
+}
+
+/** Tamanho aproximado do que o Piu guarda neste aparelho (bytes, antes da cifragem). */
+export function persistedBytes(): number {
+  let n = 0;
+  for (const [k, v] of Object.entries(snapshot)) n += k.length + (JSON.stringify(v)?.length ?? 0);
+  return n;
+}
+
+/**
  * Como `useState`, mas salvo no aparelho sob `key`.
- * `revive` ajusta o valor lido (ex.: transferências que não podem continuar depois de fechar o app).
+ * `revive` ajusta o valor lido (ex.: transferências que não podem continuar depois de fechar o app,
+ * ou a limpeza dos dados de exemplo). Se `revive` mudar o valor, o resultado é regravado.
  */
 export function usePersisted<T>(key: string, initial: T | (() => T), revive?: (saved: T) => T): [T, Dispatch<SetStateAction<T>>] {
+  const revived = useRef(false);
   const [value, setValue] = useState<T>(() => {
     if (key in snapshot) {
       const saved = snapshot[key] as T;
-      return revive ? revive(saved) : saved;
+      if (!revive) return saved;
+      const v = revive(saved);
+      revived.current = v !== saved;
+      return v;
     }
     return typeof initial === 'function' ? (initial as () => T)() : initial;
   });
   const first = useRef(true);
   useEffect(() => {
-    if (first.current) { first.current = false; return; } // não regrava o que acabou de ser lido
+    // Não regrava o que acabou de ser lido (a não ser que `revive` tenha mudado algo).
+    if (first.current) { first.current = false; if (!revived.current) return; }
     schedule(key, value);
   }, [key, value]);
   return [value, setValue];

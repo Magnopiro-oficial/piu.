@@ -10,6 +10,10 @@ import type { Config } from '../src/config.js';
 import { loadPackages, releaseKey, signedPayload } from '../src/packages.js';
 import { Pairing } from '../src/security/pairing.js';
 import { Store } from '../src/store.js';
+import { encodeSs58 } from '../src/lunes/ss58.js';
+
+/** Chave pública de teste conhecida (Alice do Substrate): `5GrwvaEF…` com o prefixo 42. */
+const ALICE = Uint8Array.from(Buffer.from('d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d', 'hex'));
 
 const HOST = 'piu-node.local:8420';
 const ORIGIN = `https://${HOST}`;
@@ -49,7 +53,8 @@ async function setup() {
   const pairing = new Pairing();
   const spent: string[] = [];
   const packages = loadPackages(pkgDir, releaseKey(spki));
-  const app = await buildApp({ config, store: new Store(null), pairing, packages, packagesDir: pkgDir, now: () => clock, onCodeSpent: r => spent.push(r) });
+  const store = new Store(null);
+  const app = await buildApp({ config, store, pairing, packages, packagesDir: pkgDir, now: () => clock, onCodeSpent: r => spent.push(r), selfDevice: { name: 'Nó de teste', cls: 'Home Node' } });
 
   const req = (method: string, url: string, o: { cookie?: string; csrf?: string; origin?: string | null; body?: unknown; host?: string; ip?: string } = {}) =>
     app.inject({
@@ -73,7 +78,9 @@ async function setup() {
 
   /** Código emitido no relógio do teste (como o console do nó faria). */
   const issueCode = () => pairing.issue(clock);
-  return { app, req, pair, pairing, issueCode, spent, packages, pkgDir, spki, advance: (ms: number) => { clock += ms; }, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
+  /** Saldo vem só de liquidação: os testes de transferência creditam um lote antes. */
+  const fund = (a: { body: unknown }, amount: number) => store.credit((a.body as { operator: { id: string } }).operator.id, amount, clock, 'lote de teste');
+  return { app, req, pair, fund, store, pairing, issueCode, spent, packages, pkgDir, spki, advance: (ms: number) => { clock += ms; }, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 test('headers de segurança (Helmet) em todas as respostas, sem fingerprinting', async () => {
@@ -166,13 +173,15 @@ test('IDOR: um operador não vê nem mexe nos equipamentos de outro (404, sem re
   const t = await setup();
   const a = await t.pair('Dono');
   const b = await t.pair('Vizinho', '10.0.0.7');
+  const made = await t.req('POST', '/api/devices', { cookie: a.cookie, csrf: a.csrf, body: { name: 'Roteador da sala', cls: 'Home Node', family: 'router' } });
+  assert.equal(made.statusCode, 201);
   const devsA = (await t.req('GET', '/api/devices', { cookie: a.cookie })).json() as { id: string }[];
-  assert.equal(devsA.length, 3);
+  assert.equal(devsA.length, 2, 'o próprio nó e o criado');
   assert.deepEqual((await t.req('GET', '/api/devices', { cookie: b.cookie, ip: '10.0.0.7' })).json(), []);
-  const target = devsA[0]!.id;
+  const target = (made.json() as { id: string }).id;
   assert.equal((await t.req('POST', `/api/devices/${target}/pause`, { cookie: b.cookie, csrf: b.csrf, ip: '10.0.0.7' })).statusCode, 404);
   assert.equal((await t.req('DELETE', `/api/devices/${target}`, { cookie: b.cookie, csrf: b.csrf, ip: '10.0.0.7' })).statusCode, 404);
-  assert.equal((await t.req('GET', '/api/devices', { cookie: a.cookie })).json().length, 3, 'nada foi alterado');
+  assert.equal((await t.req('GET', '/api/devices', { cookie: a.cookie })).json().length, 2, 'nada foi alterado');
   assert.equal((await t.req('DELETE', `/api/devices/${target}`, { cookie: a.cookie, csrf: a.csrf })).statusCode, 204);
   t.cleanup();
 });
@@ -183,7 +192,7 @@ test('IDs não previsíveis e respostas sem dados internos', async () => {
   const devs = (await t.req('GET', '/api/devices', { cookie: a.cookie })).json() as Record<string, unknown>[];
   for (const d of devs) {
     assert.match(String(d.id), /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/, 'UUID v4');
-    assert.deepEqual(Object.keys(d).sort(), ['cls', 'id', 'name', 'status', 'today'], 'sem ownerId nem campos internos');
+    assert.deepEqual(Object.keys(d).sort(), ['cls', 'id', 'name', 'self', 'status'], 'sem ownerId nem campos internos');
   }
   assert.equal((await t.req('POST', '/api/devices/1/pause', { cookie: a.cookie, csrf: a.csrf })).statusCode, 400, 'id fora do formato');
   const s = (await t.req('GET', '/api/session', { cookie: a.cookie })).json() as Record<string, unknown>;
@@ -194,6 +203,7 @@ test('IDs não previsíveis e respostas sem dados internos', async () => {
 test('transferência de LUNES: exige reautenticação recente e valida o valor', async () => {
   const t = await setup();
   const a = await t.pair('Cardeal');
+  t.fund(a, 1284.6);
   const transfer = (amount: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount } });
   assert.equal((await transfer(10.5)).statusCode, 200, 'logo depois do pareamento');
   assert.equal((await transfer(1.234)).statusCode, 400, 'mais de 2 casas');
@@ -209,7 +219,7 @@ test('transferência de LUNES: exige reautenticação recente e valida o valor',
   assert.equal((await transfer(10)).statusCode, 200);
   const w = (await t.req('GET', '/api/wallet', { cookie: a.cookie })).json() as { balance: number; txs: unknown[] };
   assert.equal(w.balance, 1264.1);
-  assert.equal(w.txs.length, 2);
+  assert.equal(w.txs.length, 3, 'a liquidação e as duas saídas');
   t.cleanup();
 });
 
@@ -229,6 +239,7 @@ test('sessão expira por inatividade e o logout a invalida no servidor', async (
 test('limites por rota são independentes (hooks não vazam entre rotas)', async () => {
   const t = await setup();
   const a = await t.pair('Cardeal');
+  t.fund(a, 10);
   const r = await t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1 } });
   assert.equal(r.headers['x-ratelimit-limit'], '10', 'transferência: 10/min');
   const d = await t.req('GET', '/api/devices', { cookie: a.cookie });
@@ -314,8 +325,14 @@ test('ajustes: validação estrita, persistem por operador', async () => {
     { ...good, policies: { ...good.policies, alerts: false } },
   ]) assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: bad })).statusCode, 400, JSON.stringify(bad));
   assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: good })).statusCode, 200);
-  assert.deepEqual((await t.req('GET', '/api/settings', { cookie: a.cookie })).json(), good);
-  assert.notDeepEqual((await t.req('GET', '/api/settings', { cookie: b.cookie })).json(), good, 'outro operador não é afetado');
+  assert.deepEqual((await t.req('GET', '/api/settings', { cookie: a.cookie })).json(), { ...good, owner: true });
+  const other = (await t.req('GET', '/api/settings', { cookie: b.cookie })).json() as { owner: boolean };
+  assert.equal(other.owner, false);
+  assert.notDeepEqual({ limits: (other as unknown as typeof good).limits, policies: (other as unknown as typeof good).policies }, good, 'outro operador não é afetado');
+  // Quem não é o dono do equipamento: recusado com o motivo (o motor só usa os ajustes do dono).
+  const refused = await t.req('PUT', '/api/settings', { cookie: b.cookie, csrf: b.csrf, body: good });
+  assert.equal(refused.statusCode, 403);
+  assert.match((refused.json() as { error: string }).error, /Só o dono/);
   t.cleanup();
 });
 
@@ -335,15 +352,24 @@ test('novo equipamento: campos validados, fica com o operador que criou', async 
   t.cleanup();
 });
 
-test('transferência para outro endereço: formato LUNES validado', async () => {
+test('transferência para outro endereço: SS58 da Lunes conferido por inteiro (como em /api/wallet/lunes)', async () => {
   const t = await setup();
   const a = await t.pair('Ana');
+  t.fund(a, 10);
   const send = (to: unknown) => t.req('POST', '/api/wallet/transfer', { cookie: a.cookie, csrf: a.csrf, body: { amount: 1, to } });
-  for (const bad of ['lunes:0OIl', 'lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 'lunes:3P8xK2mVt9abcdefghijkmnopqr<script>', 42])
+  const alice42 = encodeSs58(ALICE, 42), alice57 = encodeSs58(ALICE, 57);
+  assert.equal(alice42, '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY');
+  assert.ok(alice42.length >= 47 && alice57.length >= 47, 'endereços reais têm 47–48 caracteres');
+  // Soma de verificação trocada (última letra), outra rede (prefixo 0), formato antigo de 26–44 caracteres.
+  const broken = alice42.slice(0, -1) + (alice42.endsWith('Y') ? 'Z' : 'Y');
+  // (10 pedidos por minuto nesta rota: a lista cabe no limite junto com os válidos.)
+  for (const bad of ['lunes:', 'bitcoin:3P8xK2mVt9abcdefghijkmnopqr', 42, 'lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM', `lunes:${broken}`, `lunes:${encodeSs58(ALICE, 0)}`, alice42])
     assert.equal((await send(bad)).statusCode, 400, String(bad));
-  const ok = await send('lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
-  assert.equal(ok.statusCode, 200);
-  assert.equal((ok.json() as { to: string }).to, 'lunes:3P8xK2mVt9abcdefghijkmnopqrsQ7nM');
+  for (const addr of [alice42, alice57]) {
+    const ok = await send(`lunes:${addr}`);
+    assert.equal(ok.statusCode, 200, ok.body);
+    assert.equal((ok.json() as { to: string }).to, `lunes:${addr}`);
+  }
   assert.equal((await send('personal')).statusCode, 200);
   t.cleanup();
 });
@@ -365,6 +391,7 @@ test('celular que aprova: pareamento com código, transferência só com a aprov
   const { approvalCode, pairCode } = await import('../src/security/approval.js');
   const t = await setup();
   const a = await t.pair('Ana');
+  t.fund(a, 100);
   const b = await t.pair('Beto', '10.0.7.2');
   // Pareamento: QR com segredo; o celular devolve um código de 6 dígitos.
   const start = await t.req('POST', '/api/phones', { cookie: a.cookie, csrf: a.csrf, body: { name: 'Celular da Ana' } });

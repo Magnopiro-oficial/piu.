@@ -9,6 +9,7 @@ import ExpoModulesCore
  */
 public final class PiuTransportModule: Module {
   private var engine: BleEngine?
+  private var discoveryInterval: Double = 20
 
   public func definition() -> ModuleDefinition {
     Name("PiuTransport")
@@ -20,6 +21,7 @@ public final class PiuTransportModule: Module {
     AsyncFunction("start") { (name: String, _: String) in
       if self.engine != nil { return }
       self.engine = BleEngine(name: name) { [weak self] event, body in self?.sendEvent(event, body) }
+      self.engine?.setScanInterval(self.discoveryInterval)
     }
 
     AsyncFunction("stop") {
@@ -46,6 +48,12 @@ public final class PiuTransportModule: Module {
 
     // Sem modo de fundo no iPhone (decisão de design: só com o app aberto, nunca prometer 24 h).
     AsyncFunction("setBackground") { (_: Bool, _: String, _: String) in }
+
+    // "Procurar vizinhos" (Econômica 60 s / Normal 20 s / Rápida 5 s): ciclo de varredura (NFR-004).
+    Function("setDiscoveryInterval") { (seconds: Double) in
+      self.discoveryInterval = seconds
+      self.engine?.setScanInterval(seconds)
+    }
 
     OnDestroy {
       self.engine?.stop()
@@ -85,6 +93,21 @@ private let maxEnvelopeBytes = 32 * 1024
 private let maxPartialMessages = 64
 private let partialTimeout: TimeInterval = 60
 
+/** Uma remontagem aberta (struct em vez de tupla rotulada: inferência de tipo mais simples para o compilador). */
+private struct Partial {
+  var parts: [Int: Data] = [:]
+  var bytes = 0
+  let count: Int
+  let started: Date
+}
+
+/** Lê um inteiro big-endian de `bytes[offset..<offset+size]`. */
+private func readBigEndian(_ bytes: [UInt8], _ offset: Int, _ size: Int) -> UInt32 {
+  var v: UInt32 = 0
+  for i in 0..<size { v = (v << 8) | UInt32(bytes[offset + i]) }
+  return v
+}
+
 private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralManagerDelegate, CBPeripheralDelegate {
   typealias Emit = (String, [String: Any?]) -> Void
 
@@ -105,7 +128,12 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var nextMessageId: UInt32 = 1
   /** Nome curto do nó de cada vizinho (anúncio ou `hello`). */
   private var names: [UUID: String] = [:]
-  private var partial: [String: (parts: [Int: Data], bytes: Int, count: Int, started: Date)] = [:]
+  private var partial: [String: Partial] = [:]
+  /** Intervalo entre varreduras (s). Até `scanWindow + 1` a varredura fica contínua. */
+  private var scanInterval: TimeInterval = 20
+  private var scanTimer: DispatchSourceTimer?
+  /** Cada varredura dura isto (s); depois o rádio descansa até a próxima. */
+  private let scanWindow: TimeInterval = 4
 
   init(name: String, emit: @escaping Emit) {
     self.name = name
@@ -116,8 +144,42 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     peripheralManager = CBPeripheralManager(delegate: self, queue: queue)
   }
 
+  /** "Procurar vizinhos": muda o ciclo de varredura. Conexões já abertas não são afetadas. */
+  func setScanInterval(_ seconds: Double) {
+    queue.async {
+      self.scanInterval = max(1, seconds)
+      self.restartScanCycle()
+    }
+  }
+
+  /** Roda na `queue`. Varre por `scanWindow` a cada `scanInterval` (ou sem parar, se for curto). */
+  private func restartScanCycle() {
+    scanTimer?.cancel(); scanTimer = nil
+    guard central.state == .poweredOn else { return }
+    let scan = { [weak self] in
+      guard let self = self, self.central.state == .poweredOn else { return }
+      self.central.scanForPeripherals(withServices: [serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+    }
+    scan()
+    if scanInterval <= scanWindow + 1 { return }
+    let t = DispatchSource.makeTimerSource(queue: queue)
+    t.schedule(deadline: .now() + scanWindow, repeating: scanInterval)
+    // Ciclo: para no fim da janela; recomeça `scanInterval` depois do início anterior.
+    t.setEventHandler { [weak self] in
+      guard let self = self else { return }
+      self.central.stopScan()
+      self.queue.asyncAfter(deadline: .now() + (self.scanInterval - self.scanWindow)) { [weak self] in
+        guard let self = self, self.scanTimer != nil else { return }
+        scan()
+      }
+    }
+    scanTimer = t
+    t.resume()
+  }
+
   func stop() {
     queue.sync {
+      scanTimer?.cancel(); scanTimer = nil
       central.stopScan()
       peripherals.values.forEach { central.cancelPeripheralConnection($0) }
       peripheralManager.stopAdvertising()
@@ -132,7 +194,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     guard let id = UUID(uuidString: peerId) else { throw PeerNotConnectedException(peerId) }
     try queue.sync {
       if let p = peripherals[id], let inbox = inboxes[id] {
-        for chunk in frames(data, mtu: p.maximumWriteValueLength(for: .withResponse)) {
+        // O tamanho vem de `.withoutResponse` (MTU − 3): com `.withResponse` o iOS devolve 512 e faria
+        // escritas longas (prepared write), que o Android recusa. A escrita continua com resposta.
+        for chunk in frames(data, mtu: p.maximumWriteValueLength(for: .withoutResponse)) {
           p.writeValue(chunk, for: inbox, type: .withResponse)
         }
       } else if let c = subscribers[id], let out = outbox {
@@ -174,9 +238,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private func receive(_ chunk: Data, from peer: UUID) {
     guard chunk.count >= headerSize else { return }
     let bytes = [UInt8](chunk)
-    let id = UInt32(bytes[0]) << 24 | UInt32(bytes[1]) << 16 | UInt32(bytes[2]) << 8 | UInt32(bytes[3])
-    let index = Int(UInt16(bytes[4]) << 8 | UInt16(bytes[5]))
-    let count = Int(UInt16(bytes[6]) << 8 | UInt16(bytes[7]))
+    let id: UInt32 = readBigEndian(bytes, 0, 4)
+    let index = Int(readBigEndian(bytes, 4, 2))
+    let count = Int(readBigEndian(bytes, 6, 2))
     // Um envelope tem no máximo 32 KB: total de blocos acima disso é inválido.
     guard count > 0, index < count, count <= maxEnvelopeBytes else { return }
     let body = chunk.subdata(in: headerSize..<chunk.count)
@@ -193,8 +257,8 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     let now = Date()
     partial = partial.filter { now.timeIntervalSince($0.value.started) < partialTimeout }
     let key = "\(peer.uuidString)-\(id)"
-    var entry = partial[key] ?? (parts: [:], bytes: 0, count: count, started: now)
-    if entry.count != count { entry = (parts: [:], bytes: 0, count: count, started: now) } // total mudou: recomeça
+    var entry = partial[key] ?? Partial(count: count, started: now)
+    if entry.count != count { entry = Partial(count: count, started: now) } // total mudou: recomeça
     if entry.parts.isEmpty && partial[key] == nil && partial.count >= maxPartialMessages {
       // Muitas remontagens abertas: descarta a mais antiga.
       if let oldest = partial.min(by: { $0.value.started < $1.value.started })?.key { partial[oldest] = nil }
@@ -215,7 +279,7 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   func centralManagerDidUpdateState(_ c: CBCentralManager) {
     switch c.state {
     case .poweredOn:
-      c.scanForPeripherals(withServices: [serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
+      restartScanCycle()
       emit("onState", ["state": "running"])
     case .unauthorized:
       emit("onState", ["state": "unavailable", "reason": "Permissão de Bluetooth negada."])
