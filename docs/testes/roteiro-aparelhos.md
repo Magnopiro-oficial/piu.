@@ -79,6 +79,16 @@ Em todos os aparelhos: **modo avião ligado**, depois Bluetooth e Wi‑Fi ligado
 - **Esperado:** pareamento e aprovação sem internet; o saldo cai uma vez só.
 - **Anote:** sistema, se o Mac pediu permissão de rede, memória usada pelo piu-node no roteador (`top`).
 
+## 9b. Provider: dois piu-nodes reais (mesma rede e por endereço)
+Dois equipamentos com o piu-node (A e B), cada um com o seu painel. Abra a porta TCP 8422 (enlace LNNP) e a UDP 8423 (descoberta) no firewall dos dois.
+1. **Mesma rede:** suba A e B (o console de cada um mostra a porta do enlace, o id do nó e o código do painel). Em até 5 s, a Malha de cada painel mostra o outro como vizinho.
+2. **Por endereço** (rede que bloqueia broadcast, cabo direto, outra sub-rede): no painel de A, Adicionar equipamento → Computador Linux… → Continuar → "Instalei o Piu Node" → **Adicionar por endereço** → `IP-de-B:8422` → Conectar. Esperado: "Conectado ao nó …" e o vizinho escolhido na lista. Endereço errado ou porta fechada: o motivo aparece (conexão recusada, sem resposta…) e A continua tentando; o endereço fica em Malha → Vizinhos por endereço, com o estado, e sai em Remover.
+3. **Código de confirmação:** com o vizinho escolhido, o assistente de A mostra 6 dígitos. No painel de B, Malha → Vizinhos, a linha do nó A mostra o mesmo código. Marque "O mesmo código aparece no outro nó" só se for igual. O código muda a cada reconexão: compare os dois ao mesmo tempo.
+4. Registre B. Em Equipamentos (A), B aparece **Online**; pare o serviço do piu-node em B: em até ~10 s fica **Offline · visto por último há …**; religue: volta sozinho (A reconecta, mesmo depois de reiniciar A, porque o endereço fica salvo).
+5. Um roteador comum (sem o Piu) entra como "Roteador comum ou repetidor": fica só como registro neste nó, sem enlace nem estatísticas.
+- **Esperado:** nenhum dado de exemplo no painel; códigos iguais nos dois; B certificado pela chave de operador de A ("assinada por você").
+- **Anote:** os dois IPs, se a descoberta funcionou sozinha ou precisou do endereço, o tempo até "Online" e o motivo mostrado nas falhas.
+
 ## 10. LoRa como ponte de longa distância (com placas)
 O LoRa é a ponte entre malhas distantes: só mensagens pequenas, nunca mídia.
 1. Duas placas LoRa com firmware de modem KISS, cada uma num computador ou roteador com o piu-node: `PIU_SERIAL=lora:/dev/ttyUSB0@115200`, `PIU_LORA_SF`, `PIU_LORA_BW_KHZ` e `PIU_LORA_CR` iguais aos do firmware.
@@ -89,7 +99,7 @@ O LoRa é a ponte entre malhas distantes: só mensagens pequenas, nunca mídia.
 - **Ajuste se precisar:** perdas altas → SF maior (alcança mais, transmite mais devagar).
 
 ## 11. Lunes: conferência da Mainnet e pagamento de teste
-Endereços de produção: `wss://ws.lunes.com`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io` e `wss://ws-archive.lunes.io`.
+Endereços de produção: `wss://ws.lunes.io`, `wss://ws-lunes-main-01.lunes.io`, `wss://ws-lunes-main-02.lunes.io` e `wss://ws-archive.lunes.io`.
 1. **Mainnet, só leitura:** `cd apps/settlement && npm ci && npm run mainnet:check`. Não usa chave nem envia nada.
 2. **Pagamento de teste numa chain local** (sem dinheiro real):
    - no repositório `lunes-platform/lunes-nightly`, rode `./artefacts/lunes-node --dev --tmp`; a chain fica em `ws://127.0.0.1:9944`;
@@ -101,3 +111,16 @@ Endereços de produção: `wss://ws.lunes.com`, `wss://ws-lunes-main-01.lunes.io
   - no passo 1, todos os itens `[ok]`;
   - no passo 2, o lote finalizado e marcado como pago;
   - no passo 3, o lote aparece no explorador com o remark `piu/lote/v1`.
+
+### 11.1 Leitura do saldo no app e no painel (sem chave, sem envio)
+Use um endereço Lunes seu, com algum saldo, e confira o valor no explorador (https://blockexplorer.lunes.io/).
+1. **App:** Carteira → Receber → cole o endereço → Salvar. Volte à Carteira e puxe a tela para baixo.
+2. **App sem rede:** modo avião, abra a Carteira de novo.
+3. **Painel (piu-node):** Carteira → Receber → cole o mesmo endereço → Salvar (pede o código novo do equipamento se a última confirmação tiver mais de 15 min). No Node 20 (OpenWrt 24.10), suba o piu-node com `NODE_OPTIONS=--experimental-websocket`.
+4. **Troca de endereço WebSocket:** no piu-node, `PIU_LUNES_ENDPOINTS=wss://nao-existe.invalid,wss://ws.lunes.io` e recarregue a Carteira.
+- **Esperado:**
+  - nos passos 1 e 3, o mesmo saldo do explorador (saldo livre, 8 casas), o número do bloco finalizado, o endereço que respondeu e o horário;
+  - no passo 2, o último valor com "Sem conexão agora · … atualizado às …", sem zerar;
+  - no passo 4, o saldo aparece e o endereço que respondeu é `ws.lunes.io`;
+  - endereço com uma letra trocada é recusado ("soma de verificação"), nos dois.
+- **Anote:** o endereço WebSocket que respondeu e o tempo até o saldo aparecer. Se o saldo divergir do explorador, anote o valor dos dois e o número do bloco.

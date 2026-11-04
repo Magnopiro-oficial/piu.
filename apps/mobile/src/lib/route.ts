@@ -1,6 +1,10 @@
 import type { Chat, Msg } from '../data/types';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
+import { Priority } from '../protocol/envelope';
 import type { IconName } from '../ui/Icon';
+import { msgSummary } from './chatCore';
+import { fmtBytes } from './networkCore';
+import { PRIORITY_LABEL, type RouteRec, routeIcon, routeLabel } from './routeCore';
 
 export interface RouteView {
   text: string;
@@ -10,52 +14,46 @@ export interface RouteView {
 }
 
 const ORDER = ['criada', 'aguardando', 'encaminhada', 'entregue'];
-const viaIcon = (v: string): IconName =>
-  /LoRa/.test(v) ? 'settings_input_antenna' : /Bluetooth/.test(v) ? 'bluetooth' : /Direct/.test(v) ? 'wifi_tethering' : /aguard/.test(v) ? 'schedule' : 'hub';
-const utf8Len = (s: string) => new TextEncoder().encode(s).length;
 
 /** Validade da mensagem na fila (messenger.ts, MESSAGE_TTL_SEC): 48 h. */
 const TTL_H = MESSAGE_TTL_SEC / 3600;
 
 /**
- * Rota de uma mensagem: saltos, transporte por salto, etapa atual e metadados do envelope.
- * Os nós intermediários não se identificam para quem envia (o envelope é selado): sem a rota
- * gravada, mostra só as pontas, ligadas pelo meio por onde a conversa anda.
+ * Rota de uma mensagem: pontas, meio real do enlace com o vizinho, etapa atual e metadados reais do
+ * envelope (tamanho, blocos no meio e prioridade do cabeçalho), lidos de `rec` (lib/routeCore.ts).
+ * Os nós intermediários não se identificam para quem envia (o envelope é selado): a folha mostra só
+ * as pontas. Sem registro (ainda na fila, ou rota não guardada), envelope e blocos ficam em “—”.
+ * `prio`: prioridade com que a conversa envia (canal de alerta), para mensagem ainda sem registro.
  */
-export function buildRoute(chat: Chat, msg: Msg): RouteView {
+export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority = Priority.Normal): RouteView {
   const dest = chat.kind === 'direct' ? chat.name : `${chat.name} · membros`;
-  const r = chat.route ?? { nodes: [{ n: 'Você', k: 'Este aparelho' }, { n: dest, k: 'Destino' }], vias: [chat.via ?? 'Por perto'] };
-  let nodes = r.nodes, vias = r.vias;
   const mine = msg.from === 'me';
-  if (!mine) {
-    // Mensagem recebida: a rota vem do outro lado até você.
-    nodes = [...nodes].reverse().map((x, i, a) =>
-      i === 0 ? { n: msg.sender ?? x.n, k: chat.kind === 'group' ? 'Membro do grupo' : x.k === 'Destino' ? 'Origem' : x.k } : i === a.length - 1 ? { n: 'Você', k: 'Destino' } : x);
-    vias = [...vias].reverse();
-  }
   // Lida também é entregue (a rota é a mesma).
   const st = mine ? (msg.status === 'lida' ? 'entregue' : msg.status ?? 'entregue') : 'entregue';
   const bad = st === 'expirada' || st === 'falha';
   const si = bad ? 3 : ORDER.indexOf(st);
-  let reached = nodes.length;
-  if (mine) reached = si <= 0 ? 1 : si === 1 ? (chat.offline ? 2 : 1) : si === 2 ? nodes.length - 1 : nodes.length;
-  if (bad) reached = 1;
+  const waiting = mine && !rec && (st === 'criada' || st === 'aguardando');
+  const via = rec ? routeLabel(rec) : waiting ? 'aguardando rota' : '—';
+  const icon: IconName = rec ? routeIcon(rec) : 'schedule';
+  const nodes = mine
+    ? [{ n: 'Você', k: 'Este aparelho' }, { n: dest, k: 'Destino' }]
+    // Mensagem recebida: a rota vem do outro lado até você.
+    : [{ n: msg.sender ?? chat.name, k: chat.kind === 'group' ? 'Membro do grupo' : 'Origem' }, { n: 'Você', k: 'Destino' }];
+  // Enviada: o destino só conta como alcançado com a confirmação de entrega.
+  const reached = !mine || (!bad && si === 3) ? 2 : 1;
 
   const labels = ['Criada', 'Aguardando rota', 'Encaminhada', bad ? (st === 'expirada' ? 'Expirou' : 'Falhou') : 'Entregue'];
   const left = msg.at ? Math.max(0, Math.ceil(TTL_H - (Date.now() - msg.at) / 3_600_000)) : TTL_H;
   const ttl = bad ? (st === 'expirada' ? `${TTL_H} h esgotadas` : 'não saiu') : st === 'entregue' ? 'removida' : `${left} h`;
   return {
-    text: msg.text,
+    text: msgSummary(msg),
     steps: labels.map((label, i) => ({ label, done: i <= si, current: i === si })),
-    hops: nodes.map((x, i) => ({
-      n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1,
-      via: vias[i] ?? '', viaIcon: viaIcon(vias[i] ?? ''), solid: i + 1 < reached,
-    })),
+    hops: nodes.map((x, i) => ({ n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1, via: i === 0 ? via : '', viaIcon: icon, solid: i + 1 < reached })),
     meta: [
-      { l: 'Envelope', v: utf8Len(msg.text) + 164 + ' B' },
-      { l: 'Fragmentos', v: '1 de 1' },
+      { l: 'Envelope', v: rec ? fmtBytes(rec.b) : '—' },
+      { l: 'Fragmentos', v: rec ? `${rec.f} de ${rec.f}` : '—' },
       { l: st === 'entregue' ? 'Cópias em trânsito' : 'Expira em', v: ttl },
-      { l: 'Prioridade', v: chat.priority ?? 'Normal' },
+      { l: 'Prioridade', v: PRIORITY_LABEL[rec?.p ?? prio] },
     ],
   };
 }

@@ -1,6 +1,9 @@
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Easing, Image, Pressable, ScrollView, View } from 'react-native';
+import { initialsOf } from '../../lib/text';
+import { useMessaging } from '../../state/messaging';
+import { useSettings } from '../../state/settings';
 import { useTransport } from '../../state/transport';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -11,14 +14,19 @@ import { T } from '../../ui/T';
 
 /**
  * Por perto: visibilidade recíproca (desliga sozinha em 1 h), perfis públicos com proximidade aproximada.
- * Os perfis vêm só da malha (anúncio de Por perto); sem nenhum, o estado vazio diz quantos aparelhos o
- * transporte vê, sem inventar pessoas.
+ * Os perfis vêm só da malha (anúncio de presença assinado pela identidade pública, messaging/nearby.ts);
+ * sem nenhum, o estado vazio diz quantos aparelhos o transporte vê, sem inventar pessoas.
  */
 export default function Nearby() {
   const { c } = useTheme();
-  const { visible, setVisible, visibleMinutesLeft, inviteState, reqStatus, profiles, requests } = useWallet();
+  const { visible: chosen, setVisible, visibleMinutesLeft, inviteState } = useWallet();
+  // "Quem pode me encontrar" fora de Todos: Por perto não anuncia nem recebe pedidos (mensageiro).
+  const findOff = useSettings().priv.find !== 'all';
+  const visible = chosen && !findOff;
+  const { nearby } = useMessaging();
+  const profiles = nearby?.profiles ?? [];
   const { kind, peers } = useTransport();
-  const pending = requests.filter(r => !reqStatus[r.id]).length;
+  const pending = (nearby?.requests ?? []).filter(r => r.status === 'pending').length;
   const nodes = peers.filter(p => p.connected).length;
   const fg = visible ? c.invink : c.ink;
   const empty = nodes
@@ -41,9 +49,9 @@ export default function Nearby() {
           <Icon name={visible ? 'visibility' : 'visibility_off'} size={24} w={300} color={fg} />
           <View style={{ flex: 1, gap: 2 }}>
             <T size={15} w={600} color={fg}>{visible ? 'Você está visível' : 'Você está invisível'}</T>
-            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? `Perfil público · desliga sozinho em ${visibleMinutesLeft} min` : 'Identidade anônima nunca aparece aqui'}</T>
+            <T size={12.5} color={fg} style={{ opacity: 0.75 }}>{visible ? `Perfil público · desliga sozinho em ${visibleMinutesLeft} min` : findOff ? 'Desligado em Privacidade → Quem pode me encontrar' : 'Identidade anônima nunca aparece aqui'}</T>
           </View>
-          <VisSwitch on={visible} onChange={() => setVisible(!visible)} />
+          <VisSwitch on={visible} onChange={() => (findOff ? router.push('/settings/privacy') : setVisible(!visible))} />
         </View>
 
         {visible ? (
@@ -59,10 +67,12 @@ export default function Nearby() {
             <View style={{ paddingHorizontal: 20, flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
               {profiles.map(p => (
                 <Pressable key={p.id} onPress={() => router.push({ pathname: '/nearby/[id]', params: { id: p.id } })} accessibilityRole="button"
-                  accessibilityLabel={`${p.name}, ${p.age} anos, ${p.prox}. ${p.bio}${inviteState(p.id).kind === 'pending' ? '. Convite enviado' : ''}`}
+                  accessibilityLabel={`${p.name}, ${p.prox}. Taxa do convite ${p.fee} LUNES${inviteState(p.id).kind === 'pending' ? '. Convite enviado' : ''}`}
                   style={({ pressed }) => ({ width: '47.5%', flexGrow: 1, gap: 8, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
-                  <Stripes period={16} style={{ height: 180, borderRadius: 22 }}>
-                    <T size={10} w={500} mono color={c.ink2}>foto de perfil</T>
+                  <Stripes period={16} style={{ height: 180, borderRadius: 22, overflow: 'hidden' }}>
+                    {p.photo
+                      ? <Image source={{ uri: `data:image/jpeg;base64,${p.photo}` }} accessibilityLabel={`Foto de ${p.name}`} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+                      : <T size={26} w={650} ls={-0.03} color={c.ink2}>{initialsOf(p.name)}</T>}
                     <View style={{ position: 'absolute', top: 10, left: 10, flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 8, borderRadius: 99, backgroundColor: c.bg }}>
                       <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: c.ink, opacity: p.prox === 'muito perto' ? 1 : p.prox === 'perto' ? 0.6 : 0.3 }} />
                       <T size={11} w={550}>{p.prox}</T>
@@ -75,8 +85,8 @@ export default function Nearby() {
                     )}
                   </Stripes>
                   <View style={{ gap: 2, paddingHorizontal: 4 }}>
-                    <T size={15.5} w={650} ls={-0.015}>{p.name}, {p.age}</T>
-                    <T size={12.5} lh={1.35} color={c.ink2} numberOfLines={2}>{p.bio}</T>
+                    <T size={15.5} w={650} ls={-0.015} numberOfLines={1}>{p.name || 'Perfil público'}</T>
+                    <T size={12.5} lh={1.35} color={c.ink2} numberOfLines={2}>{`${p.via} · ${p.fee} LUNES`}</T>
                   </View>
                 </Pressable>
               ))}

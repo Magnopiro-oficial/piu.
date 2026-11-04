@@ -1,4 +1,5 @@
 import { resolve } from 'node:path';
+import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
@@ -16,6 +17,11 @@ export interface Config {
   releasePubKey: string | null;
   /** Motor de retransmissão LNNP (adapter LAN). Ausente: o nó sobe sem retransmitir. */
   lnnp?: LnnpConfig;
+  /**
+   * Endereços WebSocket da Lunes Mainnet para ler o saldo da carteira de provider (`PIU_LUNES_ENDPOINTS`).
+   * Ausente: os de produção, na ordem confirmada (src/lunes/lunesRpc.ts).
+   */
+  lunesEndpoints?: string[];
 }
 
 export interface LnnpConfig {
@@ -95,5 +101,6 @@ export function loadConfig(env = process.env): Config {
     panelDir: resolve(env.PIU_NODE_PANEL ?? '../provider-panel/dist'),
     releasePubKey: env.PIU_RELEASE_PUBKEY?.trim() || null,
     lnnp: loadLnnpConfig(env),
+    lunesEndpoints: parseLunesEndpoints(env.PIU_LUNES_ENDPOINTS),
   };
 }

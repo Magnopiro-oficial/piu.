@@ -4,17 +4,18 @@ import { test } from 'node:test';
 import { LEGACY_KEYS, legacyKeysIn } from '../legacyCore';
 import { fmtBytes, meshStatus, radarPos, relayCard } from '../networkCore';
 import { mediaBytes, storageBreakdown } from '../storageCore';
-import { activityRows, bonusSteps, dayLabel, walletSummary } from '../walletCore';
+import { activityRows, blockLabel, bonusSteps, dayLabel, onchainView, referralStats, walletSummary, whenLabel } from '../walletCore';
 
 const DAY = 86_400_000;
-const zero = { pendente: 0, validado: 0, rejeitado: 0, pago: 0 };
+const zero = { pendente: 0, validado: 0, em_lote: 0, rejeitado: 0, pago: 0 };
 
 test('carteira: sem Mainnet o saldo é 0, nunca negativo, e créditos ficam "a liberar"', () => {
   assert.deepEqual(walletSummary({ totals: zero, reserved: [] }), { available: 0, reserved: 0, toRelease: 0 });
-  const s = walletSummary({ totals: { pendente: 50, validado: 640, rejeitado: 9, pago: 100 }, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] });
+  const s = walletSummary({ totals: { pendente: 50, validado: 640, em_lote: 100, rejeitado: 9, pago: 30 }, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] });
   assert.equal(s.available, 0);
   assert.equal(s.reserved, 3);
-  assert.equal(s.toRelease, 7.4); // (640 + 100) / 100; pendentes e rejeitados não contam
+  // (640 validados + 100 em lote) / 100; pendentes e rejeitados não contam, e pago (liquidado de verdade) já é saldo.
+  assert.equal(s.toRelease, 7.4);
   assert.equal(walletSummary({ onchain: 10, totals: zero, reserved: [{ id: 'x', to: 'X', amt: 3, at: 0 }] }).available, 7);
 });
 
@@ -34,9 +35,23 @@ test('carteira: datas e etapas do bônus', () => {
   assert.equal(dayLabel(now - DAY, now), 'Ontem');
   assert.equal(dayLabel(new Date(2026, 9, 28, 9).getTime(), now), '28 out');
   assert.equal(dayLabel(new Date(2025, 9, 28, 9).getTime(), now), '28 out 2025');
-  assert.deepEqual(bonusSteps({ onboarded: true, verifiedContact: false, since: now - 3.5 * DAY, now }).map(s => s[1]), [0, 100, 0, 43]);
-  assert.equal(bonusSteps({ onboarded: true, verifiedContact: true, since: now - 30 * DAY, now })[3][0], '7 dias de uso · 7/7');
-  assert.equal(bonusSteps({ onboarded: false, verifiedContact: false, since: null, now })[3][1], 0);
+  // 7.4: identidade só conta com backup; dias = dias com entrega para 3+ contatos (não dias desde a instalação).
+  assert.deepEqual(bonusSteps({ onboarded: true, backupDone: true, verifiedContact: false, activeDays: 3 }).map(s => s[1]), [0, 100, 0, 43]);
+  const noBackup = bonusSteps({ onboarded: true, backupDone: false, verifiedContact: false, activeDays: 0 });
+  assert.equal(noBackup[1][1], 0, 'sem backup a identidade não conta');
+  assert.equal(noBackup[1][0], 'Identidade criada · falta o backup');
+  assert.equal(bonusSteps({ onboarded: true, backupDone: true, verifiedContact: true, activeDays: 30 })[3][0], '7 dias de uso · 7/7');
+  assert.equal(bonusSteps({ onboarded: false, backupDone: false, verifiedContact: false, activeDays: 0 })[3][1], 0);
+});
+
+test('6.5 convites aceitos: contadores do registro local, nada pago', () => {
+  const now = new Date(2026, 10, 3, 15).getTime();
+  assert.deepEqual(referralStats([], now), { accepted: 0, thisMonth: 0, paid: 0, earned: 0 });
+  const list = [
+    { contactId: 'a', name: 'Ana', via: 'public' as const, at: now - DAY },
+    { contactId: 'b', name: '', via: 'anon' as const, at: new Date(2026, 9, 20).getTime() },
+  ];
+  assert.deepEqual(referralStats(list, now), { accepted: 2, thisMonth: 1, paid: 0, earned: 0 });
 });
 
 test('rede: radar estável e dentro da área; números do Modo nó', () => {
@@ -83,4 +98,26 @@ test('migração: só os campos de exemplo saem; ajustes reais ficam', () => {
   for (const keep of ['nearby.myFee', 'nearby.visibleUntil', 'nearby.invites', 'nearby.reserved', 'nearby.answers', 'wallet.since', 'dev.list', 'dev.self', 'msg.state', 'set.priv']) {
     assert.ok(!(LEGACY_KEYS as readonly string[]).includes(keep), keep);
   }
+});
+
+test('carteira: leitura da Mainnet dita como é (sem endereço, consultando, lida, sem rede)', () => {
+  const now = new Date(2026, 10, 3, 15, 0).getTime();
+  const addr = '6mfqoTMHrMeVMyKwjqomUjVomPMJ4AjdCm1VReFtk7Be8wqr';
+  const snap = { address: addr, exists: true, free: '255000000', reserved: '0', frozen: '0', block: 4_200_000, blockHash: '0x' + '11'.repeat(32), endpoint: 'wss://ws-lunes-main-01.lunes.io', at: new Date(2026, 10, 3, 14, 32).getTime() };
+  const none = onchainView({ address: null, snap: null, status: { state: 'idle' }, now });
+  assert.equal(none.has, false);
+  assert.match(none.line, /Informe o endereço/);
+  assert.equal(onchainView({ address: addr, snap: null, status: { state: 'loading' }, now }).pill, 'Mainnet: consultando…');
+  const offFirst = onchainView({ address: addr, snap: null, status: { state: 'error', error: 'Nenhum endereço da Lunes respondeu.' }, now });
+  assert.equal(offFirst.has, false, 'sem leitura, nada de saldo');
+  const ok = onchainView({ address: addr, snap, status: { state: 'ok' }, now });
+  assert.equal(ok.pill, 'Mainnet · bloco #4.200.000');
+  assert.equal(ok.line, 'Saldo na Lunes Mainnet · bloco #4.200.000 · ws-lunes-main-01.lunes.io · atualizado às 14:32');
+  const off = onchainView({ address: addr, snap, status: { state: 'error', error: 'x' }, now: now + DAY });
+  assert.equal(off.stale, true);
+  assert.equal(off.line, 'Sem conexão agora · último saldo lido no bloco #4.200.000 · ws-lunes-main-01.lunes.io · atualizado em ontem, 14:32');
+  // Leitura guardada de outro endereço não vale para o atual.
+  assert.equal(onchainView({ address: '5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY', snap, status: { state: 'ok' }, now }).has, false);
+  assert.equal(whenLabel(new Date(2026, 9, 28, 9, 5).getTime(), now), 'em 28 out, 09:05');
+  assert.equal(blockLabel(12), '#12');
 });

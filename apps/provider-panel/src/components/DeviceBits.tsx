@@ -5,7 +5,7 @@ import type { RelayNode } from '../types';
 export function DeviceStatusCell({ d }: { d: RelayNode }) {
   return (
     <div className="row" style={{ gap: 7, fontSize: 13, color: 'var(--ink2)' }}>
-      <div className="dot" style={{ background: d.status === 'active' ? 'var(--ink)' : 'transparent', animation: d.status === 'warming' ? 'piuBreath 1.2s ease-in-out infinite' : 'none' }} />
+      <div className="dot" style={{ background: d.status === 'active' && (d.telemetry !== 'none' || d.link?.online) ? 'var(--ink)' : 'transparent', animation: d.status === 'warming' ? 'piuBreath 1.2s ease-in-out infinite' : 'none' }} />
       {statusShort(d)}
     </div>
   );

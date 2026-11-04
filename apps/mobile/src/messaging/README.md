@@ -54,3 +54,9 @@ Oferta com nome, tamanho, tipo e SHA-256; blocos de 12 KB dentro da sessão, cad
 ## Créditos (`credits.ts`)
 Estimativa dividida entre os relays conhecidos até o aparelho; validado e não liquidado expira em 180 dias; horário do recibo arredondado para a hora antes de assinar (`protocol/receipts.ts`).
 
+
+## Alertas da comunidade (`communityAlerts.ts`)
+- Qualquer membro de uma comunidade publica; vai no envelope de grupo da própria comunidade (o grupo dos Avisos, `kind: 'community'`), cifrado com a chave atual dela e com prioridade Alta. O roteador abre envelopes da comunidade de qualquer membro; o texto dos Avisos continua aceito só de admins.
+- Conteúdo de grupo com campo próprio: `ca` (alerta), `cv` (classificação, com revisão `n`) e `cc` (encerramento). Versões antigas ignoram.
+- Limite: 3 ativos por membro por comunidade e 1 a cada 10 min, conferido ao publicar e ao receber.
+- Estado calculado em cada aparelho com os votos de membros atuais (o do autor não conta): Confirmado (≥ 2 e ≥ 2× "não procede"), Contestado ("não procede" ≥ 2 e ≥ confirmações), Não confirmado; Encerrado pelo autor, admin ou moderador; Vencido pela validade. Sai do estado salvo 24 h depois de vencer.

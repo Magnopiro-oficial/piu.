@@ -70,6 +70,8 @@ internal class BleEngine(
     private const val MAX_CLIENTS = 6
     private const val OP_TIMEOUT_MS = 10_000L
     private const val RETRY_MS = 10_000L
+    /** Cada varredura dura isto; depois o rádio descansa até a próxima (NFR-004). */
+    private const val SCAN_WINDOW_MS = 4_000L
   }
 
   private val thread = HandlerThread("piu-ble").apply { start() }
@@ -81,6 +83,21 @@ internal class BleEngine(
   private var server: BluetoothGattServer? = null
   private var outbox: BluetoothGattCharacteristic? = null
   private var stopped = false
+  /** "Procurar vizinhos": intervalo entre varreduras. Até a janela + 2 s, a varredura é contínua. */
+  private var scanIntervalMs = 20_000L
+  private var scanning = false
+  private val scanCycle = object : Runnable {
+    override fun run() {
+      if (stopped) return
+      if (scanning) {
+        stopScan()
+        handler.postDelayed(this, scanIntervalMs - SCAN_WINDOW_MS)
+      } else {
+        startScan()
+        if (scanIntervalMs > SCAN_WINDOW_MS + 2_000L) handler.postDelayed(this, SCAN_WINDOW_MS)
+      }
+    }
+  }
 
   /** Um envio em andamento (vários blocos): avisa uma vez, no fim ou na primeira falha. */
   private class Pending(var remaining: Int, val done: ((Throwable?) -> Unit)?) {
@@ -132,20 +149,46 @@ internal class BleEngine(
     try {
       openServer()
       scanner = adapter.bluetoothLeScanner
-      scanner?.startScan(
-        listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()),
-        ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build(),
-        scanCallback,
-      )
+      restartScanCycle()
       listener.onBleState(true, null)
     } catch (e: SecurityException) {
       listener.onBleState(false, "Permissão de Bluetooth negada.")
     }
   }
 
+  /** Muda o ciclo de varredura. Conexões já abertas não são afetadas. */
+  fun setScanInterval(ms: Long) = handler.post {
+    scanIntervalMs = ms.coerceAtLeast(1_000L)
+    if (scanner != null) restartScanCycle()
+  }
+
+  /** Roda na thread `piu-ble`. */
+  private fun restartScanCycle() {
+    handler.removeCallbacks(scanCycle)
+    if (scanning) stopScan()
+    scanCycle.run()
+  }
+
+  private fun startScan() {
+    try {
+      scanner?.startScan(
+        listOf(ScanFilter.Builder().setServiceUuid(ParcelUuid(SERVICE)).build()),
+        ScanSettings.Builder().setScanMode(ScanSettings.SCAN_MODE_BALANCED).build(),
+        scanCallback,
+      )
+      scanning = true
+    } catch (_: Exception) { scanning = false }
+  }
+
+  private fun stopScan() {
+    try { scanner?.stopScan(scanCallback) } catch (_: Exception) {}
+    scanning = false
+  }
+
   fun stop() {
     handler.post {
       stopped = true
+      handler.removeCallbacks(scanCycle)
       try { scanner?.stopScan(scanCallback) } catch (_: Exception) {}
       try { advertiser?.stopAdvertising(advertiseCallback) } catch (_: Exception) {}
       clients.values.forEach { c -> try { c.gatt?.disconnect(); c.gatt?.close() } catch (_: Exception) {} }
@@ -314,7 +357,7 @@ internal class BleEngine(
       gatt.writeCharacteristic(ch, value, BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT) == BluetoothStatusCodes.SUCCESS
     } else {
       ch.writeType = BluetoothGattCharacteristic.WRITE_TYPE_DEFAULT
-      ch.value = value
+      ch.setValue(value) // setter Java devolve Boolean: chamada explícita em vez de `ch.value =`
       gatt.writeCharacteristic(ch)
     }
 
@@ -323,7 +366,7 @@ internal class BleEngine(
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       gatt.writeDescriptor(d, value) == BluetoothStatusCodes.SUCCESS
     } else {
-      d.value = value
+      d.setValue(value)
       gatt.writeDescriptor(d)
     }
 
@@ -434,13 +477,13 @@ internal class BleEngine(
   }
 
   @Suppress("DEPRECATION")
-  private fun notify(device: BluetoothDevice, value: ByteArray): Boolean {
+  private fun notifyPeer(device: BluetoothDevice, value: ByteArray): Boolean {
     val s = server ?: return false
     val ch = outbox ?: return false
     return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
       s.notifyCharacteristicChanged(device, ch, false, value) == BluetoothStatusCodes.SUCCESS
     } else {
-      ch.value = value
+      ch.setValue(value)
       s.notifyCharacteristicChanged(device, ch, false)
     }
   }
@@ -453,7 +496,7 @@ internal class BleEngine(
       if (n.pending.finished) continue
       if (!subscribers.containsKey(n.device.address)) { n.pending.step(IllegalStateException("Vizinho saiu.")); continue }
       notifying = n
-      if (notify(n.device, n.value)) {
+      if (notifyPeer(n.device, n.value)) {
         handler.postDelayed({ if (notifying === n) onNotified(n.device, false) }, OP_TIMEOUT_MS)
         return
       }

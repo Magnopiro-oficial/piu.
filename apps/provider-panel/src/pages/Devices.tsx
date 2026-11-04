@@ -4,6 +4,8 @@ import { Dialog } from '../components/Overlays';
 import { Bar, Icon, Segmented, Toggle, growX, pressable } from '../components/ui';
 import { HOURS } from './Settings';
 import { fmt, fmtInt } from '../lib/format';
+import { ago, relayOn } from '../lib/live';
+import { StepUpDialog } from '../components/Pair';
 import { deviceLabels, parentName } from '../lib/devices';
 import { useStore } from '../state/store';
 import type { DeviceFilter, HoursPolicy, RelayNode } from '../types';
@@ -55,7 +57,7 @@ export function Devices() {
                   </div>
                   <div className="col" style={{ minWidth: 0, gap: 2 }}>
                     <div className="ellipsis" style={{ fontSize: 14.5, fontWeight: 600 }}>{d.name}</div>
-                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.pub ? ` · ${d.pub}` : d.telemetry === 'live' ? ' · este nó' : ''}</div>
+                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.pub ? ` · ${d.pub}` : d.telemetry === 'live' ? ' · este nó' : ''}{d.parent ? ` · nó pai: ${parentName(devices, d.parent)}` : ''}</div>
                   </div>
                 </div>
                 <DeviceStatusCell d={d} />
@@ -83,15 +85,38 @@ export function Devices() {
 }
 
 function DeviceDetail({ d }: { d: RelayNode }) {
-  const { devices, navigate, togglePause, revokeDevice, showToast, nodeMode, setDeviceLimits } = useStore();
+  const { devices, navigate, togglePause, revokeDevice, showToast, nodeMode, setDeviceLimits, settingsOwner, live, restartDevice, stepUp } = useStore();
   const real = nodeMode === 'node';
   const [confirmRevoke, setConfirmRevoke] = useState(false);
+  const [confirmRestart, setConfirmRestart] = useState(false);
+  const [restartStepUp, setRestartStepUp] = useState(false);
   const paused = d.status === 'paused';
   const parent = parentName(devices, d.parent);
-  const statusLabel = d.telemetry === 'none' && !paused ? 'Registrado · sem contato com este nó'
+  const relay = relayOn(live);
+  /** Este nó, pausado pela chave de operador em outro equipamento seu (não por este painel). */
+  const pausedElsewhere = d.telemetry === 'live' && !!relay?.operatorPolicy?.paused;
+  const rep = d.report;
+  /** O que acontece com pausa e regras de um equipamento que não é este nó (texto verdadeiro para cada caso). */
+  const remoteNote = !real || d.telemetry !== 'none' || d.passive ? null
+    : settingsOwner === false ? 'Fica só registrado: esta sessão não é do dono deste nó, então ele não leva pausa nem regras aos seus equipamentos.'
+    : !d.nodeId ? 'Fica só registrado: sem identidade técnica, este nó não sabe qual vizinho ele é. Registre de novo escolhendo o vizinho no assistente.'
+    : !relay ? 'Fica registrado: a retransmissão LNNP está desligada neste nó, então nada sai para o equipamento.'
+    : d.policy?.applied ? 'Aplicado no equipamento: o resumo assinado por ele confirma.'
+    : d.policy ? 'Assinado pela sua chave de operador. Vale no equipamento quando ele receber, ligado a este nó ou a outro nó seu.'
+    : 'Sai assinado pela sua chave de operador e vale no equipamento quando ele receber, ligado a este nó ou a outro nó seu.';
+  const doRestart = async () => {
+    setConfirmRestart(false);
+    const r = await restartDevice(d.id);
+    if (r === 'reauth') { setRestartStepUp(true); return; }
+    if (r === 'ok') showToast({ icon: 'restart_alt', title: 'Reiniciando ' + d.name, body: 'O nó grava as mensagens guardadas e volta sozinho. O painel atualiza quando ele responder.' });
+  };
+  const statusLabel = d.telemetry === 'none' && !paused
+    ? (d.link ? (d.link.online ? 'Online · enlace com este nó' : 'Offline · sem enlace com este nó') : d.passive ? 'Só registro · sem software do Piu' : 'Registrado · sem identidade técnica')
     : d.status === 'active' ? (d.passive ? 'Vinculado à malha' : 'Ativo na malha') : paused ? (d.passive ? 'Desvinculado' : 'Pausado por você') : 'Aquecendo';
   const metrics = d.telemetry === 'live'
     ? [[fmtInt(d.receiptsToday ?? 0), 'recibos hoje'], [paused ? '0' : fmtInt(d.pph), 'encaminhados/h'], [String(d.neighbors), 'vizinhos']]
+    : d.telemetry === 'none' && rep
+    ? [[fmtInt(rep.forwarded), 'encaminhados desde que ligou'], [fmtInt(rep.stored), 'guardados desde que ligou'], [String(rep.neighbors), 'vizinhos']]
     : d.telemetry === 'none'
     ? [['—', 'recibos hoje'], ['—', 'encaminhados/h'], ['—', 'vizinhos']]
     : d.passive
@@ -148,6 +173,49 @@ function DeviceDetail({ d }: { d: RelayNode }) {
         </div>
       )}
 
+      {real && d.telemetry === 'none' && d.nodeId && (
+        // Estado real do enlace LNNP, medido por este nó (não é estatística do outro equipamento).
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)' }}>
+          <Icon name={d.link?.online ? 'link' : 'link_off'} size={17} wght={300} />
+          <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{d.link?.online ? 'Conectado a este nó agora' : 'Sem enlace com este nó agora'}</span>
+            <span className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>
+              {d.link?.online ? (d.link.address ?? 'enlace LNNP') : d.link?.lastSeen ? (ago(d.link.lastSeen) === 'agora' ? 'visto por último há menos de 1 min' : `visto por último há ${ago(d.link.lastSeen)}`) : 'não visto desde que este nó ligou'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {real && d.telemetry === 'none' && d.nodeId && (
+        // Resumo que o próprio equipamento assina e manda pela malha (só entre nós do mesmo operador).
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, background: 'var(--bg2)' }}>
+          <Icon name={rep ? 'monitoring' : 'hourglass_empty'} size={17} wght={300} />
+          <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+            <span style={{ fontSize: 12.5, fontWeight: 600 }}>{rep ? `Resumo do equipamento · ${rep.paused ? 'pausado' : rep.relaying ? 'retransmitindo' : 'sem retransmitir agora'}` : 'Sem resumo do equipamento ainda'}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>
+              {rep ? `assinado por ele · recebido ${ago(rep.receivedAt) === 'agora' ? 'há menos de 1 min' : `há ${ago(rep.receivedAt)}`} · ligado há ${ago(rep.startedAt)}`
+                : 'Chega quando ele estiver ligado a este nó (ou a outro nó seu) e tiver a sua chave de operador (backup restaurado nele).'}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {real && d.passive && (
+        <div className="row" style={{ gap: 8, padding: '10px 12px', borderRadius: 12, border: '1px solid var(--line2)' }}>
+          <Icon name="account_tree" size={17} wght={300} />
+          <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
+            <span className="ellipsis" style={{ fontSize: 12.5, fontWeight: 600 }}>{d.parent ? `Nó pai: ${parent}` : 'Sem nó pai registrado'}</span>
+            <span style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.parent ? 'leva o sinal deste ponto de acesso à malha' : 'o nó pai foi removido ou não foi escolhido'}</span>
+          </div>
+        </div>
+      )}
+
+      {pausedElsewhere && (
+        <div role="note" style={{ padding: '10px 12px', borderRadius: 12, border: '1px dashed var(--line2)', fontSize: 12.5, lineHeight: 1.45 }}>
+          Pausado pela sua chave de operador em outro equipamento seu (ajuste nº {relay!.operatorPolicy!.seq}). Para retomar, use o painel de lá.
+        </div>
+      )}
+
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 8 }}>
         {metrics.map(([v, l]) => (
           <div key={l} className="col" style={{ padding: 12, borderRadius: 14, background: 'var(--bg2)', gap: 3 }}>
@@ -165,10 +233,13 @@ function DeviceDetail({ d }: { d: RelayNode }) {
             {i.load !== null && <div className="track" style={{ height: 4, borderRadius: 2 }}><div style={{ width: (paused ? 0 : i.load) + '%', animation: growX(), transition: 'width .3s' }} /></div>}
           </div>
         ))}
-        {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Este equipamento ainda não manda estatísticas a este nó. Quando o Piu Node dele se conectar, ele aparece como vizinho na Malha.</div>}
+        {!d.ifaces.length && d.telemetry === 'none' && <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>{
+          d.passive ? 'Sem software do Piu: este nó não fala com ele, só guarda o registro e o nome público.'
+          : d.nodeId ? 'As estatísticas dele ficam no painel do próprio equipamento; aqui aparece só o estado do enlace com este nó.'
+          : 'Registrado sem identidade técnica: este nó não sabe qual vizinho ele é. Para ver o enlace, registre de novo escolhendo o vizinho no assistente.'}</div>}
       </div>
 
-      {real && !d.passive && <DeviceRules d={d} onSave={l => setDeviceLimits(d.id, l)} />}
+      {real && !d.passive && <DeviceRules d={d} note={remoteNote} onSave={l => setDeviceLimits(d.id, l)} />}
 
       <div className="col" style={{ gap: 8 }}>
         <div className="label">RECIBOS RECENTES</div>
@@ -193,24 +264,34 @@ function DeviceDetail({ d }: { d: RelayNode }) {
           <div style={{ flex: 1, fontSize: 13.5, fontWeight: 550 }}>{d.passive ? 'Desvincular da malha' : 'Pausar retransmissão'}</div>
           <Toggle on={paused} onChange={() => togglePause(d.id)} label={d.passive ? 'Desvincular da malha' : 'Pausar retransmissão'} />
         </div>
-        {real && d.telemetry === 'none' && (
-          <div style={{ padding: '0 13px 11px', fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Fica registrado aqui; vale no equipamento quando ele se conectar a este nó.</div>
+        {real && d.telemetry === 'none' && (remoteNote || d.passive) && (
+          <div style={{ padding: '0 13px 11px', fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>{remoteNote ?? 'Fica só registrado: um ponto de acesso não tem o Piu Node para receber a pausa.'}</div>
         )}
         {real ? (
           <>
-            {/* Atualizar e reiniciar pela malha ainda não existem: sem simular sucesso. */}
+            {/* Atualizar pela malha ainda não existe: sem simular sucesso. */}
             <div aria-disabled="true" style={{ ...rowStyle, cursor: 'default', opacity: 0.55 }}>
               <div className="col" style={{ flex: 1, gap: 1 }}>
                 <span style={{ fontSize: 13.5, fontWeight: 550 }}>Atualizar Piu Node</span>
                 <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>Ainda não disponível pelo painel: instale o pacote assinado no equipamento.</span>
               </div>
             </div>
-            <div aria-disabled="true" style={{ ...rowStyle, cursor: 'default', opacity: 0.55 }}>
-              <div className="col" style={{ flex: 1, gap: 1 }}>
-                <span style={{ fontSize: 13.5, fontWeight: 550 }}>Reiniciar</span>
-                <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>Ainda não disponível pelo painel: reinicie no próprio equipamento.</span>
+            {d.telemetry === 'live' && settingsOwner !== false ? (
+              // Só o nó que serve o painel, só o dono, com código novo do equipamento (step-up).
+              <div {...pressable(() => setConfirmRestart(true), 'Reiniciar ' + d.name)} style={rowStyle}>
+                <div className="col" style={{ flex: 1, gap: 1 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 550 }}>Reiniciar</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>Grava as mensagens guardadas e volta sozinho (com o serviço do sistema ou o app desktop).</span>
+                </div>
               </div>
-            </div>
+            ) : (
+              <div aria-disabled="true" style={{ ...rowStyle, cursor: 'default', opacity: 0.55 }}>
+                <div className="col" style={{ flex: 1, gap: 1 }}>
+                  <span style={{ fontSize: 13.5, fontWeight: 550 }}>Reiniciar</span>
+                  <span style={{ fontSize: 11.5, color: 'var(--ink2)', fontWeight: 400 }}>{d.telemetry === 'live' ? 'Só o dono deste nó pode reiniciá-lo.' : 'Pelo painel, só o nó que serve este painel: reinicie este pelo painel dele ou no próprio equipamento.'}</span>
+                </div>
+              </div>
+            )}
           </>
         ) : !d.passive && (
           <div {...pressable(() => showToast({ icon: 'system_update_alt', title: 'Atualização assinada aplicada', body: d.name + ' · Piu Node 0.4.3' }))} style={rowStyle}>
@@ -236,6 +317,14 @@ function DeviceDetail({ d }: { d: RelayNode }) {
             : 'A credencial é revogada em toda a malha e o equipamento deixa de retransmitir como seu. Créditos pendentes dele continuam sendo validados.'}
           primaryLabel={real && !d.nodeId ? 'Remover' : 'Revogar e remover'} onPrimary={revoke} onClose={() => setConfirmRevoke(false)} />
       )}
+      {confirmRestart && (
+        <Dialog icon="restart_alt" title={`Reiniciar ${d.name}?`} primaryLabel="Reiniciar" onPrimary={() => void doRestart()} onClose={() => setConfirmRestart(false)}
+          body="O nó grava as mensagens guardadas e o histórico, fecha os enlaces e sai; o serviço do sistema (ou o app desktop) sobe ele de novo. Os vizinhos reconectam sozinhos. O painel fica sem resposta por alguns segundos." />
+      )}
+      {restartStepUp && (
+        <StepUpDialog reason="Reiniciar o nó exige uma confirmação recente." confirmLabel="Confirmar e reiniciar" onClose={() => setRestartStepUp(false)}
+          onConfirm={async code => { const p = await stepUp(code); if (p) return p; setRestartStepUp(false); await doRestart(); return null; }} />
+      )}
     </aside>
   );
 }
@@ -247,7 +336,7 @@ const RULE_DEFAULT: Limits = { bw: 20, sto: 4, hours: 'always' };
  * Regras do equipamento (as mesmas do assistente, passo "Regras"). No nó que serve o painel, valem
  * no motor na hora, junto com os limites globais; nos outros, ficam registradas.
  */
-function DeviceRules({ d, onSave }: { d: RelayNode; onSave: (l: Limits | null) => Promise<boolean> }) {
+function DeviceRules({ d, note, onSave }: { d: RelayNode; note: string | null; onSave: (l: Limits | null) => Promise<boolean> }) {
   const on = !!d.limits;
   const v = d.limits ?? RULE_DEFAULT;
   const set = (p: Partial<Limits>) => void onSave({ ...v, ...p });
@@ -267,7 +356,7 @@ function DeviceRules({ d, onSave }: { d: RelayNode; onSave: (l: Limits | null) =
       <div style={{ fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>
         {!on ? 'Sem regras próprias: valem só os limites globais de Configurações.'
           : d.telemetry === 'live' ? 'Valem neste nó agora. Os limites globais de Configurações continuam valendo: fica o mais restrito.'
-          : 'Ficam registradas neste painel. O equipamento ainda não as recebe deste nó.'}
+          : note ?? 'Ficam registradas neste painel.'}
       </div>
     </div>
   );

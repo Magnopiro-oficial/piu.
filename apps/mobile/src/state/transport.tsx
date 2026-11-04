@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
-import { getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
+import { DISCOVERY_INTERVAL_SEC, getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
 import { useBattery } from '../lib/battery';
 import { useNetwork } from './network';
 import { useSettings } from './settings';
@@ -37,6 +37,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const enabled = onboarded && (tx.ble || tx.direct);
 
+  // "Procurar vizinhos" (Bateria e limites → DESCOBERTA): intervalo de varredura no transporte (NFR-004).
+  useEffect(() => { transport.setDiscoveryInterval?.(DISCOVERY_INTERVAL_SEC[bat.disc]); }, [transport, bat.disc]);
   // Meios ligados na aba Rede (BLE e Wi-Fi Direct/Nearby).
   useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble, nearby: tx.direct }); }, [transport, tx.ble, tx.direct]);
   // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando
@@ -70,13 +72,13 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       const now = Date.now();
       if (state === 'running' && now - startedAt.current > 10_000 && now - lastNodeBanner.current > 60_000) {
         lastNodeBanner.current = now;
-        toastRef.current({ kind: 'network', icon: 'settings_input_antenna', title: 'Novo nó alcançável', body: `${p.name} · ${p.via === 'ble' ? 'Bluetooth LE' : p.via === 'nearby' ? 'Wi-Fi Direct' : 'por perto'}`, go: goNetwork });
+        toastRef.current({ kind: 'network', href: '/(tabs)/network', icon: 'settings_input_antenna', title: 'Novo nó alcançável', body: `${p.name} · ${p.via === 'ble' ? 'Bluetooth LE' : p.via === 'nearby' ? 'Wi-Fi Direct' : 'por perto'}`, go: goNetwork });
       }
     }
     if (connected.length) hadPeers.current = true;
     else if (hadPeers.current && state === 'running') {
       hadPeers.current = false;
-      toastRef.current({ kind: 'network', icon: 'portable_wifi_off', title: 'Você saiu da malha', body: 'Nenhum nó por perto. Mensagens ficam na fila até reencontrar um.', go: goNetwork });
+      toastRef.current({ kind: 'network', href: '/(tabs)/network', icon: 'portable_wifi_off', title: 'Você saiu da malha', body: 'Nenhum nó por perto. Mensagens ficam na fila até reencontrar um.', go: goNetwork });
     }
   }, [peers, state]);
 

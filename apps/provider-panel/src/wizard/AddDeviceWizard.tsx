@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useState, type CSSProperties, type ReactNode } from 'react';
+import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
 import { Icon, Segmented, useEscape } from '../components/ui';
 import { FAMILIES, NODE, PAIR_CODE, WALLETS } from '../data/seed';
 import { parentName } from '../lib/devices';
+import { ApiError, type ApiNeighbor, type ApiPeer } from '../lib/api';
 import { copyText } from '../lib/io';
 import { checkPub, sanitizePub } from '../lib/pubName';
 import { HOURS } from '../pages/Settings';
@@ -15,6 +16,8 @@ interface WizState {
   name: string; pub: string; parent: string; bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy; wallet: 'provider' | 'personal';
   /** Com piu-node: chave do vizinho LNNP que é este equipamento ('' = sem vínculo). */
   nodePk: string;
+  /** Com piu-node: o operador conferiu que o código do enlace é o mesmo no painel do outro nó. */
+  codeOk: boolean;
 }
 
 const STEPS = ['Equipamento', 'Conectar', 'Teste real', 'Regras'];
@@ -23,8 +26,8 @@ const SCAN_MS = 1600;
 const CHECK_MS = 700;
 
 export function AddDeviceWizard() {
-  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode, live } = useStore();
-  /** Com piu-node: busca, pareamento e teste real ainda não existem; o assistente diz isso em vez de simular. */
+  const { devices, setWizardOpen, addDevice, navigate, showToast, packages, nodeMode, live, api, refreshLive } = useStore();
+  /** Com piu-node: vizinhos e código de confirmação reais; o teste com vizinhos independentes ainda não existe e o assistente diz isso. */
   const real = nodeMode === 'node';
   const neighborList = relayOn(live)?.neighbors ?? [];
   const neighbors = neighborList.length;
@@ -34,8 +37,9 @@ export function AddDeviceWizard() {
   const [activating, setActivating] = useState(false);
   const [w, setW] = useState<WizState>(() => ({
     step: 0, fam: 'router', install: 'dl', scan: 'searching', paired: false, n: 0,
-    name: FAMILIES[0].defName!, pub: FAMILIES[0].defPub!, parent: parents.find(p => p.id === 'mini')?.id ?? parents[0]?.id ?? '',
-    bw: 20, sto: 4, hours: 'always', wallet: 'provider', nodePk: '',
+    // Com piu-node, o nome público começa vazio: o do catálogo é exemplo da demonstração.
+    name: FAMILIES[0].defName!, pub: real ? '' : FAMILIES[0].defPub!, parent: parents.find(p => p.id === 'mini')?.id ?? parents[0]?.id ?? '',
+    bw: 20, sto: 4, hours: 'always', wallet: 'provider', nodePk: '', codeOk: false,
   }));
   const patch = (p: Partial<WizState>) => setW(s => ({ ...s, ...p }));
   const fam = FAMILIES.find(f => f.id === w.fam) ?? FAMILIES[0];
@@ -43,6 +47,9 @@ export function AddDeviceWizard() {
   const parent = parentName(devices, w.parent);
   const pub = checkPub(w.pub, devices.map(d => d.pub.replace(/^piu\./, '')), real);
   const done = w.n >= TOTAL_CHECKS;
+  /** Vizinho escolhido como este equipamento (some da lista se desconectar). */
+  const chosen = w.nodePk ? candidates.find(n => n.pk === w.nodePk) ?? null : null;
+  const linkOk = !real || isAp || !!fam.isRadio || !w.nodePk || (!!chosen && w.codeOk);
 
   const close = useCallback(() => setWizardOpen(false), [setWizardOpen]);
   useEscape(true, close);
@@ -63,7 +70,7 @@ export function AddDeviceWizard() {
     }
   }, [w.step, real]);
 
-  const canNext = w.step === 0 ? true : w.step === 1 ? w.paired : w.step === 2 ? done || real : pub.ok;
+  const canNext = w.step === 0 ? true : w.step === 1 ? w.paired && linkOk : w.step === 2 ? done || real : pub.ok;
   const next = () => {
     if (!canNext) return;
     if (w.step === 0) patch({ step: 1, scan: 'searching', paired: false });
@@ -89,22 +96,23 @@ export function AddDeviceWizard() {
     if (isAp) dev.model = `Repetidor comum · firmware original · ligado ao ${parent}`;
     setActivating(true);
     const linkable = real && !isAp && !fam.isRadio;
-    const id = await addDevice(dev, fam.id, real && !isAp ? {
+    // Ponto de Acesso: o nó pai escolhido vai junto (o nó confere que é um equipamento seu com o Piu Node).
+    const id = await addDevice(dev, fam.id, !real ? {} : isAp ? (w.parent && parents.some(p => p.id === w.parent) ? { parent: w.parent } : {}) : {
       ...(linkable && w.nodePk ? { nodePk: w.nodePk } : {}),
       limits: { bw: w.bw, sto: w.sto, hours: w.hours },
-    } : {});
+    });
     setActivating(false);
     if (!id) return; // o erro já apareceu num aviso; o assistente continua aberto
     setWizardOpen(false);
     navigate('devices', id);
     showToast(real
-      ? { icon: fam.icon, title: dev.name + ' registrado', body: dev.pub + ' · as estatísticas aparecem quando ele se conectar a este nó.' }
+      ? { icon: fam.icon, title: dev.name + ' registrado', body: linkable && w.nodePk ? dev.pub + ' · identidade técnica assinada; o estado do enlace aparece em Equipamentos.' : dev.pub + ' · só registro neste nó, sem enlace.' }
       : { icon: fam.icon, title: dev.name + ' entrou na malha', body: isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
   };
 
   const hint = [
     'Escolha o tipo de equipamento',
-    w.paired ? (isAp ? 'Vínculo confirmado' : real ? 'Instalação confirmada' : 'Pareado') : isAp ? 'Confirme o vínculo para continuar' : real ? 'Confirme a instalação para continuar' : 'Confirme o código para continuar',
+    w.paired ? (!linkOk ? (chosen ? 'Confira o código para continuar' : 'O vizinho escolhido desconectou') : isAp ? 'Vínculo confirmado' : real ? 'Instalação confirmada' : 'Pareado') : isAp ? 'Confirme o vínculo para continuar' : real ? 'Confirme a instalação para continuar' : 'Confirme o código para continuar',
     real ? 'Teste real indisponível nesta versão' : done ? 'Teste concluído' : 'Testando com vizinhos…',
     real ? 'Revise e registre' : 'Revise e ative',
   ][w.step];
@@ -130,7 +138,7 @@ export function AddDeviceWizard() {
           </ol>
 
           <div className="scroll-thin wiz-pad" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 26px 16px' }}>
-            {w.step === 0 && <StepFamily value={w.fam} onPick={f => patch({ fam: f.id, name: f.defName!, pub: f.defPub! })} />}
+            {w.step === 0 && <StepFamily value={w.fam} onPick={f => patch({ fam: f.id, name: f.defName!, pub: real ? w.pub : f.defPub!, nodePk: '', codeOk: false })} />}
             {w.step === 1 && (
               <div className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="col" style={{ gap: 12 }}>
@@ -170,9 +178,9 @@ export function AddDeviceWizard() {
                         <>
                           <div className="col mono" style={{ padding: '14px 16px', borderRadius: 16, background: 'var(--ink)', color: 'var(--invink)', gap: 8, fontSize: 12.5, lineHeight: 1.55 }}>
                             <div style={{ display: 'flex', gap: 10 }}><span style={{ opacity: 0.5 }}>$</span><span style={{ flex: 1, wordBreak: 'break-all', userSelect: 'all' }}>{fam.cmd}</span></div>
-                            <div style={{ display: 'flex', gap: 10 }}><span style={{ opacity: 0.5 }}>$</span><span style={{ flex: 1, userSelect: 'all' }}>piu-node pair --painel piu-node.local</span></div>
+                            {!real && <div style={{ display: 'flex', gap: 10 }}><span style={{ opacity: 0.5 }}>$</span><span style={{ flex: 1, userSelect: 'all' }}>piu-node pair --painel piu-node.local</span></div>}
                           </div>
-                          <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>O pacote confere a própria assinatura antes de instalar.</div>
+                          <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>O pacote confere a própria assinatura antes de instalar.{real ? ' Ao subir, o Piu Node mostra no console do equipamento o código do painel dele e a porta do enlace LNNP (TCP 8422).' : ''}</div>
                         </>
                       )}
                     </>
@@ -205,10 +213,12 @@ export function AddDeviceWizard() {
                     <div style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--ink)', animation: 'piuBreath 1.4s ease-in-out infinite' }} />
                   </div>
                   {real && !isAp ? (
-                    // Sem busca nem código de pareamento ainda: o operador confirma a instalação e o nó novo aparece como vizinho.
+                    // Vizinhos LNNP reais: pelo anúncio na rede local ou por endereço. O código do enlace é o mesmo nos dois painéis.
                     <div className="col" style={{ padding: 16, borderRadius: 18, border: '1px dashed var(--line2)', gap: 12 }}>
-                      <div className="row" style={{ gap: 10, fontSize: 14, fontWeight: 600 }}><Icon name="info" size={20} />Busca automática ainda não disponível</div>
-                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>Quando o Piu Node subir no equipamento, ele se anuncia na rede local e aparece como vizinho na Malha deste nó. Agora: {neighbors} {neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'}.</div>
+                      <div className="row" style={{ gap: 10, fontSize: 14, fontWeight: 600 }}><Icon name="hub" size={20} />Vizinhos LNNP deste nó</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>{fam.isRadio
+                        ? `O rádio vira um enlace do equipamento em que está ligado (configurado nele por PIU_SERIAL). Agora: ${neighbors} ${neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'} a este nó.`
+                        : `Quando o Piu Node subir no equipamento, ele se anuncia na rede local e aparece aqui. Se a rede bloquear o anúncio, adicione pelo endereço. Agora: ${neighbors} ${neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'}.`}</div>
                       <button type="button" role="checkbox" aria-checked={w.paired} onClick={() => patch({ paired: !w.paired })} className="btn" style={{ justifyContent: 'flex-start', gap: 10, fontSize: 13.5, fontWeight: 550, padding: 0, minHeight: 44 }}>
                         <span style={{ width: 20, height: 20, borderRadius: 6, border: '1.5px solid var(--ink)', background: w.paired ? 'var(--ink)' : 'transparent', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}>
                           <Icon name="check" size={15} style={{ opacity: w.paired ? 1 : 0 }} />
@@ -220,7 +230,7 @@ export function AddDeviceWizard() {
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Qual vizinho é ele? A identidade técnica dele é assinada pela sua chave de operador, e dá para revogar depois.</div>
                           <div role="radiogroup" aria-label="Identidade técnica do equipamento" className="col" style={{ gap: 6 }}>
                             {candidates.map(n => (
-                              <button key={n.id} type="button" role="radio" aria-checked={w.nodePk === n.pk} className="choice row" onClick={() => patch({ nodePk: n.pk! })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
+                              <button key={n.id} type="button" role="radio" aria-checked={w.nodePk === n.pk} className="choice row" onClick={() => patch({ nodePk: n.pk!, codeOk: false })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
                                 <Icon name="fingerprint" size={18} wght={300} />
                                 <div className="col grow" style={{ gap: 1, minWidth: 0 }}>
                                   <div className="mono ellipsis" style={{ fontSize: 12.5, fontWeight: 600 }}>{n.id}</div>
@@ -229,12 +239,23 @@ export function AddDeviceWizard() {
                                 <div className="radio"><span /></div>
                               </button>
                             ))}
-                            <button type="button" role="radio" aria-checked={w.nodePk === ''} className="choice row" onClick={() => patch({ nodePk: '' })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
+                            <button type="button" role="radio" aria-checked={w.nodePk === ''} className="choice row" onClick={() => patch({ nodePk: '', codeOk: false })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
                               <Icon name="link_off" size={18} wght={300} />
                               <div className="grow" style={{ fontSize: 12.5, fontWeight: 600, textAlign: 'left' }}>{candidates.length ? 'Nenhum destes' : 'Nenhum vizinho novo conectado'} · registrar sem identidade</div>
                               <div className="radio"><span /></div>
                             </button>
                           </div>
+                          {w.nodePk && !chosen && (
+                            <div role="status" style={{ fontSize: 12.5, color: 'var(--ink)', lineHeight: 1.4 }}>O vizinho escolhido desconectou deste nó. Espere ele voltar ou escolha outro.</div>
+                          )}
+                          {chosen && <ConfirmCode n={chosen} ok={w.codeOk} onToggle={() => patch({ codeOk: !w.codeOk })} />}
+                          {api && (
+                            <AddByAddress
+                              add={async address => { const r = await api.addRelayPeer(address); await refreshLive(); return r.peer; }}
+                              registered={pk => devices.some(d => d.nodeId === pk.slice(0, 16))}
+                              onConnected={pk => patch({ nodePk: pk, codeOk: false })}
+                            />
+                          )}
                         </div>
                       )}
                     </div>
@@ -255,7 +276,7 @@ export function AddDeviceWizard() {
                           <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{real ? 'sem software do Piu: vínculo só registrado neste nó' : fam.addr}</div>
                         </div>
                       </div>
-                      {!isAp && (
+                      {!isAp && !real && (
                         <>
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Confira se o código aparece {fam.where}:</div>
                           <div aria-label={'Código de pareamento ' + PAIR_CODE.join(' ')} style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
@@ -300,8 +321,10 @@ export function AddDeviceWizard() {
               <div className="col" style={{ gap: 12, padding: 18, borderRadius: 18, border: '1px dashed var(--line2)' }}>
                 <div className="row" style={{ gap: 10, fontSize: 15, fontWeight: 650 }}><Icon name="info" size={21} />Teste real ainda não disponível</div>
                 <div style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.5 }}>
-                  O teste com vizinhos independentes (banda, latência, encaminhamento) ainda não existe nesta versão. O equipamento entra registrado, sem classe aprovada,
-                  e as estatísticas dele aparecem quando ele se conectar a este nó.
+                  O teste com vizinhos independentes (banda, latência, encaminhamento) ainda não existe nesta versão. O equipamento entra registrado, sem classe aprovada.
+                  {isAp || fam.isRadio
+                    ? ' Sem o Piu Node nele, este nó só guarda o registro: não há estatísticas dele aqui.'
+                    : ' Com a identidade técnica escolhida e a sua chave de operador nele (backup restaurado), ele manda a este nó um resumo assinado (encaminhados, guardados, vizinhos, pausa) e recebe daqui a pausa e as regras.'}
                 </div>
                 <div className="mono" style={{ fontSize: 12, color: 'var(--ink2)' }}>agora: {neighbors} {neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'} a este nó</div>
               </div>
@@ -361,7 +384,11 @@ export function AddDeviceWizard() {
                       <div style={{ flex: 1, fontSize: 13, lineHeight: 1.45, color: 'var(--ink2)', textWrap: 'pretty' }}>Pontos de acesso não geram créditos próprios. As entregas que passam por ele contam para o {parent}, que assina os recibos.</div>
                     </div>
                   )}
-                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real${w.nodePk ? ', com identidade técnica assinada por você' : ''}.` : `${fam.result} · aprovado no teste real.`} Os limites globais de Configurações continuam valendo.{real && !isAp ? ' As regras ficam registradas; o equipamento ainda não as recebe deste nó.' : ''}</div>
+                  <div style={{ padding: '12px 14px', borderRadius: 14, border: '1px dashed var(--line2)', fontSize: 12, lineHeight: 1.45, color: 'var(--ink2)' }}>{real ? `${fam.result} · registrado sem teste real${w.nodePk ? ', com identidade técnica assinada por você' : ''}.` : `${fam.result} · aprovado no teste real.`}{real
+                    ? isAp ? ' Pontos de acesso não recebem regras: não têm o Piu Node.'
+                      : w.nodePk ? ' As regras saem assinadas pela sua chave de operador e valem nele quando ele receber pela malha, junto com os limites do próprio equipamento (fica o mais restrito).'
+                      : ' Sem identidade técnica, as regras ficam só registradas neste painel.'
+                    : ' Os limites globais de Configurações continuam valendo.'}</div>
                 </div>
               </div>
             )}
@@ -454,5 +481,77 @@ function StepTest({ fam, parent, n }: { fam: DeviceFamily; parent: string; n: nu
         </div>
       </div>
     </div>
+  );
+}
+
+/** Código do enlace com o vizinho escolhido: 6 dígitos que o outro nó também mostra (Malha → Vizinhos). */
+function ConfirmCode({ n, ok, onToggle }: { n: ApiNeighbor; ok: boolean; onToggle: () => void }) {
+  const code = n.confirmCode ?? null;
+  return (
+    <div className="col" style={{ gap: 8, padding: 12, borderRadius: 14, border: '1.5px solid var(--ink)', animation: 'piuUp .3s both' }}>
+      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>
+        {code ? 'Confira se o mesmo código aparece no painel do outro nó (Malha → Vizinhos, na linha deste nó):' : 'Este enlace não tem código de confirmação. Confira a identidade no console do outro equipamento.'}
+      </div>
+      {code && (
+        <div aria-label={'Código de confirmação ' + code.split('').join(' ')} style={{ display: 'grid', gridTemplateColumns: 'repeat(6,1fr)', gap: 6 }}>
+          {code.split('').map((v, i) => (
+            <div key={i} className="mono" style={{ height: 44, borderRadius: 11, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 20, fontWeight: 600 }}>{v}</div>
+          ))}
+        </div>
+      )}
+      <button type="button" role="checkbox" aria-checked={ok} onClick={onToggle} className="btn" style={{ justifyContent: 'flex-start', gap: 10, fontSize: 13.5, fontWeight: 550, padding: 0, minHeight: 40 }}>
+        <span style={{ width: 20, height: 20, borderRadius: 6, border: '1.5px solid var(--ink)', background: ok ? 'var(--ink)' : 'transparent', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}>
+          <Icon name="check" size={15} style={{ opacity: ok ? 1 : 0 }} />
+        </span>
+        {code ? 'O mesmo código aparece no outro nó' : 'Conferi a identidade no outro equipamento'}
+      </button>
+      <div style={{ fontSize: 11.5, color: 'var(--ink2)', lineHeight: 1.4 }}>O código muda a cada conexão nova: compare os dois painéis ao mesmo tempo.</div>
+    </div>
+  );
+}
+
+type AddResult = { tone: 'ok' | 'warn'; text: string };
+
+/** "Adicionar por endereço": o nó conecta a `host:porta`, espera o handshake e o vizinho entra na lista acima. */
+function AddByAddress({ add, registered, onConnected }: {
+  add: (address: string) => Promise<ApiPeer | null>;
+  registered: (pk: string) => boolean;
+  onConnected: (pk: string) => void;
+}) {
+  const [address, setAddress] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [result, setResult] = useState<AddResult | null>(null);
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    const a = address.trim();
+    if (!a || busy) return;
+    setBusy(true); setResult(null);
+    try {
+      const p = await add(a);
+      if (!p) setResult({ tone: 'warn', text: 'O nó não devolveu o estado deste vizinho. Veja em Malha.' });
+      else if (p.state === 'connected' && p.pk) {
+        if (registered(p.pk)) setResult({ tone: 'warn', text: `Conectado ao nó ${p.nodeId}, que já é um equipamento registrado.` });
+        else { onConnected(p.pk); setResult({ tone: 'ok', text: `Conectado ao nó ${p.nodeId}. Ele foi escolhido acima: confira o código.` }); }
+      } else if (p.state === 'failed') setResult({ tone: 'warn', text: `Não conectou: ${p.error ?? 'motivo desconhecido'}. Este nó continua tentando a cada poucos segundos.` });
+      else setResult({ tone: 'warn', text: 'Ainda conectando. Quando o handshake terminar, ele aparece na lista acima.' });
+    } catch (err) {
+      setResult({ tone: 'warn', text: err instanceof ApiError ? err.message : 'Não foi possível adicionar. Tente de novo.' });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <form onSubmit={e => void submit(e)} className="col" style={{ gap: 6, paddingTop: 8, borderTop: '1px solid var(--line)' }}>
+      <label htmlFor="wiz-peer" style={{ fontSize: 13, fontWeight: 600 }}>Adicionar por endereço</label>
+      <div className="row" style={{ gap: 8 }}>
+        <input id="wiz-peer" value={address} onChange={e => setAddress(e.target.value)} placeholder="192.168.0.12:8422" spellCheck={false} autoCapitalize="off" autoComplete="off"
+          aria-describedby="wiz-peer-msg" className="mono"
+          style={{ flex: 1, minWidth: 0, height: 40, borderRadius: 12, border: 'none', background: 'var(--bg2)', padding: '0 12px', fontSize: 13.5, color: 'var(--ink)', outline: 'none' }} />
+        <button type="submit" className="btn btn-outline" aria-disabled={busy || !address.trim()} style={{ height: 40, padding: '0 14px', borderRadius: 20, fontSize: 13, flex: 'none', opacity: busy || !address.trim() ? 0.5 : 1 }}>{busy ? 'Conectando…' : 'Conectar'}</button>
+      </div>
+      <div id="wiz-peer-msg" aria-live="polite" style={{ fontSize: 12, lineHeight: 1.4, color: result?.tone === 'ok' ? 'var(--ink)' : 'var(--ink2)' }}>
+        {result?.text ?? 'Só host:porta do enlace LNNP do outro nó (8422 por padrão), sem http://. Fica salvo neste nó e reconecta sozinho.'}
+      </div>
+    </form>
   );
 }

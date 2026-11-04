@@ -1,9 +1,11 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Animated, Easing, Platform, ScrollView, View } from 'react-native';
+import { Animated, Easing, Platform, Pressable, ScrollView, View } from 'react-native';
+import { customLabel, DAY_LETTER, DAY_MIN, DAY_NAME, hm, HOURS_STEP, type HoursWindow, NIGHT_WINDOW } from '../../messaging/hours';
 import { confirmDevice } from '../../lib/deviceAuth';
 import { fmtBytes } from '../../lib/networkCore';
 import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
+import { previewBytes } from '../../lib/storageCore';
 import { useStats } from '../../state/messaging';
 import { useResetApp } from '../../state/reset';
 import { useBattery } from '../../lib/battery';
@@ -35,6 +37,13 @@ export default function SettingsPage() {
   );
 }
 
+/** O que "Quem pode me encontrar" controla de fato (identidade pública; não há busca por nome). */
+const FIND_DESC: Record<'all' | 'contacts' | 'none', string> = {
+  all: 'Identidade pública · aparece em Por perto quando visível e recebe pedidos de quem tem seu código',
+  contacts: 'Identidade pública · fora de Por perto · pedidos só de quem tem seu código',
+  none: 'Identidade pública · fora de Por perto · pedidos pelo seu código são descartados',
+};
+
 function Privacy() {
   const { priv, setPriv } = useSettings();
   const { showToast, blocked } = useStore();
@@ -42,7 +51,7 @@ function Privacy() {
   return (
     <>
       <SetGroup title="VISIBILIDADE">
-        <SegRow name="Quem pode me encontrar" desc="Pela identidade pública" value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
+        <SegRow name="Quem pode me encontrar" desc={FIND_DESC[priv.find]} value={priv.find} onChange={find => setPriv({ find })} options={[['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']]} />
         <SegRow name="Por perto começa" value={priv.near} onChange={near => setPriv({ near })} options={[['off', 'Invisível'], ['1h', 'Visível por 1 h']]} />
       </SetGroup>
       <SetGroup title="CONVERSAS">
@@ -75,7 +84,7 @@ function Storage() {
   const { c, reduceMotion } = useTheme();
   const { sto, setSto } = useSettings();
   const { storage, setStorage } = useNetwork();
-  const { showToast } = useStore();
+  const { showToast, chats, purgeMediaPreviews } = useStore();
   const reset = useResetApp();
   const [del, setDel] = useState(false);
   const st = useStats(10_000);
@@ -83,7 +92,9 @@ function Storage() {
   const thirdPartyBytes = st?.metrics.thirdPartyBytes ?? 0;
   const creditsBytes = st ? JSON.stringify(st.credits.list).length + JSON.stringify(st.credits.lots).length : 0;
   const [use, refresh] = useStorageUsage({ thirdPartyBytes, creditsBytes });
-  const [cache, setCache] = useState(receivedCacheBytes);
+  // Cache de mídia: arquivos recebidos na memória + prévias de fotos embutidas nas conversas.
+  const [, setCleared] = useState(0);
+  const cache = receivedCacheBytes() + previewBytes(chats);
   const parts = (use?.parts ?? []).filter(([l, n]) => n > 0 || l !== 'Ajustes e registros');
   const total = use?.total ?? 0;
   const OP = [1, 0.55, 0.3, 0.15, 0.08];
@@ -121,13 +132,15 @@ function Storage() {
       </SetGroup>
       <SetGroup title="LIMPEZA">
         <LockedRow name="Armazenamento cifrado" desc="Sempre ativo · chave protegida pelo aparelho" />
-        {/* Arquivos recebidos ficam só na memória nesta execução; limpar é o mesmo que fechar o app. */}
+        {/* Arquivos recebidos (memória) e prévias embutidas nas conversas (disco): o balão passa a dizer que a mídia foi apagada. */}
         <ActionRow name="Limpar cache de mídia" value={fmtBytes(cache)} onPress={() => {
-          const freed = clearReceivedCache();
-          setCache(0); refresh();
+          const freed = clearReceivedCache() + purgeMediaPreviews();
+          setCleared(n => n + 1);
+          // Mede de novo depois que as conversas forem regravadas (persist.ts grava em ~250 ms).
+          setTimeout(refresh, 700);
           showToast(freed
-            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. Conversas continuam intactas.` }
-            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Arquivos recebidos ficam só na memória e já somem ao fechar o app.' });
+            ? { icon: 'cleaning_services', title: 'Cache limpo', body: `${fmtBytes(freed)} liberados. As mensagens continuam nas conversas.` }
+            : { icon: 'cleaning_services', title: 'Nada para limpar', body: 'Nenhuma foto ou arquivo recebido guardado neste aparelho.' });
         }} />
         <ActionRow name="Apagar dados locais" strong onPress={() => setDel(true)} />
       </SetGroup>
@@ -164,7 +177,10 @@ function Battery() {
         <ToggleRow name="Só quando estiver carregando" on={chargingOnly} onChange={() => setChargingOnly(!chargingOnly)} />
       </SetGroup>
       <SetGroup title="HORÁRIO E TRÁFEGO">
-        <SegRow name="Horário" value={bat.hours} onChange={hours => setBat({ hours })} options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', 'Personalizado']]} />
+        <SegRow name="Horário" desc={bat.hours === 'custom' ? 'Retransmite e guarda mensagens de terceiros só dentro da faixa (hora deste aparelho).' : undefined} value={bat.hours}
+          onChange={hours => setBat(hours === 'custom' ? { hours, custom: bat.custom ?? NIGHT_WINDOW } : { hours })}
+          options={[['always', 'Sempre'], ['night', '22h–7h'], ['custom', customLabel(bat.custom)]]} />
+        {bat.hours === 'custom' && bat.custom && <CustomHours w={bat.custom} onChange={custom => setBat({ hours: 'custom', custom })} />}
         <SegRow name="Tráfego de terceiros por dia" value={String(bat.traffic)} onChange={v => setBat({ traffic: Number(v) as 50 | 200 | 500 })} options={[['50', '50 MB'], ['200', '200 MB'], ['500', '500 MB']]} />
         <SegRow name="Banda máxima para a rede" value={bat.bw} onChange={bw => setBat({ bw })} options={[['1', '1 Mbps'], ['5', '5 Mbps'], ['max', 'Sem limite']]} />
       </SetGroup>
@@ -173,5 +189,61 @@ function Battery() {
       </SetGroup>
       <FootNote icon="smartphone">Android e iPhone limitam o que roda em segundo plano. O Piu nunca promete retransmissão 24 h pelo celular.</FootNote>
     </>
+  );
+}
+
+/**
+ * Faixa do horário "Personalizado": início e fim de 30 em 30 min (pode atravessar a meia-noite) e,
+ * se quiser, os dias da semana em que a faixa começa. Início e fim nunca ficam iguais (faixa vazia).
+ */
+function CustomHours({ w, onChange }: { w: HoursWindow; onChange: (w: HoursWindow) => void }) {
+  const { c } = useTheme();
+  const step = (min: number, dir: 1 | -1, other: number) => {
+    let next = (min + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    if (next === other) next = (next + dir * HOURS_STEP + DAY_MIN) % DAY_MIN;
+    return next;
+  };
+  const days = w.days ?? [0, 1, 2, 3, 4, 5, 6];
+  const toggleDay = (d: number) => {
+    const next = days.includes(d) ? days.filter(x => x !== d) : [...days, d];
+    if (!next.length) return; // ao menos um dia
+    onChange({ start: w.start, end: w.end, ...(next.length < 7 ? { days: [...next].sort((a, b) => a - b) } : {}) });
+  };
+  return (
+    <View style={{ paddingHorizontal: 14, paddingBottom: 14, gap: 12 }}>
+      <TimeStepper label="Início" value={w.start} set={dir => onChange({ ...w, start: step(w.start, dir, w.end) })} />
+      <TimeStepper label="Fim" value={w.end} set={dir => onChange({ ...w, end: step(w.end, dir, w.start) })} />
+      <View style={{ gap: 8 }}>
+        <T size={12.5} lh={1.4} color={c.ink2}>{w.start > w.end ? 'Atravessa a meia-noite: a madrugada conta para o dia em que a faixa começou. Dias da semana (opcional):' : 'Dias da semana (opcional):'}</T>
+        <View style={{ flexDirection: 'row', gap: 6 }}>
+          {DAY_LETTER.map((l, d) => {
+            const on = days.includes(d);
+            return (
+              <Pressable key={d} onPress={() => toggleDay(d)} accessibilityRole="checkbox" accessibilityState={{ checked: on }} accessibilityLabel={DAY_NAME[d]}
+                style={{ flex: 1, height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: on ? c.ink : c.bg3 }}>
+                <T size={13} w={600} color={on ? c.invink : c.ink}>{l}</T>
+              </Pressable>
+            );
+          })}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TimeStepper({ label, value, set }: { label: string; value: number; set: (dir: 1 | -1) => void }) {
+  const { c } = useTheme();
+  const btn = { width: 44, height: 44, borderRadius: 22, backgroundColor: c.bg3, alignItems: 'center' as const, justifyContent: 'center' as const };
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      <T size={14} w={550} style={{ flex: 1 }}>{label}</T>
+      <Pressable onPress={() => set(-1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos antes`} style={btn}>
+        <Icon name="remove" size={20} />
+      </Pressable>
+      <T size={17} w={650} mono style={{ width: 64, textAlign: 'center' }} accessibilityLiveRegion="polite">{hm(value)}</T>
+      <Pressable onPress={() => set(1)} accessibilityRole="button" accessibilityLabel={`${label}: 30 minutos depois`} style={btn}>
+        <Icon name="add" size={20} />
+      </Pressable>
+    </View>
   );
 }

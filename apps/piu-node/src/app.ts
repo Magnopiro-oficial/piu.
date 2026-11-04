@@ -2,7 +2,7 @@ import cookie from '@fastify/cookie';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
-import { randomUUID, timingSafeEqual } from 'node:crypto';
+import { randomUUID, timingSafeEqual, X509Certificate } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import type { Config } from './config.js';
@@ -13,10 +13,16 @@ import { cookieOptions, createSession, csrfMatches, endSession, findSession, SES
 import { readPanelFile } from './static.js';
 import { BACKUP_FILENAME, OperatorKeyError, OperatorVault } from './operator.js';
 import { claimableEpochs, isLunesAddress } from './payout.js';
+import { LUNES_EXPLORER } from './lunes/lunesRpc.js';
+import { LunesReader } from './lunes/reader.js';
+import { decodeSs58 } from './lunes/ss58.js';
 import { toHex } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
 import { makePayoutClaim, type RelayReceipt } from './protocol/receipts.js';
-import { certFromJson, certToJson, type OperatorCert, type RevocationList, unhex } from './relay/operator-frames.js';
+import {
+  certFromJson, certToJson, type DevicePolicy, type DeviceReport, type OperatorCert, type RevocationList, samePolicyValue, unhex,
+} from './relay/operator-frames.js';
+import { MAX_RUNTIME_PEERS, parsePeerAddress, type PeerStatus } from './relay/lan.js';
 import type { Device, DeviceLimits, Session, Settings, Store } from './store.js';
 
 declare module 'fastify' {
@@ -38,9 +44,20 @@ export interface AppOptions {
   relay?: {
     stats(): object; applySettings(s: Settings, device?: DeviceLimits | null): void;
     /** Operador dono do nó: linhagem de chaves, certificados e lista de revogação. */
-    setOperator?(t: { lineage?: string[]; cert?: OperatorCert | null; deviceCerts?: OperatorCert[]; list?: RevocationList | null }): void;
+    setOperator?(t: { lineage?: string[]; cert?: OperatorCert | null; deviceCerts?: OperatorCert[]; list?: RevocationList | null; policies?: DevicePolicy[] }): void;
     /** Chave técnica do nó (assina a carteira do lote) e recibos guardados (evidências para o validador). */
-    engine?: { node: KeyPair; receiptLog: RelayReceipt[]; lineage: string[] };
+    engine?: {
+      node: KeyPair; receiptLog: RelayReceipt[]; lineage: string[]; peerSeen?(peerId: string): { online: boolean; lastSeen: number | null; address: string | null };
+      /** Ajustes (pausa e regras) conhecidos para um equipamento e o último resumo assinado dele (chave do nó em hex). */
+      policyFor?(nodePkHex: string): DevicePolicy | null;
+      deviceReport?(nodePkHex: string): { report: DeviceReport; receivedAt: number } | null;
+    };
+    /** Vizinhos fixos do enlace (configuração e painel), adicionar e remover sem reiniciar. */
+    peers?(): PeerStatus[];
+    addPeer?(address: string): void;
+    removePeer?(address: string): boolean;
+    waitPeer?(address: string, ms: number, from?: number): Promise<PeerStatus | null>;
+    isConfigPeer?(address: string): boolean;
     /** Pausar retransmissão do equipamento que serve o painel. */
     setPaused?(paused: boolean): void;
     /** Histórico das estatísticas (amostras de 24 h e totais por dia). */
@@ -54,6 +71,13 @@ export interface AppOptions {
   vault?: OperatorVault;
   /** Custo do scrypt do backup de operador (só os testes baixam). */
   backupN?: number;
+  /** Leitura do saldo na Lunes Mainnet. Ausente: um leitor com `config.lunesEndpoints` (ou os de produção). */
+  lunes?: LunesReader;
+  /**
+   * Reinício pedido pelo painel (`POST /api/devices/:id/restart`): fecha o nó limpo e sai para o
+   * supervisor (procd, systemd, app desktop) subir de novo. Ausente: a rota responde 409.
+   */
+  restart?: () => void;
 }
 
 /** CSP igual à do painel (a mesma política vale para o HTML servido aqui). */
@@ -68,10 +92,13 @@ const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 const fail = (reply: FastifyReply, code: number, error: string, extra: Record<string, unknown> = {}) => reply.code(code).send({ error, ...extra });
 
 export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
+  // Impressão digital SHA-256 do certificado TLS (a mesma do console), para o QR de pareamento do celular.
+  const tlsFingerprint = o.https ? new X509Certificate(o.https.cert).fingerprint256 : undefined;
   const now = o.now ?? Date.now;
   const { store, pairing } = o;
   const vault = o.vault ?? new OperatorVault(null);
   const nodePk = o.relay?.engine ? toHex(o.relay.engine.node.pk) : null;
+  const lunes = o.lunes ?? new LunesReader({ endpoints: o.config.lunesEndpoints });
 
   /**
    * Chave de operador → motor: o dono assina a identidade técnica do próprio nó e dos equipamentos
@@ -91,16 +118,37 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     const devs = store.devicesOf(owner.id);
     const selfNow = devs.find(d => d.self);
     const certOf = (d: Device) => (d.cert ? certFromJson(d.cert) : null);
+    // Pausa e regras dos outros equipamentos (com identidade técnica): assinadas pela chave de operador
+    // e numeradas, só quando mudaram (ou a chave mudou). O motor manda aos vizinhos do mesmo operador,
+    // e o equipamento aplica as dele quando recebe (relay/operator-frames.ts, DEVICE_POLICY).
+    const policies: DevicePolicy[] = [];
+    if (o.relay?.engine?.policyFor) {
+      for (const d of devs) {
+        if (d.self || !d.nodePk || !d.cert) continue;
+        const want = { paused: d.status === 'paused', limits: d.limits ?? null };
+        const cur = o.relay.engine.policyFor(d.nodePk);
+        if (cur && toHex(cur.operatorPk) === current && samePolicyValue(cur, want)) continue;
+        // Nunca emitido e sem nada a mandar (ativo, sem regras): o equipamento já está assim.
+        if (!cur && !want.paused && !want.limits) continue;
+        policies.push(vault.devicePolicy(owner.id, unhex(d.nodePk), want, now(), cur?.seq ?? 0));
+      }
+    }
     o.relay?.setOperator?.({
       lineage: vault.lineage(owner.id),
       cert: selfNow?.nodePk ? certOf(selfNow) : null,
       deviceCerts: devs.filter(d => !d.self && d.nodePk && d.cert).map(d => certOf(d)!),
       list: vault.revocation(owner.id),
+      ...(policies.length ? { policies } : {}),
     });
     o.relay?.applySettings(store.nodeSettings(), selfNow?.limits ?? null);
   };
   if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
   syncOperator();
+  // Vizinhos fixos adicionados pelo painel antes do reinício voltam a conectar (somados aos de PIU_LNNP_PEERS).
+  for (const a of store.relayPeers()) {
+    const p = parsePeerAddress(a);
+    if (p && o.relay?.addPeer) { try { o.relay.addPeer(p); } catch { /* acima do limite: ignora o excesso */ } }
+  }
   const app = Fastify({
     https: o.https ?? null,
     bodyLimit: 16 * 1024,
@@ -232,8 +280,12 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
         media: { type: 'boolean' }, unknown: { type: 'boolean' }, community: { type: 'boolean' } } },
     },
   } as const;
-  app.get('/api/settings', authed(), async req => store.settings(req.piuSession!.operatorId));
-  app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async req => {
+  /** `owner`: os ajustes valem neste equipamento (só os do dono, o primeiro operador pareado, valem no motor). */
+  app.get('/api/settings', authed(), async req => ({ ...store.settings(req.piuSession!.operatorId), owner: store.isOwner(req.piuSession!.operatorId) }));
+  app.put<{ Body: Settings }>('/api/settings', { ...mutate(), schema: { body: settingsSchema } }, async (req, reply) => {
+    // Outro operador pode entrar no painel, mas não muda os limites do equipamento de outra pessoa:
+    // recusado com o motivo, em vez de salvar um ajuste que o motor não usaria.
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono deste equipamento (o primeiro operador pareado) muda os limites e a política de tráfego dele.');
     const saved = store.setSettings(req.piuSession!.operatorId, req.body);
     // Os limites do dono do equipamento passam a valer no roteador na hora (banda, espaço, horário, mídia).
     o.relay?.applySettings(store.nodeSettings(), store.selfDevice()?.limits ?? null);
@@ -248,15 +300,65 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   /** Recibos de retransmissão guardados para o validador: quantos e os horários dos mais recentes. */
   app.get('/api/relay/receipts', authed(), async () => (o.relay?.receipts ? { enabled: true, ...o.relay.receipts() } : { enabled: false }));
 
+  // ── vizinhos fixos do enlace (host:porta), sem reiniciar ─
+  /** Vizinhos fixos: os de PIU_LNNP_PEERS e os adicionados aqui, com o estado de cada um. */
+  app.get('/api/relay/peers', authed(), async () => (o.relay?.peers ? { enabled: true, max: MAX_RUNTIME_PEERS, peers: o.relay.peers() } : { enabled: false, peers: [] }));
+  const addressSchema = { type: 'string', minLength: 3, maxLength: 262 } as const;
+  /**
+   * Adiciona um vizinho por endereço (só `host:porta`) e espera o handshake (até ~6 s). Só o dono do
+   * equipamento: o enlace é do nó, não da sessão.
+   */
+  app.post<{ Body: { address: string } }>('/api/relay/peers', {
+    ...mutate(), config: strictLimit(20, '1 minute'),
+    schema: { body: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: addressSchema } } },
+  }, async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento muda os vizinhos dele.');
+    if (!o.relay?.addPeer || !o.relay.waitPeer) return fail(reply, 409, 'A retransmissão LNNP está desligada neste nó.');
+    const address = parsePeerAddress(req.body.address);
+    if (!address) return fail(reply, 400, 'Endereço inválido. Use só host:porta (ex.: 192.168.0.12:8422), sem http:// nem caminho.');
+    const from = now();
+    try { o.relay.addPeer(address); } catch (e) { return fail(reply, 400, e instanceof Error ? e.message : 'Não foi possível adicionar.'); }
+    if (!o.relay.isConfigPeer?.(address)) store.addRelayPeer(address);
+    const peer = await o.relay.waitPeer(address, 6000, from);
+    return reply.code(201).send({ peer });
+  });
+  app.delete<{ Params: { address: string } }>('/api/relay/peers/:address', {
+    ...mutate(), schema: { params: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: addressSchema } } },
+  }, async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono do equipamento muda os vizinhos dele.');
+    const address = parsePeerAddress(req.params.address);
+    if (!address) return fail(reply, 400, 'Endereço inválido.');
+    if (o.relay?.isConfigPeer?.(address)) return fail(reply, 409, 'Este vizinho vem da configuração do nó (PIU_LNNP_PEERS): tire de lá e reinicie.');
+    const fromLink = o.relay?.removePeer?.(address) ?? false;
+    const fromStore = store.removeRelayPeer(address);
+    if (!fromLink && !fromStore) return fail(reply, 404, 'Não encontrado.');
+    return reply.code(204).send();
+  });
+
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
-  const deviceView = ({ id, ownerId, name, cls, status, self, pub, nodePk: pk, cert, limits }: Device) => {
+  const deviceView = ({ id, ownerId, name, cls, status, self, pub, nodePk: pk, cert, limits, parent }: Device) => {
     const current = vault.keyPair(ownerId);
+    const e = o.relay?.engine;
+    const remote = !!pk && !self;
+    const rep = remote ? e?.deviceReport?.(pk) ?? null : null;
+    const pol = remote ? e?.policyFor?.(pk) ?? null : null;
     return {
       id, name, cls, status, self: !!self, ...(pub ? { pub } : {}),
       // Identidade técnica (os 16 primeiros hex, como no LNNP) e se está assinada pela chave de operador atual.
       ...(pk ? { nodeId: pk.slice(0, 16), signed: !!cert && !!current && cert.operatorPk === toHex(current.pk) } : {}),
+      // Enlace real com este equipamento (outro piu-node): conectado agora e última vez visto desde que o motor subiu.
+      ...(remote && e?.peerSeen ? { link: e.peerSeen(pk.slice(0, 16)) } : {}),
       ...(limits ? { limits } : {}),
+      ...(parent ? { parent } : {}),
+      // Pausa e regras emitidas para ele (número) e se o resumo dele já diz que aplicou.
+      ...(pol ? { policy: { seq: pol.seq, issuedAt: pol.issuedAt * 1000, applied: !!rep && rep.report.policySeq >= pol.seq } } : {}),
+      // Último resumo assinado pelo próprio equipamento (contadores desde que ele ligou).
+      ...(rep ? { report: {
+        at: rep.report.at * 1000, receivedAt: rep.receivedAt, startedAt: rep.report.startedAt * 1000,
+        forwarded: rep.report.forwarded, stored: rep.report.stored, receipts: rep.report.receipts, neighbors: rep.report.neighbors,
+        paused: rep.report.paused, relaying: rep.report.relaying,
+      } } : {}),
     };
   };
   app.get('/api/devices', authed(), async req => store.devicesOf(req.piuSession!.operatorId).map(deviceView));
@@ -266,7 +368,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   const limitsSchema = { type: 'object', required: ['bw', 'sto', 'hours'], additionalProperties: false, properties: {
     bw: { type: 'integer', enum: [5, 20, 50] }, sto: { type: 'integer', enum: [1, 4, 8] }, hours: { type: 'string', enum: ['always', 'night', 'day'] },
   } } as const;
-  app.post<{ Body: { name: string; cls: string; family: string; pub?: string; nodePk?: string; limits?: DeviceLimits } }>('/api/devices', {
+  app.post<{ Body: { name: string; cls: string; family: string; pub?: string; nodePk?: string; limits?: DeviceLimits; parent?: string } }>('/api/devices', {
     ...mutate(), config: strictLimit(20, '1 minute'),
     schema: { body: { type: 'object', required: ['name', 'cls', 'family'], additionalProperties: false, properties: {
       name: { type: 'string', minLength: 1, maxLength: 40 },
@@ -276,11 +378,20 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
       // Identidade técnica de um vizinho LNNP (chave do nó em hex), escolhida no assistente.
       nodePk: { type: 'string', pattern: '^[0-9a-f]{64}$' },
       limits: limitsSchema,
+      // Ponto de Acesso: o equipamento seu (com o Piu Node) que leva o sinal dele à malha.
+      parent: { type: 'string', pattern: UUID },
     } } },
   }, async (req, reply) => {
     const s = req.piuSession!;
     if (store.devicesOf(s.operatorId).length >= 100) return fail(reply, 400, 'Limite de equipamentos atingido.');
-    const { name, cls, family, pub, nodePk: pk, limits } = req.body;
+    const { name, cls, family, pub, nodePk: pk, limits, parent } = req.body;
+    if (parent !== undefined) {
+      if (cls !== 'Ponto de Acesso') return fail(reply, 400, 'Só um Ponto de Acesso tem nó pai.');
+      // 404 também para id de outro operador: não revela que o id existe.
+      const p = store.ownedDevice(s.operatorId, parent);
+      if (!p) return fail(reply, 404, 'Nó pai não encontrado entre os seus equipamentos.');
+      if (p.cls === 'Ponto de Acesso') return fail(reply, 400, 'O nó pai precisa ter o Piu Node (um Ponto de Acesso não serve de nó pai).');
+    }
     if (pk) {
       if (pk === nodePk) return fail(reply, 409, 'Esta é a identidade técnica do nó que serve o painel, que já é um equipamento seu.');
       if (store.deviceByNodePk(pk)) return fail(reply, 409, 'Esta identidade técnica já pertence a um equipamento registrado.');
@@ -290,12 +401,16 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
       ownerId: s.operatorId, name: name.trim(), cls, family, pub, createdAt: now(),
       ...(pk ? { nodePk: pk, cert: certToJson(vault.certify(s.operatorId, unhex(pk), now())) } : {}),
       ...(limits ? { limits } : {}),
+      ...(parent ? { parent } : {}),
     });
     if (store.isOwner(s.operatorId)) syncOperator();
     return reply.code(201).send(deviceView(d));
   });
 
-  /** Regras de um equipamento. No próprio nó, valem no motor na hora (junto com os limites globais). */
+  /**
+   * Regras de um equipamento. No próprio nó, valem no motor na hora (junto com os limites globais).
+   * Nos outros com identidade técnica (e sendo o dono deste nó), saem assinadas pela malha.
+   */
   app.put<{ Params: { id: string }; Body: DeviceLimits | { clear: true } }>('/api/devices/:id/limits', {
     ...mutate(), schema: { params: idParams, body: { oneOf: [limitsSchema, { type: 'object', required: ['clear'], additionalProperties: false, properties: { clear: { const: true } } }] } },
   }, async (req, reply) => {
@@ -303,7 +418,10 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (!d) return fail(reply, 404, 'Não encontrado.');
     const limits = 'clear' in req.body ? undefined : req.body;
     store.updateDevice(d.id, { limits });
-    if (d.self && store.isOwner(req.piuSession!.operatorId)) o.relay?.applySettings(store.nodeSettings(), limits ?? null);
+    if (store.isOwner(req.piuSession!.operatorId)) {
+      if (d.self) o.relay?.applySettings(store.nodeSettings(), limits ?? null);
+      else syncOperator();
+    }
     return deviceView(store.ownedDevice(req.piuSession!.operatorId, d.id)!);
   });
 
@@ -313,8 +431,29 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (!d) return fail(reply, 404, 'Não encontrado.');
     const u = store.setDeviceStatus(d.id, d.status === 'paused' ? 'active' : 'paused')!;
     // O equipamento que serve o painel: pausar vale no motor na hora (não guarda nem repassa terceiros).
+    // Os outros (com identidade técnica): a pausa sai assinada pela chave de operador e vale quando chega.
     if (u.self) o.relay?.setPaused?.(u.status === 'paused');
-    return { id: u.id, status: u.status };
+    else if (store.isOwner(req.piuSession!.operatorId)) syncOperator();
+    const v = deviceView(u);
+    return { id: u.id, status: u.status, ...('policy' in v ? { policy: v.policy } : {}) };
+  });
+
+  /**
+   * Reinicia o nó que serve o painel: só ele (os outros equipamentos se reiniciam pelo painel deles),
+   * só o dono, com confirmação recente (step-up). Responde 202 e, depois da resposta sair, fecha limpo
+   * (mensagens guardadas e histórico gravados) e sai para o supervisor subir de novo.
+   */
+  app.post<{ Params: { id: string } }>('/api/devices/:id/restart', { ...mutate(), config: strictLimit(5, '10 minutes'), schema: { params: idParams } }, async (req, reply) => {
+    const s = req.piuSession!;
+    const d = store.ownedDevice(s.operatorId, req.params.id);
+    if (!d) return fail(reply, 404, 'Não encontrado.');
+    if (!d.self) return fail(reply, 409, 'Pelo painel, só dá para reiniciar o equipamento que serve este painel. Reinicie o outro pelo painel dele ou no próprio equipamento.');
+    if (!store.isOwner(s.operatorId)) return fail(reply, 403, 'Só o dono do equipamento pode reiniciá-lo.');
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const restart = o.restart;
+    if (!restart) return fail(reply, 409, 'Este nó não foi iniciado com reinício pelo painel. Reinicie no próprio equipamento.');
+    reply.raw.once('finish', () => setImmediate(restart));
+    return reply.code(202).send({ restarting: true });
   });
 
   app.delete<{ Params: { id: string } }>('/api/devices/:id', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
@@ -443,15 +582,53 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   // ── carteira ───────────────────────────────────────────
   app.get('/api/wallet', authed(), async req => store.wallet(req.piuSession!.operatorId));
 
+  /**
+   * Carteira de provider na Lunes Mainnet: o endereço que o operador configurou e o saldo lido nela
+   * (último bloco finalizado, cache curto). Só leitura: o nó não tem a chave dessa carteira.
+   */
+  app.get('/api/wallet/lunes', authed(), async req => {
+    const saved = store.lunesAddress(req.piuSession!.operatorId);
+    const base = { address: saved?.address ?? null, setAt: saved?.at ?? null, explorer: LUNES_EXPLORER, endpoints: lunes.endpoints };
+    if (!saved) return { ...base, onchain: null, error: null, cached: false };
+    const b = await lunes.balance(saved.address);
+    return { ...base, onchain: b.reading, error: b.error, cached: b.cached };
+  });
+
+  /** Configura o endereço (SS58 conferido aqui: base58, prefixo 57 ou 42, soma de verificação). Exige step-up. */
+  app.put<{ Body: { address: string } }>('/api/wallet/lunes', {
+    ...mutate(), config: strictLimit(10, '10 minutes'),
+    schema: { body: { type: 'object', required: ['address'], additionalProperties: false, properties: { address: { type: 'string', minLength: 1, maxLength: 80 } } } },
+  }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const d = decodeSs58(req.body.address);
+    if (!d.ok) return fail(reply, 400, d.error);
+    const saved = store.setLunesAddress(req.piuSession!.operatorId, req.body.address.trim(), now())!;
+    return { address: saved.address, setAt: saved.at };
+  });
+
+  /** Tira o endereço configurado. Exige step-up. */
+  app.delete('/api/wallet/lunes', { ...mutate(), config: strictLimit(10, '10 minutes') }, async (req, reply) => {
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    store.setLunesAddress(req.piuSession!.operatorId, null, now());
+    return reply.code(204).send();
+  });
+
   app.post<{ Body: { amount: number; to?: string } }>('/api/wallet/transfer', {
     ...mutate(), config: strictLimit(10, '1 minute'),
     schema: { body: { type: 'object', required: ['amount'], additionalProperties: false, properties: {
       amount: { type: 'number', exclusiveMinimum: 0, maximum: 1_000_000 },
-      // Carteira pessoal do operador ou um endereço LUNES (base58, sem 0, O, I, l).
-      to: { type: 'string', pattern: '^(personal|lunes:[1-9A-HJ-NP-Za-km-z]{26,44})$' },
+      // Carteira pessoal do operador ou `lunes:` + endereço SS58 (conferido por inteiro abaixo).
+      to: { type: 'string', minLength: 1, maxLength: 80 },
     } } },
   }, async (req, reply) => {
     const s = req.piuSession!;
+    const rawTo = req.body.to;
+    if (rawTo !== undefined && rawTo !== 'personal') {
+      // A mesma conferência de PUT /api/wallet/lunes: base58, prefixo 57 ou 42, 32 bytes e soma de verificação.
+      if (!rawTo.startsWith('lunes:')) return fail(reply, 400, 'Destino inválido. Use a carteira pessoal ou lunes: seguido do endereço Lunes (SS58).');
+      const d = decodeSs58(rawTo.slice('lunes:'.length));
+      if (!d.ok) return fail(reply, 400, d.error);
+    }
     if (now() - s.authAt > STEP_UP_MS) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
     const amount = req.body.amount;
     if (Math.round(amount * 100) !== amount * 100) return fail(reply, 400, 'Valor com mais de 2 casas decimais.');
@@ -499,7 +676,11 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     const secret = newSecret();
     const p = store.addPhone({ id: randomUUID(), operatorId: s.operatorId, name: req.body.name.trim(), secret: secret.toString('base64url'), addedAt: now(), confirmed: false });
     const op = store.operator(s.operatorId);
-    return reply.code(201).send({ id: p.id, qr: pairPayload({ phoneId: p.id, secret, node: o.config.allowedHosts[0] ?? 'piu-node', operator: op?.name ?? '' }), expiresAt: now() + PAIR_TTL_MS });
+    // O QR leva a impressão digital do certificado (o app só aceita este certificado) e o endereço
+    // pelo qual o painel foi aberto (o Host já passou pela lista de nomes permitidos).
+    const host = req.headers.host ?? '';
+    const url = /^[A-Za-z0-9.\-]+(:\d{1,5})?$|^\[[0-9A-Fa-f:]+\](:\d{1,5})?$/.test(host) ? `https://${host}` : undefined;
+    return reply.code(201).send({ id: p.id, qr: pairPayload({ phoneId: p.id, secret, node: o.config.allowedHosts[0] ?? 'piu-node', operator: op?.name ?? '', fingerprint: tlsFingerprint, url }), expiresAt: now() + PAIR_TTL_MS });
   });
 
   /** O operador digita o código de 6 dígitos que o celular mostrou ao ler o QR. */

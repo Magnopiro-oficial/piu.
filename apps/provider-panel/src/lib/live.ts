@@ -92,14 +92,27 @@ export function liveDevice(d: ApiDevice, live: Live | null): RelayNode {
   const cls = (d.cls in CLASS_ICON ? d.cls : 'Home Node') as NodeClass;
   const base: RelayNode = {
     id: d.id, name: d.name, cls, short: '', pub: d.pub ?? '', icon: CLASS_ICON[cls], status: d.status,
-    model: 'Registrado pelo assistente · ainda não manda estatísticas a este nó',
+    model: 'Registrado pelo assistente',
     pph: 0, today: 0, month: 0, neighbors: 0, storage: null, uptime: '—', ifaces: [], receipts: [], passive: cls === 'Ponto de Acesso', telemetry: 'none',
     ...(d.nodeId ? { nodeId: d.nodeId, signed: !!d.signed } : {}), ...(d.limits ? { limits: d.limits } : {}),
+    ...(d.parent ? { parent: d.parent } : {}), ...(d.report ? { report: d.report } : {}), ...(d.policy ? { policy: d.policy } : {}),
   };
   if (!d.self && d.nodeId) {
-    // Vinculado a um vizinho: se ele está conectado agora, o painel diz isso (as estatísticas dele ainda não chegam aqui).
+    // Vinculado a um vizinho: o enlace real (o nó diz se está conectado e quando foi visto por último).
+    // Conectado também quando a leitura de equipamentos ainda não pegou a conexão nova, mas o relay já.
     const on = relayOn(live)?.neighbors.find(n => n.id === d.nodeId);
-    base.model = on ? `Identidade ${d.nodeId} · conectado a este nó agora (${on.address})` : `Identidade ${d.nodeId} · não está conectado a este nó agora`;
+    const link = on ? { online: true, lastSeen: Date.now(), address: on.address } : d.link ?? null;
+    if (link) base.link = link;
+    base.model = link?.online ? `Identidade ${d.nodeId} · enlace LNNP com este nó (${link.address ?? 'endereço desconhecido'})` : `Identidade ${d.nodeId} · sem enlace com este nó agora`;
+    // Resumo assinado pelo próprio equipamento (chega pela malha quando ele é do mesmo operador).
+    if (d.report) {
+      base.uptime = ago(d.report.startedAt);
+      base.neighbors = d.report.neighbors;
+    }
+  } else if (!d.self) {
+    base.model = cls === 'Ponto de Acesso'
+      ? 'Sem software do Piu · só registro neste nó, sem enlace nem estatísticas'
+      : 'Registrado sem identidade técnica · sem enlace nem estatísticas neste nó';
   }
   if (!d.self) return base;
   const r = relayOn(live), h = historyOn(live), rc = receiptsOn(live);

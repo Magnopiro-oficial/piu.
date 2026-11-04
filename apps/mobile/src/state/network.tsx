@@ -21,7 +21,7 @@ const Ctx = createContext<Network | null>(null);
  */
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [relay, setRelay] = usePersisted('net.relay', true);
-  const [tx, setTx] = usePersisted<Record<TxKey, boolean>>('net.tx', { ble: true, direct: true, mesh: true, lora: false, eth: false });
+  const [tx, setTx] = usePersisted<Record<TxKey, boolean>>('net.tx', { ble: true, direct: true, mesh: false, lora: false, eth: false });
   const [battery, setBattery] = usePersisted<20 | 30 | 50>('net.battery', 30);
   const [storage, setStorage] = usePersisted<256 | 512 | 1024>('net.storage', 512);
   const [chargingOnly, setChargingOnly] = usePersisted('net.chargingOnly', false);

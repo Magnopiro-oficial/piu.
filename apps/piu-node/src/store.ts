@@ -13,8 +13,9 @@ export interface Session {
 }
 export type DeviceStatus = 'active' | 'paused';
 /**
- * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais);
- * os outros são registros feitos pelo assistente e ainda não mandam estatísticas a este nó.
+ * Equipamento do operador. `self`: o próprio nó que serve o painel (as estatísticas dele são reais).
+ * Os outros são registros do assistente; com identidade técnica, recebem pausa e regras pela malha
+ * (`DEVICE_POLICY`) e mandam um resumo assinado (`DEVICE_REPORT`) quando estão ligados a este nó.
  * `today` é legado (versões antigas guardavam um valor de referência) e não sai mais pela API.
  */
 export interface Device {
@@ -25,6 +26,8 @@ export interface Device {
   cert?: CertJson;
   /** Regras do equipamento (assistente, passo "Regras"). Ausente: só os limites globais. */
   limits?: DeviceLimits;
+  /** Ponto de Acesso: id do equipamento (do mesmo operador) que é o nó pai dele. */
+  parent?: string;
 }
 /** Regras de um equipamento: banda (Mbps), armazenamento para terceiros (GB) e horário. */
 export interface DeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: HoursPolicy }
@@ -50,9 +53,14 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
-interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[] }
+/** Endereço Lunes (SS58) da carteira de provider do operador, configurado no painel. Só leitura do saldo. */
+export interface LunesAddress { address: string; at: number }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [] });
+interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[];
+  /** Vizinhos fixos do enlace LNNP adicionados pelo painel (`host:porta`), somados aos de `PIU_LNNP_PEERS`. */
+  relayPeers: string[]; lunes: Record<string, LunesAddress> }
+
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {} });
 
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
@@ -119,7 +127,12 @@ export class Store {
     this.save();
     return dev;
   }
-  removeDevice(id: string) { this.s.devices = this.s.devices.filter(d => d.id !== id); this.save(); }
+  /** Tira o equipamento; pontos de acesso ligados a ele ficam sem nó pai. */
+  removeDevice(id: string) {
+    this.s.devices = this.s.devices.filter(d => d.id !== id);
+    for (const d of this.s.devices) if (d.parent === id) delete d.parent;
+    this.save();
+  }
   /** Muda campos de um equipamento (identidade técnica, certificado, regras). */
   updateDevice(id: string, p: Partial<Pick<Device, 'nodePk' | 'cert' | 'limits'>>) {
     const d = this.s.devices.find(x => x.id === id);
@@ -130,6 +143,10 @@ export class Store {
   deviceByNodePk(nodePk: string) { return this.s.devices.find(d => d.nodePk === nodePk) ?? null; }
   /** Dono do equipamento (o primeiro operador pareado). */
   owner() { return this.s.operators[0] ?? null; }
+
+  relayPeers() { return [...this.s.relayPeers]; }
+  addRelayPeer(address: string) { if (!this.s.relayPeers.includes(address)) { this.s.relayPeers.push(address); this.save(); } }
+  removeRelayPeer(address: string) { const before = this.s.relayPeers.length; this.s.relayPeers = this.s.relayPeers.filter(a => a !== address); if (this.s.relayPeers.length !== before) this.save(); return before !== this.s.relayPeers.length; }
 
   claims() { return [...this.s.claims]; }
   /** Uma carteira por época: declarar de novo troca a anterior. */
@@ -167,6 +184,15 @@ export class Store {
   addPendingTx(t: PendingTx, now: number) { this.s.pendingTx = this.s.pendingTx.filter(x => x.expiresAt > now && x.operatorId !== t.operatorId); this.s.pendingTx.push(t); this.save(); return t; }
   pendingTx(id: string, now: number) { return this.s.pendingTx.find(t => t.id === id && t.expiresAt > now) ?? null; }
   removePendingTx(id: string) { this.s.pendingTx = this.s.pendingTx.filter(t => t.id !== id); this.save(); }
+
+  /** Endereço Lunes da carteira de provider do operador (null se ainda não configurado). */
+  lunesAddress(operatorId: string): LunesAddress | null { return this.s.lunes[operatorId] ?? null; }
+  setLunesAddress(operatorId: string, address: string | null, now: number): LunesAddress | null {
+    if (address == null) delete this.s.lunes[operatorId];
+    else this.s.lunes[operatorId] = { address, at: now };
+    this.save();
+    return this.lunesAddress(operatorId);
+  }
 
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {

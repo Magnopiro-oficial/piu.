@@ -3,9 +3,9 @@ name: CI · piu-node
 on:
   push:
     branches: [main]
-    paths: ['apps/piu-node/**', '.github/workflows/ci-piu-node.yml']
+    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', '.github/workflows/ci-piu-node.yml']
   pull_request:
-    paths: ['apps/piu-node/**', '.github/workflows/ci-piu-node.yml']
+    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', '.github/workflows/ci-piu-node.yml']
 
 # Menor privilégio: o token do GitHub só lê o código.
 permissions:

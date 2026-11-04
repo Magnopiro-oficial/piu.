@@ -15,3 +15,11 @@ export function parseAmount(s: string): number {
 }
 /** 3.1 → "3,1" */
 export const fmtDec = (n: number) => String(n).replace('.', ',');
+/** planck (texto, 1 LUNES = 10^8) → "1.234,56789012", com 2 a 8 casas, sem arredondar para cima. */
+export function fmtPlanck(planck: string): string {
+  const p = BigInt(planck), base = 100_000_000n;
+  const int = intFmt.format(p / base);
+  let frac = (p % base).toString().padStart(8, '0');
+  while (frac.length > 2 && frac.endsWith('0')) frac = frac.slice(0, -1);
+  return `${int},${frac}`;
+}

@@ -1,8 +1,10 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useRef, useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Image, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { fmtLunes, type NearProfile } from '../../data/wallet';
+import { fmtLunes, MAINNET_PENDING, type NearProfile } from '../../data/wallet';
+import { initialsOf } from '../../lib/text';
+import { useMessaging } from '../../state/messaging';
 import { BackHeader } from '../../ui/Controls';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
@@ -21,7 +23,8 @@ const MAX = 140;
 /** Perfil público de alguém por perto, com convite pago para conversar. */
 export default function NearProfileScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { profiles } = useWallet();
+  const { nearby } = useMessaging();
+  const profiles = nearby?.profiles ?? [];
   const { c } = useTheme();
   const p = profiles.find(x => x.id === id);
   if (!p) {
@@ -44,6 +47,7 @@ function ProfileView({ p }: { p: NearProfile }) {
   const insets = useSafeAreaInsets();
   const { inviteState } = useWallet();
   const { showToast } = useStore();
+  const hide = useMessaging().nearby?.hide ?? (() => {});
   const [sheet, setSheet] = useState(false);
   const st = inviteState(p.id);
   const sent = st.kind !== 'none';
@@ -53,27 +57,20 @@ function ProfileView({ p }: { p: NearProfile }) {
   return (
     <Screen edges={[]}>
       <ScrollView contentContainerStyle={{ paddingBottom: 120 }}>
-        <Stripes period={20} style={{ height: 430 }}>
-          <T size={11} w={500} mono color={c.ink2}>foto de perfil</T>
+        <Stripes period={20} style={{ height: 430, overflow: 'hidden' }}>
+          {p.photo
+            ? <Image source={{ uri: `data:image/jpeg;base64,${p.photo}` }} accessibilityLabel={`Foto de ${p.name}`} resizeMode="cover" style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }} />
+            : <T size={64} w={650} ls={-0.04} color={c.ink2}>{initialsOf(p.name)}</T>}
           <View style={{ position: 'absolute', top: insets.top + 8, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
             <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar" style={round}><Icon name="arrow_back_ios_new" size={20} /></Pressable>
-            <Pressable onPress={() => showToast({ icon: 'flag', title: 'Denúncia registrada', body: `${p.name} não aparece mais para você em Por perto.` })} accessibilityRole="button" accessibilityLabel={`Denunciar perfil de ${p.name}`} style={round}><Icon name="flag" size={20} /></Pressable>
-          </View>
-          <View accessibilityLabel="Foto 1 de 3" style={{ position: 'absolute', bottom: 14, flexDirection: 'row', gap: 6 }}>
-            {[0, 1, 2].map(i => <View key={i} style={{ width: i === 0 ? 18 : 6, height: 6, borderRadius: 3, backgroundColor: c.ink, opacity: i === 0 ? 1 : 0.35 }} />)}
+            <Pressable onPress={() => { hide(p.id); showToast({ icon: 'visibility_off', title: 'Perfil ocultado', body: `${p.name || 'Este perfil'} não aparece mais para você em Por perto, só neste aparelho. A denúncia não é enviada a ninguém nesta versão.` }); router.back(); }} accessibilityRole="button" accessibilityLabel={`Ocultar perfil de ${p.name} (denúncia só local)`} style={round}><Icon name="flag" size={20} /></Pressable>
           </View>
         </Stripes>
 
         <View style={{ paddingTop: 20, paddingHorizontal: 22, gap: 14 }}>
           <View style={{ gap: 4 }}>
-            <T size={32} w={700} ls={-0.04} accessibilityRole="header">{p.name}, {p.age}</T>
+            <T size={32} w={700} ls={-0.04} accessibilityRole="header">{p.name || 'Perfil público'}</T>
             <T size={13} mono color={c.ink2}>{p.prox} · {p.via}</T>
-          </View>
-          <T size={15.5} lh={1.45}>{p.bio}</T>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {p.tags.map(t => (
-              <View key={t} style={{ paddingVertical: 7, paddingHorizontal: 13, borderRadius: 99, borderWidth: 1, borderColor: c.line2 }}><T size={13} w={500}>{t}</T></View>
-            ))}
           </View>
           <View style={{ marginTop: 4, borderRadius: 20, backgroundColor: c.bg2 }}>
             {([['Em comum', p.common], ['Taxa do convite', `${fmtLunes(p.fee)} LUNES · definida por ${p.name}`], ['Identidade', 'pública · chave verificada']] as const).map(([l, v], i) => (
@@ -109,14 +106,14 @@ function ProfileView({ p }: { p: NearProfile }) {
 
 function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
   const { c } = useTheme();
-  const { invite, onchain: balance } = useWallet();
+  const { invite } = useWallet();
+  const { nearby } = useMessaging();
   const ref = useRef<SheetHandle>(null);
   const [msg, setMsg] = useState('');
   const [done, setDone] = useState(false);
   const [signing, setSigning] = useState(false);
   const [authErr, setAuthErr] = useState<string | null>(null);
   const fee = fmtLunes(p.fee);
-  const short = balance < p.fee;
 
   if (done) {
     return (
@@ -125,6 +122,7 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
           <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="waving_hand" size={30} color={c.invink} /></View>
           <T size={22} w={700} ls={-0.03}>Convite enviado</T>
           <T size={14} lh={1.45} color={c.ink2} align="center">{`${fee} reservados. Se ${p.name} aceitar, a conversa abre. Se não, o valor volta em até 24 h.`}</T>
+          <T size={12} lh={1.4} color={c.ink2} align="center">{`Reserva registrada só neste aparelho · ${MAINNET_PENDING}.`}</T>
         </View>
         <Button label="Concluir" onPress={() => ref.current?.close()} />
       </Sheet>
@@ -157,9 +155,13 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
           </View>
         ))}
       </View>
-      {short && <T size={12.5} color={c.ink2} align="center">Saldo insuficiente para este convite.</T>}
+      {/* Sem a liquidação ligada ao app não há reserva assinada em LUNES: só o registro local. */}
+      <View style={{ flexDirection: 'row', gap: 10, padding: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2 }}>
+        <Icon name="cloud_off" size={18} w={300} />
+        <T size={12.5} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{'O convite e o texto vão pela malha agora. A reserva fica registrada só neste aparelho: a reserva assinada em LUNES depende da liquidação, ainda não ligada ao app.'}</T>
+      </View>
       {authErr && <T size={12.5} color={c.ink2} align="center" accessibilityRole="alert">{authErr}</T>}
-      <Button label={signing ? 'Confirmando…' : `Assinar e enviar · ${fee} LUNES`} disabled={!msg.trim() || short || signing}
+      <Button label={signing ? 'Confirmando…' : `Assinar e enviar · ${fee} LUNES`} disabled={!msg.trim() || signing}
         left={<Icon name="fingerprint" size={20} color={c.invink} />}
         onPress={async () => {
           // A reserva é uma assinatura de LUNES: pede a biometria (ou o bloqueio do aparelho), como no envio.
@@ -167,7 +169,10 @@ function InviteSheet({ p, onClose }: { p: NearProfile; onClose: () => void }) {
           const r = await confirmDevice(`Reservar ${fee} LUNES para convidar ${p.name}`);
           setSigning(false);
           if (r === 'denied') { setAuthErr('Assinatura cancelada. Nada foi reservado.'); return; }
-          invite(p.id, p.name, p.fee); setDone(true);
+          try {
+            const sent = nearby!.invite(p.id, msg);
+            invite(p.id, p.name, sent.fee); setDone(true);
+          } catch (e) { setAuthErr(String((e as Error).message)); }
         }} />
     </Sheet>
   );

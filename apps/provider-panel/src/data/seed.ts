@@ -28,7 +28,7 @@ export function seedDevices(): RelayNode[] {
       receipts: rcpts([['14:31', 'texto', '2 saltos', 'confirmado'], ['14:31', 'alerta LoRa', '3 saltos', 'confirmado'], ['14:30', 'arquivo 1,2 MB', '1 salto', 'confirmado'], ['14:30', 'texto', '—', 'duplicata']]) },
     { id: 'antena', name: 'Antena do telhado', cls: 'Super Node', short: 'LoRa 915 MHz', pub: 'piu.serra-norte', model: 'LoRa 915 MHz · antena 5 dBi · Raspberry Pi 4', icon: 'settings_input_antenna', status: 'active', pph: 420, today: 5.8, month: 103.04, neighbors: 9, storage: [0.4, 2], uptime: '31 d',
       ifaces: ifs([['LoRa 915 MHz', 'alcance medido 4,1 km', 48], ['Wi-Fi 2,4 GHz', '3 celulares', 12]]),
-      receipts: rcpts([['14:31', 'alerta Defesa Civil', '3 saltos', 'confirmado'], ['14:28', 'texto', '4 saltos', 'confirmado'], ['14:26', 'texto', '—', 'rota circular']]) },
+      receipts: rcpts([['14:31', 'alerta da comunidade', '3 saltos', 'confirmado'], ['14:28', 'texto', '4 saltos', 'confirmado'], ['14:26', 'texto', '—', 'rota circular']]) },
     { id: 'router', name: 'Roteador da sala', cls: 'Home Node', short: 'GL-MT3000', pub: 'piu.vila-esperanca-2', model: 'GL-MT3000 · OpenWrt 23.05 · Piu Node 0.4.2', icon: 'router', status: 'active', pph: 610, today: 2.9, month: 52.99, neighbors: 11, storage: [1.2, 4], uptime: '6 d',
       ifaces: ifs([['Wi-Fi Mesh 5 GHz', '18 de 40 Mbps', 45], ['Wi-Fi 2,4 GHz', '11 celulares', 28], ['Ethernet', 'Mini-PC da garagem', 22]]),
       receipts: rcpts([['14:32', 'texto', '1 salto', 'confirmado'], ['14:31', 'recibo de grupo', '2 saltos', 'confirmado'], ['14:29', 'foto 2,4 MB', '1 salto', 'confirmado']]) },

@@ -10,7 +10,9 @@ import { QrCode } from '../../ui/QrCode';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
+import { Dialog } from '../../ui/Dialog';
 import { Icon, type IconName } from '../../ui/Icon';
+import { routeLabel } from '../../lib/routeCore';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
@@ -20,9 +22,10 @@ export default function Contact() {
   const { c } = useTheme();
   const { compact } = useLayout();
   const { chats, verified, setVerified, showToast, block, isBlocked, patchChat } = useStore();
+  const [deleting, setDeleting] = useState(false);
   const { identities } = useKeys();
   const ident = chats.find(x => x.id === id)?.ident ?? 'public';
-  const { contactKeys } = useMessaging();
+  const { contactKeys, lastRouteOf, deleteChat } = useMessaging();
   const [myCard] = useMyCard(ident);
   // Chaves do contato: vieram no cartão (QR) ou na primeira mensagem (pedido de conversa).
   const real = id ? contactKeys(id) : null;
@@ -63,8 +66,18 @@ export default function Contact() {
       ? { icon: 'timer_off', title: 'Mensagens temporárias desligadas', body: 'As próximas mensagens ficam na conversa.' }
       : { icon: 'timer', title: `Mensagens temporárias · ${nextTemp === '7d' ? '7 dias' : '24 h'}`, body: 'As próximas mensagens somem dos dois aparelhos nesse prazo.' });
   };
-  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', chat.via ?? '—', 450], ['timer', 'Mensagens temporárias', tempLabel, 450, tempAct],
-    [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct]];
+  // Silenciar: as mensagens continuam chegando, sem banner nem notificação (store.tsx respeita `muted`).
+  const muteAct = () => {
+    patchChat(chat.id, { muted: !chat.muted });
+    showToast(chat.muted
+      ? { icon: 'notifications', title: 'Conversa com notificações', body: 'Novas mensagens voltam a aparecer como banner.' }
+      : { icon: 'notifications_off', title: 'Conversa silenciada', body: 'As mensagens continuam chegando, sem banner.' });
+  };
+  const last = lastRouteOf(chat.id);
+  const rows: [IconName, string, string, number, (() => void)?][] = [['route', 'Última rota', last ? routeLabel(last) : '—', 450], ['timer', 'Mensagens temporárias', tempLabel, 450, tempAct],
+    [chat.muted ? 'notifications_off' : 'notifications', chat.muted ? 'Reativar notificações' : 'Silenciar conversa', chat.muted ? 'Silenciada' : '', 450, muteAct],
+    [isBl ? 'lock_open' : 'block', `${isBl ? 'Desbloquear' : 'Bloquear'} ${first}`, isBl ? 'Bloqueado' : '', 650, blockAct],
+    ['delete', 'Apagar conversa e contato', '', 650, () => setDeleting(true)]];
 
   return (
     <Screen>
@@ -109,6 +122,12 @@ export default function Contact() {
           ))}
         </View>
       </ScrollView>
+      {deleting && (
+        <Dialog icon="delete" title={`Apagar ${first}?`} primary="Apagar" primaryIcon="delete"
+          body="A conversa e o contato saem deste aparelho, e mensagens ainda na fila para esta pessoa são descartadas. Para conversar de novo, troquem os códigos outra vez."
+          onClose={() => setDeleting(false)}
+          onPrimary={() => { setDeleting(false); deleteChat(chat.id); showToast({ icon: 'delete', title: 'Conversa apagada', body: 'O contato saiu deste aparelho.' }); router.dismissTo('/(tabs)'); }} />
+      )}
     </Screen>
   );
 }

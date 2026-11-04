@@ -9,6 +9,7 @@ import { persistedBytes } from '../../lib/persist';
 import { handleOf, initialsOf } from '../../lib/text';
 import { fingerprintOf, useKeys } from '../../state/keys';
 import { useResetApp } from '../../state/reset';
+import { backupLabel } from '../../lib/backupStatus';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -27,7 +28,7 @@ import { T } from '../../ui/T';
 export default function Profile() {
   const { c } = useTheme();
   const { identity, setIdentity, profile } = useStore();
-  const { backupDone } = useSettings();
+  const { backupDone, backupAt } = useSettings();
   // Mesmos números das telas Aparelhos e Armazenamento (registro real e medição real).
   const devices = useActiveDeviceCount();
   const [storage] = useStorageUsage();
@@ -52,7 +53,7 @@ export default function Profile() {
     ['battery_saver', 'Bateria e limites', '', () => router.push('/settings/battery')],
     ['devices', 'Aparelhos', String(devices), () => router.push('/devices')],
     ['router', 'Painel do provider', '', () => router.push('/provider')],
-    ['key', 'Backup cifrado das chaves', backupDone ? 'Feito hoje' : 'Pendente', () => router.push('/backup')],
+    ['key', 'Backup cifrado das chaves', backupLabel(backupAt, backupDone), () => router.push('/backup')],
     ['person_add', 'Convidar para o Piu', '', () => router.push('/invite'), true],
     ['restart_alt', 'Ver boas-vindas', '', () => router.push('/welcome' as Href)],
     ['delete', 'Apagar dados locais', '', () => setDel(true), true],

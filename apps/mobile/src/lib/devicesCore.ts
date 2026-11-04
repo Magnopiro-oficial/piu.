@@ -113,3 +113,81 @@ export function decodeRevocation(s: string): RevocationNotice {
   }
   return { t: o.t, v: o.v, by: o.by, device: o.device, devicePk: o.devicePk, reason: o.reason, at: o.at, sig: o.sig };
 }
+
+// ── aviso de troca de aparelho ──────────────────────────────────
+
+/**
+ * Restaurei as chaves num aparelho novo (pela frase ou por arquivo) e as sessões antigas foram
+ * descartadas aqui. O aviso é assinado pela chave da IDENTIDADE (um por identidade, como a
+ * revogação) e diz aos contatos que as sessões novas são minhas. A identidade é a mesma (vem da
+ * frase): o código de segurança não muda; mudam as chaves de sessão.
+ */
+export type DeviceChangeReason = 'phrase' | 'file';
+export const DEVICE_CHANGE_VERSION = 1;
+
+export interface DeviceChangeNotice {
+  t: 'piu/device-change';
+  v: number;
+  /** Chave de assinatura da identidade (base64url). */
+  by: string;
+  reason: DeviceChangeReason;
+  /** Segundos. */
+  at: number;
+  /** Ed25519 da identidade sobre `deviceChangeMessage`. */
+  sig: string;
+}
+
+const CHANGE_CODE: Record<DeviceChangeReason, number> = { phrase: 1, file: 2 };
+
+function deviceChangeMessage(by: Uint8Array, reason: DeviceChangeReason, at: number, v = DEVICE_CHANGE_VERSION) {
+  return new Writer().bytes(utf8('piu/v0/device-change')).u8(v).bytes(by).u8(CHANGE_CODE[reason]).u32(at).done();
+}
+
+export function createDeviceChange(identity: Pick<Identity, 'sign'>, reason: DeviceChangeReason, at: number): DeviceChangeNotice {
+  const by = identity.sign.pk;
+  const sig = sign.sign(deviceChangeMessage(by, reason, at), identity.sign.sk);
+  return { t: 'piu/device-change', v: DEVICE_CHANGE_VERSION, by: b64url(by), reason, at, sig: b64url(sig) };
+}
+
+/** Confere com a chave que o contato já conhece (`expectedBy`, obrigatória: sem ela qualquer um assinaria). */
+export function verifyDeviceChange(n: DeviceChangeNotice, expectedBy: Uint8Array): boolean {
+  try {
+    if (n.t !== 'piu/device-change' || n.v !== DEVICE_CHANGE_VERSION || !(n.reason in CHANGE_CODE)) return false;
+    if (!Number.isInteger(n.at) || n.at < 0 || n.at > 0xffffffff) return false;
+    const by = unb64url(n.by), sig = unb64url(n.sig);
+    if (by.length !== 32 || sig.length !== 64 || b64url(expectedBy) !== n.by) return false;
+    return sign.verify(sig, deviceChangeMessage(by, n.reason, n.at, n.v), by);
+  } catch { return false; }
+}
+
+export const encodeDeviceChange = (n: DeviceChangeNotice) => JSON.stringify(n);
+
+/** Aviso recebido pelo protocolo: revogação ou troca de aparelho. Lança erro se não for nenhum dos dois. */
+export function decodeNotice(s: string): { kind: 'revoke'; n: RevocationNotice } | { kind: 'change'; n: DeviceChangeNotice } {
+  if (s.length > 4096) throw new Error('Aviso grande demais.');
+  const o = JSON.parse(s);
+  if (o?.t === 'piu/revoke-device') return { kind: 'revoke', n: decodeRevocation(s) };
+  if (o?.t === 'piu/device-change' && typeof o.v === 'number' && typeof o.at === 'number' && ['by', 'reason', 'sig'].every(f => typeof o[f] === 'string')) {
+    return { kind: 'change', n: { t: o.t, v: o.v, by: o.by, reason: o.reason, at: o.at, sig: o.sig } };
+  }
+  throw new Error('Aviso inválido.');
+}
+
+/**
+ * Por quanto tempo o aviso também vai para contatos que aparecerem depois neste aparelho (pela
+ * frase, os contatos não vêm: quem for adicionado de novo pelo código recebe o aviso).
+ */
+export const DEVICE_CHANGE_WINDOW_SEC = 7 * 86400;
+
+/** Aviso de troca na fila do aparelho que restaurou, com os contatos que já o receberam. */
+export interface DeviceChangeOutbox { text: string; via: 'public' | 'anon'; at: number; sentTo: string[] }
+
+export const deviceChangeActive = (o: Pick<DeviceChangeOutbox, 'at'>, now: number) => now - o.at < DEVICE_CHANGE_WINDOW_SEC;
+
+/**
+ * Do lado do contato: o aviso é novo? Uma vez por assinatura e só se for mais novo que o último
+ * aceito desse contato (aviso antigo repetido pela malha não gera outra mensagem).
+ */
+export function isNewDeviceChange(n: Pick<DeviceChangeNotice, 'at' | 'sig'>, last: { at: number; sig: string } | undefined): boolean {
+  return !last || (n.sig !== last.sig && n.at > last.at);
+}

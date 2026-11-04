@@ -71,8 +71,33 @@ async function bootNode() {
     // handshake autenticado; não expõe o painel). Ajustável pelas variáveis PIU_LNNP_*.
     lnnp: loadLnnpConfig(),
   };
-  node = await startNode(config, { onCode: code => { latestCode = code; }, log: msg => { if (!app.isPackaged) console.log(msg); } });
+  node = await startNode(config, {
+    onCode: code => { latestCode = code; }, log: msg => { if (!app.isPackaged) console.log(msg); },
+    onRestart: () => void restartNode(),
+  });
   latestCode = node.issueCode();
+}
+
+/**
+ * Reiniciar pelo painel: o nó roda neste processo, então o app é o supervisor. Fecha o nó limpo
+ * (mensagens guardadas e histórico gravados), sobe de novo e recarrega a janela (a sessão continua:
+ * fica no disco do nó). Se não subir, avisa e sai.
+ */
+let restarting = false;
+async function restartNode() {
+  if (restarting || !node) return;
+  restarting = true;
+  const old = node;
+  node = null;
+  try {
+    await old.close().catch(() => {});
+    await bootNode();
+    if (win) void win.loadURL(node!.url + '/');
+  } catch (err) {
+    dialog.showErrorBox('Não foi possível reiniciar o nó', `O piu-node embutido não voltou a subir.\n\n${(err as Error).message}`);
+    quitting = true;
+    app.exit(1);
+  } finally { restarting = false; }
 }
 
 // ── segurança da janela ───────────────────────────────────

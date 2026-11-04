@@ -4,10 +4,12 @@ import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../da
 import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
-import { notify } from '../lib/notifications';
+import { chirpInApp, notify } from '../lib/notifications';
 import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { isStatusBack, tempSeconds } from '../lib/status';
+import { msgSummary } from '../lib/chatCore';
+import { stripPreviews } from '../lib/storageCore';
 import { nowHM } from '../lib/text';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 
@@ -15,6 +17,8 @@ import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 export interface FileOps {
   send: (chatId: string, peer: string, msgId: string, f: { name: string; mime: string; data: Uint8Array }, expireSec?: number) => { blocks: number } | null;
   setPaused: (msgId: string, paused: boolean) => boolean;
+  /** Arquivo recebido que esperava "Baixar": pede os blocos ao contato. */
+  download: (peer: string, msgId: string) => boolean;
 }
 
 interface Profile {
@@ -48,7 +52,8 @@ interface Store {
   chats: Chat[];
   openChat: (id: string) => void;
   leaveChat: () => void;
-  send: (chatId: string, text: string) => void;
+  /** `loc`: localização em texto curto (`text` = nome do lugar ou as coordenadas). */
+  send: (chatId: string, text: string, loc?: { lat: number; lon: number }) => void;
   retry: (chatId: string, msgId: string) => void;
   /** Contatos verificados pessoalmente pelo código de segurança. */
   verified: Record<string, boolean>;
@@ -70,7 +75,8 @@ interface Store {
   /** Estou digitando nesta conversa. */
   notifyTyping: (chatId: string) => void;
   /** Mensagem real recebida (já decifrada e conferida). */
-  receive: (chatId: string, msg: Msg) => void;
+  /** `quiet`: entra na conversa sem banner nem notificação (ex.: grupo movimentado sem menção). */
+  receive: (chatId: string, msg: Msg, opts?: { quiet?: boolean }) => void;
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
   /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
   setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
@@ -78,13 +84,15 @@ interface Store {
   setPreviewMode: (p: Preview) => void;
   patchChat: (chatId: string, p: Partial<Chat>) => void;
   removeChat: (chatId: string) => void;
+  /** "Limpar cache de mídia": apaga as prévias embutidas nas conversas. Devolve os bytes liberados. */
+  purgeMediaPreviews: () => number;
   toggleFilePause: (chatId: string, msgId: string) => void;
   toast: (ToastData & { seq: number; leaving?: boolean }) | null;
   showToast: (t: ToastData) => void;
   dismissToast: () => void;
 }
 
-type Outbound = (chatId: string, peer: string, msgId: string, text: string, expireSec?: number) => boolean;
+type Outbound = (chatId: string, peer: string, msgId: string, text: string, expireSec?: number, loc?: { lat: number; lon: number }) => boolean;
 export interface Signals { read: (chatId: string, peer: string, msgIds: string[]) => void; typing: (chatId: string, peer: string) => void }
 
 const Ctx = createContext<Store | null>(null);
@@ -101,7 +109,8 @@ const dropExpired = (msgs: Msg[] | undefined, now: number) => (msgs?.some(m => m
  */
 function reviveChats(saved: Chat[]): Chat[] {
   const now = Date.now();
-  return cleanChats(saved).map(c => ({
+  // `via`, `viaIcon`, `route` e `priority` eram fixos nas versões antigas: a rota real fica à parte (lib/routeCore.ts).
+  return cleanChats(saved).map(({ via: _v, viaIcon: _vi, route: _r, priority: _p, ...c }: Chat & { via?: unknown; viaIcon?: unknown; route?: unknown; priority?: unknown }) => ({
     ...c,
     msgs: dropExpired(c.msgs, now)?.map(m => {
       const { fresh: _fresh, ...rest } = m;
@@ -182,9 +191,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const patchFile = useCallback((cid: string, mid: string, p: Partial<FileXfer>) =>
     patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {})), [patchMsg]);
 
-  /** Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). */
+  /**
+   * Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). Banner com `kind` também
+   * vira notificação do sistema quando o app não está em primeiro plano (`notify` confere tipos
+   * ligados, silêncio e prévia, e não dispara com o app aberto).
+   */
   const showToast = useCallback((t: ToastData) => {
     if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
+    if (t.kind) chirpInApp(t.kind);
+    if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.critical ? { critical: true } : {}), ...(t.href ? { data: { href: t.href } } : {}) });
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
     setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });
@@ -198,22 +213,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   };
   const dismissToast = useCallback(leave, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const push = useCallback((cid: string, msg: Msg) => {
+  const push = useCallback((cid: string, msg: Msg, opts?: { quiet?: boolean }) => {
     const viewingIt = viewing.current === cid;
     if (msg.from === 'them') {
       stopTyping(cid);
       // Conversa aberta: a mensagem que chegou já foi lida.
       if (viewingIt && msg.id.startsWith('in-')) setTimeout(() => markRead(cid, [msg.id]), 0);
     }
-    if (msg.from === 'them' && !viewingIt) {
+    if (msg.from === 'them' && !viewingIt && !opts?.quiet) {
       const c = chatsRef.current.find(x => x.id === cid);
-      // Com o app em segundo plano, vira notificação do sistema (respeita prévia, tipos e silêncio).
-      if (c && !c.muted) notify({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' || c.kind === 'community' ? 'channel' : 'msg', title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''), data: { href: `/chat/${cid}` } });
-      if (c && !c.muted) showToast({ kind: c.kind === 'group' ? 'group' : c.kind === 'channel' ? 'channel' : 'msg', av: c.initials, title: c.name, body: msg.text || (msg.file ? `Arquivo: ${msg.file.name}` : ''),
-        hidden: { title: 'Piu', body: c.kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+      // Banner e, com o app em segundo plano, notificação do sistema (showToast chama `notify`).
+      // Comunidade conta como Canais (o mesmo tipo nos dois).
+      const kind = c?.kind === 'group' ? 'group' as const : c?.kind === 'channel' || c?.kind === 'community' ? 'channel' as const : 'msg' as const;
+      if (c && !c.muted) showToast({ kind, av: c.initials, title: c.name, body: msgSummary(msg), href: `/chat/${cid}`,
+        hidden: { title: 'Piu', body: kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
-      ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, fresh: true }],
+      // Recebida: guarda quando chegou (prévia da tela bloqueada, lib/lockFeed.ts).
+      // Toda mensagem guarda quando entrou (separador de data da conversa; prévia da tela bloqueada).
+      ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, ...(!msg.at ? { at: Date.now() } : {}), fresh: true }],
       unread: msg.from === 'me' || viewingIt ? c.unread : c.unread + 1,
     })));
   }, [showToast, stopTyping, markRead]);
@@ -240,14 +258,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     // Estados (seção 3.1): criada → aguardando (na fila) → encaminhada → entregue.
     // Cifrado na sessão (ou com a chave do grupo) e na fila do roteador; os estados seguintes vêm da rede.
     // Fora de alcance, fica na fila até surgir uma rota.
-    send: (cid, text) => {
+    send: (cid, text, loc) => {
       const chat = chats.find(c => c.id === cid);
       const id = 'n' + Date.now();
       // Temporária (só conversa com uma pessoa): o prazo vai junto e a mensagem some dos dois lados.
       const exp = chat?.peer ? tempSeconds(chat.temp) : undefined;
-      push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}) });
+      push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}), ...(loc ? { loc } : {}) });
       const to = chat?.peer ?? (chat?.group ? 'group:' + chat.group : null);
-      const ok = !!to && (outbound.current?.(cid, to, id, text, exp) ?? false);
+      const ok = !!to && (outbound.current?.(cid, to, id, text, exp, loc) ?? false);
       // Só passa para "na fila" se a rede ainda não avançou o estado (o vizinho pode já ter recebido).
       later(ok ? 300 : 0, () => patchMsg(cid, id, m => (m.status === 'criada' ? { status: ok ? 'aguardando' : 'falha' } : {})));
       if (chat?.request) setChats(cs => cs.map(c => (c.id === cid ? { ...c, request: false } : c)));
@@ -259,7 +277,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Temporária: reenvia com o que falta do prazo.
       const left = m?.expiresAt ? Math.floor((m.expiresAt - Date.now()) / 1000) : undefined;
       if (left !== undefined && left < 60) return;
-      const ok = !!to && !!m && (outbound.current?.(cid, to, mid, m.text, left) ?? false);
+      const ok = !!to && !!m && (outbound.current?.(cid, to, mid, m.text, left, m.loc) ?? false);
       setStatus(cid, mid, ok ? 'aguardando' : 'falha');
     },
     verified,
@@ -281,8 +299,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setFileOps: ops => { fileOps.current = ops; },
     patchFile,
     toggleFilePause: (cid, mid) => {
-      const f = chats.find(c => c.id === cid)?.msgs?.find(m => m.id === mid)?.file;
+      const chat = chats.find(c => c.id === cid);
+      const f = chat?.msgs?.find(m => m.id === mid)?.file;
       if (!f) return;
+      if (f.incoming) {
+        if (f.held && chat?.peer && fileOps.current?.download(chat.peer, mid.replace(/^in-/, ''))) patchFile(cid, mid, { held: false });
+        return;
+      }
       const pause = f.state !== 'userPaused';
       if (fileOps.current?.setPaused(mid, pause)) patchFile(cid, mid, { state: pause ? 'userPaused' : 'resuming' });
       else patchFile(cid, mid, { lost: true });
@@ -292,7 +315,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     typing,
     setTyping,
     notifyTyping: cid => { const c = chatsRef.current.find(x => x.id === cid); if (c?.peer && !c.request) signals.current?.typing(cid, c.peer); },
-    receive: (cid, msg) => push(cid, msg),
+    receive: (cid, msg, opts) => push(cid, msg, opts),
     setMsgStatus: (cid, mid, st) => {
       setStatus(cid, mid, st);
       const c = chatsRef.current.find(x => x.id === cid);
@@ -314,11 +337,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setNotifyFilter: fn => { notifyFilter.current = fn; },
     setPreviewMode: p => { previewMode.current = p; },
     patchChat: (cid, p) => setChats(cs => cs.map(c => (c.id === cid ? { ...c, ...p } : c))),
-    removeChat: cid => setChats(cs => cs.filter(c => c.id !== cid)),
+    removeChat: cid => {
+      if (viewing.current === cid) viewing.current = null;
+      stopTyping(cid);
+      setChats(cs => cs.filter(c => c.id !== cid));
+      setVerifiedMap(m => { if (!(cid in m)) return m; const { [cid]: _x, ...rest } = m; return rest; });
+    },
+    purgeMediaPreviews: () => {
+      const r = stripPreviews(chatsRef.current);
+      if (r.freed) { chatsRef.current = r.chats; setChats(r.chats); }
+      return r.freed;
+    },
     toast,
     showToast,
     dismissToast,
-  }), [profile, blocked, onboarded, identity, chats, verified, toast, push, setStatus, patchFile, showToast, dismissToast, typing, setTyping, markRead]);
+  }), [profile, blocked, onboarded, identity, chats, verified, toast, push, setStatus, patchFile, showToast, dismissToast, typing, setTyping, markRead, stopTyping]);
 
   retryRef.current = store.retry;
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

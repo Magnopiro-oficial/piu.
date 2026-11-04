@@ -12,11 +12,15 @@ import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
-/** Tipos de canal (FUN-007), textos do design. */
+/**
+ * Tipos de canal (FUN-007). Não há diretório nem busca de canais: todos entram pelo link ou QR do
+ * convite (7 dias, até 50 usos). Público entra sem aprovação; privado e secreto pedem aprovação de um
+ * admin e escondem os inscritos uns dos outros.
+ */
 const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', string, string][] = [
-  ['public', 'campaign', 'Público', 'Qualquer pessoa encontra e lê. Aparece em Por perto e na busca.'],
-  ['private', 'lock', 'Privado', 'Entra só com convite. Inscritos não veem uns aos outros.'],
-  ['secret', 'visibility_off', 'Secreto', 'Não aparece em busca. Nem o nome sai sem convite.'],
+  ['public', 'campaign', 'Público', 'Entra quem tiver o link ou o QR, sem aprovação. Não aparece em Por perto nem em busca.'],
+  ['private', 'lock', 'Privado', 'Entra pelo link ou QR com aprovação de um admin. Inscritos não veem uns aos outros.'],
+  ['secret', 'visibility_off', 'Secreto', 'Como o privado. O nome só circula dentro do convite.'],
 ];
 
 /** Criar canal (FUN-007): público, privado ou secreto; quem publica; com identidade pública ou anônima. */
@@ -29,6 +33,8 @@ export default function NewChannel() {
   const [desc, setDesc] = useState('');
   const [type, setType] = useState<ChannelType>('public');
   const [post, setPost] = useState<'admins' | 'mods'>('admins');
+  // Prioridade das publicações (design: canal de alerta com "Prioridade Alta"; o padrão é Normal).
+  const [prio, setPrio] = useState<'normal' | 'high'>('normal');
   const [ident, setIdent] = useState<IdentityKind>(identity);
   // Só pelo protocolo: sem as chaves carregadas, espera (não cria canal de mentira).
   const ok = ready && name.trim().length > 0;
@@ -40,7 +46,7 @@ export default function NewChannel() {
     // Canal real pelo protocolo: os inscritos entram pelo convite do canal.
     let id: string;
     try {
-      id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent });
+      id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent, ...(prio === 'high' ? { prio: 'high' as const } : {}) });
     } catch (e) { showToast({ icon: 'error', title: 'Não foi possível criar', body: (e as Error).message }); return; }
     router.dismissTo('/(tabs)');
     router.push({ pathname: '/chat/[id]', params: { id } });
@@ -80,6 +86,14 @@ export default function NewChannel() {
         <SectionLabel>QUEM PUBLICA</SectionLabel>
         <View style={{ paddingHorizontal: 20 }}>
           <Segmented label="Quem publica" value={post} onChange={setPost} options={[['admins', 'Só admins'], ['mods', 'Admins e moderadores']]} />
+        </View>
+
+        <SectionLabel>PRIORIDADE</SectionLabel>
+        <View style={{ paddingHorizontal: 20, gap: 8 }}>
+          <Segmented label="Prioridade" value={prio} onChange={setPrio} options={[['normal', 'Normal'], ['high', 'Alta']]} />
+          <T size={12.5} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>
+            {prio === 'high' ? 'Para alertas: as publicações passam à frente na fila de cada nó. Não dá para mudar depois.' : 'As publicações seguem na fila como as outras mensagens.'}
+          </T>
         </View>
 
         <SectionLabel>PUBLICAR COMO</SectionLabel>

@@ -17,15 +17,20 @@ export const WELCOME_BONUS = 10;
 export const REFERRAL_REWARD = 25;
 export const REFERRAL_MONTHLY_CAP = 20;
 
-/** Texto padrão enquanto não há liquidação real (a Lunes Mainnet ainda não está conectada). */
-export const MAINNET_PENDING = 'liquidação ainda não conectada à Mainnet';
+/**
+ * Texto padrão para o pagamento dos créditos: a leitura da Lunes Mainnet existe (lib/lunesRpc.ts),
+ * mas pagar em LUNES (lotes semanais, convites) depende da liquidação (apps/settlement), ainda não ligada ao app.
+ */
+export const MAINNET_PENDING = 'pagamento em LUNES pendente da liquidação';
 
 // ── Por perto ────────────────────────────────────────────
-export type Prox = 'muito perto' | 'perto' | 'mais longe';
-/** Perfil público anunciado por alguém por perto (chega pelo protocolo de Por perto). */
-export interface NearProfile { id: string; name: string; age: number; bio: string; tags: string[]; prox: Prox; via: string; fee: number; common: string }
-/** Pedido de conversa recebido por Por perto (convite pago de outra pessoa). */
-export interface ChatRequest { id: string; name: string; age: number; initials: string; fee: number; prox: Prox; time: string; msg: string }
+/**
+ * Perfil público anunciado por alguém por perto e pedido de conversa recebido: chegam pelo anúncio de
+ * presença e pelo convite pago (messaging/nearby.ts, Messenger). Nome, foto e taxa vêm do perfil
+ * público da pessoa; idade, bio e interesses ainda não têm tela de edição (regra 5.2) e não vão.
+ */
+export type { NearPeer as NearProfile, NearRequest as ChatRequest } from '../messaging/messenger';
+export type { NearProx as Prox } from '../messaging/nearby';
 
 /** Taxa definida por quem recebe o convite. */
 export const FEE_OPTIONS = [1, 3, 5, 10] as const;

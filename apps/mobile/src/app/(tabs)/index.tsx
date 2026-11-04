@@ -13,6 +13,7 @@ import { Avatar } from '../../ui/Avatar';
 import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { msgSummary } from '../../lib/chatCore';
 
 type Filter = 'all' | Kind;
 const FILTERS: [Filter, string][] = [['all', 'Todas'], ['direct', 'Pessoas'], ['group', 'Grupos'], ['channel', 'Canais'], ['community', 'Comunidades']];
@@ -111,7 +112,7 @@ function ChatRow({ chat, onPress }: { chat: Chat; onPress: () => void }) {
   const { c } = useTheme();
   const last = chat.msgs?.[chat.msgs.length - 1];
   const fromMe = last?.from === 'me';
-  const preview = chat.preview ?? (last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + last.text : '');
+  const preview = chat.preview ?? (last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + msgSummary(last) : '');
   const kindIcon = KIND_ICON[chat.kind];
   return (
     <Pressable onPress={onPress} accessibilityRole="button"

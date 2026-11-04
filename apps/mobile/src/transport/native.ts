@@ -41,6 +41,7 @@ export function createNativeTransport(): Transport | null {
       else await mod.send(id, toBase64(data));
     },
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
+    setDiscoveryInterval: sec => { mod.setDiscoveryInterval?.(sec); },
   };
   const transport = createMultiTransport(source, { lowBattery: watchLowBattery() });
   transport.setBackgroundRelay = async on => {

@@ -18,5 +18,7 @@ dependencies {
   // Nearby Connections: descoberta e conexão por Bluetooth, BLE e Wi-Fi Direct, sem internet.
   // Confira a versão mais recente em https://developers.google.com/nearby/connections/android/get-started
   implementation 'com.google.android.gms:play-services-nearby:19.3.0'
+  // bundleOf, NotificationCompat e ServiceCompat.startForeground (≥ 1.12). O expo-modules-core já traz uma
+  // versão maior (1.17.0); o Gradle usa a maior.
   implementation 'androidx.core:core-ktx:1.13.1'
 }

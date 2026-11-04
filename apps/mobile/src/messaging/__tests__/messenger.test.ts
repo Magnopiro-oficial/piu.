@@ -456,7 +456,7 @@ test('créditos: relay ganha recibo, a prova de entrega volta pela malha e valid
   assert.equal(a.m.credits.list().length, 0);
 });
 
-test('créditos: lote semanal (simulado) paga validados depois da carência, com mínimo de 5 LUNES', async () => {
+test('créditos: lote semanal fecha validados depois da carência (em lote, sem pagar), com mínimo de 5 LUNES', async () => {
   const { CreditBook, CREDIT_PARAMS } = await import('../credits');
   const { makeRelayReceipt } = await import('../../protocol/receipts');
   const { deriveNodeKey: dn } = await import('../../protocol/keys');
@@ -475,12 +475,13 @@ test('créditos: lote semanal (simulado) paga validados depois da carência, com
   const res = book.tick(t0 + 15 * 86400);
   assert.ok(res.lot);
   assert.equal(res.lot!.count, n);
-  assert.equal(res.lot!.simulated, true);
+  assert.equal(res.lot!.settled, false, 'o celular não liquida: o lote aguarda liquidação');
   assert.equal(book.totals().validado, 0);
-  assert.equal(book.totals().pago, n);
+  assert.equal(book.totals().em_lote, n);
+  assert.equal(book.totals().pago, 0, 'nada vira "pago" sem liquidação real');
   // Estado salvo e restaurado.
   const again = new CreditBook(book.export(t0 + 15 * 86400));
-  assert.equal(again.totals().pago, n);
+  assert.equal(again.totals().em_lote, n);
   assert.equal(again.lots.length, 1);
 });
 

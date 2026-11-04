@@ -10,8 +10,13 @@ interface Keys {
   phrase: string[] | null;
   identities: { public: Identity; anon: Identity } | null;
   nodePk: Uint8Array | null;
-  /** Chave técnica do nó (assina recibos de retransmissão). */
+  /** Chave técnica do nó de hoje (assina recibos de retransmissão). */
   node: KeyPair | null;
+  /**
+   * Chave técnica do nó de um dia (dias UTC desde 1970). Gira por dia para não ligar anúncios e
+   * recibos ao mesmo aparelho (LNNP §12.1). Sempre a mesma para o mesmo dia e a mesma frase.
+   */
+  nodeKeyFor: ((day: number) => KeyPair) | null;
   vaultIsSecure: boolean;
   /** Gera uma frase nova e guarda no cofre. */
   create: () => Promise<void>;
@@ -27,10 +32,19 @@ export async function preloadKeys() { preloaded = await loadPhrase(); }
 /** "Apagar dados locais". */
 export async function wipeKeys() { preloaded = null; await clearPhrase(); }
 
+/** Índice da chave do nó: o dia UTC. */
+export const nodeDayOf = (ms: number) => Math.floor(ms / 86_400_000);
+
 function derive(words: string[]) {
   const seed = seedFromPhrase(words);
-  const node = deriveNodeKey(seed);
-  return { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node, nodePk: node.pk };
+  const cache = new Map<number, KeyPair>();
+  const nodeKeyFor = (day: number) => {
+    let k = cache.get(day);
+    if (!k) { k = deriveNodeKey(seed, day); cache.set(day, k); while (cache.size > 4) cache.delete(cache.keys().next().value!); }
+    return k;
+  };
+  const node = nodeKeyFor(nodeDayOf(Date.now()));
+  return { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node, nodePk: node.pk, nodeKeyFor };
 }
 
 /** Chaves reais do aparelho: tudo deriva da frase de recuperação guardada no cofre do sistema. */
@@ -43,6 +57,7 @@ export function KeysProvider({ children }: { children: ReactNode }) {
     identities: derived?.identities ?? null,
     nodePk: derived?.nodePk ?? null,
     node: derived?.node ?? null,
+    nodeKeyFor: derived?.nodeKeyFor ?? null,
     vaultIsSecure,
     create: async () => { const w = newPhrase(); await savePhrase(w); preloaded = w; setPhrase(w); },
     restore: async words => {

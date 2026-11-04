@@ -35,7 +35,16 @@ export interface StartOptions {
   log?: (msg: string) => void;
   /** Código novo depois que o anterior foi usado ou bloqueado (mostrar só localmente). */
   onCode?: (code: string, reason: 'used' | 'locked') => void;
+  /**
+   * O dono pediu para reiniciar pelo painel (`POST /api/devices/:id/restart`). Quem sobe o nó decide
+   * como: a linha de comando fecha e sai com `RESTART_EXIT_CODE` para o supervisor subir de novo; o
+   * app desktop fecha e sobe o nó outra vez no mesmo processo. Ausente: a rota responde 409.
+   */
+  onRestart?: () => void;
 }
+
+/** Código de saída do reinício pedido pelo painel (EX_TEMPFAIL): procd e systemd (`Restart=on-failure`) sobem de novo. */
+export const RESTART_EXIT_CODE = 75;
 
 /** TLS na rede local: certificado próprio do nó (P-256), gerado na primeira execução; chave com 0600. */
 async function tls(config: Config) {
@@ -96,7 +105,7 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
 
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay, selfDevice, vault,
+    config, store, pairing, packages, packagesDir, relay, selfDevice, vault, restart: o.onRestart,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).

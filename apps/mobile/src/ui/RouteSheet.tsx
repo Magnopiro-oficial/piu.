@@ -2,6 +2,8 @@ import { useRef } from 'react';
 import { View } from 'react-native';
 import type { Chat, Msg } from '../data/types';
 import { buildRoute } from '../lib/route';
+import type { RouteRec } from '../lib/routeCore';
+import type { Priority } from '../protocol/envelope';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
 import { Icon } from './Icon';
@@ -12,15 +14,15 @@ import { T } from './T';
  * Folha “Rota da mensagem”: barra de 4 etapas, saltos com o transporte de cada um,
  * envelope, fragmentos, validade, prioridade e a nota de que os nós no caminho não leem nada.
  */
-export function RouteSheet({ chat, msg, onClose }: { chat: Chat; msg: Msg; onClose: () => void }) {
+export function RouteSheet({ chat, msg, rec, prio, onClose }: { chat: Chat; msg: Msg; rec?: RouteRec; prio?: Priority; onClose: () => void }) {
   const { c } = useTheme();
-  const r = buildRoute(chat, msg);
+  const r = buildRoute(chat, msg, rec, prio);
   const sheet = useRef<SheetHandle>(null);
   return (
     <Sheet ref={sheet} onClose={onClose} label="Rota da mensagem">
       <View style={{ gap: 6 }}>
         <T size={22} w={700} ls={-0.03} accessibilityRole="header">Rota da mensagem</T>
-        <T size={14} color={c.ink2} numberOfLines={1}>“{r.text}”</T>
+        {!!r.text && <T size={14} color={c.ink2} numberOfLines={1}>“{r.text}”</T>}
       </View>
 
       <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={'Etapa: ' + (r.steps.find(s => s.current)?.label ?? '')}>
