@@ -130,7 +130,7 @@ export function Settings() {
           style={{ alignSelf: 'flex-start', height: 36, padding: '0 14px', borderRadius: 18, fontSize: 13, opacity: others === 0 ? 0.4 : 1 }}>{others === 0 ? 'Nenhuma outra sessão' : 'Encerrar outras sessões'}</button>
         {stepUpOpen && <StepUpDialog onConfirm={confirmStepUp} onClose={() => setStepUpOpen(false)} />}
         {phones && (
-          <div className="col" style={{ gap: 4, paddingTop: 10, borderTop: '1px solid var(--line)' }}>
+          <div id="cfg-phones" className="col" style={{ gap: 4, paddingTop: 10, borderTop: '1px solid var(--line)', borderRadius: 4 }}>
             <div style={{ fontSize: 13.5, fontWeight: 600 }}>Celulares que aprovam transferências</div>
             {phones.filter(p => p.confirmed).length === 0 && <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Nenhum. Sem celular, transferências pedem um código novo do equipamento.</div>}
             {phones.filter(p => p.confirmed).map(p => (
@@ -150,7 +150,7 @@ export function Settings() {
         {pairStepUp && <StepUpDialog onConfirm={async code => { const p = await stepUp(code); if (p) return p; setPairStepUp(false); await startPair(); return null; }} onClose={() => setPairStepUp(false)} />}
       </section>
 
-      <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
+      <section id="cfg-key" className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
         <CardHead title="Identidade de operador" sub="Assina seus equipamentos. Separada da sua identidade de conversa." />
         {api ? <OperatorKey /> : (<>
         <div className="mono" aria-label="Impressão digital da chave de operador" style={{ display: 'grid', gridTemplateColumns: 'repeat(4,1fr)', gap: 8, fontSize: 15, fontWeight: 500, padding: '12px 14px', borderRadius: 14, background: 'var(--bg2)' }}>

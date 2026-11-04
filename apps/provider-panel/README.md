@@ -8,6 +8,7 @@ npm install
 npm run dev        # http://localhost:8420
 npm run build      # gera dist/ (base relativa, dá para servir de qualquer caminho)
 npm run typecheck
+npm test           # Vitest: lógica do guia e da ajuda (src/lib/*.test.ts)
 ```
 
 ## Estrutura
@@ -16,6 +17,10 @@ npm run typecheck
 - `src/pages/`: Visão geral, Equipamentos (+ painel de detalhe), Malha, Ganhos, Carteira, Configurações.
 - `src/wizard/AddDeviceWizard.tsx`: assistente de 4 etapas (Equipamento, Conectar, Teste real, Regras), incluindo o Ponto de Acesso.
 - `src/data/seed.ts` e `src/data/topology.ts`: dados de exemplo do protótipo (**ilustrativos**).
+- `src/lib/guide.ts`, `src/lib/help.ts` e `src/components/Guide.tsx`: ajuda para quem não entende de redes.
+  - **Primeiros passos** (Visão geral, só com o piu-node): entrar, backup da chave, carteira de recebimento, celular, primeiro vizinho e, opcional, mais um equipamento. Cada passo se marca pelo estado real do nó (`/api/operator`, `/api/wallet/lunes`, `/api/phones`, vizinhos LNNP) e leva ao cartão certo. “Esconder” vale só neste navegador; a Ajuda reabre.
+  - **Ajuda** (botão no cabeçalho de toda página): o que a página mostra, o que fazer nela e as palavras dela em linguagem simples (glossário completo em “Ver todas”).
+  - **No assistente**: “O que é isso?” ao lado dos termos técnicos e “Onde fica isso no meu roteador?” para o Ponto de Acesso.
 
 ## O que vem do piu-node e o que ainda é simulado
 Servido pelo `piu-node` (com sessão), o painel **não usa dados de exemplo**: o que o nó mede aparece; o que depende de terceiros (validador, Mainnet, preço do LUNES) ou de hardware ainda não suportado aparece como indisponível, nunca como número inventado. As estatísticas são lidas a cada 10 s (`src/lib/live.ts`).

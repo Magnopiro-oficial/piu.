@@ -4,6 +4,7 @@ import { fmt } from '../lib/format';
 import { dayLabel, fullDate, historyOn, relayOn } from '../lib/live';
 import { useStore } from '../state/store';
 import type { PageId } from '../types';
+import { HelpButton } from './Guide';
 import { Icon, Segmented } from './ui';
 
 /** Faixa superior: qual nó serve o painel e o estado da conexão. */
@@ -137,6 +138,7 @@ export function PageHeader() {
         <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{subtitle}</div>
       </div>
       <div className="page-actions" style={{ display: 'flex', gap: 8, flex: 'none', flexWrap: 'wrap' }}>
+        <HelpButton page={page} title={title} />
         {showExport && (
           <button type="button" className="btn btn-outline" onClick={exportCsv} style={{ height: 40, padding: '0 16px', borderRadius: 20, fontSize: 13.5 }}>
             <Icon name="download" size={18} />Exportar CSV

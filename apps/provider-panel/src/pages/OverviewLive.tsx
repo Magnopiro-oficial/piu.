@@ -1,4 +1,5 @@
 import { DeviceStatusCell } from '../components/DeviceBits';
+import { SetupGuide } from '../components/Guide';
 import { Bar, Icon, growX, pressable } from '../components/ui';
 import { deviceLabels } from '../lib/devices';
 import { fmtInt } from '../lib/format';
@@ -43,6 +44,7 @@ export function OverviewLive() {
 
   return (
     <div className="grid12 page-body">
+      <SetupGuide />
       <section className="span8 card-ink col" style={{ padding: 24, borderRadius: 24, gap: 20, animation: 'piuUp .45s both' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
           <div className="col" style={{ gap: 6 }}>

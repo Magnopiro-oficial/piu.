@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { RouterHowTo, Why } from '../components/Guide';
 import { Icon, Segmented, useEscape } from '../components/ui';
+import type { TermId } from '../lib/help';
 import { FAMILIES, NODE, PAIR_CODE, WALLETS } from '../data/seed';
 import { parentName } from '../lib/devices';
 import { ApiError, type ApiNeighbor, type ApiPeer } from '../lib/api';
@@ -138,7 +140,14 @@ export function AddDeviceWizard() {
           </ol>
 
           <div className="scroll-thin wiz-pad" style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '4px 26px 16px' }}>
-            {w.step === 0 && <StepFamily value={w.fam} onPick={f => patch({ fam: f.id, name: f.defName!, pub: real ? w.pub : f.defPub!, nodePk: '', codeOk: false })} />}
+            {w.step === 0 && (
+              <div className="col" style={{ gap: 12 }}>
+                <div style={{ fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.45 }}>
+                  Escolha o aparelho que vai entrar na rede. Na dúvida, “Roteador comum ou repetidor” é o mais fácil: não instala nada, só muda três ajustes no roteador.
+                </div>
+                <StepFamily value={w.fam} onPick={f => patch({ fam: f.id, name: f.defName!, pub: real ? w.pub : f.defPub!, nodePk: '', codeOk: false })} />
+              </div>
+            )}
             {w.step === 1 && (
               <div className="wiz-2col" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
                 <div className="col" style={{ gap: 12 }}>
@@ -147,6 +156,10 @@ export function AddDeviceWizard() {
                     <>
                       <Segmented variant="bg2" label="Forma de instalação" value={w.install} onChange={install => patch({ install })}
                         options={[{ value: 'dl', label: 'Baixar pela rede local' }, { value: 'term', label: 'Terminal' }]} />
+                      <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>
+                        {w.install === 'dl' ? 'Para quem instala pela página de configuração do aparelho: o arquivo vem deste computador, sem internet.' : 'Para quem digita comandos no aparelho (Linux, Raspberry Pi): copie a linha e cole no terminal dele.'}
+                      </div>
+                      <Why term="signedPackage" label="É seguro instalar?" />
                       {w.install === 'dl' ? (
                         <div className="col" style={{ padding: 14, borderRadius: 16, background: 'var(--bg2)', gap: 10 }}>
                           <div className="row" style={{ gap: 10 }}>
@@ -202,6 +215,7 @@ export function AddDeviceWizard() {
                           </li>
                         ))}
                       </ol>
+                      <RouterHowTo />
                       <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>Ele manda e recebe mensagens ao vivo entre quem está conectado. O que ele não faz sozinho é guardar mensagens para quem está fora e assinar recibos: isso fica com o nó pai.</div>
                     </>
                   )}
@@ -219,6 +233,7 @@ export function AddDeviceWizard() {
                       <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45 }}>{fam.isRadio
                         ? `O rádio vira um enlace do equipamento em que está ligado (configurado nele por PIU_SERIAL). Agora: ${neighbors} ${neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'} a este nó.`
                         : `Quando o Piu Node subir no equipamento, ele se anuncia na rede local e aparece aqui. Se a rede bloquear o anúncio, adicione pelo endereço. Agora: ${neighbors} ${neighbors === 1 ? 'vizinho conectado' : 'vizinhos conectados'}.`}</div>
+                      <Why term="neighbor" label="O que é um vizinho?" />
                       <button type="button" role="checkbox" aria-checked={w.paired} onClick={() => patch({ paired: !w.paired })} className="btn" style={{ justifyContent: 'flex-start', gap: 10, fontSize: 13.5, fontWeight: 550, padding: 0, minHeight: 44 }}>
                         <span style={{ width: 20, height: 20, borderRadius: 6, border: '1.5px solid var(--ink)', background: w.paired ? 'var(--ink)' : 'transparent', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .15s' }}>
                           <Icon name="check" size={15} style={{ opacity: w.paired ? 1 : 0 }} />
@@ -228,6 +243,7 @@ export function AddDeviceWizard() {
                       {!fam.isRadio && w.paired && (
                         <div className="col" style={{ gap: 6 }}>
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>Qual vizinho é ele? A identidade técnica dele é assinada pela sua chave de operador, e dá para revogar depois.</div>
+                          <Why term="techId" />
                           <div role="radiogroup" aria-label="Identidade técnica do equipamento" className="col" style={{ gap: 6 }}>
                             {candidates.map(n => (
                               <button key={n.id} type="button" role="radio" aria-checked={w.nodePk === n.pk} className="choice row" onClick={() => patch({ nodePk: n.pk!, codeOk: false })} style={{ gap: 10, padding: '8px 12px', borderRadius: 12 }}>
@@ -289,6 +305,7 @@ export function AddDeviceWizard() {
                       {isAp && (
                         <>
                           <div style={{ fontSize: 12.5, color: 'var(--ink2)' }}>Ligado a qual nó seu?</div>
+                          <Why term="parentNode" />
                           <div role="radiogroup" aria-label="Nó pai" className="col" style={{ gap: 6 }}>
                             {parents.map(p => (
                               <button key={p.id} type="button" role="radio" aria-checked={w.parent === p.id} className="choice row" onClick={() => patch({ parent: p.id })} style={{ gap: 10, padding: '10px 12px', borderRadius: 12 }}>
@@ -345,12 +362,13 @@ export function AddDeviceWizard() {
                       <Icon name={pub.icon} size={19} fill={1} />
                     </div>
                     <div id="wiz-pub-msg" aria-live="polite" style={{ fontSize: 12, lineHeight: 1.4, color: pub.tone === 'strong' ? 'var(--ink)' : 'var(--ink2)' }}>{pub.msg}</div>
+                    <Why term="publicName" />
                   </div>
                   {!isAp && (
                     <>
-                      <WizLimit title="Banda para a rede"><Segmented variant="bg2" label="Banda" value={w.bw} onChange={bw => patch({ bw })} options={([5, 20, 50] as const).map(v => ({ value: v, label: `${v} Mbps` }))} /></WizLimit>
-                      <WizLimit title="Armazenamento para terceiros"><Segmented variant="bg2" label="Armazenamento" value={w.sto} onChange={sto => patch({ sto })} options={([1, 4, 8] as const).map(v => ({ value: v, label: `${v} GB` }))} /></WizLimit>
-                      <WizLimit title="Horário"><Segmented<HoursPolicy> variant="bg2" label="Horário" value={w.hours} onChange={hours => patch({ hours })} options={HOURS} /></WizLimit>
+                      <WizLimit title="Banda para a rede" term="bandwidth"><Segmented variant="bg2" label="Banda" value={w.bw} onChange={bw => patch({ bw })} options={([5, 20, 50] as const).map(v => ({ value: v, label: `${v} Mbps` }))} /></WizLimit>
+                      <WizLimit title="Armazenamento para terceiros" term="storage"><Segmented variant="bg2" label="Armazenamento" value={w.sto} onChange={sto => patch({ sto })} options={([1, 4, 8] as const).map(v => ({ value: v, label: `${v} GB` }))} /></WizLimit>
+                      <WizLimit title="Horário" term="hours"><Segmented<HoursPolicy> variant="bg2" label="Horário" value={w.hours} onChange={hours => patch({ hours })} options={HOURS} /></WizLimit>
                     </>
                   )}
                 </div>
@@ -409,8 +427,8 @@ export function AddDeviceWizard() {
 
 const fieldLabel: CSSProperties = { fontSize: 13, fontWeight: 500, color: 'var(--ink2)' };
 
-function WizLimit({ title, children }: { title: string; children: ReactNode }) {
-  return <div className="col" style={{ gap: 7 }}><div style={fieldLabel}>{title}</div>{children}</div>;
+function WizLimit({ title, term, children }: { title: string; term: TermId; children: ReactNode }) {
+  return <div className="col" style={{ gap: 7 }}><div style={fieldLabel}>{title}</div>{children}<Why term={term} /></div>;
 }
 
 function StepFamily({ value, onPick }: { value: string; onPick: (f: DeviceFamily) => void }) {

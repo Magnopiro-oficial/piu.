@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
 import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiDeviceLimits, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
+import { guideHidden as loadGuideHidden, setGuideHidden as saveGuideHidden } from '../lib/guide';
 import { type Live, liveDevice, liveTx } from '../lib/live';
 import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
 import { useNode } from './node';
@@ -85,6 +86,8 @@ interface Store {
   setLimits: (p: Partial<Store['limits']>) => void;
   policies: Policies; togglePolicy: (k: keyof Policies) => void;
   wizardOpen: boolean; setWizardOpen: (o: boolean) => void;
+  /** “Primeiros passos” escondido pelo operador neste navegador (a ajuda reabre). */
+  guideHidden: boolean; setGuideHidden: (h: boolean) => void;
   toast: (ToastData & { seq: number }) | null; showToast: (t: ToastData) => void;
   totals: { month: number; today: number; active: number; validated: number };
   /** Estatísticas reais do nó (retransmissão, histórico, recibos); null na demonstração. */
@@ -120,6 +123,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [limits, setLimitsState] = useState<Store['limits']>({ bw: 50, sto: 8, hours: 'always' });
   const [policies, setPolicies] = useState<Policies>({ media: true, unknown: true, community: false });
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [guideHidden, setGuideHiddenState] = useState(loadGuideHidden);
+  const setGuideHidden = useCallback((h: boolean) => { saveGuideHidden(h); setGuideHiddenState(h); }, []);
   const [toast, setToast] = useState<Store['toast']>(null);
   const [packages, setPackages] = useState<ApiPackage[]>([]);
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
@@ -317,12 +322,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       limits, setLimits: p => setLimitsState(l => ({ ...l, ...p })),
       policies, togglePolicy: k => setPolicies(p => ({ ...p, [k]: !p[k] })),
       wizardOpen, setWizardOpen,
+      guideHidden, setGuideHidden,
       toast, showToast,
       totals: { month, today, active: devices.filter(d => d.status === 'active').length, validated: api ? 0 : month - PENDING },
       live,
       refreshLive: () => readLive.current?.() ?? Promise.resolve(),
     };
-  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, nodeWallet, settingsOwner, limits, policies, wizardOpen, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
+  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, nodeWallet, settingsOwner, limits, policies, wizardOpen, guideHidden, setGuideHidden, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

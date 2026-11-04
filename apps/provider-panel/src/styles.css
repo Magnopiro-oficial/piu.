@@ -49,6 +49,11 @@ a:hover { opacity: .7; }
 @keyframes piuTravel { from { left: 0% } to { left: 100% } }
 @keyframes piuPanel { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
 @keyframes piuToast { from { transform: translateY(24px) scale(.96); opacity: 0 } to { transform: none; opacity: 1 } }
+/* Primeiros passos: o cartão de destino pisca para o operador achar onde agir. */
+@keyframes piuFlash { 0%, 45% { box-shadow: 0 0 0 3px var(--ink) } 100% { box-shadow: 0 0 0 3px transparent } }
+.guide-flash { animation: piuFlash 2.4s ease-out; }
+.howto > summary { list-style: none; }
+.howto > summary::-webkit-details-marker { display: none; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
