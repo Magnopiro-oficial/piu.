@@ -1,8 +1,7 @@
 <p align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand/icon-1024.png">
-    <img src="design/brand/icon-light-1024.png" width="120" alt="piu. icon">
-  </picture>
+  <img src="design/brand/icon-1024.png" width="120" alt="piu. logo">
+  &nbsp;&nbsp;
+  <img src="design/brand/icon-light-1024.png" width="120" alt="piu. logo">
 </p>
 
 <h1 align="center">The piu. Manifesto</h1>
@@ -56,6 +55,10 @@ Any proposal can be discussed and implemented **as long as it does not violate t
 - mechanisms that identify people without their consent.
 
 When in doubt, ask: *does this make people freer and better protected, or less?*
+
+## Proposals and improvements
+
+Want to propose an improvement, a new protocol or a partnership? Open an issue or a pull request in this repository, or write to me: **[lucashermescardeal@gmail.com](mailto:lucashermescardeal@gmail.com)**.
 
 ---
 
