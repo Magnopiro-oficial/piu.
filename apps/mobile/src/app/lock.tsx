@@ -7,6 +7,7 @@ import { useMessaging } from '../state/messaging';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
+import { Enter } from '../ui/Enter';
 import { Icon } from '../ui/Icon';
 import { T } from '../ui/T';
 
@@ -30,7 +31,9 @@ export default function Lock() {
   const time = now.toLocaleTimeString('pt-BR', { hour: 'numeric', minute: '2-digit' });
 
   return (
-    <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) }}>
+    // Fundo parado; o conteúdo entra com `fade` (design: tela cheia).
+    <View style={{ flex: 1, backgroundColor: c.bg }}>
+    <Enter kind="fade" style={{ paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) }}>
       <Svg style={{ position: 'absolute', top: 0, left: 0 }} width="100%" height="100%" pointerEvents="none">
         <Defs><Pattern id="lockdots" width={18} height={18} patternUnits="userSpaceOnUse"><Circle cx={9} cy={9} r={1} fill={c.dot} /></Pattern></Defs>
         <Rect width="100%" height="100%" fill="url(#lockdots)" />
@@ -90,6 +93,7 @@ export default function Lock() {
           <View key={ic} style={{ width: 50, height: 50, borderRadius: 25, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={ic} size={22} /></View>
         ))}
       </View>
+    </Enter>
     </View>
   );
 }

@@ -1,6 +1,8 @@
 /**
- * O "piu": som curto (0,12 s, gerado para o projeto, assets/sounds/piu.wav) que toca quando chega
- * algo com o app aberto. Notificações com o app fechado usam o mesmo arquivo (lib/notifications.ts).
+ * O "piu": som curto (0,15 s, gerado para o projeto, assets/sounds/piu.wav) que toca quando chega
+ * algo com o app aberto. O arquivo começa com 0,3 s de silêncio: no Android o alto-falante leva
+ * ~130 ms para ligar e, sem essa folga, o piu inteiro tocava antes (e ninguém ouvia).
+ * Notificações com o app fechado usam o mesmo arquivo (lib/notifications.ts).
  * - Respeita o modo silencioso do iPhone e mistura com outros áudios (não pausa música).
  * - No máximo um piu a cada 1,5 s, para uma rajada de mensagens não virar um coro.
  */
@@ -16,8 +18,9 @@ function load() {
   ready ??= (async () => {
     await setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers', shouldPlayInBackground: false }).catch(() => {});
     player = createAudioPlayer(require('../../assets/sounds/piu.wav'));
-    player.volume = 0.7;
-  })().catch(() => { ready = null; });
+    // Volume cheio: o piu dura 0,15 s e já respeita o volume de mídia do aparelho (a 70% mal se ouvia).
+    player.volume = 1;
+  })().catch(e => { console.warn('[piu-som] load falhou', String(e)); ready = null; });
   return ready;
 }
 
@@ -30,8 +33,11 @@ export async function playPiu(now = Date.now()) {
     if (!player) return;
     await player.seekTo(0);
     player.play();
-  } catch { /* sem áudio neste aparelho: segue em silêncio */ }
+  } catch (e) { console.warn('[piu-som]', String(e)); /* sem áudio neste aparelho: segue em silêncio */ }
 }
+
+/** Abre o arquivo antes da primeira vez (nada toca). */
+export const preloadPiu = () => { void load(); };
 
 /** Para testar nos ajustes: toca mesmo que tenha tocado há pouco. */
 export const previewPiu = () => { lastAt = 0; return playPiu(); };

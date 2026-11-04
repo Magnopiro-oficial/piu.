@@ -4,6 +4,7 @@ import { useCallback, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import { MAINNET_PENDING, REFERRAL_REWARD, WELCOME_BONUS } from '../../data/wallet';
 import { CREDIT_PARAMS } from '../../messaging/credits';
+import { balanceEye, maskAmount, maskBalance } from '../../lib/balanceMask';
 import { formatLunes, LUNES_EXPLORER } from '../../lib/lunesRpc';
 import { shareTextFile } from '../../lib/shareFile';
 import { activityRows, bonusSteps, dayLabel, lunes2, onchainView, referralStats, walletSummary } from '../../lib/walletCore';
@@ -58,7 +59,9 @@ export default function WalletTab() {
 function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const { c } = useTheme();
   const { onchain, reserved, refunded, spent, earned, lunesAddress, onchainSnap, onchainStatus } = useWallet();
-  const { backupDone } = useSettings();
+  const { backupDone, hideBalance, setHideBalance } = useSettings();
+  // Olho do saldo: só esconde a exibição (saldo, "a liberar", reservado); os dados ficam intactos.
+  const eye = balanceEye(hideBalance);
   const { onboarded, verified, chats, showToast } = useStore();
   const st = useStats(5000);
   const now = Date.now();
@@ -85,15 +88,21 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
     <>
       <View style={{ marginTop: 14, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 18, borderRadius: 28, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
-          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Saldo disponível</T>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+            <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Saldo disponível</T>
+            <Pressable onPress={() => setHideBalance(!hideBalance)} accessibilityRole="button" accessibilityLabel={eye.label} accessibilityState={{ selected: hideBalance }} hitSlop={8}
+              style={{ width: 36, height: 36, marginVertical: -8, marginRight: -8, borderRadius: 18, alignItems: 'center', justifyContent: 'center', opacity: 0.85 }}>
+              <Icon name={eye.icon} size={20} color={c.invink} />
+            </Pressable>
+          </View>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
             {/* Sem leitura da Mainnet (sem endereço, ou nunca lido): traço, não um zero que pareça saldo. */}
-            <T size={54} w={650} ls={-0.055} tabular color={c.invink} style={{ lineHeight: 56 }} accessibilityLiveRegion="polite">{view.has ? lunes2(sum.available) : '—'}</T>
+            <T size={54} w={650} ls={-0.055} tabular color={c.invink} style={{ lineHeight: 56 }} accessibilityLiveRegion="polite">{maskBalance(view.has ? lunes2(sum.available) : '—', hideBalance)}</T>
             <T size={15} w={600} color={c.invink} style={{ opacity: 0.75 }}>LUNES</T>
           </View>
           <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: view.stale ? 0.9 : 0.75 }}>{view.line}</T>
-          {snap && sum.reserved > 0 && <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{`${formatLunes(BigInt(snap.free))} LUNES na conta − ${lunes2(sum.reserved)} reservado em convites (registro local)`}</T>}
-          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{sum.toRelease > 0 ? `+ ${lunes2(sum.toRelease)} a liberar · créditos de rede · ${MAINNET_PENDING}` : `Créditos de rede · ${MAINNET_PENDING}`}</T>
+          {snap && sum.reserved > 0 && <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{`${maskAmount(formatLunes(BigInt(snap.free)), hideBalance)} LUNES na conta − ${maskAmount(lunes2(sum.reserved), hideBalance)} reservado em convites (registro local)`}</T>}
+          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{sum.toRelease > 0 ? `+ ${maskAmount(lunes2(sum.toRelease), hideBalance)} a liberar · créditos de rede · ${MAINNET_PENDING}` : `Créditos de rede · ${MAINNET_PENDING}`}</T>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {actions.map(([icon, label, go]) => (

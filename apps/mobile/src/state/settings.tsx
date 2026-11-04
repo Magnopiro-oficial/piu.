@@ -37,6 +37,8 @@ interface Settings {
   /** @deprecated Sempre vazio: desconectar e revogar aparelhos ficam no registro real (lib/devices.ts). */
   dropped: Record<string, boolean>;
   restoreMode: RestoreMode; setRestoreMode: (m: RestoreMode) => void;
+  /** Carteira: esconder o saldo na tela (só exibição; os dados não mudam). */
+  hideBalance: boolean; setHideBalance: (v: boolean) => void;
 }
 
 const DEFAULT_NOTIFS = Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>;
@@ -61,6 +63,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [backupDone, setBackupDone] = usePersisted('set.backupDone', false);
   const [backupAt, setBackupAt] = usePersisted<BackupRecord | null>('set.backupAt', null);
   const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');
+  const [hideBalance, setHideBalance] = usePersisted('set.hideBalance', false);
 
   const value = useMemo<Settings>(() => ({
     priv, setPriv: p => setPrivS(s => ({ ...s, ...p })),
@@ -72,7 +75,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     backupDone, setBackupDone, backupAt, setBackupAt,
     dropped: NONE,
     restoreMode, setRestoreMode,
-  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode]);
+    hideBalance, setHideBalance,
+  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode, hideBalance, setHideBalance]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

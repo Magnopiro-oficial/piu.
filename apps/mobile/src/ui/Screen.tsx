@@ -6,7 +6,7 @@ import { Enter, type EnterKind } from './Enter';
 
 /**
  * Fundo do tema + áreas seguras do aparelho + entrada da tela (design: `push` nas telas internas,
- * `tab` no conteúdo das abas). O fundo fica parado; só o conteúdo anima.
+ * `tab` no conteúdo das abas, `reveal` nas boas-vindas, `fade` nas telas cheias). O fundo fica parado; só o conteúdo anima.
  */
 export function Screen({ children, style, edges = ['top', 'bottom'], enter = 'push' }: {
   children: ReactNode; style?: StyleProp<ViewStyle>; edges?: ('top' | 'bottom')[]; enter?: EnterKind;

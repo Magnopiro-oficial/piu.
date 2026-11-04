@@ -34,7 +34,7 @@ export default function Welcome() {
   );
 
   return (
-    <Screen style={{ paddingHorizontal: width < 360 ? 20 : 28 }}>
+    <Screen enter="reveal" style={{ paddingHorizontal: width < 360 ? 20 : 28 }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
         <View style={{ position: 'absolute', width: 300, height: 300, alignItems: 'center', justifyContent: 'center', transform: [{ scale: k }] }}>
           {[300, 210, 120].map(s => (

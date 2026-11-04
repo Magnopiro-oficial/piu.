@@ -31,7 +31,7 @@ export default function Match() {
   const ring = { width: SIZE, height: SIZE, borderRadius: SIZE / 2, borderWidth: 4, borderColor: c.ink, overflow: 'hidden' } as const;
 
   return (
-    <Screen style={{ backgroundColor: c.ink }}>
+    <Screen enter="fade" style={{ backgroundColor: c.ink }}>
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 32, gap: 14 }}>
         <View accessible accessibilityLabel={`Você e ${r.name}`} style={{ flexDirection: 'row', marginBottom: 18 }}>
           <Animated.View style={[ring, slide(-60), { marginRight: -18, zIndex: 1 }]}>

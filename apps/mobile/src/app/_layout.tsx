@@ -19,6 +19,7 @@ import { WalletProvider } from '../state/wallet';
 import { FONT_FILES } from '../theme/fonts';
 import { ThemeProvider, useTheme } from '../theme/ThemeProvider';
 import { AppLock } from '../ui/AppLock';
+import { SplashGate } from '../ui/Splash';
 import { SystemPrompts } from '../ui/SystemPrompts';
 import { Toast } from '../ui/Toast';
 
@@ -32,26 +33,30 @@ export default function RootLayout() {
   const ready = (loaded || !!error) && hydrated;
   useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return null;
+  // Quando o splash nativo some, a abertura animada (`SplashGate`, mesma cor de fundo) assume por cima
+  // do app já montado: links de convite, guarda de onboarding e bloqueio seguem rodando por baixo.
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-        <ResetProvider>
-          <KeysProvider>
-            <StoreProvider>
-              <NetworkProvider>
-                <WalletProvider>
-                  <SettingsProvider>
-                    <TransportProvider>
-                      <MessagingProvider>
-                        <Navigator />
-                      </MessagingProvider>
-                    </TransportProvider>
-                  </SettingsProvider>
-                </WalletProvider>
-              </NetworkProvider>
-            </StoreProvider>
-          </KeysProvider>
-        </ResetProvider>
+        <SplashGate>
+          <ResetProvider>
+            <KeysProvider>
+              <StoreProvider>
+                <NetworkProvider>
+                  <WalletProvider>
+                    <SettingsProvider>
+                      <TransportProvider>
+                        <MessagingProvider>
+                          <Navigator />
+                        </MessagingProvider>
+                      </TransportProvider>
+                    </SettingsProvider>
+                  </WalletProvider>
+                </NetworkProvider>
+              </StoreProvider>
+            </KeysProvider>
+          </ResetProvider>
+        </SplashGate>
       </ThemeProvider>
     </SafeAreaProvider>
   );

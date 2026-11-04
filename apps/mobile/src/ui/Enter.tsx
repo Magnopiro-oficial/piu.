@@ -1,39 +1,43 @@
 import { useFocusEffect } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useRef } from 'react';
+import { type ReactNode, useCallback, useEffect, useMemo, useRef } from 'react';
 import { Animated, Easing, type StyleProp, type ViewStyle } from 'react-native';
+import { ENTER_SPEC, type EnterKind } from '../lib/enterSpec';
 import { useTheme } from '../theme/ThemeProvider';
 
 /**
- * Entrada das telas (design: `piuPush` e `piuTab`):
- * - `push`: tela interna entra deslizando 32 px da direita com fade, 0,36 s, cubic-bezier(.2,.85,.3,1);
- * - `tab`: conteúdo da aba sobe 10 px com fade, 0,34 s, cubic-bezier(.2,.8,.3,1), a cada vez que a aba aparece.
+ * Entrada das telas (design: `piuPush`, `piuTab`, `reveal`, `fade`; parâmetros em lib/enterSpec.ts):
+ * - `push`: tela interna entra deslizando 56 px da direita com fade, 0,36 s, cubic-bezier(.2,.85,.3,1);
+ * - `tab`: conteúdo da aba sobe 16 px e cresce de .985 com fade, 0,34 s, cubic-bezier(.2,.8,.3,1), a cada vez que a aba aparece;
+ * - `reveal`: cresce de .965 com fade, 0,5 s, cubic-bezier(.2,.85,.3,1) (boas-vindas);
+ * - `fade`: só opacidade, 0,3 s, ease-out (telas cheias: tela bloqueada, encontro de Por perto).
  * Com "reduzir movimento" do sistema, nada anima.
  */
-export type EnterKind = 'push' | 'tab' | 'none';
-
-const SPEC = {
-  push: { dur: 360, ease: Easing.bezier(0.2, 0.85, 0.3, 1), dx: 32, dy: 0 },
-  tab: { dur: 340, ease: Easing.bezier(0.2, 0.8, 0.3, 1), dx: 0, dy: 10 },
-};
+export type { EnterKind };
 
 export function useEnter(kind: EnterKind) {
   const { reduceMotion } = useTheme();
   const p = useRef(new Animated.Value(kind === 'none' || reduceMotion ? 1 : 0)).current;
   const run = useCallback(() => {
     if (kind === 'none' || reduceMotion) { p.setValue(1); return; }
-    const s = SPEC[kind];
+    const s = ENTER_SPEC[kind];
     p.setValue(0);
-    Animated.timing(p, { toValue: 1, duration: s.dur, easing: s.ease, useNativeDriver: true }).start();
+    Animated.timing(p, { toValue: 1, duration: s.dur, easing: Easing.bezier(...s.bezier), useNativeDriver: true }).start();
   }, [kind, reduceMotion, p]);
-  // Tela interna: anima ao montar. Aba: anima toda vez que ganha o foco (as abas ficam montadas).
-  useEffect(() => { if (kind === 'push') run(); }, [kind, run]);
+  // Tela (push/reveal/fade): anima ao montar. Aba: anima toda vez que ganha o foco (as abas ficam montadas).
+  useEffect(() => { if (kind !== 'tab' && kind !== 'none') run(); }, [kind, run]);
   useFocusEffect(useCallback(() => { if (kind === 'tab') run(); }, [kind, run]));
-  if (kind === 'none') return null;
-  const s = SPEC[kind];
-  return {
-    opacity: p,
-    transform: [s.dx ? { translateX: p.interpolate({ inputRange: [0, 1], outputRange: [s.dx, 0] }) } : { translateY: p.interpolate({ inputRange: [0, 1], outputRange: [s.dy, 0] }) }],
-  };
+  return useMemo(() => {
+    if (kind === 'none') return null;
+    const s = ENTER_SPEC[kind];
+    const at = (from: number) => p.interpolate({ inputRange: [0, 1], outputRange: [from, 0] });
+    // Só entra na lista o que o design move nesse tipo (translate/scale ausentes = 0/1).
+    const transform = [
+      ...(s.dx ? [{ translateX: at(s.dx) }] : []),
+      ...(s.dy ? [{ translateY: at(s.dy) }] : []),
+      ...(s.scale !== 1 ? [{ scale: p.interpolate({ inputRange: [0, 1], outputRange: [s.scale, 1] }) }] : []),
+    ];
+    return { opacity: p, transform };
+  }, [kind, p]);
 }
 
 export function Enter({ kind, style, children }: { kind: EnterKind; style?: StyleProp<ViewStyle>; children: ReactNode }) {

@@ -47,8 +47,11 @@ function SystemPermission() {
       {perm === 'undetermined' && <Button label="Permitir notificações" height={42} fontSize={14} onPress={() => { void requestNotificationPermission().finally(refresh); }} />}
       {perm === 'denied' && Platform.OS !== 'web' && <Button label="Abrir ajustes do aparelho" variant="outline" height={42} fontSize={14} onPress={() => { void Linking.openSettings(); }} />}
       {perm === 'granted' && (
-        <Button label={sent ? 'Chega em 5 s · bloqueie a tela' : 'Enviar aviso de teste'} variant="outline" height={42} fontSize={14} disabled={sent}
-          onPress={() => { void sendTestNotification().then(ok => { setSent(ok); if (ok) setTimeout(() => setSent(false), 6000); }); }} />
+        <>
+          <Button label={sent ? 'Chega em 5 s · feche o app' : 'Testar com o app fechado'} variant="outline" height={42} fontSize={14} disabled={sent}
+            onPress={() => { void sendTestNotification().then(ok => { setSent(ok); if (ok) setTimeout(() => setSent(false), 6000); }); }} />
+          <T size={12} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 2 }}>Feche o app ou bloqueie a tela; em 5 segundos chega um aviso. Toque nele para voltar ao Piu.</T>
+        </>
       )}
     </View>
   );

@@ -16,8 +16,9 @@ import { AppState, Platform } from 'react-native';
 import type { NotifKey, Preview } from '../data/settings';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
-import { playPiu } from './piuSound';
+import { playPiu, preloadPiu } from './piuSound';
 import { persistNow, readPersisted } from './persist';
+import { badgeAfterOpen, nextBadgeCount } from './badgeCount';
 
 export type NotifyKind = NotifKey;
 
@@ -63,6 +64,14 @@ let channelsReady: Promise<void> | null = null;
 const actions = new Map<string, () => void>();
 /** Evita duplicar quando `notify` e o espelho do banner disparam a mesma coisa. */
 let last = { key: '', at: 0 };
+/** Número no ícone do app (lib/badgeCount.ts): soma a cada aviso comum, zera ao abrir o app. */
+let badgeCount = 0;
+
+function setBadge(n: number) {
+  if (Platform.OS === 'web') return;
+  badgeCount = n;
+  void Notifications.setBadgeCountAsync(n).catch(() => {});
+}
 
 AppState.addEventListener('change', s => { active = s === 'active'; });
 
@@ -117,7 +126,8 @@ export async function requestNotificationPermission(): Promise<boolean> {
     return (await Notification.requestPermission()) === 'granted';
   }
   await ensureChannels(); // Android 13+: o pedido só aparece depois de existir um canal
-  const p = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: false, allowCriticalAlerts: false } });
+  // `allowBadge`: o número no ícone do app (iPhone só mostra com essa permissão).
+  const p = await Notifications.requestPermissionsAsync({ ios: { allowAlert: true, allowSound: true, allowBadge: true, allowCriticalAlerts: false } });
   iosPreviewsWhenUnlocked = p.ios?.allowsPreviews === Notifications.IosAllowsPreviews.WHEN_AUTHENTICATED;
   return p.granted;
 }
@@ -139,11 +149,13 @@ function present(n: NotifyInput, preview: Preview): { title: string; body: strin
 export const notify = (n: NotifyInput) => deliver(n, 0);
 
 /**
- * Aviso de teste (Ajustes → Notificações): chega em 5 s, para dar tempo de bloquear a tela ou sair
- * do app e ver como fica com a pré-visualização escolhida.
+ * Aviso de teste (Ajustes → Notificações, "Testar com o app fechado"): chega em 5 s, para dar tempo
+ * de fechar o app ou bloquear a tela e ver como fica com a pré-visualização escolhida. O toque abre
+ * a lista de Conversas (`/(tabs)`): é o que acontece com uma mensagem real; a prévia da tela
+ * bloqueada (`/lock`) continua acessível pelo link "Ver na tela bloqueada" na mesma tela.
  */
 export const sendTestNotification = () =>
-  deliver({ kind: 'msg', title: 'Piu · aviso de teste', body: 'Assim chega uma mensagem nova com a pré-visualização escolhida.', data: { href: '/lock' } }, 5);
+  deliver({ kind: 'msg', title: 'Piu · aviso de teste', body: 'Assim chega uma mensagem nova com a pré-visualização escolhida.', data: { href: '/(tabs)' } }, 5);
 
 async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
   const c = cfg;
@@ -169,9 +181,14 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
     }
     if ((await notificationPermission()) !== 'granted') return false;
     await ensureChannels();
+    // Número no ícone: alertas críticos não contam. `badge` no conteúdo vale quando a notificação
+    // chega (iPhone, inclusive a agendada); `setBadgeCountAsync` cobre o launcher do Android agora.
+    const badge = nextBadgeCount(badgeCount, { critical });
+    const counts = badge !== badgeCount;
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title, body, data,
+        badge: counts ? badge : undefined,
         sound: mode === 'piu' ? 'piu.wav' : mode === 'normal' || mode === 'critical' ? 'default' : false,
         vibrate: mode === 'discreet' ? [0, 90] : undefined,
         interruptionLevel: critical ? 'timeSensitive' : mode === 'quiet' ? 'passive' : 'active',
@@ -182,6 +199,8 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
         : Platform.OS === 'android' ? { channelId: channelId(mode) } : null,
     });
     if (n.go) { actions.set(id, n.go); if (actions.size > 50) actions.delete(actions.keys().next().value!); }
+    // Agendada com o app aberto (aviso de teste): o número só muda quando ela chegar, pelo `badge` acima.
+    if (counts) { if (active) badgeCount = badge; else setBadge(badge); }
     return true;
   } catch {
     return false;
@@ -205,6 +224,8 @@ export function NotificationBridge() {
   const { preview, notifs, quiet, discreet, piuSound } = useSettings();
   const { onboarded } = useStore();
   cfg = { preview, notifs, quiet, discreet, piu: piuSound, onboarded };
+  // Carrega o piu de antemão: o primeiro aviso não espera o arquivo abrir.
+  useEffect(() => { if (piuSound && Platform.OS !== 'web') preloadPiu(); }, [piuSound]);
 
   // Toque na notificação → abre a tela (com o app aberto, em segundo plano ou fechado).
   useEffect(() => {
@@ -236,10 +257,12 @@ export function NotificationBridge() {
     return () => clearTimeout(t);
   }, [onboarded]);
 
-  // Ao voltar para o app, limpa as notificações já vistas.
+  // Ao voltar para o app, limpa as notificações já vistas e zera o número no ícone.
   useEffect(() => {
     if (Platform.OS === 'web') return;
-    const sub = AppState.addEventListener('change', s => { if (s === 'active') void Notifications.dismissAllNotificationsAsync().catch(() => {}); });
+    const clear = () => { void Notifications.dismissAllNotificationsAsync().catch(() => {}); setBadge(badgeAfterOpen()); };
+    if (active) clear(); // já aberto ao montar (o sistema pode ter guardado um número de antes)
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') clear(); });
     return () => sub.remove();
   }, []);
 
