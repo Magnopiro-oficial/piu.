@@ -23,5 +23,13 @@ test('cada falha do envio vira um aviso que a pessoa entende', () => {
   assert.match(none.body, /Bluetooth/);
   const other = appShareError('qualquer outra coisa');
   assert.equal(other.title, 'Não foi possível enviar o Piu');
-  for (const e of [split, none, other]) assert.ok(!/ERR_|apk|intent/i.test(e.body), 'sem jargão no aviso');
+  const wifi = appShareError('ERR_WIFI_OFF');
+  assert.match(wifi.body, /Wi-Fi/);
+  const perm = appShareError('ERR_NO_PERMISSION');
+  assert.match(perm.body, /permiss/i);
+  const busy = appShareError('ERR_P2P_BUSY');
+  assert.match(busy.body, /Bluetooth/, 'sugere o outro caminho');
+  const unsupported = appShareError('ERR_P2P_UNSUPPORTED');
+  assert.match(unsupported.body, /Bluetooth/);
+  for (const e of [split, none, other, wifi, perm, busy, unsupported]) assert.ok(!/ERR_|apk|intent|p2p/i.test(e.body), 'sem jargão no aviso');
 });

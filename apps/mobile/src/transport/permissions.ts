@@ -20,6 +20,18 @@ export async function requestTransportPermissions(): Promise<'granted' | 'denied
 }
 
 /**
+ * Abrir a rede Wi-Fi Direct do "Enviar o Piu": dispositivos Wi-Fi por perto no Android 13+,
+ * localização precisa até o 12 (o Android exige para criar o grupo).
+ */
+export async function requestWifiDirectPermission(): Promise<'granted' | 'denied'> {
+  if (Platform.OS !== 'android') return 'denied';
+  const v = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
+  const p = v >= 33 ? PermissionsAndroid.PERMISSIONS.NEARBY_WIFI_DEVICES : PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION;
+  if (await PermissionsAndroid.check(p)) return 'granted';
+  return (await PermissionsAndroid.request(p)) === PermissionsAndroid.RESULTS.GRANTED ? 'granted' : 'denied';
+}
+
+/**
  * Android 13+: permissão para mostrar o aviso fixo do Modo nó em segundo plano (NFR-009).
  * Negar não impede o serviço; o aviso só deixa de aparecer na gaveta de notificações.
  */

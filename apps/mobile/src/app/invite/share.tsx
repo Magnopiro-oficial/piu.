@@ -1,6 +1,6 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
-import type { ReactNode } from 'react';
+import { useState, type ReactNode } from 'react';
 import { ScrollView, Share, View } from 'react-native';
 import { hasStoreLinks, inviteLink, inviteShareText } from '../../lib/inviteLink';
 import { APP_SCHEME, STORE_LINKS, useInviter } from '../../lib/inviter';
@@ -13,6 +13,7 @@ import { BackHeader } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { WifiSharePanel } from '../../ui/WifiSharePanel';
 
 /**
  * Enviar o convite de longe: o link `piu://invite/accept?c=…` com o seu cartão de contato assinado
@@ -34,6 +35,7 @@ export default function ShareInvite() {
     catch { showToast({ icon: 'error', title: 'Não foi possível compartilhar', body: 'Copie o link e envie por onde preferir.' }); }
   };
   const { canSend, sending, send: sendApp } = useSendApp();
+  const [wifiOpen, setWifiOpen] = useState(false);
   const copy = async () => {
     if (!link) return;
     await Clipboard.setStringAsync(link);
@@ -44,6 +46,19 @@ export default function ShareInvite() {
     <Screen>
       <BackHeader title="Enviar convite" />
       <ScrollView contentContainerStyle={{ paddingTop: 4, paddingHorizontal: 20, paddingBottom: 32, gap: 14 }}>
+        {canSend && (
+          // Regra 6.1: distribuição P2P, sem loja e sem internet (só Android).
+          <View style={{ borderRadius: 22, backgroundColor: c.bg2, padding: 16, gap: 10 }}>
+            <T size={14.5} w={600}>A pessoa ainda não tem o Piu?</T>
+            <T size={12.5} lh={1.45} color={c.ink2}>Envie o app do seu celular para o dela, sem internet. Wi-Fi Direct é mais rápido; Bluetooth funciona em qualquer Android. No celular dela, abra o arquivo e permita instalar. Depois, mande o convite abaixo.</T>
+            {wifiOpen ? <WifiSharePanel onClose={() => setWifiOpen(false)} /> : (
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                <Button label={sending ? 'Preparando…' : 'Bluetooth'} height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} disabled={sending} onPress={sendApp} left={<Icon name="bluetooth" size={18} color={c.invink} />} />
+                <Button label="Wi-Fi Direct" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => setWifiOpen(true)} left={<Icon name="wifi_tethering" size={18} color={c.invink} />} />
+              </View>
+            )}
+          </View>
+        )}
         <View style={{ borderRadius: 22, backgroundColor: c.bg2 }}>
           <Step n={1} title="Envie o link">
             <T size={12} mono lh={1.5} color={c.ink2} numberOfLines={3} selectable>{link || 'Preparando o convite…'}</T>
@@ -66,16 +81,6 @@ export default function ShareInvite() {
           </Step>
         </View>
 
-        {canSend && (
-          <View style={{ borderRadius: 22, backgroundColor: c.bg2, padding: 16, gap: 10 }}>
-            <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
-              <Icon name="bluetooth" size={20} />
-              <T size={14.5} w={600} style={{ flex: 1 }}>A pessoa ainda não tem o Piu?</T>
-            </View>
-            <T size={12.5} lh={1.45} color={c.ink2}>Envie o instalador do seu celular para o dela, sem internet: escolha Bluetooth ou Quick Share. No celular dela, abra o arquivo recebido e permita instalar. Depois, mande o convite acima.</T>
-            <Button label={sending ? 'Preparando…' : 'Enviar o Piu'} height={44} fontSize={14} disabled={sending} onPress={sendApp} left={<Icon name="upload" size={18} color={c.invink} />} />
-          </View>
-        )}
 
         <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, flexDirection: 'row', gap: 10 }}>
           <Icon name="install_mobile" size={17} />
