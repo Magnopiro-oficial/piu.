@@ -62,6 +62,27 @@ interface State { operators: Operator[]; sessions: Session[]; devices: Device[];
 
 const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {} });
 
+/** Dados de demonstração que as versões antigas gravavam para o primeiro operador (saldo e três equipamentos). */
+const LEGACY_DEMO_BALANCE = 1284.6;
+const LEGACY_DEMO_DEVICES = new Set(['Mini-PC da garagem|Gateway Local', 'Antena do telhado|Super Node', 'Roteador da sala|Home Node']);
+const LEGACY_DEMO_KEYS = 'cls,id,name,ownerId,status,today';
+const isLegacyDemoDevice = (d: Device) =>
+  LEGACY_DEMO_DEVICES.has(`${d.name}|${d.cls}`) && d.today === 4.12 && Object.keys(d).sort().join(',') === LEGACY_DEMO_KEYS;
+/** Saldo que só existe por causa do valor de demonstração: nenhuma entrada real e saídas que fecham com ele. */
+const isLegacyDemoWallet = (w: Wallet) =>
+  !w.txs.some(t => t.kind === 'in') && Math.round((w.balance + w.txs.reduce((s, t) => s + t.amount, 0)) * 100) === Math.round(LEGACY_DEMO_BALANCE * 100);
+
+/** Tira os dados de demonstração gravados pelas versões antigas. Devolve se mudou algo. */
+function dropLegacyDemo(s: State): boolean {
+  const before = s.devices.length;
+  s.devices = s.devices.filter(d => !isLegacyDemoDevice(d));
+  let changed = s.devices.length !== before;
+  const first = s.operators[0];
+  const w = first && s.wallets[first.id];
+  if (w && isLegacyDemoWallet(w)) { s.wallets[first.id] = { balance: 0, txs: [] }; changed = true; }
+  return changed;
+}
+
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
  * Gravação atômica (arquivo temporário + rename). Tokens de sessão ficam só como hash SHA-256.
@@ -77,6 +98,7 @@ export class Store {
       mkdirSync(dataDir, { recursive: true, mode: 0o700 });
       chmodSync(dataDir, 0o700);
       try { this.s = { ...empty(), ...JSON.parse(readFileSync(this.file, 'utf8')) }; } catch { this.s = empty(); }
+      if (dropLegacyDemo(this.s)) this.save();
     } else {
       this.s = empty();
     }
