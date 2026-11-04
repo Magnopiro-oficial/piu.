@@ -29,6 +29,8 @@ interface Settings {
   notifs: Record<NotifKey, boolean>; toggleNotif: (k: NotifKey) => void;
   quiet: boolean; setQuiet: (v: boolean) => void;
   discreet: boolean; setDiscreet: (v: boolean) => void;
+  /** "Som de piu": o piu toca com o app aberto e é o som das notificações. */
+  piuSound: boolean; setPiuSound: (v: boolean) => void;
   backupDone: boolean; setBackupDone: (v: boolean) => void;
   /** Último backup de verdade (frase confirmada ou arquivo cifrado salvo), com a data. */
   backupAt: BackupRecord | null; setBackupAt: (r: BackupRecord) => void;
@@ -55,6 +57,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const batN = useMemo(() => normBattery(bat), [bat]);
   const [quiet, setQuiet] = usePersisted('set.quiet', false);
   const [discreet, setDiscreet] = usePersisted('set.discreet', true);
+  const [piuSound, setPiuSound] = usePersisted('set.piuSound', true);
   const [backupDone, setBackupDone] = usePersisted('set.backupDone', false);
   const [backupAt, setBackupAt] = usePersisted<BackupRecord | null>('set.backupAt', null);
   const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');
@@ -65,11 +68,11 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     bat: batN, setBat: p => setBatS(s => normBattery({ ...normBattery(s), ...p })),
     preview, setPreview,
     notifs, toggleNotif: k => setNotifs(n => { const cur = { ...DEFAULT_NOTIFS, ...n }; return { ...cur, [k]: !cur[k] }; }),
-    quiet, setQuiet, discreet, setDiscreet,
+    quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound,
     backupDone, setBackupDone, backupAt, setBackupAt,
     dropped: NONE,
     restoreMode, setRestoreMode,
-  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode]);
+  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

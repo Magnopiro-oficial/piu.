@@ -4,6 +4,7 @@ import { AppState, Linking, Platform, Pressable, ScrollView, View } from 'react-
 import { NOTIF_TYPES, PREVIEW_HINT } from '../data/settings';
 import { OFFICIAL_NOTE } from '../messaging/communityAlerts';
 import { useMessaging } from '../state/messaging';
+import { previewPiu } from '../lib/piuSound';
 import { notificationPermission, requestNotificationPermission, sendTestNotification } from '../lib/notifications';
 import { useSettings } from '../state/settings';
 import { useTheme } from '../theme/ThemeProvider';
@@ -80,7 +81,7 @@ function CommunityAlerts() {
 /** Notificações sem servidor: pré-visualização, tipos de aviso, alertas da comunidade e silêncio. */
 export default function Notifications() {
   const { c } = useTheme();
-  const { preview, setPreview, notifs, toggleNotif, quiet, setQuiet, discreet, setDiscreet } = useSettings();
+  const { preview, setPreview, notifs, toggleNotif, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound } = useSettings();
   const link = (label: string, href: '/lock') => (
     <Pressable onPress={() => router.push(href)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 4, paddingHorizontal: 2 }}>
       <T size={12.5} w={550} style={{ textDecorationLine: 'underline' }}>{label}</T>
@@ -111,6 +112,16 @@ export default function Notifications() {
         </SetGroup>
 
         <CommunityAlerts />
+
+        <SetGroup title="SOM">
+          <ToggleRow icon="music_note" name="Som de piu" desc={discreet ? 'Com o app aberto. Com ele fechado, a vibração discreta (abaixo) deixa sem som' : 'Com o app aberto e nas notificações'} on={piuSound}
+            onChange={() => { const next = !piuSound; setPiuSound(next); if (next) void previewPiu(); }} />
+          <Pressable onPress={() => void previewPiu()} accessibilityRole="button" accessibilityLabel="Ouvir o piu"
+            style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14, opacity: pressed ? 0.6 : 1 })}>
+            <Icon name="play_arrow" size={21} w={300} />
+            <T size={15} w={500}>Ouvir o piu</T>
+          </Pressable>
+        </SetGroup>
 
         <SetGroup title="SILÊNCIO">
           <ToggleRow name="Modo noturno" desc="22h às 7h · alertas Graves da comunidade ainda tocam" on={quiet} onChange={() => setQuiet(!quiet)} />

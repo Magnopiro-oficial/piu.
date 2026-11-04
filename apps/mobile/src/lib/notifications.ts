@@ -16,6 +16,7 @@ import { AppState, Platform } from 'react-native';
 import type { NotifKey, Preview } from '../data/settings';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
+import { playPiu } from './piuSound';
 import { persistNow, readPersisted } from './persist';
 
 export type NotifyKind = NotifKey;
@@ -35,7 +36,7 @@ export interface NotifyInput {
   go?: () => void;
 }
 
-interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: boolean; discreet: boolean; onboarded: boolean }
+interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: boolean; discreet: boolean; piu: boolean; onboarded: boolean }
 
 /** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"). */
 const HIDDEN_BODY: Record<NotifyKind, string> = {
@@ -44,9 +45,10 @@ const HIDDEN_BODY: Record<NotifyKind, string> = {
 };
 
 /** Canais do Android (importância e som são fixos depois de criados, por isso um canal por modo). */
-type Mode = 'normal' | 'discreet' | 'quiet' | 'critical';
+type Mode = 'normal' | 'piu' | 'discreet' | 'quiet' | 'critical';
 const CHANNELS: Record<Mode, Notifications.NotificationChannelInput> = {
   normal: { name: 'Mensagens e avisos', importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+  piu: { name: 'Mensagens com piu', description: 'O som do Piu', importance: Notifications.AndroidImportance.HIGH, sound: 'piu.wav', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   discreet: { name: 'Avisos discretos', description: 'Sem som; um toque curto', importance: Notifications.AndroidImportance.HIGH, sound: null, enableVibrate: true, vibrationPattern: [0, 90], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   quiet: { name: 'Modo noturno', description: 'Entre 22h e 7h: sem som nem vibração', importance: Notifications.AndroidImportance.LOW, sound: null, enableVibrate: false, vibrationPattern: null, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
   critical: { name: 'Alertas graves da comunidade', description: 'Publicados por membros das suas comunidades. Não são avisos oficiais.', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
@@ -72,6 +74,18 @@ if (Platform.OS !== 'web') {
 }
 
 export const isQuietHour = (d = new Date()) => d.getHours() >= 22 || d.getHours() < 7;
+
+/**
+ * Com o app aberto: o piu junto do banner. Só para o que já passou pelos filtros (tipo ligado,
+ * conversa não silenciada); fica quieto no modo noturno, com "Som de piu" desligado e fora de
+ * primeiro plano (aí quem toca é a notificação do sistema).
+ */
+export function chirpInApp(kind: NotifyKind) {
+  const c = cfg;
+  if (!c?.onboarded || !c.piu || !active || !c.notifs[kind as NotifKey]) return;
+  if (c.quiet && isQuietHour()) return;
+  void playPiu();
+}
 
 function ensureChannels() {
   if (Platform.OS !== 'android') return Promise.resolve();
@@ -140,7 +154,7 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
   if (key === last.key && Date.now() - last.at < 3000) return false;
   last = { key, at: Date.now() };
 
-  const mode: Mode = critical ? 'critical' : c.quiet && isQuietHour() ? 'quiet' : c.discreet ? 'discreet' : 'normal';
+  const mode: Mode = critical ? 'critical' : c.quiet && isQuietHour() ? 'quiet' : c.discreet ? 'discreet' : c.piu ? 'piu' : 'normal';
   const { title, body } = present({ ...n, critical }, c.preview);
   const data = { ...n.data, kind: n.kind };
 
@@ -148,7 +162,7 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
     if (Platform.OS === 'web') {
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
       setTimeout(() => {
-        const w = new Notification(title, { body, tag: n.data?.href ?? n.kind, silent: mode !== 'normal' && mode !== 'critical', data });
+        const w = new Notification(title, { body, tag: n.data?.href ?? n.kind, silent: mode !== 'normal' && mode !== 'piu' && mode !== 'critical', data });
         w.onclick = () => { window.focus(); open(n.go, n.data?.href); w.close(); };
       }, delaySec * 1000);
       return true;
@@ -158,7 +172,7 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
     const id = await Notifications.scheduleNotificationAsync({
       content: {
         title, body, data,
-        sound: mode === 'normal' || mode === 'critical' ? 'default' : false,
+        sound: mode === 'piu' ? 'piu.wav' : mode === 'normal' || mode === 'critical' ? 'default' : false,
         vibrate: mode === 'discreet' ? [0, 90] : undefined,
         interruptionLevel: critical ? 'timeSensitive' : mode === 'quiet' ? 'passive' : 'active',
         threadIdentifier: n.data?.href,
@@ -188,9 +202,9 @@ const OPENS = 'notif.opens';
  * (em `_layout.tsx`, junto do `<Toast />`).
  */
 export function NotificationBridge() {
-  const { preview, notifs, quiet, discreet } = useSettings();
+  const { preview, notifs, quiet, discreet, piuSound } = useSettings();
   const { onboarded } = useStore();
-  cfg = { preview, notifs, quiet, discreet, onboarded };
+  cfg = { preview, notifs, quiet, discreet, piu: piuSound, onboarded };
 
   // Toque na notificação → abre a tela (com o app aberto, em segundo plano ou fechado).
   useEffect(() => {

@@ -4,7 +4,7 @@ import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../da
 import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
-import { notify } from '../lib/notifications';
+import { chirpInApp, notify } from '../lib/notifications';
 import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { isStatusBack, tempSeconds } from '../lib/status';
@@ -198,6 +198,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
    */
   const showToast = useCallback((t: ToastData) => {
     if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
+    if (t.kind) chirpInApp(t.kind);
     if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.critical ? { critical: true } : {}), ...(t.href ? { data: { href: t.href } } : {}) });
     clearTimeout(toastTimer.current);
     toastSeq.current += 1;
