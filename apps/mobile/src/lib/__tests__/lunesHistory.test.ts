@@ -161,3 +161,22 @@ test('snapshot para o disco: BigInt vira texto e volta igual', () => {
   assert.doesNotThrow(() => JSON.stringify(snap));
   assert.deepEqual(fromHistorySnapshot(snap), h);
 });
+
+test('fetchLunesHistory: fetch global mantém receiver globalThis como no navegador', async () => {
+  const original = globalThis.fetch;
+  let calls = 0;
+  globalThis.fetch = async function (this: typeof globalThis, input, init) {
+    assert.equal(this, globalThis, 'fetch nativo exige o objeto global como receiver');
+    calls++;
+    assert.equal(input, 'https://lunes-squid.lunes.io');
+    assert.equal(init?.method, 'POST');
+    return new Response(JSON.stringify(EMPTY_TRANSFERS), { status: 200 });
+  };
+  try {
+    const h = await fetchLunesHistory(ALICE_57);
+    assert.equal(calls, 1, 'usa o fetch global sem injeção e sem consultar a rede');
+    assert.deepEqual(h.moves, []);
+    assert.equal(h.total, 0);
+    assert.equal(h.truncated, false);
+  } finally { globalThis.fetch = original; }
+});

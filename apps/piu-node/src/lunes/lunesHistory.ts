@@ -191,7 +191,8 @@ export async function fetchLunesHistory(address: string, opts: LunesHistoryOptio
   const d = publicKeyOf(address);
   const id = encodeSs58(d.publicKey, INDEXER_SS58_PREFIX);
   const first = opts.first ?? HISTORY_PAGE;
-  const o = { fetch: opts.fetch ?? fetch, indexer: opts.indexer ?? LUNES_INDEXER, timeoutMs: opts.timeoutMs ?? 12_000 };
+  // No navegador, fetch nativo exige o receiver global: o.fetch(...) não pode ligá-lo a o.
+  const o = { fetch: opts.fetch ?? globalThis.fetch.bind(globalThis), indexer: opts.indexer ?? LUNES_INDEXER, timeoutMs: opts.timeoutMs ?? 12_000 };
   const transfers = await graphql<TransfersData>(o, ACCOUNT_TRANSFERS_QUERY, { id, first }, 'as transferências');
   let moves = parseTransfers({ data: transfers }, id, d.prefix);
   if (moves.length) {

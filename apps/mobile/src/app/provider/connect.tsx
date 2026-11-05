@@ -3,6 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PROV_FAMILIES } from '../../data/network';
 import { useT, type Key } from '../../i18n';
+import { useProvNodes } from '../../lib/approvalNodes';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
@@ -20,6 +21,7 @@ import { T } from '../../ui/T';
 export default function ProvConnect() {
   const { c } = useTheme();
   const t = useT();
+  const { nodes } = useProvNodes();
   const { showToast } = useStore();
   const { fam: famId } = useLocalSearchParams<{ fam?: string }>();
   const fam = PROV_FAMILIES.find(f => f.id === famId) ?? PROV_FAMILIES[0];
@@ -68,6 +70,11 @@ export default function ProvConnect() {
               </View>
             </View>
             <Button label={t('provConnect.scanPanel')} height={46} onPress={() => router.push('/scan')} left={<Icon name="qr_code_scanner" size={18} color={c.invink} />} />
+          </View>
+        )}
+        {(nodes?.length ?? 0) > 0 && (
+          <View style={{ marginTop: 18, marginHorizontal: 20 }}>
+            <Button label={t('prov.paired')} variant="outline" height={46} onPress={() => router.push('/provider')} left={<Icon name="devices" size={19} />} />
           </View>
         )}
         <View style={{ flexDirection: 'row', gap: 10, paddingTop: 14, paddingHorizontal: 24 }}>

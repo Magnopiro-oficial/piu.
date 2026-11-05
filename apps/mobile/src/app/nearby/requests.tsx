@@ -14,11 +14,11 @@ import { useMessaging } from '../../state/messaging';
 import { useStore } from '../../state/store';
 import { useWallet } from '../../state/wallet';
 import { useTheme } from '../../theme/ThemeProvider';
-import { Avatar } from '../../ui/Avatar';
 import { Button } from '../../ui/Button';
 import { BackHeader, Segmented, SectionLabel } from '../../ui/Controls';
 import { Icon, type IconName } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
+import { Stripes } from '../../ui/Stripes';
 import { T } from '../../ui/T';
 
 /** Pedidos de conversa recebidos por Por perto: aceitar (recebe a taxa), recusar em silêncio, bloquear. */
@@ -26,6 +26,7 @@ export default function Requests() {
   const { c } = useTheme();
   const t = useT();
   const { compact } = useLayout();
+  const stackActions = compact || t('accept.accept').length > 18;
   const { myFee, setMyFee } = useWallet();
   const { nearby } = useMessaging();
   const requests = nearby?.requests ?? [];
@@ -51,30 +52,32 @@ export default function Requests() {
             : st === 'blocked' ? ['block', t('requests.blocked')]
               : st === 'declined' ? ['close', t('requests.declined', { name: r.name })] : null;
           return (
-            <View key={r.id} accessibilityLiveRegion="polite" style={{ padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 12, opacity: st && st !== 'accepted' ? 0.55 : 1 }}>
+            <View key={r.id} accessibilityLiveRegion="polite" style={{ padding: 16, borderRadius: 24, borderWidth: 1, borderColor: c.line2, gap: 14, opacity: st && st !== 'accepted' ? 0.55 : 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                <Avatar initials={initialsOf(r.name)} size={compact ? 40 : 46} />
+                <Stripes period={10} label={t('nearby.photoOf', { name: r.name })} style={{ width: compact ? 44 : 52, height: compact ? 44 : 52, borderRadius: 26, flexShrink: 0 }}>
+                  <T size={15} w={600}>{initialsOf(r.name)}</T>
+                </Stripes>
                 <View style={{ flex: 1, gap: 2 }}>
-                  <T size={15.5} w={650} numberOfLines={1}>{r.name}</T>
-                  <T size={12.5} mono color={c.ink2} numberOfLines={2}>{r.prox} · {ago(r.at, t)}</T>
+                  <T size={16} w={650} numberOfLines={1}>{r.name}</T>
+                  <T size={12.5} color={c.ink2} numberOfLines={2}>{r.prox} · {ago(r.at, t)}</T>
                 </View>
-                <View style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 99, backgroundColor: c.ink }}>
-                  <T size={12} w={600} mono color={c.invink}>+{fmtLunes(r.fee)}{compact ? '' : ' LUNES'}</T>
+                <View style={{ paddingVertical: 5, paddingHorizontal: 10, borderRadius: 10, backgroundColor: c.bg2 }}>
+                  <T size={12.5} w={600}>+{fmtLunes(r.fee)}{compact ? '' : ' LUNES'}</T>
                 </View>
               </View>
-              <View style={{ alignSelf: 'flex-start', maxWidth: '92%', paddingVertical: 10, paddingHorizontal: 14, borderRadius: 18, borderTopLeftRadius: 6, backgroundColor: c.bg }}>
-                <T size={14.5} lh={1.4}>{r.msg}</T>
+              <View style={{ paddingVertical: 12, paddingHorizontal: 14, borderRadius: 16, borderBottomLeftRadius: 6, backgroundColor: c.bub, borderWidth: 1, borderColor: c.line }}>
+                <T size={15} lh={1.45}>{r.msg}</T>
               </View>
               {done ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                   <Icon name={done[0]} size={18} fill={st === 'accepted'} />
-                  <T size={13} w={550}>{done[1]}</T>
+                  <T size={13} w={550} color={c.ink2} style={{ flex: 1 }}>{done[1]}</T>
                 </View>
               ) : (
                 <>
-                  <View style={{ flexDirection: compact ? 'column-reverse' : 'row', gap: 8 }}>
-                    <Button label={t('scan.transfer.refuse')} variant="soft" height={46} fontSize={14} style={!compact && { flex: 1 }} onPress={() => answer(r.id, 'decline')} />
-                    <Button label={t('accept.accept')} height={46} fontSize={14} style={!compact && { flex: 1.6 }}
+                  <View style={{ flexDirection: stackActions ? 'column-reverse' : 'row', gap: 8 }}>
+                    <Button label={t('scan.transfer.refuse')} variant="outline" height={46} fontSize={14.5} style={!stackActions && { flex: 1 }} onPress={() => answer(r.id, 'decline')} />
+                    <Button label={t('accept.accept')} height={46} fontSize={14.5} style={!stackActions && { flex: 1.4 }}
                       onPress={() => { if (answer(r.id, 'accept')) router.push({ pathname: '/nearby/match', params: { id: r.id } }); }} />
                   </View>
                   {/* Bloqueia o `piu:` real do remetente: o mensageiro descarta novos pedidos e mensagens dele. */}
@@ -87,11 +90,11 @@ export default function Requests() {
           );
         })}
 
-        <View style={{ marginTop: 8 }}><SectionLabel>{t('requests.prefs')}</SectionLabel></View>
-        <View style={{ padding: 16, borderRadius: 22, borderWidth: 1, borderColor: c.line2, gap: 12 }}>
+        <View style={{ marginTop: -12, marginHorizontal: -20 }}><SectionLabel>{t('requests.prefs')}</SectionLabel></View>
+        <View style={{ marginTop: -12, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 10 }}>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-between', alignItems: 'baseline', columnGap: 8 }}>
-            <T size={15} w={600}>{t('requests.fee')}</T>
-            <T size={12} color={c.ink2}>{compact ? `${t('requests.inLunes')} · ` : ''}{t('requests.fee.desc')}</T>
+            <T size={14} w={550}>{t('requests.fee')}</T>
+            <T size={14} color={c.ink2}>{compact ? `${t('requests.inLunes')} · ` : ''}{t('requests.fee.desc')}</T>
           </View>
           <Segmented label={t('requests.fee')} value={String(myFee)} onChange={v => setMyFee(Number(v))}
             options={FEE_OPTIONS.map(n => [String(n), compact ? String(n) : `${n} LUNES`] as [string, string])} />

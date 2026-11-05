@@ -102,7 +102,7 @@ export default function Alert() {
           </View>
         </View>
         <View style={{ gap: 12 }} accessibilityRole={loud ? 'alert' : undefined}>
-          <T size={32} w={700} ls={-0.04} lh={1.05} color={fg} style={{ opacity: a.status === 'contested' ? 0.7 : 1 }}>{a.title}</T>
+          <T size={loud ? 36 : 32} w={700} ls={loud ? -0.045 : -0.04} lh={loud ? 1.02 : 1.05} color={fg} style={{ opacity: a.status === 'contested' ? 0.7 : 1 }}>{a.title}</T>
           {!!a.text && <T size={16} lh={1.45} color={fg} style={{ opacity: 0.85 }} selectable>{a.text}</T>}
         </View>
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: line }}>

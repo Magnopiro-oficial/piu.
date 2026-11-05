@@ -1,7 +1,7 @@
 import * as Clipboard from 'expo-clipboard';
 import { router } from 'expo-router';
 import { useState } from 'react';
-import { Linking, TextInput, View } from 'react-native';
+import { Linking, Pressable, TextInput, View } from 'react-native';
 import type { Chat } from '../data/types';
 import { useT } from '../i18n';
 import { formatLunes, LUNES_EXPLORER } from '../lib/lunesRpc';
@@ -104,7 +104,13 @@ export function ReceiveSheet({ onClose }: { onClose: () => void }) {
         <>
           <View style={{ alignItems: 'center', gap: 12 }}>
             <QrCode value={lunesAddress} size={208} label={t('wallet.receiveSheet.qr')} />
-            <T size={13} mono lh={1.45} align="center" selectable>{lunesAddress}</T>
+            <View style={{ alignSelf: 'stretch', flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.bg2 }}>
+              <T size={13} w={500} mono lh={1.45} selectable style={{ flex: 1, minWidth: 0, flexShrink: 1 }}>{lunesAddress}</T>
+              <Pressable accessibilityRole="button" accessibilityLabel={t('common.copy')} accessibilityValue={{ text: lunesAddress }} onPress={copy}
+                style={({ pressed }) => ({ width: 44, height: 44, flexShrink: 0, borderRadius: 12, alignItems: 'center', justifyContent: 'center', backgroundColor: pressed ? c.bg3 : 'transparent' })}>
+                <Icon name="content_copy" size={18} />
+              </Pressable>
+            </View>
           </View>
           {snap && (
             <T size={12.5} lh={1.4} color={c.ink2} align="center">{`${formatLunes(BigInt(snap.free))} LUNES · ${t('wallet.block')} ${blockLabel(snap.block)} · ${whenLabel(snap.at, Date.now())}`}</T>

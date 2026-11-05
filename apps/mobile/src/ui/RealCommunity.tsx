@@ -29,7 +29,7 @@ export function RealCommunity({ chat }: { chat: Chat }) {
   const admin = isAdmin(g, myIdIn(g.via));
   const kids = g.children ?? [];
   const activeAlerts = (alerts?.list(g.id) ?? []).filter(a => a.active).length;
-  const sections: [string, typeof kids][] = [[t('communityInfo.groups'), kids.filter(k => k.kind === 'group')], [t('communityInfo.channels'), kids.filter(k => k.kind === 'channel')]];
+  const sections: [string, typeof kids][] = [[t('communityInfo.channels'), kids.filter(k => k.kind === 'channel')], [t('communityInfo.groups'), kids.filter(k => k.kind === 'group')]];
   const open = (k: { id: string; name: string }) => {
     if (groupOps.isMember(k.id)) { router.push({ pathname: '/chat/[id]', params: { id: chatIdForGroup(k.id) } }); return; }
     try { groupOps.joinChild(g.id, k.id); showToast({ icon: 'schedule_send', title: t('communityInfo.requestSent'), body: t('communityInfo.requestSent.body', { name: k.name }) }); }
