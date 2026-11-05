@@ -48,6 +48,8 @@ win:
     - target: nsis
       arch: [x64]
   icon: assets/icon.png
+  # Sem espaço no nome: o Wine (build do Windows no Linux) falha com o caminho "Piu Provider-…".
+  artifactName: Piu-Provider-${version}-win-${arch}.${ext}
 nsis:
   oneClick: false
   perMachine: false
