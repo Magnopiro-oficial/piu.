@@ -84,6 +84,8 @@ jobs:
   build:
     name: ${{ inputs.app_name }} · ${{ matrix.label }}
     runs-on: ${{ matrix.os }}
+    # Só o build do Windows roda em contêiner (vazio = direto no runner).
+    container: ${{ matrix.container || '' }}
     timeout-minutes: 60
     strategy:
       fail-fast: false
@@ -101,8 +103,12 @@ jobs:
             os: ubuntu-latest
             platform: linux
             arch: x64
+          # Windows é gerado no Linux com Wine (imagem oficial do electron-builder): o nome do
+          # repositório termina em ponto ("piu.") e o Windows não cria pasta com ponto no fim, então
+          # o runner windows-latest nem consegue montar a área de trabalho (D:\a\piu.\piu.).
           - label: windows-x64
-            os: windows-latest
+            os: ubuntu-latest
+            container: electronuserland/builder:wine
             platform: win
             arch: x64
     env:
