@@ -176,6 +176,9 @@ jobs:
           ARCH: ${{ matrix.arch }}
         run: |
           set -euo pipefail
+          # Windows no contêiner com Wine: o HOME (/github/home) não pertence ao usuário do contêiner e
+          # o Wine se recusa a criar a configuração lá; usa um prefixo próprio.
+          if [[ "$PLATFORM" == win ]]; then export WINEPREFIX=/tmp/wineprefix; mkdir -p "$WINEPREFIX"; fi
           # Usa o script dist:<so> do app quando existir (ele já monta painel + processo principal);
           # senão, build genérico + electron-builder direto.
           if node -e "process.exit(require('./package.json').scripts?.['dist:'+process.env.PLATFORM] ? 0 : 1)"; then
