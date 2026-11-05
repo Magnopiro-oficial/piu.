@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { t } from '../i18n';
 import { AuthLost, detectNode, NodeApi, type Operator } from '../lib/api';
 
 type Mode =
@@ -38,7 +39,7 @@ export function NodeProvider({ children }: { children: ReactNode }) {
     lost,
     guard: async p => {
       try { return await p; } catch (e) {
-        if (e instanceof AuthLost) lost('Sua sessão terminou. Pareie de novo com o código do equipamento.');
+        if (e instanceof AuthLost) lost(t('session.ended'));
         throw e;
       }
     },

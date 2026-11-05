@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import type { LunesTransfer } from './lunes/signing.js';
 import type { CertJson } from './relay/operator-frames.js';
 
 export interface Operator { id: string; name: string; createdAt: number }
@@ -58,9 +59,14 @@ export interface LunesAddress { address: string; at: number }
 
 interface State { operators: Operator[]; sessions: Session[]; devices: Device[]; wallets: Record<string, Wallet>; settings: Record<string, Settings>; phones: Phone[]; pendingTx: PendingTx[]; claims: PayoutClaimRecord[];
   /** Vizinhos fixos do enlace LNNP adicionados pelo painel (`host:porta`), somados aos de `PIU_LNNP_PEERS`. */
-  relayPeers: string[]; lunes: Record<string, LunesAddress> }
+  relayPeers: string[]; lunes: Record<string, LunesAddress>;
+  /** Pedidos de transferência na Mainnet assinados no celular (src/lunes/signing.ts), com o estado de cada um. */
+  lunesTransfers: LunesTransfer[] }
 
-const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {} });
+const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {}, lunesTransfers: [] });
+
+/** Quantos pedidos de transferência na Mainnet ficam guardados por operador (os mais antigos já encerrados saem). */
+export const MAX_LUNES_TRANSFERS = 50;
 
 /** Dados de demonstração que as versões antigas gravavam para o primeiro operador (saldo e três equipamentos). */
 const LEGACY_DEMO_BALANCE = 1284.6;
@@ -215,6 +221,29 @@ export class Store {
     this.save();
     return this.lunesAddress(operatorId);
   }
+
+  /** Pedidos de transferência na Mainnet do operador (ou de todos, sem argumento), do mais recente ao mais antigo (empate: o inserido por último primeiro). */
+  lunesTransfers(operatorId?: string): LunesTransfer[] {
+    return this.s.lunesTransfers.filter(t => operatorId === undefined || t.operatorId === operatorId).reverse().sort((a, b) => b.createdAt - a.createdAt);
+  }
+  lunesTransfer(id: string): LunesTransfer | null { return this.s.lunesTransfers.find(t => t.id === id) ?? null; }
+  addLunesTransfer(t: LunesTransfer): LunesTransfer {
+    this.s.lunesTransfers.push(t);
+    // Poda: só os encerrados mais antigos do mesmo operador saem; o que está em andamento fica sempre.
+    const mine = this.lunesTransfers(t.operatorId);
+    const done = new Set(['finalized', 'failed', 'expired']);
+    for (const old of mine.slice(MAX_LUNES_TRANSFERS).filter(x => done.has(x.status))) this.s.lunesTransfers = this.s.lunesTransfers.filter(x => x.id !== old.id);
+    this.save();
+    return t;
+  }
+  updateLunesTransfer(id: string, patch: Partial<LunesTransfer>): LunesTransfer | null {
+    const t = this.lunesTransfer(id);
+    if (!t) return null;
+    Object.assign(t, patch);
+    this.save();
+    return t;
+  }
+  removeLunesTransfer(id: string) { this.s.lunesTransfers = this.s.lunesTransfers.filter(t => t.id !== id); this.save(); }
 
   wallet(operatorId: string): Wallet { return this.s.wallets[operatorId] ?? { balance: 0, txs: [] }; }
   transfer(operatorId: string, amount: number, now: number, to = 'personal'): WalletTx {

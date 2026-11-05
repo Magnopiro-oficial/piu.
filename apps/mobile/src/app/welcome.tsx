@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
+import { useT, type Key } from '../i18n';
 import { useLayout } from '../lib/responsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
@@ -8,15 +9,12 @@ import { Icon, type IconName } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
-const BENEFITS: [IconName, string][] = [
-  ['wifi_off', 'Funciona sem internet e sem servidores'],
-  ['lock', 'Cifrado de ponta a ponta, sempre'],
-  ['hub', 'Cada aparelho fortalece a rede'],
-];
+const BENEFITS: [IconName, Key][] = [['wifi_off', 'welcome.benefit.offline'], ['lock', 'welcome.benefit.e2e'], ['hub', 'welcome.benefit.mesh']];
 
 /** Boas-vindas (FUN-001): logotipo com órbitas girando (90 s), proposta e entrada. */
 export default function Welcome() {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const { width, height, short } = useLayout();
   // A órbita tem 300 px no design; encolhe para caber em telas estreitas ou baixas.
   const k = Math.max(0.55, Math.min(1, (width - 24) / 300, (height - 400) / 300));
@@ -47,18 +45,18 @@ export default function Welcome() {
         <T size={Math.round(112 * k)} w={750} ls={-0.07} style={{ lineHeight: Math.round(120 * k) }}>piu<T size={Math.round(112 * k)} w={750} color={c.ink3}>.</T></T>
       </View>
       <View style={{ gap: short ? 16 : 22, paddingBottom: 16 }}>
-        <T size={width < 360 ? 26 : 30} w={600} ls={-0.03} lh={1.08} accessibilityRole="header">Mensagens que voam de aparelho em aparelho.</T>
+        <T size={width < 360 ? 26 : 30} w={600} ls={-0.03} lh={1.08} accessibilityRole="header">{t('welcome.title')}</T>
         <View style={{ gap: 12 }}>
           {BENEFITS.map(([icon, text]) => (
             <View key={icon} style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name={icon} size={20} w={300} />
-              <T size={15} color={c.ink2}>{text}</T>
+              <T size={15} color={c.ink2}>{t(text)}</T>
             </View>
           ))}
         </View>
         <View style={{ gap: 10, marginTop: 6 }}>
-          <Button label="Criar identidade" onPress={() => router.push('/identity')} />
-          <Button label="Restaurar de outro aparelho" variant="ghost" height={46} onPress={() => router.push('/restore')} />
+          <Button label={t('welcome.create')} onPress={() => router.push('/identity')} />
+          <Button label={t('welcome.restore')} variant="ghost" height={46} onPress={() => router.push('/restore')} />
         </View>
       </View>
     </Screen>

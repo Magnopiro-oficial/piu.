@@ -1,7 +1,7 @@
 import { router, type Href } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { PROFILE_NOTES } from '../../data/settings';
+import { LANGS, resolveLang, useT } from '../../i18n';
 import { useActiveDeviceCount } from '../../lib/devices';
 import { fmtBytes } from '../../lib/networkCore';
 import { useStorageUsage } from '../../lib/storageUsage';
@@ -28,7 +28,8 @@ import { T } from '../../ui/T';
 export default function Profile() {
   const { c } = useTheme();
   const { identity, setIdentity, profile } = useStore();
-  const { backupDone, backupAt } = useSettings();
+  const t = useT();
+  const { backupDone, backupAt, lang } = useSettings();
   // Mesmos números das telas Aparelhos e Armazenamento (registro real e medição real).
   const devices = useActiveDeviceCount();
   const [storage] = useStorageUsage();
@@ -43,31 +44,34 @@ export default function Profile() {
   // Identidade pública sem nome (quem começou pela anônima): mostra o código da chave, sem inventar nome.
   const pubName = profile.name.trim();
   const p = pub
-    ? { name: pubName || 'Sem nome público', initials: pubName ? initialsOf(pubName) : fp[0].slice(0, 2), handle: pubName ? handleOf(pubName) : short, radius: 'circle', note: PROFILE_NOTES.public, fp }
-    : { name: `Anônimo · ${fp[0]}`, initials: fp[0].slice(0, 2), handle: short, radius: 'square', note: PROFILE_NOTES.anon, fp };
+    ? { name: pubName || t('profile.noPublicName'), initials: pubName ? initialsOf(pubName) : fp[0].slice(0, 2), handle: pubName ? handleOf(pubName) : short, radius: 'circle', note: t('profile.note.public'), fp }
+    : { name: t('profile.anonName', { code: fp[0] }), initials: fp[0].slice(0, 2), handle: short, radius: 'square', note: t('profile.note.anon'), fp };
+  const langName = LANGS.find(l => l.code === resolveLang(lang))?.native ?? '';
 
   const rows: [IconName, string, string, () => void, boolean?][] = [
-    ['shield_lock', 'Privacidade', '', () => router.push('/settings/privacy')],
-    ['notifications', 'Notificações', '', () => router.push('/notifications')],
-    ['database', 'Armazenamento', storage ? fmtBytes(storage.total) : fmtBytes(persistedBytes()), () => router.push('/settings/storage')],
-    ['battery_saver', 'Bateria e limites', '', () => router.push('/settings/battery')],
-    ['devices', 'Aparelhos', String(devices), () => router.push('/devices')],
-    ['router', 'Painel do provider', '', () => router.push('/provider')],
-    ['key', 'Backup cifrado das chaves', backupLabel(backupAt, backupDone), () => router.push('/backup')],
-    ['person_add', 'Convidar para o Piu', '', () => router.push('/invite'), true],
-    ['restart_alt', 'Ver boas-vindas', '', () => router.push('/welcome' as Href)],
-    ['delete', 'Apagar dados locais', '', () => setDel(true), true],
+    ['shield_lock', t('profile.row.privacy'), '', () => router.push('/settings/privacy')],
+    ['notifications', t('profile.row.notifications'), '', () => router.push('/notifications')],
+    ['translate', t('profile.row.language'), langName, () => router.push('/language' as Href)],
+    ['database', t('profile.row.storage'), storage ? fmtBytes(storage.total) : fmtBytes(persistedBytes()), () => router.push('/settings/storage')],
+    ['battery_saver', t('profile.row.battery'), '', () => router.push('/settings/battery')],
+    ['devices', t('profile.row.devices'), String(devices), () => router.push('/devices')],
+    ['computer', t('profile.row.desktop'), '', () => router.push('/link-desktop' as Href)],
+    ['router', t('profile.row.provider'), '', () => router.push('/provider')],
+    ['key', t('profile.row.backup'), backupLabel(backupAt, backupDone), () => router.push('/backup')],
+    ['person_add', t('profile.row.invite'), '', () => router.push('/invite'), true],
+    ['restart_alt', t('profile.row.welcome'), '', () => router.push('/welcome' as Href)],
+    ['delete', t('profile.row.wipe'), '', () => setDel(true), true],
   ];
 
   return (
     <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20 }}>
-          <View accessibilityRole="radiogroup" accessibilityLabel="Identidade" style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: 14, backgroundColor: c.bg2 }}>
-            {([['public', 'Pública', 'public'], ['anon', 'Anônima', 'visibility_off']] as const).map(([k, l, ic]) => {
+          <View accessibilityRole="radiogroup" accessibilityLabel={t('profile.identity')} style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: 14, backgroundColor: c.bg2 }}>
+            {([['public', t('profile.identity.public'), 'public'], ['anon', t('profile.identity.anon'), 'visibility_off']] as const).map(([k, l, ic]) => {
               const on = identity === k;
               return (
-                <Pressable key={k} onPress={() => setIdentity(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} accessibilityLabel={`Identidade ${l.toLowerCase()}`}
+                <Pressable key={k} onPress={() => setIdentity(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on} accessibilityLabel={t('profile.identity.a11y', { name: l.toLowerCase() })}
                   style={{ flex: 1, height: 36, borderRadius: 11, backgroundColor: on ? c.bg : 'transparent', flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6,
                     shadowColor: '#000', shadowOpacity: on ? 0.12 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
                   <Icon name={ic} size={17} />
@@ -88,11 +92,11 @@ export default function Profile() {
         </View>
 
         <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', gap: 16, alignItems: 'center' }}>
-          <Pressable onPress={() => router.push('/my-code')} accessibilityRole="button" accessibilityLabel="Abrir meu código em tela cheia">
-            {card ? <QrCode value={card} size={104} label="QR do meu contato" /> : <View style={{ width: 104, height: 104, borderRadius: 14, backgroundColor: c.bg }} />}
+          <Pressable onPress={() => router.push('/my-code')} accessibilityRole="button" accessibilityLabel={t('profile.openMyCode')}>
+            {card ? <QrCode value={card} size={104} label={t('profile.qrLabel')} /> : <View style={{ width: 104, height: 104, borderRadius: 14, backgroundColor: c.bg }} />}
           </Pressable>
-          <View accessible accessibilityLabel={'Impressão digital: ' + p.fp.join(' ')} style={{ flex: 1, gap: 8 }}>
-            <T size={12.5} color={c.ink2}>Impressão digital</T>
+          <View accessible accessibilityLabel={t('profile.fingerprint.a11y', { fp: p.fp.join(' ') })} style={{ flex: 1, gap: 8 }}>
+            <T size={12.5} color={c.ink2}>{t('profile.fingerprint')}</T>
             <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 4 }}>
               {p.fp.map((f, i) => <T key={i} size={14} w={500} mono style={{ width: '50%' }}>{f}</T>)}
             </View>
@@ -104,12 +108,12 @@ export default function Profile() {
             {rows.map(([icon, name, value, go, strong]) => <ActionRow key={name} icon={icon} name={name} value={value} onPress={go} strong={strong} />)}
           </SetGroup>
         </View>
-        <T size={11.5} mono color={c.ink2} align="center" style={{ marginTop: 16, marginHorizontal: 24 }}>Piu 0.1 · LNNP v1 · sem servidor central</T>
+        <T size={11.5} mono color={c.ink2} align="center" style={{ marginTop: 16, marginHorizontal: 24 }}>{t('profile.footer')}</T>
       </ScrollView>
 
       {del && (
-        <Dialog icon="delete_forever" title="Apagar dados locais?" hold primary="Segure para apagar" primaryIcon="touch_app"
-          body="Chaves, conversas e carteira serão apagadas deste aparelho. Sem backup não há como recuperar, nem os seus LUNES."
+        <Dialog icon="delete_forever" title={t('profile.wipe.title')} hold primary={t('profile.wipe.hold')} primaryIcon="touch_app"
+          body={t('profile.wipe.body')}
           onClose={() => setDel(false)}
           onPrimary={() => { setDel(false); reset(); router.replace('/welcome' as Href); }} />
       )}

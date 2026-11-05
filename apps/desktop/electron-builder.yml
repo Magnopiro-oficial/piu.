@@ -1,0 +1,55 @@
+# Piu Desktop: o mensageiro Piu para computador.
+appId: net.piu.desktop
+productName: Piu
+copyright: Lunes Network · AGPL-3.0-only
+directories:
+  output: release
+  buildResources: assets
+files:
+  - dist/main.cjs
+  - dist/preload.cjs
+  - dist/renderer/**
+  - package.json
+extraResources:
+  - from: assets
+    to: assets
+    filter: ["icon.png"]
+# SO e arquitetura no nome evitam colisões entre os jobs do release.
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+asar: true
+electronFuses:
+  runAsNode: false
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  enableEmbeddedAsarIntegrityValidation: true
+  onlyLoadAppFromAsar: true
+mac:
+  target:
+    - target: dmg
+    - target: zip
+  category: public.app-category.social-networking
+  icon: assets/icon.png
+  # Sem assinatura nem notarização por enquanto (testes locais).
+  identity: null
+  hardenedRuntime: true
+  extendInfo:
+    NSUserNotificationAlertStyle: alert
+dmg:
+  title: Piu
+linux:
+  target: [AppImage, deb]
+  category: Network
+  icon: assets/icon.png
+  maintainer: Lunes Network
+  synopsis: Mensageiro Piu para computador
+  description: Converse pela malha Piu a partir do computador. Entra na rede local como nó LNNP; funciona sem internet.
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.png
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

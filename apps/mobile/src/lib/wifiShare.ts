@@ -3,6 +3,7 @@
  * serve o instalador numa página local por 10 minutos. O outro celular entra na rede pelo QR e baixa
  * pela página. TypeScript puro, testado no Node; a rede e o servidor são do módulo `piu-app-share`.
  */
+import { fmtNumber, tIn, type Key, type Lang, type Vars } from '../i18n/core';
 
 /** A rede fica aberta por 10 min (design: "Rede Piu-7F3A aberta por 10 min"). */
 export const SHARE_WINDOW_MS = 10 * 60 * 1000;
@@ -29,13 +30,14 @@ export function shareTimeLeft(startedAt: number, now: number): string {
 const html = (s: string) => s.replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 
 /** Página servida pelo celular de quem convida: um botão para o arquivo, sem script nem recurso de fora. */
-export function downloadPageHtml(fileName: string, size: number): string {
+export function downloadPageHtml(fileName: string, size: number, lang: Lang = 'pt-BR'): string {
+  const t = (k: Key, vars?: Vars) => html(tIn(lang, k, vars));
   const f = html(fileName);
-  const mb = (size / 1024 / 1024).toFixed(1).replace('.', ',');
-  return `<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Baixar o Piu</title>
+  const mb = fmtNumber(Math.round((size / 1024 / 1024) * 10) / 10, { minimumFractionDigits: 1, maximumFractionDigits: 1 }, lang, 'auto');
+  return `<!doctype html><html lang="${lang}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${t('wifiPage.title')}</title>
 <style>body{font-family:system-ui,sans-serif;margin:0;padding:32px 20px;background:#111;color:#f4f4f4;line-height:1.45}h1{font-size:30px;margin:0 0 8px}p{color:#bbb}a{display:block;margin:24px 0;padding:16px;border-radius:28px;background:#f4f4f4;color:#111;text-align:center;font-weight:600;font-size:17px;text-decoration:none}</style></head>
-<body><h1>piu.</h1><p>Instalador enviado de um celular por perto, sem internet.</p>
-<a href="/${f}" download="${f}">Baixar o Piu (${mb} MB)</a>
-<p>Depois de baixar, abra o arquivo. O Android vai pedir para permitir a instalação deste app: toque em Configurações e permita. Em seguida, volte e instale.</p>
-<p>Ao abrir o Piu, escaneie o código de convite no celular de quem enviou.</p></body></html>`;
+<body><h1>piu.</h1><p>${t('wifiPage.intro')}</p>
+<a href="/${f}" download="${f}">${t('wifiPage.download', { mb })}</a>
+<p>${t('wifiPage.install')}</p>
+<p>${t('wifiPage.then')}</p></body></html>`;
 }

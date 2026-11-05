@@ -1,3 +1,4 @@
+import { t } from '../i18n';
 import type { PageId } from '../types';
 
 /**
@@ -23,21 +24,15 @@ export interface SetupStep {
 
 const has = (n: number | null) => (n === null ? null : n > 0);
 
-/** Na ordem de importância: o que não dá para refazer depois (backup) vem antes. */
+/** Na ordem de importância: o que não dá para refazer depois (backup) vem antes. Textos no idioma atual. */
 export function setupSteps(s: SetupSignals): SetupStep[] {
   return [
-    { id: 'pair', icon: 'devices', title: 'Entrar no painel', cta: '', done: true, go: { page: 'overview' },
-      why: 'Você já fez: este navegador está ligado ao seu nó com o código de 8 dígitos.' },
-    { id: 'backup', icon: 'key', title: 'Guardar uma cópia da sua chave', cta: 'Fazer o backup', done: s.keyBackedUp, go: { page: 'settings', anchor: 'cfg-key' },
-      why: 'A chave prova que os equipamentos e os ganhos são seus. Se este computador quebrar sem a cópia, você perde o controle deles. Guarde o arquivo fora daqui (pendrive ou nuvem).' },
-    { id: 'payout', icon: 'account_balance_wallet', title: 'Dizer onde receber os ganhos', cta: 'Informar a carteira', done: s.payoutAddress, go: { page: 'wallet' },
-      why: 'Os ganhos são pagos em LUNES numa carteira sua. Em Carteira, toque em Receber e cole o endereço dela.' },
-    { id: 'phone', icon: 'smartphone', title: 'Ligar o seu celular', cta: 'Parear o celular', done: s.phoneConfirmed, go: { page: 'settings', anchor: 'cfg-phones' },
-      why: 'Com o app Piu no celular, você aprova transferências com um toque, em vez de pegar um código novo no equipamento.' },
-    { id: 'neighbor', icon: 'hub', title: 'Encontrar o primeiro vizinho', cta: 'Ver a malha', done: has(s.neighbors), go: { page: 'mesh' },
-      why: 'O nó só passa mensagens adiante quando outro aparelho com o Piu está na mesma rede. Assim que um aparecer, este passo se marca sozinho.' },
-    { id: 'device', icon: 'router', title: 'Colocar mais um equipamento', cta: 'Adicionar equipamento', done: s.otherDevices > 0, optional: true, go: { wizard: true },
-      why: 'Opcional. Um roteador, um Raspberry Pi ou um rádio leva o sinal mais longe e aumenta o que você recebe.' },
+    { id: 'pair', icon: 'devices', title: t('step.pair.title'), cta: '', done: true, go: { page: 'overview' }, why: t('step.pair.why') },
+    { id: 'backup', icon: 'key', title: t('step.backup.title'), cta: t('step.backup.cta'), done: s.keyBackedUp, go: { page: 'settings', anchor: 'cfg-key' }, why: t('step.backup.why') },
+    { id: 'payout', icon: 'account_balance_wallet', title: t('step.payout.title'), cta: t('step.payout.cta'), done: s.payoutAddress, go: { page: 'wallet' }, why: t('step.payout.why') },
+    { id: 'phone', icon: 'smartphone', title: t('step.phone.title'), cta: t('step.phone.cta'), done: s.phoneConfirmed, go: { page: 'settings', anchor: 'cfg-phones' }, why: t('step.phone.why') },
+    { id: 'neighbor', icon: 'hub', title: t('step.neighbor.title'), cta: t('step.neighbor.cta'), done: has(s.neighbors), go: { page: 'mesh' }, why: t('step.neighbor.why') },
+    { id: 'device', icon: 'router', title: t('step.device.title'), cta: t('step.device.cta'), done: s.otherDevices > 0, optional: true, go: { wizard: true }, why: t('step.device.why') },
   ];
 }
 

@@ -6,11 +6,16 @@
  * - Modo nó: pacotes retransmitidos hoje, taxa de entrega dos últimos 7 dias e espaço de terceiros.
  */
 import type { IconName } from '../ui/Icon';
+import { fmtNumber, t as tGlobal, type Key, type Vars } from '../i18n/core';
+/** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
+type Tr = (key: Key, vars?: Vars) => string;
 
 export type TxKey = 'ble' | 'direct' | 'mesh' | 'lora' | 'eth';
 export type PeerVia = 'ble' | 'nearby' | 'sim';
 
 export const VIA_LABEL: Record<PeerVia, string> = { ble: 'Bluetooth LE', nearby: 'Wi-Fi Direct', sim: 'Simulado' };
+/** Meio do vizinho no idioma em uso (só "Simulado" se traduz). */
+export const viaLabel = (v: PeerVia, t: Tr = tGlobal) => (v === 'sim' ? t('via.sim') : VIA_LABEL[v]);
 export const VIA_ICON: Record<PeerVia, IconName> = { ble: 'bluetooth', nearby: 'wifi_tethering', sim: 'smartphone' };
 /** Transporte da aba Rede que corresponde ao meio do vizinho (o simulado não tem chave). */
 export const VIA_TX: Record<PeerVia, TxKey | null> = { ble: 'ble', nearby: 'direct', sim: null };
@@ -30,23 +35,24 @@ export function fmtBytes(b: number): string {
   if (b === 0) return '0 MB';
   if (b < 1024) return `${b} B`;
   if (b < 1024 * 1024) return `${Math.round(b / 1024)} KB`;
-  if (b < 1024 ** 3) return `${(Math.round((b / 1048576) * 10) / 10).toLocaleString('pt-BR')} MB`;
-  return `${(Math.round((b / 1024 ** 3) * 10) / 10).toLocaleString('pt-BR')} GB`;
+  if (b < 1024 ** 3) return `${fmtNumber(Math.round((b / 1048576) * 10) / 10)} MB`;
+  return `${fmtNumber(Math.round((b / 1024 ** 3) * 10) / 10)} GB`;
 }
 
 export interface NodeMetrics { relayedToday: number; sent: number; delivered: number; thirdPartyBytes: number }
 
 /** Os três números do cartão Modo nó. Sem métricas (antes das chaves), traços. */
-export function relayCard(m: NodeMetrics | null, relay: boolean): [string, string][] {
-  if (!m) return [['—', 'pacotes hoje'], ['—', 'entregues'], ['0 MB', 'em uso']];
-  const rate = m.sent ? `${(Math.round((m.delivered / m.sent) * 1000) / 10).toLocaleString('pt-BR')}%` : '—';
-  return [[relay ? m.relayedToday.toLocaleString('pt-BR') : '—', 'pacotes hoje'], [rate, 'entregues'], [fmtBytes(m.thirdPartyBytes), 'em uso']];
+export function relayCard(m: NodeMetrics | null, relay: boolean, t: Tr = tGlobal): [string, string][] {
+  const L = [t('relayCard.packetsToday'), t('relayCard.delivered'), t('relayCard.inUse')];
+  if (!m) return [['—', L[0]!], ['—', L[1]!], ['0 MB', L[2]!]];
+  const rate = m.sent ? `${fmtNumber(Math.round((m.delivered / m.sent) * 1000) / 10)}%` : '—';
+  return [[relay ? fmtNumber(m.relayedToday) : '—', L[0]!], [rate, L[1]!], [fmtBytes(m.thirdPartyBytes), L[2]!]];
 }
 
 /** Linha de status do topo da aba Rede. */
-export function meshStatus(state: 'off' | 'starting' | 'running' | 'unavailable', connected: number): string {
-  if (state === 'running') return connected ? `Sem internet · malha local ativa · ${connected} ${connected === 1 ? 'vizinho' : 'vizinhos'}` : 'Sem internet · procurando vizinhos';
-  if (state === 'starting') return 'Ligando a malha local…';
-  if (state === 'unavailable') return 'Malha local indisponível neste aparelho';
-  return 'Malha local desligada';
+export function meshStatus(state: 'off' | 'starting' | 'running' | 'unavailable', connected: number, t: Tr = tGlobal): string {
+  if (state === 'running') return connected ? t('mesh.active', { count: connected }) : t('mesh.searching');
+  if (state === 'starting') return t('mesh.starting');
+  if (state === 'unavailable') return t('mesh.unavailable');
+  return t('mesh.off');
 }

@@ -1,4 +1,5 @@
 import { createPortal } from 'react-dom';
+import { useT } from '../i18n/react';
 import { useStore } from '../state/store';
 import { Icon, useEscape } from './ui';
 
@@ -23,6 +24,7 @@ export interface DialogProps {
 
 /** Diálogo de confirmação 420px (assinatura no celular, revogação). */
 export function Dialog({ icon, title, body, code, waiting, primaryLabel, onPrimary, onClose }: DialogProps) {
+  const t = useT();
   useEscape(true, onClose);
   return createPortal(
     <>
@@ -40,7 +42,7 @@ export function Dialog({ icon, title, body, code, waiting, primaryLabel, onPrima
           {code && <div className="mono" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '.08em', padding: '8px 0' }}>{code}</div>}
           <div className="col" style={{ gap: 8, width: '100%', marginTop: 6 }}>
             <button type="button" className="btn btn-primary" autoFocus onClick={onPrimary} style={{ height: 48, borderRadius: 24, fontSize: 15 }}>{primaryLabel}</button>
-            <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>Cancelar</button>
+            <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>{t('common.cancel')}</button>
           </div>
         </div>
       </div>

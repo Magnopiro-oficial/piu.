@@ -1,10 +1,15 @@
 import * as Clipboard from 'expo-clipboard';
+import { router } from 'expo-router';
 import { useState } from 'react';
 import { Linking, TextInput, View } from 'react-native';
+import type { Chat } from '../data/types';
+import { useT } from '../i18n';
 import { formatLunes, LUNES_EXPLORER } from '../lib/lunesRpc';
 import { blockLabel, whenLabel } from '../lib/walletCore';
+import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { useWallet } from '../state/wallet';
+import { ContactPickerSheet, PayRequestSheet } from './PaymentRequest';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
@@ -19,16 +24,17 @@ import { T } from './T';
  */
 export function SendSheet({ onClose }: { onClose: () => void }) {
   const { c } = useTheme();
+  const t = useT();
   const { lunesAddress, onchainSnap } = useWallet();
   const snap = onchainSnap && onchainSnap.address === lunesAddress ? onchainSnap : null;
   return (
-    <Sheet onClose={onClose} label="Enviar LUNES">
-      <T size={22} w={700} ls={-0.03} accessibilityRole="header">Enviar LUNES</T>
-      <Pending icon="key_off" title="Envio pela sua carteira Lunes" body="O Piu não guarda a chave da sua carteira Lunes, então não assina nem envia nada. Para enviar, use a carteira onde está a chave deste endereço." />
+    <Sheet onClose={onClose} label={t('wallet.sendSheet.title')}>
+      <T size={22} w={700} ls={-0.03} accessibilityRole="header">{t('wallet.sendSheet.title')}</T>
+      <Pending icon="key_off" title={t('wallet.sendSheet.pendingTitle')} body={t('wallet.sendSheet.pendingBody')} />
       <View style={{ borderRadius: 18, backgroundColor: c.bg2, paddingVertical: 14, paddingHorizontal: 16, gap: 10 }}>
         {[
-          ['Saldo na Mainnet', snap ? `${formatLunes(BigInt(snap.free))} LUNES` : lunesAddress ? 'ainda não lido' : 'sem endereço'],
-          ['Pagamento dos créditos', 'aguardando liquidação'],
+          [t('wallet.sendSheet.mainnetBalance'), snap ? `${formatLunes(BigInt(snap.free))} LUNES` : lunesAddress ? t('wallet.sendSheet.notRead') : t('wallet.sendSheet.noAddress')],
+          [t('wallet.sendSheet.creditsPayment'), t('wallet.awaitingSettlement')],
         ].map(([l, v]) => (
           <View key={l} style={{ flexDirection: 'row', gap: 16 }}>
             <T size={13} color={c.ink2}>{l}</T>
@@ -46,64 +52,78 @@ export function SendSheet({ onClose }: { onClose: () => void }) {
  */
 export function ReceiveSheet({ onClose }: { onClose: () => void }) {
   const { c } = useTheme();
-  const { showToast } = useStore();
+  const t = useT();
+  const { showToast, chats } = useStore();
+  const { payments } = useMessaging();
   const { lunesAddress, setLunesAddress, onchainSnap, refreshOnchain } = useWallet();
   const [editing, setEditing] = useState(!lunesAddress);
   const [draft, setDraft] = useState(lunesAddress ?? '');
   const [err, setErr] = useState<string | null>(null);
+  // "Pedir a um contato" (regra 7.3): escolhe a conversa, monta o pedido e abre a conversa com o balão.
+  const [ask, setAsk] = useState<'pick' | Chat | null>(null);
   const snap = onchainSnap && onchainSnap.address === lunesAddress ? onchainSnap : null;
+  const sendAsk = (chat: Chat, input: { amount: string; desc: string }) => {
+    try {
+      payments.send(chat.id, input);
+      onClose();
+      router.push({ pathname: '/chat/[id]', params: { id: chat.id } });
+    } catch (e) { showToast({ icon: 'error', title: t('wallet.ask.fail'), body: e instanceof Error ? e.message : t('common.tryAgain') }); }
+  };
 
   const save = () => {
     const e = setLunesAddress(draft);
     setErr(e);
     if (e) return;
     setEditing(false);
-    showToast({ icon: 'check_circle', title: 'Endereço salvo', body: 'O saldo é lido na Lunes Mainnet agora.' });
+    showToast({ icon: 'check_circle', title: t('wallet.addressSaved'), body: t('wallet.addressSaved.body') });
     // O estado do endereço muda no próximo render; a carteira lê de novo quando o endereço muda.
   };
   const copy = () => {
     if (!lunesAddress) return;
-    void Clipboard.setStringAsync(lunesAddress).then(() => showToast({ icon: 'content_copy', title: 'Endereço copiado', body: lunesAddress })).catch(() => {});
+    void Clipboard.setStringAsync(lunesAddress).then(() => showToast({ icon: 'content_copy', title: t('wallet.addressCopied'), body: lunesAddress })).catch(() => {});
   };
 
   return (
-    <Sheet onClose={onClose} label="Receber LUNES">
-      <T size={22} w={700} ls={-0.03} accessibilityRole="header">Receber LUNES</T>
+    <Sheet onClose={onClose} label={t('wallet.receiveSheet.title')}>
+      <T size={22} w={700} ls={-0.03} accessibilityRole="header">{t('wallet.receiveSheet.title')}</T>
       {editing || !lunesAddress ? (
         <>
-          <T size={13.5} lh={1.45} color={c.ink2}>Cole o endereço da sua carteira Lunes. O Piu não cria nem guarda chave Lunes: ele só lê o saldo desse endereço na Mainnet.</T>
+          <T size={13.5} lh={1.45} color={c.ink2}>{t('wallet.receiveSheet.paste')}</T>
           <View style={{ gap: 6 }}>
-            <TextInput value={draft} onChangeText={t => { setDraft(t.replace(/\s/g, '')); setErr(null); }} placeholder="Endereço Lunes (SS58)" placeholderTextColor={c.ink3}
-              accessibilityLabel="Endereço da sua carteira Lunes" autoCapitalize="none" autoCorrect={false} spellCheck={false} maxLength={60}
+            <TextInput value={draft} onChangeText={v => { setDraft(v.replace(/\s/g, '')); setErr(null); }} placeholder={t('wallet.receiveSheet.placeholder')} placeholderTextColor={c.ink3}
+              accessibilityLabel={t('wallet.receiveSheet.input.a11y')} autoCapitalize="none" autoCorrect={false} spellCheck={false} maxLength={60}
               style={{ minHeight: 52, paddingHorizontal: 16, paddingVertical: 12, borderRadius: 16, borderWidth: 1, borderColor: err ? c.ink : c.line2, color: c.ink, fontSize: 14, fontFamily: fontFamily(400, true) }} />
             {err && <T size={12.5} lh={1.4} color={c.ink} accessibilityLiveRegion="polite">{err}</T>}
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            {lunesAddress && <Button label="Cancelar" variant="outline" height={48} style={{ flex: 1 }} onPress={() => { setEditing(false); setDraft(lunesAddress); setErr(null); }} />}
-            <Button label="Salvar endereço" height={48} style={{ flex: 1 }} disabled={!draft} onPress={save} />
+            {lunesAddress && <Button label={t('common.cancel')} variant="outline" height={48} style={{ flex: 1 }} onPress={() => { setEditing(false); setDraft(lunesAddress); setErr(null); }} />}
+            <Button label={t('wallet.receiveSheet.save')} height={48} style={{ flex: 1 }} disabled={!draft} onPress={save} />
           </View>
         </>
       ) : (
         <>
           <View style={{ alignItems: 'center', gap: 12 }}>
-            <QrCode value={lunesAddress} size={208} label="QR do seu endereço Lunes" />
+            <QrCode value={lunesAddress} size={208} label={t('wallet.receiveSheet.qr')} />
             <T size={13} mono lh={1.45} align="center" selectable>{lunesAddress}</T>
           </View>
           {snap && (
-            <T size={12.5} lh={1.4} color={c.ink2} align="center">{`${formatLunes(BigInt(snap.free))} LUNES · bloco ${blockLabel(snap.block)} · ${whenLabel(snap.at, Date.now())}`}</T>
+            <T size={12.5} lh={1.4} color={c.ink2} align="center">{`${formatLunes(BigInt(snap.free))} LUNES · ${t('wallet.block')} ${blockLabel(snap.block)} · ${whenLabel(snap.at, Date.now())}`}</T>
           )}
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button label="Copiar" height={48} style={{ flex: 1 }} onPress={copy} left={<Icon name="content_copy" size={18} color={c.invink} />} />
-            <Button label="Explorador" variant="outline" height={48} style={{ flex: 1 }} onPress={() => { void Linking.openURL(LUNES_EXPLORER).catch(() => {}); }} left={<Icon name="public" size={18} />} />
+            <Button label={t('common.copy')} height={48} style={{ flex: 1 }} onPress={copy} left={<Icon name="content_copy" size={18} color={c.invink} />} />
+            <Button label={t('wallet.explorer')} variant="outline" height={48} style={{ flex: 1 }} onPress={() => { void Linking.openURL(LUNES_EXPLORER).catch(() => {}); }} left={<Icon name="public" size={18} />} />
           </View>
           <View style={{ flexDirection: 'row', gap: 8 }}>
-            <Button label="Trocar endereço" variant="ghost" height={44} fontSize={14} style={{ flex: 1 }} onPress={() => { setDraft(lunesAddress); setEditing(true); }} />
-            <Button label="Remover" variant="ghost" height={44} fontSize={14} style={{ flex: 1 }} onPress={() => { setLunesAddress(null); setDraft(''); setEditing(true); }} />
+            <Button label={t('wallet.receiveSheet.change')} variant="ghost" height={44} fontSize={14} style={{ flex: 1 }} onPress={() => { setDraft(lunesAddress); setEditing(true); }} />
+            <Button label={t('common.remove')} variant="ghost" height={44} fontSize={14} style={{ flex: 1 }} onPress={() => { setLunesAddress(null); setDraft(''); setEditing(true); }} />
           </View>
-          <Button label="Ler saldo agora" variant="soft" height={44} fontSize={14} onPress={() => { void refreshOnchain(); }} />
+          <Button label={t('wallet.receiveSheet.readNow')} variant="soft" height={44} fontSize={14} onPress={() => { void refreshOnchain(); }} />
+          <Button label={t('wallet.receiveSheet.askContact')} variant="outline" height={48} onPress={() => setAsk('pick')} left={<Icon name="account_balance_wallet" size={18} />} />
         </>
       )}
-      <T size={12.5} lh={1.4} color={c.ink2}>Este endereço não fica ligado às suas identidades de conversa e não é enviado a ninguém pela malha: só o nó da Lunes consultado vê qual saldo foi pedido.</T>
+      <T size={12.5} lh={1.4} color={c.ink2}>{t('wallet.receiveSheet.note')}</T>
+      {ask === 'pick' && <ContactPickerSheet chats={chats} onClose={() => setAsk(null)} onPick={ch => setAsk(ch)} />}
+      {ask && ask !== 'pick' && <PayRequestSheet address={lunesAddress} toName={ask.name} onClose={() => setAsk(null)} onSend={input => sendAsk(ask, input)} />}
     </Sheet>
   );
 }

@@ -8,6 +8,8 @@
  * mensagens curtas (o servidor confere de novo de qualquer jeito).
  */
 
+import { t } from '../i18n';
+
 const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
 export const LUNES_PREFIXES = [57, 42] as const;
 
@@ -88,17 +90,17 @@ const PRE = new TextEncoder().encode('SS58PRE');
 /** Motivo de o endereço não servir, ou `null` se é um endereço da Lunes válido (mesmas mensagens do nó). */
 export function lunesAddressProblem(address: string): string | null {
   const a = address.trim();
-  if (!a) return 'Informe o endereço.';
+  if (!a) return t('ss58.empty');
   const b = base58Decode(a);
-  if (!b) return 'O endereço tem caracteres que não existem no formato SS58 (0, O, I e l não são usados).';
-  if (b.length !== 35) return 'Endereço com tamanho errado. Confira se copiou inteiro.';
+  if (!b) return t('ss58.badChars');
+  if (b.length !== 35) return t('ss58.badLen');
   const prefix = b[0]!;
-  if (prefix > 63) return 'Formato de endereço não suportado.';
+  if (prefix > 63) return t('ss58.unsupported');
   const m = new Uint8Array(PRE.length + 33);
   m.set(PRE); m.set(b.subarray(0, 33), PRE.length);
   const sum = blake2b512(m);
-  if (sum[0] !== b[33] || sum[1] !== b[34]) return 'A soma de verificação do endereço não confere. Confira se copiou inteiro, sem trocar letras.';
-  if (!(LUNES_PREFIXES as readonly number[]).includes(prefix)) return `Este endereço é de outra rede (prefixo ${prefix}). Use um endereço da Lunes.`;
+  if (sum[0] !== b[33] || sum[1] !== b[34]) return t('ss58.badChecksum');
+  if (!(LUNES_PREFIXES as readonly number[]).includes(prefix)) return t('ss58.otherNet', { prefix });
   return null;
 }
 

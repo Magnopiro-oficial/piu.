@@ -4,7 +4,11 @@ import { Priority } from '../protocol/envelope';
 import type { IconName } from '../ui/Icon';
 import { msgSummary } from './chatCore';
 import { fmtBytes } from './networkCore';
-import { PRIORITY_LABEL, type RouteRec, routeIcon, routeLabel } from './routeCore';
+import { priorityLabel, type RouteRec, routeIcon, routeLabel } from './routeCore';
+import { t as tGlobal, type Key, type Vars } from '../i18n/core';
+/** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
+type Tr = (key: Key, vars?: Vars) => string;
+
 
 export interface RouteView {
   text: string;
@@ -16,7 +20,7 @@ export interface RouteView {
 const ORDER = ['criada', 'aguardando', 'encaminhada', 'entregue'];
 
 /** Validade da mensagem na fila (messenger.ts, MESSAGE_TTL_SEC): 48 h. */
-const TTL_H = MESSAGE_TTL_SEC / 3600;
+
 
 /**
  * Rota de uma mensagem: pontas, meio real do enlace com o vizinho, etapa atual e metadados reais do
@@ -25,35 +29,39 @@ const TTL_H = MESSAGE_TTL_SEC / 3600;
  * as pontas. Sem registro (ainda na fila, ou rota não guardada), envelope e blocos ficam em “—”.
  * `prio`: prioridade com que a conversa envia (canal de alerta), para mensagem ainda sem registro.
  */
-export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority = Priority.Normal): RouteView {
-  const dest = chat.kind === 'direct' ? chat.name : `${chat.name} · membros`;
+export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority = Priority.Normal, t: Tr = tGlobal): RouteView {
+  const dest = chat.kind === 'direct' ? chat.name : t('route.members', { name: chat.name });
   const mine = msg.from === 'me';
   // Lida também é entregue (a rota é a mesma).
   const st = mine ? (msg.status === 'lida' ? 'entregue' : msg.status ?? 'entregue') : 'entregue';
   const bad = st === 'expirada' || st === 'falha';
   const si = bad ? 3 : ORDER.indexOf(st);
   const waiting = mine && !rec && (st === 'criada' || st === 'aguardando');
-  const via = rec ? routeLabel(rec) : waiting ? 'aguardando rota' : '—';
+  const via = rec ? routeLabel(rec, t) : waiting ? t('route.waitingRoute') : '—';
   const icon: IconName = rec ? routeIcon(rec) : 'schedule';
   const nodes = mine
-    ? [{ n: 'Você', k: 'Este aparelho' }, { n: dest, k: 'Destino' }]
+    ? [{ n: t('common.you'), k: t('route.thisDevice') }, { n: dest, k: t('route.destination') }]
     // Mensagem recebida: a rota vem do outro lado até você.
-    : [{ n: msg.sender ?? chat.name, k: chat.kind === 'group' ? 'Membro do grupo' : 'Origem' }, { n: 'Você', k: 'Destino' }];
+    : [{ n: msg.sender ?? chat.name, k: chat.kind === 'group' ? t('route.groupMember') : t('route.origin') }, { n: t('common.you'), k: t('route.destination') }];
   // Enviada: o destino só conta como alcançado com a confirmação de entrega.
   const reached = !mine || (!bad && si === 3) ? 2 : 1;
 
-  const labels = ['Criada', 'Aguardando rota', 'Encaminhada', bad ? (st === 'expirada' ? 'Expirou' : 'Falhou') : 'Entregue'];
-  const left = msg.at ? Math.max(0, Math.ceil(TTL_H - (Date.now() - msg.at) / 3_600_000)) : TTL_H;
-  const ttl = bad ? (st === 'expirada' ? `${TTL_H} h esgotadas` : 'não saiu') : st === 'entregue' ? 'removida' : `${left} h`;
+  const labels = [t('route.step.created'), t('route.step.waiting'), t('route.step.forwarded'), bad ? (st === 'expirada' ? t('route.step.expired') : t('route.step.failed')) : t('route.step.delivered')];
+  // Mensagens temporárias têm prazo menor que o limite da fila (48 h).
+  const created = msg.at ?? Date.now();
+  const deadline = Math.min(created + MESSAGE_TTL_SEC * 1000, msg.expiresAt ?? Infinity);
+  const durationH = Math.max(0, Math.ceil((deadline - created) / 3_600_000));
+  const left = Math.max(0, Math.ceil((deadline - Date.now()) / 3_600_000));
+  const ttl = bad ? (st === 'expirada' ? t('route.ttl.exhausted', { h: durationH }) : t('route.ttl.notSent')) : st === 'entregue' ? t('route.ttl.removed') : `${left} h`;
   return {
-    text: msgSummary(msg),
+    text: msgSummary(msg, t),
     steps: labels.map((label, i) => ({ label, done: i <= si, current: i === si })),
     hops: nodes.map((x, i) => ({ n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1, via: i === 0 ? via : '', viaIcon: icon, solid: i + 1 < reached })),
     meta: [
-      { l: 'Envelope', v: rec ? fmtBytes(rec.b) : '—' },
-      { l: 'Fragmentos', v: rec ? `${rec.f} de ${rec.f}` : '—' },
-      { l: st === 'entregue' ? 'Cópias em trânsito' : 'Expira em', v: ttl },
-      { l: 'Prioridade', v: PRIORITY_LABEL[rec?.p ?? prio] },
+      { l: t('route.envelope'), v: rec ? fmtBytes(rec.b) : '—' },
+      { l: t('route.fragments'), v: rec ? t('route.fragments.of', { n: rec.f, total: rec.f }) : '—' },
+      { l: st === 'entregue' ? t('route.copiesInTransit') : t('route.expiresIn'), v: ttl },
+      { l: t('newChannel.priority.label'), v: priorityLabel(rec?.p ?? prio, t) },
     ],
   };
 }

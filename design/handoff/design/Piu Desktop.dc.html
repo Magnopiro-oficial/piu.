@@ -1,0 +1,1127 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0}input{font-family:inherit}input::placeholder{color:var(--ink3)}a{color:inherit}a:hover{opacity:.7}
+[data-piu-theme="light"]{--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--scrim:rgba(0,0,0,.28);--bub:#ffffff;--dot:rgba(0,0,0,.07);--note:rgba(250,250,248,.97)}
+[data-piu-theme="dark"]{--bg:#0a0a0a;--bg2:#161616;--bg3:#262626;--side:#0e0e0e;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--scrim:rgba(0,0,0,.62);--bub:#161616;--dot:rgba(255,255,255,.06);--note:rgba(38,38,38,.97)}
+@keyframes piuUp{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuFade{from{opacity:0}to{opacity:1}}
+@keyframes piuOut{to{opacity:0;transform:scale(1.04)}}
+@keyframes piuReveal{from{transform:scale(.97);opacity:0;filter:blur(6px)}to{transform:none;opacity:1;filter:none}}
+@keyframes piuPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
+@keyframes piuDialog{from{opacity:0;transform:scale(.92) translateY(10px)}to{opacity:1;transform:none}}
+@keyframes piuPgA{from{transform:translateY(14px);opacity:0;filter:blur(3px)}to{transform:none;opacity:1;filter:none}}
+@keyframes piuPgB{from{transform:translateY(14px);opacity:0;filter:blur(3px)}to{transform:none;opacity:1;filter:none}}
+@keyframes piuSide{from{transform:translateX(40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuRail{from{transform:translateX(-40px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuMsgIn{from{opacity:0;transform:translateY(14px) scale(.85)}to{opacity:1;transform:none}}
+@keyframes piuDot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-4px);opacity:1}}
+@keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes piuRingS{from{transform:scale(1);opacity:.55}to{transform:scale(2.4);opacity:0}}
+@keyframes piuRingL{from{transform:scale(.6);opacity:.5}to{transform:scale(3.2);opacity:0}}
+@keyframes piuSpin{to{transform:rotate(360deg)}}
+@keyframes piuSpinR{to{transform:rotate(-360deg)}}
+@keyframes piuQr{from{transform:scale(0);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuScan{0%{top:0%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+@keyframes piuTravelY{from{top:-3px}to{top:calc(100% - 3px)}}
+@keyframes piuLetter{from{transform:translateY(60%) rotate(8deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuNoteMac{from{transform:translateX(120%)}to{transform:none}}
+@keyframes piuNoteLin{from{transform:translateY(-160%)}to{transform:none}}
+@keyframes piuNoteOut{to{transform:translateX(40px);opacity:0}}
+@keyframes piuToast{from{transform:translateY(24px) scale(.95);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuGrowY{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes piuGrowX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes piuBurst{0%{transform:translate(0,0) scale(1);opacity:1}100%{transform:translate(var(--x),var(--y)) scale(0);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+<div data-piu-theme="{{ theme }}" dir="{{ dir }}" style="width:1280px;height:820px;position:relative;overflow:hidden;border-radius:12px;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2);transition:background-color .4s,color .4s;">
+
+  <sc-if value="{{ isMac }}" hint-placeholder-val="{{ true }}">
+    <div style="height:40px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;z-index:3;">
+      <div style="display:flex;gap:8px;"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840;"></div></div>
+      <div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;color:var(--ink2);white-space:nowrap;">{{ winTitle }}</div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isLinux }}" hint-placeholder-val="{{ false }}">
+    <div style="height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;z-index:3;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;"><img src="brand/icon-192.png" alt="" style="width:20px;height:20px;border-radius:5px;display:block;">Piu</div>
+      <div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13.5px;font-weight:650;white-space:nowrap;">{{ winTitle }}</div>
+      <div style="display:flex;gap:10px;">
+        <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">remove</span></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:13px;line-height:1;">crop_square</span></div>
+        <div style="width:24px;height:24px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">close</span></div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isSplash }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;position:relative;display:flex;align-items:center;justify-content:center;overflow:hidden;animation:{{ splashAnim }};">
+      <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingL 2.4s cubic-bezier(.2,.7,.3,1) infinite;"></div>
+      <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingL 2.4s .8s cubic-bezier(.2,.7,.3,1) infinite;"></div>
+      <div style="position:absolute;width:180px;height:180px;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingL 2.4s 1.6s cubic-bezier(.2,.7,.3,1) infinite;"></div>
+      <div style="position:absolute;width:440px;height:440px;animation:piuSpin 7s linear infinite;">
+        <div style="position:absolute;width:12px;height:12px;border-radius:50%;background:var(--ink);top:0;left:214px;animation:piuPop .5s .5s both;"></div>
+        <div style="position:absolute;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);bottom:40px;left:60px;animation:piuPop .5s .7s both;"></div>
+      </div>
+      <div style="position:absolute;width:300px;height:300px;animation:piuSpinR 5s linear infinite;">
+        <div style="position:absolute;width:9px;height:9px;border-radius:50%;background:var(--ink);top:40px;right:20px;animation:piuPop .5s .6s both;"></div>
+        <div style="position:absolute;width:7px;height:7px;border-radius:50%;background:var(--ink);bottom:6px;left:146px;animation:piuPop .5s .8s both;"></div>
+      </div>
+      <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:22px;">
+        <img src="brand/icon-512.png" alt="Piu" style="width:120px;height:120px;border-radius:30px;display:block;box-shadow:0 24px 60px -18px rgba(0,0,0,.45);animation:piuPop .8s .1s cubic-bezier(.2,.9,.3,1.4) both;">
+        <div style="display:flex;font-size:64px;font-weight:750;letter-spacing:-0.07em;line-height:1;overflow:hidden;padding-bottom:4px;">
+          <span style="display:inline-block;animation:piuLetter .55s .45s cubic-bezier(.2,.9,.3,1.2) both;">p</span>
+          <span style="display:inline-block;animation:piuLetter .55s .53s cubic-bezier(.2,.9,.3,1.2) both;">i</span>
+          <span style="display:inline-block;animation:piuLetter .55s .61s cubic-bezier(.2,.9,.3,1.2) both;">u</span>
+          <span style="display:inline-block;color:var(--ink3);animation:piuLetter .55s .69s cubic-bezier(.2,.9,.3,1.2) both;">.</span>
+        </div>
+      </div>
+      <div style="position:absolute;bottom:56px;display:flex;flex-direction:column;align-items:center;gap:12px;animation:piuFade .5s .9s both;">
+        <div style="display:flex;gap:6px;">
+          <div style="width:6px;height:6px;border-radius:3px;background:var(--ink);animation:piuDot 1s ease-in-out infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:3px;background:var(--ink);animation:piuDot 1s .15s ease-in-out infinite;"></div>
+          <div style="width:6px;height:6px;border-radius:3px;background:var(--ink);animation:piuDot 1s .3s ease-in-out infinite;"></div>
+        </div>
+        <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.04em;">iniciando o nó local</div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isAuth }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:1;min-height:0;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);animation:piuReveal .6s cubic-bezier(.2,.85,.3,1) both;">
+      <div style="padding:52px 64px 40px;display:flex;flex-direction:column;gap:28px;">
+        <div style="display:flex;align-items:center;gap:14px;">
+          <sc-if value="{{ auth.canBack }}" hint-placeholder-val="{{ false }}"><button onClick="{{ authBack }}" style="width:36px;height:36px;margin-left:-8px;border:none;border-radius:10px;background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;animation:piuPop .35s both;" style-hover="background:var(--bg2);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">arrow_back</span></button></sc-if>
+          <div style="font-size:34px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:12px;animation:{{ authAnim }};">
+          <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ auth.kicker }}</div>
+          <div style="font-size:46px;font-weight:700;letter-spacing:-0.045em;line-height:1.02;text-wrap:pretty;">{{ auth.title }}</div>
+          <div style="font-size:16px;color:var(--ink2);line-height:1.45;max-width:440px;text-wrap:pretty;">{{ auth.sub }}</div>
+        </div>
+        <sc-if value="{{ auth.showSteps }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;flex-direction:column;gap:14px;">
+            <sc-for list="{{ qrSteps }}" as="s" hint-placeholder-count="3">
+              <div style="display:flex;align-items:center;gap:14px;font-size:15px;animation:{{ s.anim }};">
+                <div style="width:30px;height:30px;border-radius:50%;border:1px solid var(--line2);display:flex;align-items:center;justify-content:center;font:600 13px 'Geist Mono',monospace;flex:none;">{{ s.n }}</div>
+                <div>{{ s.pre }} <b style="font-weight:650;">{{ s.b }}</b></div>
+              </div>
+            </sc-for>
+          </div>
+        </sc-if>
+        <div style="flex:1;"></div>
+        <div style="display:flex;align-items:center;gap:14px;">
+          <div onClick="{{ toggleKeep }}" style="width:42px;height:26px;border-radius:13px;background:{{ keepT.track }};position:relative;cursor:pointer;flex:none;transition:background .2s;"><div style="position:absolute;top:3px;left:{{ keepT.knob }};width:20px;height:20px;border-radius:10px;background:{{ keepT.knobBg }};box-shadow:0 1px 2px rgba(0,0,0,.15);transition:left .3s cubic-bezier(.2,.9,.3,1.4);"></div></div>
+          <div style="display:flex;flex-direction:column;gap:2px;">
+            <div style="font-size:14.5px;font-weight:600;">Manter conectado neste computador</div>
+            <div style="font-size:12.5px;color:var(--ink2);">Chaves guardadas no {{ keychain }}, cifradas.</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="position:relative;overflow:hidden;background:var(--side);border-left:1px solid var(--line);display:flex;align-items:center;justify-content:center;padding:40px;">
+        <div style="position:absolute;left:50%;top:50%;width:0;height:0;pointer-events:none;">
+          <div style="position:absolute;left:-320px;top:-320px;width:640px;height:640px;border-radius:50%;border:1px solid var(--line2);"></div>
+          <div style="position:absolute;left:-230px;top:-230px;width:460px;height:460px;border-radius:50%;border:1px solid var(--line2);"></div>
+          <div style="position:absolute;left:-320px;top:-320px;width:640px;height:640px;animation:piuSpin 60s linear infinite;"><div style="position:absolute;width:10px;height:10px;border-radius:50%;background:var(--ink);top:-5px;left:315px;"></div><div style="position:absolute;width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);bottom:90px;left:40px;"></div></div>
+          <div style="position:absolute;left:-230px;top:-230px;width:460px;height:460px;animation:piuSpinR 40s linear infinite;"><div style="position:absolute;width:8px;height:8px;border-radius:50%;background:var(--ink);top:60px;right:40px;"></div><div style="position:absolute;width:6px;height:6px;border-radius:50%;background:var(--ink);bottom:-3px;left:227px;"></div></div>
+        </div>
+
+        <sc-if value="{{ isStart }}" hint-placeholder-val="{{ true }}">
+          <div style="position:relative;width:430px;display:flex;flex-direction:column;gap:12px;">
+            <sc-for list="{{ startOpts }}" as="o" hint-placeholder-count="3">
+              <button onClick="{{ o.go }}" style="display:flex;align-items:center;gap:16px;padding:18px;border:none;border-radius:20px;background:{{ o.bg }};color:{{ o.fg }};cursor:pointer;text-align:left;box-shadow:0 0 0 1px var(--line2) inset;animation:{{ o.anim }};transition:transform .25s cubic-bezier(.2,.9,.3,1.4),box-shadow .25s;" style-hover="transform:translateY(-3px) scale(1.01);box-shadow:0 0 0 1px var(--line2) inset,0 18px 40px -20px rgba(0,0,0,.35);" style-active="transform:scale(0.98);">
+                <div style="width:48px;height:48px;border-radius:14px;background:{{ o.iconBg }};color:{{ o.iconFg }};display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:25px;line-height:1;font-variation-settings:'wght' 300;">{{ o.icon }}</span></div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;"><div style="font:650 16px Geist;">{{ o.title }}</div><div style="font:400 13px Geist;opacity:.72;line-height:1.35;">{{ o.desc }}</div></div>
+                <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;opacity:.6;">arrow_forward</span>
+              </button>
+            </sc-for>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isQr }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:20px;">
+            <div onClick="{{ scan }}" title="Simular leitura" style="padding:22px;border-radius:28px;background:#fff;box-shadow:0 0 0 1px var(--line2),0 30px 70px -24px rgba(0,0,0,.35);cursor:pointer;position:relative;animation:piuPop .6s cubic-bezier(.2,.9,.3,1.25) both;">
+              <div style="width:252px;height:252px;display:grid;grid-template-columns:repeat(29,minmax(0,1fr));">
+                <sc-for list="{{ qrCells }}" as="c" hint-placeholder-count="0"><div style="background:{{ c.bg }};border-radius:{{ c.r }};animation:{{ c.anim }};"></div></sc-for>
+              </div>
+              <div style="position:absolute;left:14px;right:14px;top:22px;bottom:22px;pointer-events:none;"><div style="position:absolute;left:0;right:0;height:3px;border-radius:2px;background:#0c0c0c;box-shadow:0 0 18px 4px rgba(12,12,12,.25);animation:piuScan 2.6s 1s ease-in-out infinite;"></div></div>
+              <div style="position:absolute;left:50%;top:50%;margin:-29px 0 0 -29px;width:58px;height:58px;border-radius:15px;background:#fff;padding:5px;animation:piuPop .5s .9s cubic-bezier(.2,.9,.3,1.5) both;"><img src="brand/icon-192.png" alt="" style="width:48px;height:48px;border-radius:11px;display:block;"></div>
+            </div>
+            <div style="width:296px;display:flex;flex-direction:column;gap:8px;animation:piuUp .5s .6s both;">
+              <div style="height:3px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ qrPct }};background:var(--ink);transition:width 1s linear;"></div></div>
+              <div style="display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:var(--ink2);"><span>novo código em {{ qrLeft }} s</span><span>Wi-Fi local · Bluetooth</span></div>
+            </div>
+            <button onClick="{{ scan }}" style="height:38px;padding:0 16px;border-radius:19px;border:1px dashed var(--line2);background:var(--side);color:var(--ink2);font:550 13px Geist;cursor:pointer;display:flex;align-items:center;gap:7px;animation:piuUp .5s .75s both;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">qr_code_scanner</span>Simular leitura pelo celular</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isConfirm }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;width:400px;display:flex;flex-direction:column;align-items:center;gap:24px;text-align:center;">
+            <div style="position:relative;width:96px;height:96px;">
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 2.2s ease-out infinite;"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 2.2s 1.1s ease-out infinite;"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;animation:piuPop .6s cubic-bezier(.2,.9,.3,1.4) both;"><span style="font-family:'Material Symbols Rounded';font-size:42px;line-height:1;font-variation-settings:'wght' 300;">smartphone</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px;animation:piuUp .5s .15s both;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.025em;">Pixel 7a · Cardeal quer conectar</div><div style="font-size:14px;color:var(--ink2);">Confira se o celular mostra o mesmo código</div></div>
+            <div style="display:flex;gap:10px;">
+              <sc-for list="{{ codeWords }}" as="w" hint-placeholder-count="3"><div style="height:54px;padding:0 20px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;font:600 19px 'Geist Mono',monospace;animation:{{ w.anim }};">{{ w.v }}</div></sc-for>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;width:100%;animation:piuUp .5s .55s both;">
+              <button onClick="{{ confirmPair }}" style="height:50px;border:none;border-radius:25px;background:var(--ink);color:var(--invink);font:600 15px Geist;cursor:pointer;" style-active="transform:scale(0.98);">Os códigos são iguais</button>
+              <button onClick="{{ goQr }}" style="height:44px;border:none;border-radius:22px;background:transparent;color:var(--ink);font:550 14px Geist;cursor:pointer;">Não são iguais · cancelar</button>
+            </div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isCreate }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;width:430px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;">
+              <sc-for list="{{ idOpts }}" as="o" hint-placeholder-count="2">
+                <button onClick="{{ o.pick }}" style="padding:16px;border:none;border-radius:18px;background:{{ o.bg }};color:{{ o.fg }};cursor:pointer;text-align:left;display:flex;flex-direction:column;gap:10px;box-shadow:0 0 0 1px var(--line2) inset;transition:background .3s,color .3s,transform .3s cubic-bezier(.2,.9,.3,1.4);transform:{{ o.scale }};animation:{{ o.anim }};">
+                  <span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'wght' 300;">{{ o.icon }}</span>
+                  <div style="display:flex;flex-direction:column;gap:3px;"><div style="font:650 15px Geist;">{{ o.title }}</div><div style="font:400 12.5px Geist;opacity:.72;line-height:1.35;">{{ o.desc }}</div></div>
+                </button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ createPub }}" hint-placeholder-val="{{ true }}">
+              <div style="display:flex;flex-direction:column;gap:8px;animation:piuUp .4s both;">
+                <div style="font-size:13px;font-weight:550;color:var(--ink2);">Nome de exibição</div>
+                <input value="{{ name }}" onChange="{{ onName }}" placeholder="Como querem te chamar" style="height:48px;border-radius:14px;border:none;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;padding:0 16px;font:550 16px Geist;color:var(--ink);outline:none;">
+              </div>
+            </sc-if>
+            <sc-if value="{{ createAnon }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:14px 16px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:4px;animation:piuUp .4s both;">
+                <div style="font-size:13px;color:var(--ink2);">Seu nome será derivado da chave</div>
+                <div style="font:600 16px 'Geist Mono',monospace;">Anônimo · 7F3A</div>
+              </div>
+            </sc-if>
+            <div style="display:flex;gap:10px;padding:12px 14px;border-radius:14px;border:1px dashed var(--line2);background:var(--side);font-size:12.5px;color:var(--ink2);line-height:1.45;animation:piuUp .5s .2s both;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink);">key</span>As chaves nascem neste computador e não saem dele. Depois você pode conectar o celular à mesma identidade.</div>
+            <button onClick="{{ createId }}" style="height:52px;border:none;border-radius:26px;background:var(--ink);color:var(--invink);font:600 15.5px Geist;cursor:pointer;opacity:{{ createOp }};transition:opacity .2s;animation:piuUp .5s .28s both;" style-active="transform:scale(0.98);">Gerar minhas chaves</button>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isWork }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;width:430px;display:flex;flex-direction:column;align-items:center;gap:22px;">
+            <div style="position:relative;width:110px;height:110px;display:flex;align-items:center;justify-content:center;">
+              <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--bg3);"></div>
+              <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(var(--ink) {{ workDeg }}, transparent 0);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));mask:radial-gradient(farthest-side,transparent calc(100% - 3px),#000 calc(100% - 2px));"></div>
+              <sc-if value="{{ workRunning }}" hint-placeholder-val="{{ true }}"><div style="font:600 26px 'Geist Mono',monospace;font-variant-numeric:tabular-nums;">{{ workPctLabel }}</div></sc-if>
+              <sc-if value="{{ workDone }}" hint-placeholder-val="{{ false }}">
+                <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--ink);animation:piuRingL 1.2s ease-out both;"></div>
+                <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--ink);animation:piuRingL 1.2s .2s ease-out both;"></div>
+                <sc-for list="{{ burst }}" as="b" hint-placeholder-count="0"><div style="position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:var(--ink);--x:{{ b.x }};--y:{{ b.y }};animation:piuBurst .9s {{ b.d }} cubic-bezier(.1,.8,.3,1) both;"></div></sc-for>
+                <div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;animation:piuPop .55s cubic-bezier(.2,.9,.3,1.5) both;"><span style="font-family:'Material Symbols Rounded';font-size:52px;line-height:1;font-variation-settings:'wght' 500;">check</span></div>
+              </sc-if>
+            </div>
+            <div style="width:100%;border-radius:20px;background:var(--bg);box-shadow:0 0 0 1px var(--line) inset;overflow:hidden;animation:piuUp .5s .1s both;">
+              <sc-for list="{{ workRows }}" as="r" hint-placeholder-count="4">
+                <div style="position:relative;display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid {{ r.border }};opacity:{{ r.op }};transition:opacity .3s;">
+                  <div style="width:32px;height:32px;border-radius:50%;background:{{ r.iconBg }};color:{{ r.iconFg }};display:flex;align-items:center;justify-content:center;flex:none;transition:background .3s,color .3s;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;display:inline-block;animation:{{ r.iconAnim }};">{{ r.icon }}</span></div>
+                  <div style="flex:1;font-size:14.5px;font-weight:550;">{{ r.label }}</div>
+                  <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">{{ r.state }}</div>
+                  <div style="position:absolute;left:0;bottom:0;height:2px;width:{{ r.pct }};background:var(--ink);opacity:.5;"></div>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">{{ workNote }}</div>
+          </div>
+        </sc-if>
+
+        <sc-if value="{{ isPhrase }}" hint-placeholder-val="{{ false }}">
+          <div style="position:relative;width:450px;display:flex;flex-direction:column;gap:18px;">
+            <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+              <sc-for list="{{ phraseSlots }}" as="w" hint-placeholder-count="12">
+                <div style="height:42px;border-radius:12px;background:var(--bg);box-shadow:{{ w.ring }};display:flex;align-items:center;gap:8px;padding:0 12px;animation:{{ w.anim }};transition:box-shadow .25s;">
+                  <span style="font:500 11px 'Geist Mono',monospace;color:var(--ink3);width:16px;">{{ w.n }}</span>
+                  <input value="{{ w.v }}" onChange="{{ w.set }}" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:14px;color:var(--ink);">
+                </div>
+              </sc-for>
+            </div>
+            <div style="display:flex;gap:8px;animation:piuUp .5s .5s both;">
+              <button onClick="{{ fillPhrase }}" style="height:50px;padding:0 18px;border:none;border-radius:25px;background:var(--bg3);color:var(--ink);font:600 14px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">content_paste</span>Colar</button>
+              <button onClick="{{ restore }}" style="flex:1;height:50px;border:none;border-radius:25px;background:var(--ink);color:var(--invink);font:600 15px Geist;cursor:pointer;opacity:{{ restoreOp }};transition:opacity .2s;" style-active="transform:scale(0.98);">Restaurar neste computador</button>
+            </div>
+          </div>
+        </sc-if>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isApp }}" hint-placeholder-val="{{ false }}">
+    <div style="flex:1;min-height:0;display:flex;">
+      <div style="width:68px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:14px 0 16px;gap:6px;animation:{{ railAnim }};">
+        <img src="brand/icon-192.png" alt="Piu" style="width:36px;height:36px;border-radius:10px;display:block;margin-bottom:12px;animation:piuPop .6s .1s cubic-bezier(.2,.9,.3,1.5) both;">
+        <sc-for list="{{ rail }}" as="r" hint-placeholder-count="2">
+          <button onClick="{{ r.go }}" title="{{ r.label }}" style="position:relative;width:44px;height:44px;border:none;border-radius:13px;background:{{ r.bg }};color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,transform .25s cubic-bezier(.2,.9,.3,1.5);" style-active="transform:scale(0.9);">
+            <span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' {{ r.fill }}, 'wght' 350;transition:font-variation-settings .2s;">{{ r.icon }}</span>
+            <sc-if value="{{ r.hasBadge }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:3px;right:2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--ink);color:var(--invink);font:650 10.5px Geist;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--side);animation:piuPop .4s cubic-bezier(.2,.9,.3,1.5) both;">{{ r.badge }}</div></sc-if>
+          </button>
+        </sc-for>
+        <div style="flex:1;"></div>
+        <div title="Nós por perto" style="display:flex;flex-direction:column;align-items:center;gap:5px;font:500 10px 'Geist Mono',monospace;color:var(--ink2);margin-bottom:10px;"><div style="position:relative;width:8px;height:8px;"><div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;inset:0;border-radius:50%;border:1px solid var(--ink);animation:piuRingS 2s ease-out infinite;"></div></div>6 nós</div>
+        <button onClick="{{ toggleIdentity }}" title="Trocar identidade" style="width:40px;height:40px;border:none;border-radius:{{ me.radius }};background:{{ me.bg }};color:{{ me.fg }};font:600 13px Geist;cursor:pointer;transition:border-radius .4s cubic-bezier(.2,.9,.3,1.3),background .3s,transform .3s cubic-bezier(.2,.9,.3,1.5);" style-hover="transform:scale(1.08);">{{ me.initials }}</button>
+      </div>
+
+      <sc-if value="{{ isChatsNav }}" hint-placeholder-val="{{ true }}">
+        <div style="width:320px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;min-height:0;animation:{{ listAnim }};">
+          <div style="padding:18px 16px 10px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;">
+              <div style="font-size:24px;font-weight:700;letter-spacing:-0.04em;">{{ tx.chatsH }}</div>
+              <div style="height:24px;padding:0 9px;border-radius:12px;border:1px solid var(--line2);display:flex;align-items:center;gap:5px;font:500 11px 'Geist Mono',monospace;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:13px;line-height:1;">{{ me.icon }}</span>{{ me.label }}</div>
+            </div>
+            <div style="height:36px;border-radius:11px;background:var(--bg2);display:flex;align-items:center;gap:8px;padding:0 10px;">
+              <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink2);">search</span>
+              <input value="{{ q }}" onChange="{{ onQ }}" placeholder="{{ tx.search }}" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:14px;color:var(--ink);">
+              <span style="font:500 11px 'Geist Mono',monospace;color:var(--ink3);padding:2px 6px;border-radius:5px;border:1px solid var(--line2);">{{ kSearch }}</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4"><button onClick="{{ f.pick }}" style="height:28px;padding:0 11px;border:none;border-radius:14px;background:{{ f.bg }};color:{{ f.fg }};font:550 12.5px Geist;cursor:pointer;transition:background .25s,color .25s,transform .2s;" style-active="transform:scale(0.94);">{{ f.label }}</button></sc-for>
+            </div>
+          </div>
+          <div style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;padding:0 8px 12px;display:flex;flex-direction:column;gap:2px;">
+            <sc-for list="{{ list }}" as="c" hint-placeholder-count="6">
+              <div onClick="{{ c.open }}" style="display:flex;align-items:center;gap:12px;padding:{{ rowPad }} 10px;border-radius:14px;background:{{ c.bg }};cursor:pointer;transition:background .2s,transform .2s;animation:{{ c.anim }};" style-hover="transform:translateX(3px);" style-active="transform:scale(0.98);">
+                <div style="width:{{ avSize }};height:{{ avSize }};border-radius:{{ c.radius }};background:{{ c.avBg }};color:{{ c.avFg }};display:flex;align-items:center;justify-content:center;font:600 14px Geist;flex:none;transition:width .25s,height .25s;">{{ c.initials }}</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                  <div style="display:flex;align-items:center;gap:6px;">
+                    <div style="flex:1;min-width:0;display:flex;align-items:center;gap:5px;"><div style="font-size:14.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.name }}</div><sc-if value="{{ c.hasKind }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1;color:var(--ink2);">{{ c.kindIcon }}</span></sc-if><sc-if value="{{ c.isMuted }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1;color:var(--ink3);animation:piuPop .35s both;">notifications_off</span></sc-if></div>
+                    <div style="font-size:12px;color:var(--ink2);font-variant-numeric:tabular-nums;">{{ c.time }}</div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:8px;">
+                    <div style="flex:1;min-width:0;font-size:13.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ c.preview }}</div>
+                    <sc-if value="{{ c.hasUnread }}" hint-placeholder-val="{{ false }}"><div style="min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--ink);color:var(--invink);font:650 11px Geist;display:flex;align-items:center;justify-content:center;animation:piuPop .4s cubic-bezier(.2,.9,.3,1.5) both;">{{ c.unread }}</div></sc-if>
+                  </div>
+                </div>
+              </div>
+            </sc-for>
+            <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}"><div style="padding:30px 16px;text-align:center;font-size:13.5px;color:var(--ink2);animation:piuFade .3s both;">Nenhuma conversa aqui ainda</div></sc-if>
+          </div>
+        </div>
+
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;animation:{{ chatAnim }};">
+          <div style="height:64px;flex:none;display:flex;align-items:center;gap:12px;padding:0 14px 0 20px;border-bottom:1px solid var(--line);">
+            <div style="width:38px;height:38px;border-radius:{{ chat.radius }};background:{{ chat.avBg }};color:{{ chat.avFg }};display:flex;align-items:center;justify-content:center;font:600 13px Geist;flex:none;">{{ chat.initials }}</div>
+            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+              <div style="display:flex;align-items:center;gap:5px;"><div style="font-size:15.5px;font-weight:650;letter-spacing:-0.015em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.name }}</div><sc-if value="{{ chat.verified }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;font-variation-settings:'FILL' 1;animation:piuPop .45s cubic-bezier(.2,.9,.3,1.5) both;">verified</span></sc-if></div>
+              <div style="font-size:12.5px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ chat.sub }}</div>
+            </div>
+            <button onClick="{{ toggleMute }}" title="Silenciar" style="width:38px;height:38px;border:none;border-radius:11px;background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .2s;" style-active="transform:scale(0.88);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;">{{ chat.muteIcon }}</span></button>
+            <button onClick="{{ toggleInfo }}" title="Detalhes" style="width:38px;height:38px;border:none;border-radius:11px;background:{{ infoBtnBg }};color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:background .2s,transform .2s;" style-active="transform:scale(0.88);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;">side_navigation</span></button>
+          </div>
+          <div ref="{{ scrollRef }}" style="flex:1;min-height:0;overflow-y:auto;scrollbar-width:thin;scroll-behavior:smooth;background-color:var(--bg);background-image:radial-gradient(var(--dot) 1px, transparent 1.2px);background-size:18px 18px;">
+            <div style="max-width:760px;margin:0 auto;padding:20px 28px 14px;display:flex;flex-direction:column;gap:4px;">
+              <div style="align-self:center;display:flex;align-items:center;gap:6px;padding:7px 12px;border-radius:12px;background:var(--bg2);font-size:12px;color:var(--ink2);margin-bottom:6px;"><span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1;color:var(--ink);">lock</span>Cifrado de ponta a ponta. Clique numa mensagem para ver a rota.</div>
+              <sc-for list="{{ msgs }}" as="m" hint-placeholder-count="5">
+                <sc-if value="{{ m.isMe }}" hint-placeholder-val="{{ false }}">
+                  <div onClick="{{ m.open }}" style="align-self:flex-end;max-width:68%;padding:8px 12px 6px 14px;border-radius:20px 20px 6px 20px;background:var(--ink);color:var(--invink);cursor:pointer;display:flex;flex-direction:column;gap:2px;margin-top:{{ m.gap }};animation:{{ m.anim }};transform-origin:bottom right;box-shadow:{{ m.ring }};transition:box-shadow .25s,transform .2s;" style-hover="transform:translateY(-1px);">
+                    <div style="font-size:{{ msgSize }};line-height:1.4;text-wrap:pretty;">{{ m.text }}</div>
+                    <div style="align-self:flex-end;display:flex;align-items:center;gap:4px;font-size:11px;opacity:.72;"><span>{{ m.statusLabel }}</span><span>·</span><span style="font-variant-numeric:tabular-nums;">{{ m.time }}</span><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">{{ m.statusIcon }}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ m.isSys }}" hint-placeholder-val="{{ false }}">
+                  <div style="align-self:center;max-width:360px;margin:8px 0 4px;padding:7px 12px;border-radius:12px;background:var(--bg2);font-size:12px;line-height:1.4;color:var(--ink2);text-align:center;animation:{{ m.anim }};">{{ m.text }}</div>
+                </sc-if>
+                <sc-if value="{{ m.isThem }}" hint-placeholder-val="{{ true }}">
+                  <div onClick="{{ m.open }}" style="align-self:flex-start;max-width:68%;padding:8px 14px 6px 12px;border-radius:20px 20px 20px 6px;background:var(--bub);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;gap:2px;margin-top:{{ m.gap }};box-shadow:0 0 0 1px var(--line) inset, {{ m.ring }};animation:{{ m.anim }};transform-origin:bottom left;transition:box-shadow .25s,transform .2s;" style-hover="transform:translateY(-1px);">
+                    <sc-if value="{{ m.showSender }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;font-weight:650;">{{ m.sender }}</div></sc-if>
+                    <div style="font-size:{{ msgSize }};line-height:1.4;text-wrap:pretty;">{{ m.text }}</div>
+                    <div style="align-self:flex-end;font-size:11px;color:var(--ink2);font-variant-numeric:tabular-nums;">{{ m.time }}</div>
+                  </div>
+                </sc-if>
+              </sc-for>
+              <sc-if value="{{ showTyping }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self:flex-start;margin-top:8px;padding:14px 16px;border-radius:20px 20px 20px 6px;background:var(--bub);box-shadow:0 0 0 1px var(--line) inset;display:flex;gap:4px;animation:piuMsgIn .3s cubic-bezier(.2,.9,.3,1.3) both;transform-origin:bottom left;">
+                  <div style="width:7px;height:7px;border-radius:50%;background:var(--ink2);animation:piuDot 1.1s ease-in-out infinite;"></div>
+                  <div style="width:7px;height:7px;border-radius:50%;background:var(--ink2);animation:piuDot 1.1s ease-in-out .15s infinite;"></div>
+                  <div style="width:7px;height:7px;border-radius:50%;background:var(--ink2);animation:piuDot 1.1s ease-in-out .3s infinite;"></div>
+                </div>
+              </sc-if>
+              <sc-if value="{{ chat.offline }}" hint-placeholder-val="{{ false }}">
+                <div style="align-self:center;margin-top:12px;max-width:360px;padding:14px 16px;border-radius:18px;border:1px dashed var(--line2);background:var(--bg);display:flex;flex-direction:column;gap:6px;animation:piuUp .4s both;">
+                  <div style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;animation:piuBreath 2s infinite;">schedule_send</span>{{ chat.first }} está fora de alcance</div>
+                  <div style="font-size:13px;line-height:1.4;color:var(--ink2);text-wrap:pretty;">A mensagem fica guardada no nó Galpão e é entregue quando surgir uma rota. Expira em 47 h.</div>
+                </div>
+              </sc-if>
+            </div>
+          </div>
+          <sc-if value="{{ chat.canWrite }}" hint-placeholder-val="{{ true }}">
+            <div style="flex:none;border-top:1px solid var(--line);padding:10px 20px 12px;display:flex;flex-direction:column;gap:7px;">
+              <div style="max-width:760px;width:100%;margin:0 auto;display:flex;align-items:center;gap:10px;">
+                <button onClick="{{ attach }}" title="Anexar" style="width:42px;height:42px;border-radius:21px;border:none;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;transition:transform .3s cubic-bezier(.2,.9,.3,1.5);" style-hover="transform:rotate(-20deg);"><span style="font-family:'Material Symbols Rounded';font-size:23px;line-height:1;font-variation-settings:'wght' 300;">attach_file</span></button>
+                <button onClick="{{ payInChat }}" title="Enviar LUNES" style="width:42px;height:42px;border-radius:21px;border:none;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;transition:transform .35s cubic-bezier(.2,.9,.3,1.5);" style-hover="transform:rotateY(180deg);"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 300;">toll</span></button>
+                <input value="{{ draft }}" onChange="{{ onDraft }}" onKeyDown="{{ onKey }}" placeholder="{{ composerHint }}" style="flex:1;min-width:0;height:44px;border-radius:22px;border:none;background:var(--bg2);padding:0 18px;font-size:15px;color:var(--ink);outline:none;transition:box-shadow .2s;" style-focus="box-shadow:0 0 0 2px var(--ink);">
+                <button onClick="{{ send }}" title="Enviar" style="width:42px;height:42px;border-radius:21px;border:none;background:var(--ink);color:var(--invink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;opacity:{{ sendOpacity }};transform:{{ sendScale }};transition:opacity .2s,transform .3s cubic-bezier(.2,.9,.3,1.6);" style-active="transform:scale(0.85);"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 500;">arrow_upward</span></button>
+              </div>
+              <div style="max-width:760px;width:100%;margin:0 auto;display:flex;justify-content:space-between;gap:12px;font:400 11px 'Geist Mono',monospace;color:var(--ink2);padding:0 4px;">
+                <span style="display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:13px;line-height:1;">{{ chat.viaIcon }}</span>{{ chat.via }}</span>
+                <span>{{ enterHint }}</span>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ chat.readOnly }}" hint-placeholder-val="{{ false }}">
+            <div style="flex:none;border-top:1px solid var(--line);padding:14px 20px;display:flex;align-items:center;gap:12px;">
+              <div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:13.5px;font-weight:550;">Somente administradores publicam</div><div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ chat.via }}</div></div>
+              <button onClick="{{ toggleMute }}" style="height:36px;padding:0 16px;border-radius:18px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13.5px Geist;cursor:pointer;">{{ chat.muteLabel }}</button>
+            </div>
+          </sc-if>
+        </div>
+
+        <sc-if value="{{ infoOpen }}" hint-placeholder-val="{{ false }}">
+          <div style="width:320px;flex:none;border-left:1px solid var(--line);overflow-y:auto;scrollbar-width:thin;animation:piuSide .4s cubic-bezier(.2,.85,.3,1) both;">
+            <div style="padding:14px 14px 0;display:flex;justify-content:flex-end;"><button onClick="{{ toggleInfo }}" style="width:32px;height:32px;border:none;border-radius:10px;background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;" style-hover="background:var(--bg2);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">close</span></button></div>
+            <sc-if value="{{ hasRoute }}" hint-placeholder-val="{{ false }}">
+              <div style="margin:0 16px 18px;padding:16px;border-radius:20px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:12px;animation:piuDialog .4s cubic-bezier(.2,.9,.3,1.2) both;">
+                <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">ROTA DA MENSAGEM</div><button onClick="{{ closeRoute }}" style="border:none;background:transparent;color:inherit;cursor:pointer;padding:0;display:flex;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">close</span></button></div>
+                <div style="display:flex;flex-direction:column;">
+                  <sc-for list="{{ route }}" as="n" hint-placeholder-count="3">
+                    <div style="display:flex;flex-direction:column;animation:{{ n.anim }};">
+                      <sc-if value="{{ n.hasVia }}" hint-placeholder-val="{{ false }}"><div style="display:flex;align-items:center;gap:12px;height:30px;"><div style="position:relative;width:12px;height:30px;display:flex;justify-content:center;"><div style="width:1.5px;height:100%;background:currentColor;opacity:.3;"></div><div style="position:absolute;left:3px;width:6px;height:6px;border-radius:50%;background:currentColor;animation:{{ n.travel }};"></div></div><div style="font:400 11px 'Geist Mono',monospace;opacity:.7;">{{ n.via }}</div></div></sc-if>
+                      <div style="display:flex;align-items:center;gap:12px;"><div style="width:12px;height:12px;border-radius:50%;border:2px solid currentColor;background:{{ n.dot }};flex:none;"></div><div style="display:flex;flex-direction:column;"><div style="font-size:13.5px;font-weight:600;">{{ n.n }}</div><div style="font-size:11.5px;opacity:.7;">{{ n.k }}</div></div></div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-if>
+            <div style="padding:4px 20px 18px;display:flex;flex-direction:column;align-items:center;gap:10px;text-align:center;">
+              <div style="width:76px;height:76px;border-radius:{{ chat.radiusL }};background:{{ chat.avBg }};color:{{ chat.avFg }};display:flex;align-items:center;justify-content:center;font:600 24px Geist;animation:piuPop .5s .1s cubic-bezier(.2,.9,.3,1.4) both;">{{ chat.initials }}</div>
+              <div style="display:flex;flex-direction:column;gap:3px;animation:piuUp .4s .15s both;"><div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">{{ chat.name }}</div><div style="font-size:12.5px;color:var(--ink2);">{{ chat.sub }}</div></div>
+            </div>
+            <div style="padding:0 16px;display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;animation:piuUp .4s .2s both;">
+              <sc-for list="{{ infoActions }}" as="a" hint-placeholder-count="3">
+                <button onClick="{{ a.act }}" style="height:62px;border:none;border-radius:16px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;font:550 12px Geist;transition:background .15s,transform .2s;" style-hover="background:var(--bg3);" style-active="transform:scale(0.94);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' {{ a.fill }};">{{ a.icon }}</span>{{ a.label }}</button>
+              </sc-for>
+            </div>
+            <sc-if value="{{ chat.isDirect }}" hint-placeholder-val="{{ true }}">
+              <div style="padding:22px 20px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">CÓDIGO DE SEGURANÇA</div>
+              <div style="margin:0 16px;padding:14px;border-radius:18px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;">
+                <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;font:500 13.5px 'Geist Mono',monospace;text-align:center;">
+                  <sc-for list="{{ chat.fp }}" as="g" hint-placeholder-count="8"><div style="animation:{{ g.anim }};">{{ g.v }}</div></sc-for>
+                </div>
+                <div style="font-size:12px;color:var(--ink2);line-height:1.4;">Compare com o aparelho de {{ chat.first }}, pessoalmente ou por outra via.</div>
+              </div>
+            </sc-if>
+            <div style="padding:22px 20px 8px;font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">MENSAGENS TEMPORÁRIAS</div>
+            <div style="margin:0 16px;display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg2);">
+              <sc-for list="{{ tempOpts }}" as="o" hint-placeholder-count="4"><button onClick="{{ o.pick }}" style="flex:1;height:30px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 12.5px Geist;cursor:pointer;box-shadow:{{ o.shadow }};transition:background .2s,box-shadow .2s;">{{ o.label }}</button></sc-for>
+            </div>
+            <div style="padding:22px 16px 24px;display:flex;flex-direction:column;gap:8px;">
+              <button onClick="{{ leaveAct }}" style="height:44px;border-radius:22px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:600 14px Geist;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;" style-hover="background:var(--bg2);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">{{ chat.leaveIcon }}</span>{{ chat.leaveLabel }}</button>
+            </div>
+          </div>
+        </sc-if>
+      </sc-if>
+      <sc-if value="{{ isSettingsNav }}" hint-placeholder-val="{{ false }}">
+        <div style="width:248px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px 14px;gap:14px;animation:piuUp .4s cubic-bezier(.2,.85,.3,1) both;">
+          <div style="font-size:24px;font-weight:700;letter-spacing:-0.04em;padding:0 8px;">{{ tx.settingsH }}</div>
+          <div style="display:flex;flex-direction:column;gap:2px;overflow-y:auto;scrollbar-width:none;">
+            <sc-for list="{{ pages }}" as="p" hint-placeholder-count="10">
+              <button onClick="{{ p.go }}" style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border:none;border-radius:11px;background:{{ p.bg }};color:var(--ink);font:{{ p.weight }} 14px Geist;cursor:pointer;text-align:left;transition:background .2s,transform .2s;" style-hover="transform:translateX(3px);">
+                <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'FILL' {{ p.fill }}, 'wght' 350;">{{ p.icon }}</span><span style="flex:1;">{{ p.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="flex:1;"></div>
+          <button onClick="{{ askLogout }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 10px;border:1px solid var(--line2);border-radius:12px;background:transparent;color:var(--ink);font:550 13.5px Geist;cursor:pointer;" style-hover="background:var(--bg2);"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">logout</span>{{ tx.logout }}</button>
+        </div>
+        <div style="flex:1;min-width:0;overflow-y:auto;scrollbar-width:thin;">
+          <div style="max-width:720px;margin:0 auto;padding:32px 40px 48px;display:flex;flex-direction:column;gap:6px;animation:{{ pgAnim }};">
+            <div style="font-size:30px;font-weight:700;letter-spacing:-0.04em;">{{ pg.title }}</div>
+            <div style="font-size:14px;color:var(--ink2);line-height:1.45;margin-bottom:12px;max-width:560px;text-wrap:pretty;">{{ pg.desc }}</div>
+
+            <sc-if value="{{ isPgProfile }}" hint-placeholder-val="{{ false }}">
+              <div style="display:flex;align-items:center;gap:18px;padding:18px;border-radius:20px;background:var(--bg2);margin-bottom:6px;animation:piuUp .45s .05s both;">
+                <div style="width:72px;height:72px;border-radius:{{ me.radiusL }};background:{{ me.bg }};color:{{ me.fg }};display:flex;align-items:center;justify-content:center;font:600 24px Geist;flex:none;transition:border-radius .4s cubic-bezier(.2,.9,.3,1.3),background .3s;animation:piuPop .55s .1s cubic-bezier(.2,.9,.3,1.4) both;">{{ me.initials }}</div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:8px;">
+                  <sc-if value="{{ me.isPub }}" hint-placeholder-val="{{ true }}"><input value="{{ name }}" onChange="{{ onName }}" style="height:40px;max-width:320px;border-radius:11px;border:none;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;padding:0 12px;font:600 16px Geist;color:var(--ink);outline:none;"></sc-if>
+                  <sc-if value="{{ me.isAnon }}" hint-placeholder-val="{{ false }}"><div style="font-size:18px;font-weight:650;">Anônimo · 7F3A</div></sc-if>
+                  <div style="display:flex;flex-wrap:wrap;gap:6px 10px;font:500 12px 'Geist Mono',monospace;color:var(--ink2);">
+                    <sc-for list="{{ fpGroups }}" as="g" hint-placeholder-count="8"><span style="animation:{{ g.anim }};">{{ g.v }}</span></sc-for>
+                  </div>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-if value="{{ isPgChats }}" hint-placeholder-val="{{ false }}">
+              <div style="padding:18px;border-radius:20px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;margin-bottom:6px;animation:piuUp .45s .05s both;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;"><div style="font-size:26px;font-weight:700;letter-spacing:-0.03em;">1,2 GB</div><div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">cifrado neste computador</div></div>
+                <div style="height:10px;border-radius:5px;background:var(--bg3);display:flex;overflow:hidden;gap:2px;">
+                  <sc-for list="{{ usage }}" as="u" hint-placeholder-count="3"><div style="width:{{ u.w }};background:{{ u.bg }};transform-origin:left;animation:{{ u.anim }};"></div></sc-for>
+                </div>
+                <div style="display:flex;gap:16px;font-size:12.5px;color:var(--ink2);">
+                  <sc-for list="{{ usage }}" as="u" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:{{ u.bg }};"></div>{{ u.l }} · {{ u.w }}</div></sc-for>
+                </div>
+              </div>
+            </sc-if>
+
+            <sc-for list="{{ pg.sections }}" as="sec" hint-placeholder-count="2">
+              <div style="display:flex;flex-direction:column;animation:{{ sec.anim }};">
+                <div style="padding:16px 4px 8px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">{{ sec.title }}</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <sc-for list="{{ sec.rows }}" as="r" hint-placeholder-count="3">
+                    <div onClick="{{ r.act }}" style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid {{ r.border }};min-height:56px;">
+                      <sc-if value="{{ r.hasIcon }}" hint-placeholder-val="{{ false }}"><div style="width:36px;height:36px;border-radius:11px;background:var(--bg);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ r.icon }}</span></div></sc-if>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+                        <div style="font-size:14.5px;font-weight:550;">{{ r.name }}</div>
+                        <sc-if value="{{ r.hasDesc }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;color:var(--ink2);line-height:1.35;">{{ r.desc }}</div></sc-if>
+                      </div>
+                      <sc-if value="{{ r.isToggle }}" hint-placeholder-val="{{ false }}"><div onClick="{{ r.toggle }}" style="width:42px;height:26px;border-radius:13px;background:{{ r.track }};position:relative;cursor:pointer;flex:none;transition:background .25s;"><div style="position:absolute;top:3px;left:{{ r.knob }};width:20px;height:20px;border-radius:10px;background:{{ r.knobBg }};box-shadow:0 1px 3px rgba(0,0,0,.2);transition:left .35s cubic-bezier(.2,.9,.3,1.5);"></div></div></sc-if>
+                      <sc-if value="{{ r.isSeg }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg3);flex:none;"><sc-for list="{{ r.opts }}" as="o" hint-placeholder-count="3"><button onClick="{{ o.pick }}" style="height:30px;padding:0 12px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 12.5px Geist;cursor:pointer;box-shadow:{{ o.shadow }};transition:background .25s,box-shadow .25s;">{{ o.label }}</button></sc-for></div></sc-if>
+                      <sc-if value="{{ r.isAction }}" hint-placeholder-val="{{ false }}"><div style="font:500 12.5px 'Geist Mono',monospace;color:var(--ink2);cursor:pointer;">{{ r.value }}</div></sc-if>
+                      <sc-if value="{{ r.isBtn }}" hint-placeholder-val="{{ false }}"><button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:{{ r.btnBg }};color:{{ r.btnFg }};font:600 13px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;flex:none;transition:transform .2s;" style-active="transform:scale(0.94);">{{ r.btnLabel }}</button></sc-if>
+                      <sc-if value="{{ r.isKbd }}" hint-placeholder-val="{{ false }}"><div style="display:flex;gap:4px;"><sc-for list="{{ r.keys }}" as="k" hint-placeholder-count="2"><div style="min-width:28px;height:28px;padding:0 8px;border-radius:7px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 2px 0 var(--line2);display:flex;align-items:center;justify-content:center;font:550 12.5px 'Geist Mono',monospace;">{{ k }}</div></sc-for></div></sc-if>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+
+            <sc-if value="{{ isPgBackup }}" hint-placeholder-val="{{ false }}">
+              <div style="margin-top:14px;padding:16px;border-radius:20px;background:var(--bg2);display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;filter:{{ bkBlur }};transition:filter .5s;animation:piuUp .45s .2s both;">
+                <sc-for list="{{ bkWords }}" as="w" hint-placeholder-count="12"><div style="height:40px;border-radius:11px;background:var(--bg);display:flex;align-items:center;gap:8px;padding:0 12px;font-size:14px;"><span style="font:500 11px 'Geist Mono',monospace;color:var(--ink3);">{{ w.n }}</span>{{ w.w }}</div></sc-for>
+              </div>
+            </sc-if>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isWalletNav }}" hint-placeholder-val="{{ false }}">
+        <div style="flex:1;min-width:0;overflow-y:auto;scrollbar-width:thin;">
+          <div style="max-width:980px;margin:0 auto;padding:30px 36px 40px;display:grid;grid-template-columns:minmax(0,1.35fr) minmax(0,1fr);gap:20px;align-items:start;animation:{{ wAnim }};">
+            <div style="display:flex;flex-direction:column;gap:20px;min-width:0;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;">
+                <div style="font-size:30px;font-weight:700;letter-spacing:-0.04em;">{{ tx.walletH }}</div>
+                <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">lunes:7f3a…c19e</div>
+              </div>
+              <div style="position:relative;overflow:hidden;padding:24px 24px 20px;border-radius:26px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:18px;animation:piuDialog .6s .08s cubic-bezier(.2,.9,.3,1.15) both;">
+                <div style="position:absolute;right:-90px;top:-90px;width:260px;height:260px;border-radius:50%;border:1px solid rgba(127,127,127,.35);"></div>
+                <div style="position:absolute;right:-40px;top:-40px;width:160px;height:160px;border-radius:50%;border:1px solid rgba(127,127,127,.35);"></div>
+                <div style="position:absolute;right:-90px;top:-90px;width:260px;height:260px;animation:piuSpin 24s linear infinite;"><div style="position:absolute;left:40px;bottom:40px;width:9px;height:9px;border-radius:50%;background:var(--invink);"></div></div>
+                <div style="position:relative;display:flex;align-items:center;justify-content:space-between;">
+                  <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">SALDO DISPONÍVEL</div>
+                  <button onClick="{{ toggleBal }}" title="Mostrar ou esconder" style="width:34px;height:34px;border:none;border-radius:17px;background:rgba(127,127,127,.22);color:inherit;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:transform .3s cubic-bezier(.2,.9,.3,1.5);" style-active="transform:scale(0.85);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">{{ bal.eye }}</span></button>
+                </div>
+                <div style="position:relative;display:flex;align-items:baseline;gap:10px;">
+                  <div style="font-size:58px;font-weight:700;letter-spacing:-0.05em;line-height:1;font-variant-numeric:tabular-nums;">{{ bal.shown }}</div>
+                  <div style="font-size:18px;font-weight:600;opacity:.7;">LUNES</div>
+                </div>
+                <div style="position:relative;display:flex;gap:14px;font-size:13px;opacity:.75;"><span>{{ bal.fiat }}</span><span>{{ bal.locked }} · bônus em validação</span></div>
+                <div style="position:relative;display:flex;gap:10px;">
+                  <sc-for list="{{ wActions }}" as="a" hint-placeholder-count="3">
+                    <button onClick="{{ a.go }}" style="flex:1;height:48px;border:none;border-radius:24px;background:{{ a.bg }};color:{{ a.fg }};font:600 14px Geist;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;animation:{{ a.anim }};transition:background .25s,color .25s,transform .2s;" style-active="transform:scale(0.95);"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">{{ a.icon }}</span>{{ a.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;">
+                <div style="padding:4px 4px 8px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">MOVIMENTAÇÕES</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <sc-for list="{{ activity }}" as="t" hint-placeholder-count="5">
+                    <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;border-top:1px solid {{ t.border }};animation:{{ t.anim }};">
+                      <div style="width:38px;height:38px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">{{ t.icon }}</span></div>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ t.t }}</div><div style="font-size:12.5px;color:var(--ink2);">{{ t.d }}</div></div>
+                      <sc-if value="{{ t.hasSt }}" hint-placeholder-val="{{ false }}"><div style="height:22px;padding:0 8px;border-radius:11px;border:1px solid var(--line2);font:500 11px 'Geist Mono',monospace;color:var(--ink2);display:flex;align-items:center;gap:5px;"><div style="width:5px;height:5px;border-radius:50%;background:var(--ink);animation:piuBreath 1.2s infinite;"></div>{{ t.st }}</div></sc-if>
+                      <div style="font:600 14.5px Geist;font-variant-numeric:tabular-nums;color:{{ t.vColor }};">{{ t.v }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;flex-direction:column;gap:20px;min-width:0;padding-top:52px;">
+              <sc-if value="{{ sheetOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 24px 60px -30px rgba(0,0,0,.35);padding:20px;display:flex;flex-direction:column;gap:16px;animation:piuSide .45s cubic-bezier(.2,.85,.3,1) both;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;"><div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">{{ sheetTitle }}</div><button onClick="{{ closeSheet }}" style="width:30px;height:30px;border:none;border-radius:15px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">close</span></button></div>
+                  <sc-if value="{{ isSend }}" hint-placeholder-val="{{ true }}">
+                    <sc-if value="{{ sendForm }}" hint-placeholder-val="{{ true }}">
+                      <div style="display:flex;gap:12px;">
+                        <sc-for list="{{ payees }}" as="p" hint-placeholder-count="4">
+                          <button onClick="{{ p.pick }}" style="flex:1;border:none;background:transparent;color:var(--ink);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:6px;padding:0;animation:{{ p.anim }};">
+                            <div style="width:48px;height:48px;border-radius:50%;background:{{ p.bg }};color:{{ p.fg }};display:flex;align-items:center;justify-content:center;font:600 14px Geist;transform:{{ p.scale }};transition:background .25s,color .25s,transform .3s cubic-bezier(.2,.9,.3,1.5);">{{ p.ini }}</div>
+                            <div style="font-size:12px;font-weight:550;">{{ p.n }}</div>
+                          </button>
+                        </sc-for>
+                      </div>
+                      <div style="display:flex;align-items:baseline;justify-content:center;gap:8px;padding:10px 0 2px;">
+                        <input value="{{ sendAmt }}" onChange="{{ onSendAmt }}" style="width:150px;border:none;background:transparent;outline:none;text-align:right;font:700 48px Geist;letter-spacing:-0.05em;color:var(--ink);font-variant-numeric:tabular-nums;">
+                        <div style="font-size:16px;font-weight:600;color:var(--ink2);">LUNES</div>
+                      </div>
+                      <div style="display:flex;gap:6px;justify-content:center;">
+                        <sc-for list="{{ quick }}" as="q" hint-placeholder-count="4"><button onClick="{{ q.pick }}" style="height:30px;min-width:48px;padding:0 12px;border:none;border-radius:15px;background:{{ q.bg }};color:{{ q.fg }};font:600 13px Geist;cursor:pointer;transition:background .2s,color .2s,transform .2s;" style-active="transform:scale(0.92);">{{ q.label }}</button></sc-for>
+                      </div>
+                      <div style="border-radius:16px;background:var(--bg2);display:grid;grid-template-columns:auto 1fr;gap:9px 14px;padding:13px 15px;font-size:13px;">
+                        <span style="color:var(--ink2);">Para</span><span style="text-align:right;font-weight:550;">{{ sendTo }}</span>
+                        <span style="color:var(--ink2);">Disponível</span><span style="text-align:right;font-weight:550;font-variant-numeric:tabular-nums;">{{ avail }} LUNES</span>
+                        <span style="color:var(--ink2);">Taxa</span><span style="text-align:right;font-weight:550;">0,01 LUNES</span>
+                        <span style="color:var(--ink2);">Liquidação</span><span style="text-align:right;font-weight:550;">quando a malha alcançar a Mainnet</span>
+                      </div>
+                      <sc-if value="{{ sendErr }}" hint-placeholder-val="{{ false }}"><div style="font-size:12.5px;font-weight:550;text-align:center;animation:piuUp .3s both;">Valor maior que o saldo disponível</div></sc-if>
+                      <button onClick="{{ confirmSend }}" style="height:50px;border:none;border-radius:25px;background:var(--ink);color:var(--invink);font:600 15px Geist;cursor:pointer;opacity:{{ sendOp }};transition:opacity .2s;display:flex;align-items:center;justify-content:center;gap:8px;" style-active="transform:scale(0.97);"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">north_east</span>Enviar agora</button>
+                    </sc-if>
+                    <sc-if value="{{ sendOk }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:16px 0 4px;text-align:center;">
+                        <div style="position:relative;width:96px;height:96px;">
+                          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--ink);animation:piuRingL 1.2s ease-out both;"></div>
+                          <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--ink);animation:piuRingL 1.2s .2s ease-out both;"></div>
+                          <sc-for list="{{ burst }}" as="b" hint-placeholder-count="0"><div style="position:absolute;left:50%;top:50%;width:8px;height:8px;margin:-4px;border-radius:50%;background:var(--ink);--x:{{ b.x }};--y:{{ b.y }};animation:piuBurst .9s {{ b.d }} cubic-bezier(.1,.8,.3,1) both;"></div></sc-for>
+                          <div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;animation:piuPop .55s cubic-bezier(.2,.9,.3,1.5) both;"><span style="font-family:'Material Symbols Rounded';font-size:44px;line-height:1;">north_east</span></div>
+                        </div>
+                        <div style="display:flex;flex-direction:column;gap:4px;animation:piuUp .4s .2s both;"><div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">{{ sentLabel }}</div><div style="font-size:13px;color:var(--ink2);line-height:1.4;">Assinado e enviado pela malha. Liquida quando um nó alcançar a Mainnet.</div></div>
+                        <div style="display:flex;gap:8px;width:100%;animation:piuUp .4s .3s both;">
+                          <button onClick="{{ sendAgain }}" style="flex:1;height:44px;border:none;border-radius:22px;background:var(--bg2);color:var(--ink);font:600 14px Geist;cursor:pointer;">Enviar outro</button>
+                          <button onClick="{{ closeSheet }}" style="flex:1;height:44px;border:none;border-radius:22px;background:var(--ink);color:var(--invink);font:600 14px Geist;cursor:pointer;">Pronto</button>
+                        </div>
+                      </div>
+                    </sc-if>
+                  </sc-if>
+                  <sc-if value="{{ isRecv }}" hint-placeholder-val="{{ false }}">
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:14px;">
+                      <div style="padding:14px;border-radius:20px;background:#fff;box-shadow:0 0 0 1px var(--line2);position:relative;animation:piuPop .55s cubic-bezier(.2,.9,.3,1.25) both;">
+                        <div style="width:190px;height:190px;display:grid;grid-template-columns:repeat(29,minmax(0,1fr));"><sc-for list="{{ recvQr }}" as="c" hint-placeholder-count="0"><div style="background:{{ c.bg }};border-radius:{{ c.r }};animation:{{ c.anim }};"></div></sc-for></div>
+                        <div style="position:absolute;left:50%;top:50%;margin:-22px 0 0 -22px;width:44px;height:44px;border-radius:11px;background:#fff;padding:4px;"><img src="brand/icon-192.png" alt="" style="width:36px;height:36px;border-radius:8px;display:block;"></div>
+                      </div>
+                      <div onClick="{{ copyAddr }}" style="width:100%;height:42px;border-radius:12px;background:var(--bg2);display:flex;align-items:center;justify-content:center;gap:8px;font:500 13px 'Geist Mono',monospace;cursor:pointer;" style-active="transform:scale(0.98);">lunes:7f3a91c2…a912c19e<span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">content_copy</span></div>
+                      <div style="font-size:12.5px;color:var(--ink2);line-height:1.45;text-align:center;text-wrap:pretty;">Funciona sem internet: o pagamento fica registrado e liquida quando a malha alcançar a Mainnet.</div>
+                    </div>
+                  </sc-if>
+                </div>
+              </sc-if>
+
+              <div style="border-radius:24px;background:var(--bg2);padding:20px;display:flex;flex-direction:column;gap:14px;animation:piuUp .5s .2s cubic-bezier(.2,.85,.3,1) both;">
+                <div style="display:flex;align-items:baseline;justify-content:space-between;"><div style="font-size:16px;font-weight:650;">Créditos de rede</div><div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">7 dias</div></div>
+                <div style="display:flex;align-items:baseline;gap:8px;"><div style="font-size:32px;font-weight:700;letter-spacing:-0.04em;">+15,10</div><div style="font-size:13px;color:var(--ink2);">LUNES por retransmitir</div></div>
+                <div style="height:110px;display:flex;align-items:flex-end;gap:8px;">
+                  <sc-for list="{{ credBars }}" as="b" hint-placeholder-count="7">
+                    <div style="flex:1;height:100%;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;gap:6px;">
+                      <div style="width:100%;height:{{ b.h }};border-radius:7px;background:{{ b.bg }};transform-origin:bottom;animation:{{ b.anim }};"></div>
+                      <div style="font:500 10.5px 'Geist Mono',monospace;color:var(--ink2);">{{ b.d }}</div>
+                    </div>
+                  </sc-for>
+                </div>
+                <div style="font-size:12.5px;color:var(--ink2);line-height:1.45;">Este computador retransmite com até 5 Mbps. Ajuste em Ajustes → Rede.</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </sc-if>
+  <sc-if value="{{ noteOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ openNote }}" style="position:absolute;top:{{ noteTop }};left:{{ noteLeft }};right:{{ noteRight }};width:{{ noteW }};z-index:60;cursor:pointer;animation:{{ noteAnim }};">
+      <div style="display:flex;gap:12px;padding:12px 14px;border-radius:{{ noteRadius }};background:var(--note);color:var(--ink);box-shadow:0 0 0 1px var(--line2),0 18px 44px -12px rgba(0,0,0,.4);backdrop-filter:blur(20px);">
+        <div style="position:relative;width:40px;height:40px;flex:none;">
+          <img src="brand/icon-192.png" alt="" style="width:40px;height:40px;border-radius:10px;display:block;">
+          <div style="position:absolute;right:-5px;bottom:-5px;width:22px;height:22px;border-radius:{{ note.radius }};background:var(--ink);color:var(--invink);font:650 9px Geist;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 2px var(--note);animation:piuPop .4s .25s cubic-bezier(.2,.9,.3,1.5) both;">{{ note.initials }}</div>
+        </div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+          <div style="display:flex;align-items:baseline;gap:8px;"><div style="flex:1;min-width:0;font-size:13.5px;font-weight:650;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ note.title }}</div><div style="font-size:11.5px;color:var(--ink2);">agora</div></div>
+          <div style="font-size:13px;line-height:1.35;color:var(--ink2);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">{{ note.body }}</div>
+        </div>
+        <button onClick="{{ closeNote }}" style="width:22px;height:22px;border:none;border-radius:11px;background:var(--bg3);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1;">close</span></button>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;left:0;right:0;bottom:26px;display:flex;justify-content:center;z-index:55;pointer-events:none;">
+      <div style="height:42px;padding:0 18px 0 14px;border-radius:21px;background:var(--ink);color:var(--invink);display:flex;align-items:center;gap:9px;font:550 13.5px Geist;box-shadow:0 14px 34px -12px rgba(0,0,0,.45);animation:piuToast .45s cubic-bezier(.2,.9,.3,1.3) both;">
+        <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;animation:piuPop .45s .1s cubic-bezier(.2,.9,.3,1.5) both;">{{ toast.icon }}</span>{{ toast.text }}
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ dialogOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeDialog }}" style="position:absolute;inset:0;background:var(--scrim);z-index:70;animation:piuFade .25s both;backdrop-filter:blur(3px);"></div>
+    <div style="position:absolute;left:50%;top:50%;width:400px;transform:translate(-50%,-50%);z-index:71;">
+      <div style="background:var(--bg);border-radius:26px;padding:26px 22px 20px;display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;box-shadow:0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.35);animation:piuDialog .4s cubic-bezier(.2,.9,.3,1.25) both;">
+        <sc-if value="{{ dlg.isQr }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:16px;border-radius:22px;background:#fff;box-shadow:0 0 0 1px var(--line2);position:relative;">
+            <div style="width:200px;height:200px;display:grid;grid-template-columns:repeat(29,minmax(0,1fr));"><sc-for list="{{ dlgQr }}" as="c" hint-placeholder-count="0"><div style="background:{{ c.bg }};border-radius:{{ c.r }};animation:{{ c.anim }};"></div></sc-for></div>
+            <div style="position:absolute;left:50%;top:50%;margin:-24px 0 0 -24px;width:48px;height:48px;border-radius:12px;background:#fff;padding:4px;"><img src="brand/icon-192.png" alt="" style="width:40px;height:40px;border-radius:9px;display:block;"></div>
+          </div>
+        </sc-if>
+        <sc-if value="{{ dlg.hasSecond }}" hint-placeholder-val="{{ true }}"><div style="width:56px;height:56px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;animation:piuPop .5s .1s cubic-bezier(.2,.9,.3,1.5) both;"><span style="font-family:'Material Symbols Rounded';font-size:27px;line-height:1;font-variation-settings:'wght' 300;">{{ dlg.icon }}</span></div></sc-if>
+        <div style="font-size:20px;font-weight:700;letter-spacing:-0.025em;line-height:1.15;text-wrap:pretty;">{{ dlg.title }}</div>
+        <div style="font-size:14px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">{{ dlg.body }}</div>
+        <div style="display:flex;gap:8px;width:100%;margin-top:8px;">
+          <sc-if value="{{ dlg.hasSecond }}" hint-placeholder-val="{{ true }}"><button onClick="{{ closeDialog }}" style="flex:1;height:46px;border:none;border-radius:23px;background:var(--bg2);color:var(--ink);font:600 14.5px Geist;cursor:pointer;">Cancelar</button></sc-if>
+          <button onClick="{{ dlg.act }}" style="flex:1;height:46px;border:none;border-radius:23px;background:var(--ink);color:var(--invink);font:600 14.5px Geist;cursor:pointer;" style-active="transform:scale(0.97);">{{ dlg.primary }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820},&quot;os&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;mac&quot;,&quot;linux&quot;],&quot;default&quot;:&quot;mac&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;start&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;splash&quot;,&quot;auth&quot;,&quot;app&quot;],&quot;default&quot;:&quot;splash&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = this.init();
+  init() {
+    return {
+      phase: (this.props && this.props.start) || 'splash', splashOut: false,
+      authStep: 'start', authSeq: 0, work: null, workPct: 0, workDone: false, idType: 'public', name: 'Cardeal', keep: true, qrLeft: 30, qrSeed: 1, phrase: Array(12).fill(''),
+      nav: 'chats', filter: 'all', q: '', active: 'marina', chats: this.seed(), draft: '', typing: null, infoOpen: false, routeMsg: null, identity: 'public', muted: {}, temp: {}, verified: {},
+      page: 'profile', pgSeq: 0, themeSel: null,
+      notif: { msg: true, group: true, channel: true, nearby: false, wallet: true, sound: true, badge: true, preview: 'always', dnd: false },
+      priv: { read: true, typing: true, find: 'contacts', delay: false, pad: true, lockSleep: true, lockAfter: '15' },
+      look: { font: 'm', density: 'comfort', enter: true, motion: true },
+      sto: { auto: 'wifi', ret: '48', temp: 'off' }, net: { lan: true, bt: true, relay: true, bw: '5' }, sys: { login: true, tray: true, update: 'auto' },
+      blocked: [{ id: 'b4f2a', name: 'Desconhecido · 4F2A', initials: '4F', when: '12 out' }, { id: 'brafa', name: 'Rafael M.', initials: 'RM', when: '28 set' }],
+      devices: [{ id: 'this', kind: 'this', name: 'Este computador', meta: 'conectado agora' }, { id: 'pixel', kind: 'phone', name: 'Pixel 7a', meta: 'aparelho principal · visto há 2 min' }, { id: 'tab', kind: 'tablet', name: 'Galaxy Tab A8', meta: 'visto ontem' }],
+      note: null, toast: null, dialog: null, bkShown: false,
+      hideBal: (() => { try { return localStorage.getItem('piu.hideBal') === '1'; } catch (e) { return false; } })(),
+      lang: 'pt-BR', region: 'auto', weekStart: 'sun', autoTr: false, spell: true,
+      wSheet: null, sendTo: 'marina', sendAmt: '5', sendDone: false, sent: [], balT: null, wSeq: 0,
+    };
+  }
+  seed() {
+    const you = { n: 'Você', k: 'Este computador' }, galpao = { n: 'Galpão · OpenWrt', k: 'Home Node' };
+    return [
+      { id: 'marina', ident: 'public', kind: 'direct', name: 'Marina Alves', initials: 'MA', time: '14:32', unread: 2, inv: true, sub: 'por perto · 2 saltos', via: 'Wi-Fi local · 2 saltos', viaIcon: 'hub',
+        route: { nodes: [you, { n: 'Pixel 7a · 9C21', k: 'Mobile Node' }, galpao, { n: 'Marina Alves', k: 'Destino' }], vias: ['Wi-Fi local', 'Wi-Fi Mesh', 'Wi-Fi Direct'] },
+        fp: ['7F3A', '91C2', '0B4E', 'D8A1', '55E0', '3C7F', 'A912', 'C19E'],
+        msgs: [{ id: 'm1', from: 'them', text: 'Oi! Você vai no mutirão hoje?', time: '14:10' }, { id: 'm2', from: 'me', text: 'Vou sim, saio daqui a pouco.', time: '14:12', status: 'entregue' },
+          { id: 'm3', from: 'them', text: 'A internet caiu no bairro inteiro, mas aqui tá chegando tudo pelo Piu.', time: '14:20' }, { id: 'm4', from: 'me', text: 'Pois é! Do computador também, pela rede do galpão.', time: '14:21', status: 'entregue' },
+          { id: 'm5', from: 'them', text: 'Chego em 10 min, estou perto da praça.', time: '14:32' }] },
+      { id: 'mutirao', ident: 'public', kind: 'group', name: 'Mutirão Vila Esperança', initials: 'VE', time: '14:05', unread: 5, sub: '18 membros · 6 por perto', via: 'Wi-Fi Mesh · 1 salto', viaIcon: 'hub',
+        route: { nodes: [you, galpao, { n: '18 membros', k: 'Grupo · chave v4' }], vias: ['Wi-Fi local', 'Wi-Fi Mesh'] },
+        msgs: [{ id: 'g1', from: 'them', sender: 'Lia', text: 'Alguém tem extensão sobrando? Precisamos no galpão.', time: '13:48' }, { id: 'g2', from: 'me', text: 'Levo uma de 10 m.', time: '13:51', status: 'entregue' },
+          { id: 'g3', from: 'them', sender: 'Seu Antônio', text: 'Os mantimentos chegaram, estamos separando por família.', time: '13:58' }, { id: 'g4', from: 'them', sender: 'João', text: 'Gerador ligado. O roteador do galpão voltou a retransmitir.', time: '14:05' }] },
+      { id: 'defesa', ident: 'public', kind: 'channel', name: 'Defesa Civil · Serra', initials: 'DC', time: '13:40', unread: 1, inv: true, sub: '1.240 inscritos · canal público', via: 'LoRa 915 MHz · 3 saltos', viaIcon: 'settings_input_antenna',
+        route: { nodes: [you, { n: 'Gateway Praça', k: 'Gateway Local' }, { n: 'Torre Serra · 3A0F', k: 'Super Node' }, { n: 'Defesa Civil', k: 'Origem' }], vias: ['Wi-Fi local', 'LoRa 915 MHz', 'LoRa 915 MHz'] },
+        msgs: [{ id: 'd1', from: 'them', text: 'Chuva forte prevista para esta noite. Evite áreas de encosta.', time: '09:15' }, { id: 'd2', from: 'them', text: 'Estrada RJ-130 interditada no km 12. Use o desvio pela Estrada Velha.', time: '13:40' }] },
+      { id: 'pedro', ident: 'public', kind: 'direct', name: 'Pedro Lima', initials: 'PL', time: '12:18', unread: 0, offline: true, sub: 'fora de alcance · 1 na fila', via: 'na fila · aguardando rota', viaIcon: 'schedule',
+        route: { nodes: [you, { n: 'Galpão · OpenWrt', k: 'guardando' }, { n: 'Pedro Lima', k: 'Fora de alcance' }], vias: ['Wi-Fi local', 'aguardando rota'] }, fp: ['2B71', 'C04E', '9A13', 'F7D2', '0E58', 'B3C9', '6A40', 'D1F7'],
+        msgs: [{ id: 'p1', from: 'them', text: 'Consegue me mandar o mapa da trilha?', time: '11:52' }, { id: 'p2', from: 'me', text: 'Mandei o mapa, chegou?', time: '12:18', status: 'aguardando' }] },
+      { id: 'ana', ident: 'public', kind: 'direct', name: 'Ana Costa', initials: 'AC', time: 'Ontem', unread: 0, sub: 'vista via Gateway Praça', via: 'Wi-Fi Direct · 3 saltos', viaIcon: 'wifi_tethering', fp: ['44E1', '9B0C', 'A7F3', '12D8', 'E95A', '30C6', '7D2B', 'F0A4'],
+        route: { nodes: [you, { n: 'Gateway Praça', k: 'Gateway Local' }, { n: 'Ana Costa', k: 'Destino' }], vias: ['Wi-Fi local', 'Wi-Fi Direct'] },
+        msgs: [{ id: 'a1', from: 'them', text: 'Obrigada pela ajuda ontem!', time: 'Ontem' }, { id: 'a2', from: 'me', text: 'Imagina. Qualquer coisa me chama.', time: 'Ontem', status: 'entregue' }] },
+      { id: 'anon1', ident: 'anon', kind: 'direct', name: 'Contato anônimo · 2D19', initials: '2D', time: '10:02', unread: 1, sub: 'identidade anônima', via: 'Bluetooth LE · 1 salto', viaIcon: 'bluetooth', fp: ['2D19', 'F4C8', '0A63', '9E21', '7B5D', 'C0F4', '41DC', 'B7E0'],
+        route: { nodes: [you, { n: 'Contato anônimo', k: 'Destino' }], vias: ['Bluetooth LE'] },
+        msgs: [{ id: 'x1', from: 'them', text: 'Recebi o documento. Mantém isso só por aqui, combinado?', time: '10:02' }] },
+    ];
+  }
+  createdChats(ident) {
+    return [{ id: 'piu', ident, kind: 'channel', name: 'Piu · Primeiros passos', initials: 'P', inv: true, time: 'agora', unread: 2, sub: 'canal oficial · somente leitura', via: 'gerado neste computador', viaIcon: 'key',
+      route: { nodes: [{ n: 'Você', k: 'Este computador' }, { n: 'Piu', k: 'Canal assinado' }], vias: ['local'] },
+      msgs: [{ id: 'w0', from: 'sys', text: 'Identidade criada neste computador. Chaves no ' + this.keychain() + '.', time: 'agora' },
+        { id: 'w1', from: 'them', text: 'Bem-vindo ao Piu. Para conversar, troque códigos com alguém por perto em Ajustes → Perfil → Código do perfil.', time: 'agora' },
+        { id: 'w2', from: 'them', text: 'Quer usar no celular também? Ajustes → Aparelhos → Conectar outro aparelho.', time: 'agora' }] }];
+  }
+  keychain() { return (this.props.os || 'mac') === 'mac' ? 'Keychain do macOS' : 'chaveiro do sistema'; }
+  componentDidMount() {
+    if (this.state.phase === 'splash') { this.t(() => this.setState({ splashOut: true }), 2200); this.t(() => this.setState({ phase: 'auth', splashOut: false }), 2650); }
+    if (this.state.phase === 'app') this.t(() => this.incoming(), 5000);
+    this.qrI = setInterval(() => { const s = this.state; if (s.phase === 'auth' && s.authStep === 'qr') this.setState(st => st.qrLeft <= 1 ? { qrLeft: 30, qrSeed: st.qrSeed + 1 } : { qrLeft: st.qrLeft - 1 }); }, 1000);
+  }
+  componentDidUpdate(prev) { const j = this.props.jump, pj = prev && prev.jump; if (j && (!pj || j.n !== pj.n)) this.setState(j.state || {}); if (this.scrollEl && this.lastLen !== this.msgCount) { this.lastLen = this.msgCount; this.scrollEl.scrollTop = this.scrollEl.scrollHeight; } }
+  componentWillUnmount() { clearInterval(this.qrI); clearInterval(this.workI); (this.T || []).forEach(clearTimeout); }
+  t(fn, ms) { (this.T = this.T || []).push(setTimeout(fn, ms)); }
+  now() { const d = new Date(); return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0'); }
+  step(authStep) { this.setState(st => ({ authStep, authSeq: st.authSeq + 1 })); }
+  startWork(kind) {
+    clearInterval(this.workI);
+    this.setState(st => ({ authStep: 'work', authSeq: st.authSeq + 1, work: kind, workPct: 0, workDone: false }));
+    this.workI = setInterval(() => {
+      const p = Math.min(100, this.state.workPct + 1.6);
+      this.setState({ workPct: p });
+      if (p >= 100) { clearInterval(this.workI); this.t(() => this.setState({ workDone: true }), 150); this.t(() => this.enterApp(kind), 1700); }
+    }, 40);
+  }
+  enterApp(kind) {
+    const s = this.state;
+    if (kind === 'create') { const ident = s.idType; this.setState({ phase: 'app', nav: 'chats', identity: ident, chats: this.createdChats(ident), active: 'piu', filter: 'all', infoOpen: false, devices: s.devices.filter(d => d.kind === 'this') }); }
+    else this.setState({ phase: 'app', nav: 'chats', identity: 'public', chats: this.seed(), active: 'marina', filter: 'all', infoOpen: false });
+    this.t(() => this.incoming(), 5500);
+  }
+  incoming() {
+    const s = this.state;
+    if (s.phase !== 'app') return;
+    if (s.chats.some(c => c.id === 'mutirao')) {
+      const m = { id: 'in' + Date.now(), from: 'them', sender: 'João', text: 'Pessoal, a reunião mudou para as 19h no galpão.', time: this.now(), anim: 'piuMsgIn .4s cubic-bezier(.2,.9,.3,1.3) both' };
+      this.setState(st => ({ chats: st.chats.map(c => c.id === 'mutirao' ? { ...c, msgs: [...c.msgs, m], time: m.time, unread: st.active === 'mutirao' && st.nav === 'chats' ? 0 : c.unread + 1 } : c) }));
+      if (s.notif.group && !s.muted.mutirao) this.showNote({ chat: 'mutirao', title: 'Mutirão Vila Esperança', body: 'João: ' + m.text, initials: 'VE', round: false });
+    } else {
+      const ident = s.identity;
+      const c = { id: 'marina', ident, kind: 'direct', name: 'Marina Alves', initials: 'MA', inv: true, time: this.now(), unread: 1, sub: 'por perto · 1 salto', via: 'Wi-Fi local · 1 salto', viaIcon: 'hub', fp: ['7F3A', '91C2', '0B4E', 'D8A1', '55E0', '3C7F', 'A912', 'C19E'],
+        route: { nodes: [{ n: 'Você', k: 'Este computador' }, { n: 'Marina Alves', k: 'Destino' }], vias: ['Wi-Fi local'] },
+        msgs: [{ id: 'nm1', from: 'sys', text: 'Marina adicionou você pelo código do perfil.', time: this.now() }, { id: 'nm2', from: 'them', text: 'Oi! Peguei seu código na feira. Aqui é a Marina.', time: this.now(), anim: 'piuMsgIn .4s cubic-bezier(.2,.9,.3,1.3) both' }] };
+      this.setState(st => ({ chats: [c, ...st.chats] }));
+      if (s.notif.msg) this.showNote({ chat: 'marina', title: 'Marina Alves', body: 'Oi! Peguei seu código na feira. Aqui é a Marina.', initials: 'MA', round: true });
+    }
+  }
+  showNote(n) {
+    if (this.state.notif.dnd) return;
+    this.noteSeq = (this.noteSeq || 0) + 1; const seq = this.noteSeq;
+    this.setState({ note: { ...n, seq, leaving: false } });
+    this.t(() => this.setState(st => st.note && st.note.seq === seq ? { note: { ...st.note, leaving: true } } : null), 5200);
+    this.t(() => this.setState(st => st.note && st.note.seq === seq ? { note: null } : null), 5550);
+  }
+  showToast(text, icon) {
+    this.toastSeq = (this.toastSeq || 0) + 1; const seq = this.toastSeq;
+    this.setState({ toast: { text, icon: icon || 'check', seq } });
+    this.t(() => this.setState(st => st.toast && st.toast.seq === seq ? { toast: null } : null), 2600);
+  }
+  openChat(id) { this.setState(st => ({ nav: 'chats', active: id, routeMsg: null, chats: st.chats.map(c => c.id === id ? { ...c, unread: 0 } : c) })); }
+  send() {
+    const s = this.state, text = s.draft.trim();
+    if (!text) return;
+    const id = 'me' + Date.now(), cid = s.active;
+    const m = { id, from: 'me', text, time: this.now(), status: 'criada', anim: 'piuMsgIn .38s cubic-bezier(.2,.9,.3,1.3) both' };
+    this.setState(st => ({ draft: '', chats: st.chats.map(c => c.id === cid ? { ...c, msgs: [...c.msgs, m], time: m.time } : c) }));
+    const setSt = status => this.setState(st => ({ chats: st.chats.map(c => c.id === cid ? { ...c, msgs: c.msgs.map(x => x.id === id ? { ...x, status } : x) } : c) }));
+    const ch = s.chats.find(c => c.id === cid);
+    if (ch && ch.offline) { this.t(() => setSt('aguardando'), 600); return; }
+    this.t(() => setSt('encaminhada'), 650); this.t(() => setSt('entregue'), 1500);
+    if (ch && ch.kind === 'direct') {
+      this.t(() => this.setState({ typing: cid }), 2000);
+      this.t(() => {
+        const r = { id: 'r' + Date.now(), from: 'them', text: ['Fechado!', 'Recebi aqui no celular.', 'Boa, te vejo lá.', 'Combinado.'][Math.floor(Math.random() * 4)], time: this.now(), anim: 'piuMsgIn .4s cubic-bezier(.2,.9,.3,1.3) both' };
+        this.setState(st => ({ typing: null, chats: st.chats.map(c => c.id === cid ? { ...c, msgs: [...c.msgs, r] } : c) }));
+      }, 3800);
+    }
+  }
+  qr(seed) {
+    if (this.qrCache && this.qrCache.seed === seed) return this.qrCache.cells;
+    let x = seed * 7919 + 17; const rnd = () => (x = (x * 9301 + 49297) % 233280) / 233280;
+    const N = 29, cells = [];
+    const finder = (r, c) => { for (const [R, C] of [[0, 0], [0, N - 7], [N - 7, 0]]) { const i = r - R, j = c - C; if (i >= 0 && i < 7 && j >= 0 && j < 7) return (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) ? 1 : 0; if (i >= -1 && i <= 7 && j >= -1 && j <= 7) return 0; } return -1; };
+    for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+      const f = finder(r, c); let on;
+      if (f >= 0) on = f === 1; else if (r >= 11 && r <= 17 && c >= 11 && c <= 17) on = false; else on = rnd() > 0.52;
+      const d = Math.round(Math.hypot(r - 14, c - 14) * 28);
+      cells.push({ bg: on ? '#0c0c0c' : 'transparent', r: f >= 0 ? '1px' : '2px', anim: on ? 'piuQr .35s ' + d + 'ms cubic-bezier(.2,.9,.3,1.5) both' : 'none' });
+    }
+    this.qrCache = { seed, cells };
+    return cells;
+  }
+  tg(on) { return { track: on ? 'var(--ink)' : 'var(--bg3)', knob: on ? '19px' : '3px', knobBg: on ? 'var(--invink)' : '#ffffff' }; }
+
+  renderVals() {
+    const s = this.state, set = o => () => this.setState(o);
+    const os = this.props.os || 'mac', mac = os === 'mac', mod = mac ? '⌘' : 'Ctrl';
+    const theme = s.themeSel || this.props.theme || 'light';
+    const mo = a => s.look.motion ? a : 'none';
+    const seg = (cur, v) => ({ bg: cur === v ? 'var(--bg)' : 'transparent', weight: cur === v ? 600 : 450, shadow: cur === v ? '0 1px 3px rgba(0,0,0,.14)' : 'none' });
+    const c0 = s.chats.find(c => c.id === s.active) || s.chats.find(c => c.ident === s.identity);
+    const winTitle = s.phase !== 'app' ? 'Piu' : s.nav === 'settings' ? 'Ajustes' : s.nav === 'wallet' ? 'Carteira' : (c0 ? c0.name : 'Piu');
+    return {
+      theme, isMac: mac, isLinux: !mac, winTitle,
+      isSplash: s.phase === 'splash', isAuth: s.phase === 'auth', isApp: s.phase === 'app',
+      splashAnim: s.splashOut ? 'piuOut .45s cubic-bezier(.4,0,.6,1) forwards' : 'none',
+      ...this.authVals(s, set, mac),
+      ...this.appVals(s, set, mac, mod, mo, seg, c0),
+      ...this.setVals(s, set, mac, mod, mo, seg),
+      ...this.walletVals(s, set, mo),
+      tx: this.L(s.lang), dir: s.lang === 'ar' ? 'rtl' : 'ltr',
+    };
+  }
+
+  langs() {
+    return [['pt-BR', 'Português (Brasil)', 'Portuguese · Brazil'], ['pt-PT', 'Português (Portugal)', 'Portuguese · Portugal'], ['en', 'English', 'Inglês'], ['es', 'Español', 'Espanhol'],
+      ['fr', 'Français', 'Francês'], ['de', 'Deutsch', 'Alemão'], ['it', 'Italiano', 'Italiano'], ['ja', '日本語', 'Japonês'], ['zh', '中文（简体）', 'Chinês simplificado'], ['ar', 'العربية', 'Árabe · da direita para a esquerda'], ['hi', 'हिन्दी', 'Hindi']];
+  }
+  L(k) {
+    const D = {
+      en: { langSet: 'Language', chatsH: 'Chats', walletH: 'Wallet', settingsH: 'Settings', logout: 'Disconnect this computer', search: 'Search chats', profile: 'Profile', devices: 'Devices', notifs: 'Notifications', privacy: 'Privacy', look: 'Appearance', lang: 'Language', chats: 'Chats', network: 'Network', system: 'System', backup: 'Backup', keys: 'Shortcuts' },
+      es: { langSet: 'Idioma', chatsH: 'Chats', walletH: 'Billetera', settingsH: 'Ajustes', logout: 'Desconectar esta computadora', search: 'Buscar chats', profile: 'Perfil', devices: 'Dispositivos', notifs: 'Notificaciones', privacy: 'Privacidad', look: 'Apariencia', lang: 'Idioma', chats: 'Chats', network: 'Red', system: 'Sistema', backup: 'Respaldo', keys: 'Atajos' },
+      fr: { langSet: 'Langue', chatsH: 'Discussions', walletH: 'Portefeuille', settingsH: 'Réglages', logout: 'Déconnecter cet ordinateur', search: 'Rechercher', profile: 'Profil', devices: 'Appareils', notifs: 'Notifications', privacy: 'Confidentialité', look: 'Apparence', lang: 'Langue', chats: 'Discussions', network: 'Réseau', system: 'Système', backup: 'Sauvegarde', keys: 'Raccourcis' },
+      de: { langSet: 'Sprache', chatsH: 'Chats', walletH: 'Wallet', settingsH: 'Einstellungen', logout: 'Diesen Computer trennen', search: 'Chats suchen', profile: 'Profil', devices: 'Geräte', notifs: 'Mitteilungen', privacy: 'Datenschutz', look: 'Darstellung', lang: 'Sprache', chats: 'Chats', network: 'Netzwerk', system: 'System', backup: 'Backup', keys: 'Kurzbefehle' },
+      it: { langSet: 'Lingua', chatsH: 'Chat', walletH: 'Portafoglio', settingsH: 'Impostazioni', logout: 'Disconnetti questo computer', search: 'Cerca chat', profile: 'Profilo', devices: 'Dispositivi', notifs: 'Notifiche', privacy: 'Privacy', look: 'Aspetto', lang: 'Lingua', chats: 'Chat', network: 'Rete', system: 'Sistema', backup: 'Backup', keys: 'Scorciatoie' },
+    };
+    const pt = { langSet: 'Idioma', chatsH: 'Conversas', walletH: 'Carteira', settingsH: 'Ajustes', logout: 'Desconectar este computador', search: 'Buscar conversas' };
+    return D[k] || pt;
+  }
+  goNav(k) {
+    this.setState(st => ({ nav: k, pgSeq: st.pgSeq + 1, wSeq: st.wSeq + 1, wSheet: k === 'wallet' ? st.wSheet : null }));
+    if (k === 'wallet') this.startBal();
+  }
+  balance() { return 58.4 - this.state.sent.reduce((a, x) => a + x.amt, 0); }
+  startBal(from) {
+    cancelAnimationFrame(this.balRaf);
+    const target = this.balance(), start = performance.now(), f = from == null ? 0 : from;
+    const tick = now => { const p = Math.min(1, (now - start) / 1100), e = 1 - Math.pow(1 - p, 4);
+      this.setState({ balT: f + (target - f) * e }); if (p < 1) this.balRaf = requestAnimationFrame(tick); else this.setState({ balT: null }); };
+    this.balRaf = requestAnimationFrame(tick);
+  }
+  walletVals(s, set, mo) {
+    const fmt = n => n.toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+    const bal = this.balance(), shownN = s.balT == null ? bal : s.balT;
+    const people = [['marina', 'MA', 'Marina Alves'], ['ana', 'AC', 'Ana Costa'], ['pedro', 'PL', 'Pedro Lima'], ['joao', 'JS', 'João Souza']];
+    const amt = parseFloat(String(s.sendAmt).replace(',', '.')) || 0, ok = amt > 0 && amt <= bal;
+    const to = people.find(p => p[0] === s.sendTo) || people[0];
+    const base = [['south_west', 'Recebido de Marina Alves', 'Hoje · 14:02', '+5,00', ''], ['hub', 'Créditos de retransmissão', 'Ontem · lote #0043', '+6,40', ''],
+      ['north_east', 'Enviado para Ana Costa', '29 out', '−2,00', ''], ['redeem', 'Bônus de boas-vindas', '28 out', '+25,00', 'em validação'], ['hub', 'Créditos de retransmissão', '28 out · lote #0042', '+6,40', '']];
+    const acts = [...s.sent.map(x => ['north_east', 'Enviado para ' + x.to, 'agora', '−' + fmt(x.amt), x.status, true]), ...base];
+    const bars = [12, 18, 9, 22, 30, 26, 34], mx = 34;
+    return {
+      isWalletNav: s.nav === 'wallet',
+      wAnim: mo('piuPg' + (s.wSeq % 2 ? 'A' : 'B') + ' .5s cubic-bezier(.2,.85,.3,1) both'),
+      bal: { shown: s.hideBal ? '••••••' : fmt(shownN), locked: s.hideBal ? '+ •••• a liberar' : '+ 60,00 a liberar', eye: s.hideBal ? 'visibility_off' : 'visibility', fiat: s.hideBal ? '' : '≈ R$ ' + fmt(bal * 0.42) },
+      toggleBal: () => { const v = !s.hideBal; try { localStorage.setItem('piu.hideBal', v ? '1' : '0'); } catch (e) {} this.setState({ hideBal: v }); if (!v) this.startBal(); },
+      wActions: [['north_east', 'Enviar', 'send'], ['south_west', 'Receber', 'receive'], ['swap_horiz', 'Converter', 'swap']].map(([icon, label, k], i) => ({ icon, label, anim: mo('piuPop .5s ' + (0.35 + i * 0.07) + 's cubic-bezier(.2,.9,.3,1.5) both'),
+        bg: s.wSheet === k ? 'var(--invink)' : 'rgba(127,127,127,.22)', fg: s.wSheet === k ? 'var(--ink)' : 'var(--invink)',
+        go: () => k === 'swap' ? this.showToast('Conversão disponível quando a malha alcançar a Mainnet', 'cloud_off') : this.setState({ wSheet: k, sendDone: false }) })),
+      activity: acts.map(([icon, t, d, v, st, fresh], i) => ({ icon, t, d, v, hasSt: !!st, st: st || '', border: i ? 'var(--line)' : 'transparent', vColor: v[0] === '+' ? 'var(--ink)' : 'var(--ink2)',
+        anim: mo(fresh ? 'piuMsgIn .45s cubic-bezier(.2,.9,.3,1.3) both' : 'piuUp .45s ' + (0.3 + i * 0.05) + 's cubic-bezier(.2,.85,.3,1) both') })),
+      credBars: bars.map((v, i) => ({ h: Math.round(v / mx * 100) + '%', bg: i === bars.length - 1 ? 'var(--ink)' : 'var(--bg3)', d: ['S', 'T', 'Q', 'Q', 'S', 'S', 'D'][i], anim: mo('piuGrowY .7s ' + (0.35 + i * 0.06) + 's cubic-bezier(.2,.9,.3,1.2) both') })),
+      sheetTitle: s.wSheet === 'receive' ? 'Receber LUNES' : s.sendDone ? 'Enviado' : 'Enviar LUNES',
+      sheetOpen: !!s.wSheet && s.wSheet !== 'swap', isSend: s.wSheet === 'send', isRecv: s.wSheet === 'receive', closeSheet: set({ wSheet: null }),
+      sendForm: !s.sendDone, sendOk: s.sendDone,
+      payees: people.map(([id, ini, n], i) => ({ ini, n: n.split(' ')[0], bg: s.sendTo === id ? 'var(--ink)' : 'var(--bg3)', fg: s.sendTo === id ? 'var(--invink)' : 'var(--ink)', scale: s.sendTo === id ? 'scale(1.08)' : 'none',
+        anim: mo('piuPop .45s ' + (0.1 + i * 0.05) + 's cubic-bezier(.2,.9,.3,1.5) both'), pick: set({ sendTo: id }) })),
+      sendAmt: s.sendAmt, onSendAmt: e => this.setState({ sendAmt: e.target.value.replace(/[^0-9,\.]/g, '') }),
+      quick: [1, 5, 10, 25].map(n => ({ label: String(n), bg: amt === n ? 'var(--ink)' : 'var(--bg2)', fg: amt === n ? 'var(--invink)' : 'var(--ink)', pick: set({ sendAmt: String(n) }) })),
+      avail: s.hideBal ? '••••' : fmt(bal), sendOp: ok ? 1 : 0.35, sendErr: amt > bal, sendTo: to[2],
+      confirmSend: () => { if (!ok) return; const prev = bal; this.setState(st => ({ sendDone: true, sent: [{ to: to[2], amt, status: 'na malha' }, ...st.sent] })); this.t(() => this.startBal(prev), 50);
+        this.t(() => this.setState(st => ({ sent: st.sent.map((x, i) => i === 0 ? { ...x, status: '' } : x) })), 2600); },
+      sentLabel: fmt(amt) + ' LUNES para ' + to[2], sendAgain: set({ sendDone: false }),
+      recvQr: this.qr(s.qrSeed + 23),
+      copyAddr: () => this.showToast('Endereço copiado', 'content_copy'),
+    };
+  }
+
+  authVals(s, set, mac) {
+    const wk = s.work || 'pair';
+    const workCopy = { pair: ['SINCRONIZANDO', 'Trazendo seus dados do celular.', 'Transferência cifrada, aparelho a aparelho, pela rede local. Nada passa por servidor.'],
+      create: ['GERANDO CHAVES', 'Criando sua identidade.', 'Tudo acontece neste computador. Nenhum dado é enviado.'],
+      restore: ['RESTAURANDO', 'Reconstruindo suas chaves.', 'Mensagens guardadas voltam quando contatos ou nós guardiões estiverem ao alcance.'] }[wk];
+    const copy = {
+      start: ['PIU PARA ' + (mac ? 'MAC' : 'LINUX'), 'Suas conversas, agora no computador.', 'Conecte ao celular que você já usa ou crie uma identidade nova aqui mesmo. Sem conta, sem número de telefone, sem servidor.'],
+      qr: ['CONECTAR AO CELULAR', 'Escaneie com o Piu no celular.', 'O computador vira mais um aparelho da sua identidade. As conversas sincronizam direto, pela rede local.'],
+      confirm: ['CONFIRMAÇÃO', 'Quase lá. Compare os códigos.', 'Isso garante que ninguém no meio do caminho está se passando pelo seu celular.'],
+      create: ['NOVA IDENTIDADE', 'Comece do zero, só neste computador.', 'Escolha como quer aparecer. Dá para ter as duas identidades e trocar quando quiser.'],
+      phrase: ['RESTAURAR', 'Digite suas 12 palavras.', 'A frase reconstrói suas chaves neste computador. As palavras nunca saem dele.'],
+      work: s.workDone ? [workCopy[0], 'Pronto. Bem-vindo de volta.' , workCopy[2]] : workCopy,
+    }[s.authStep];
+    if (s.workDone && wk === 'create') copy[1] = 'Pronto. Sua identidade existe.';
+    const rowsDef = { pair: [['key', 'Chaves da identidade'], ['contacts', 'Contatos · 48'], ['forum', 'Conversas · 12'], ['image', 'Mídia recente · 212 MB']],
+      create: [['casino', 'Gerando entropia'], ['key', 'Par de chaves Ed25519'], ['enhanced_encryption', 'Guardando no ' + this.keychain()], ['hub', 'Anunciando na malha local']],
+      restore: [['spellcheck', 'Conferindo as palavras'], ['key', 'Derivando as chaves'], ['contacts', 'Buscando contatos guardados'], ['hub', 'Procurando nós guardiões']] }[wk];
+    const filled = s.phrase.every(w => w.trim());
+    const nameOk = s.idType === 'anon' || s.name.trim();
+    const sample = 'caju farol vento ponte areia lua trilho mangue sabiá rede orvalho praça'.split(' ');
+    return {
+      auth: { kicker: copy[0], title: copy[1], sub: copy[2], canBack: s.authStep !== 'start' && s.authStep !== 'work', showSteps: s.authStep === 'qr' },
+      authAnim: 'piuPg' + (s.authSeq % 2 ? 'A' : 'B') + ' .5s cubic-bezier(.2,.85,.3,1) both',
+      authBack: () => { clearInterval(this.workI); this.step(s.authStep === 'confirm' ? 'qr' : 'start'); },
+      isStart: s.authStep === 'start', isQr: s.authStep === 'qr', isConfirm: s.authStep === 'confirm', isCreate: s.authStep === 'create', isWork: s.authStep === 'work', isPhrase: s.authStep === 'phrase',
+      startOpts: [['qr_code_scanner', 'Conectar ao meu celular', 'Use a identidade que você já tem. Leva 20 segundos.', 'qr'], ['person_add', 'Criar nova identidade', 'Começa aqui, sem celular. Chaves geradas neste computador.', 'create'], ['key', 'Restaurar com frase', 'Use as 12 palavras do seu backup.', 'phrase']]
+        .map(([icon, title, desc, k], i) => ({ icon, title, desc, go: () => { if (k === 'qr') this.setState({ qrLeft: 30 }); this.step(k); }, bg: i ? 'var(--bg)' : 'var(--ink)', fg: i ? 'var(--ink)' : 'var(--invink)', iconBg: i ? 'var(--bg2)' : 'var(--invink)', iconFg: i ? 'var(--ink)' : 'var(--ink)', anim: 'piuUp .55s ' + (0.15 + i * 0.09) + 's cubic-bezier(.2,.85,.3,1) both' })),
+      qrSteps: [['1', 'Abra o Piu no celular e vá em', 'Perfil → Aparelhos'], ['2', 'Toque em', 'Conectar computador'], ['3', 'Aponte a câmera para', 'este código']].map(([n, pre, b], i) => ({ n, pre, b, anim: 'piuUp .5s ' + (0.2 + i * 0.1) + 's both' })),
+      qrCells: this.qr(s.qrSeed), qrLeft: s.qrLeft, qrPct: (s.qrLeft / 30 * 100) + '%',
+      scan: () => this.step('confirm'), goQr: () => this.step('qr'), confirmPair: () => this.startWork('pair'),
+      codeWords: ['CAJU', 'FAROL', '82'].map((v, i) => ({ v, anim: 'piuPop .5s ' + (0.25 + i * 0.1) + 's cubic-bezier(.2,.9,.3,1.5) both' })),
+      idOpts: [['public', 'public', 'Pública', 'Nome e foto. Pessoas encontram você pelo código.'], ['anon', 'visibility_off', 'Anônima', 'Sem nome. Só um código derivado da chave.']].map(([k, icon, title, desc], i) => ({ icon, title, desc,
+        bg: s.idType === k ? 'var(--ink)' : 'var(--bg)', fg: s.idType === k ? 'var(--invink)' : 'var(--ink)', scale: s.idType === k ? 'scale(1.02)' : 'none', anim: 'piuUp .5s ' + (0.1 + i * 0.08) + 's both', pick: set({ idType: k }) })),
+      createPub: s.idType === 'public', createAnon: s.idType === 'anon', name: s.name, onName: e => this.setState({ name: e.target.value }), createOp: nameOk ? 1 : 0.4,
+      createId: () => nameOk && this.startWork('create'),
+      workDeg: (s.workPct * 3.6) + 'deg', workPctLabel: Math.round(s.workPct) + '%', workRunning: !s.workDone, workDone: s.workDone,
+      burst: Array.from({ length: 14 }, (_, i) => { const a = i / 14 * Math.PI * 2, r = 80 + (i % 3) * 22; return { x: Math.round(Math.cos(a) * r) + 'px', y: Math.round(Math.sin(a) * r) + 'px', d: (i % 4) * 0.03 + 's' }; }),
+      workRows: rowsDef.map(([icon, label], i) => { const loc = Math.max(0, Math.min(100, (s.workPct - i * 25) * 4)); const done = loc >= 100, run = loc > 0 && !done;
+        return { icon: done ? 'check' : icon, label, state: done ? 'pronto' : run ? Math.round(loc) + '%' : 'aguardando', pct: run ? loc + '%' : '0%', border: i ? 'var(--line)' : 'transparent', op: loc > 0 ? 1 : 0.45,
+          iconBg: done ? 'var(--ink)' : 'var(--bg2)', iconFg: done ? 'var(--invink)' : 'var(--ink)', iconAnim: done ? 'piuPop .4s cubic-bezier(.2,.9,.3,1.5) both' : run ? 'piuBreath .9s ease-in-out infinite' : 'none' }; }),
+      workNote: s.workDone ? 'tudo certo · abrindo o Piu' : 'não feche esta janela',
+      phraseSlots: s.phrase.map((v, i) => ({ n: String(i + 1), v, ring: v.trim() ? '0 0 0 1.5px var(--ink) inset' : '0 0 0 1px var(--line2) inset', anim: 'piuUp .4s ' + (i * 0.03) + 's both',
+        set: e => { const val = e.target.value; this.setState(st => ({ phrase: st.phrase.map((w, j) => j === i ? val : w) })); } })),
+      fillPhrase: () => sample.forEach((w, i) => this.t(() => this.setState(st => ({ phrase: st.phrase.map((x, j) => j === i ? w : x) })), i * 70)),
+      restoreOp: filled ? 1 : 0.4, restore: () => filled && this.startWork('restore'),
+      keepT: this.tg(s.keep), toggleKeep: () => this.setState(st => ({ keep: !st.keep })), keychain: this.keychain(),
+    };
+  }
+
+  appVals(s, set, mac, mod, mo, seg, c0) {
+    const kindIcon = { group: 'group', channel: 'campaign' };
+    const statusIcon = { criada: 'radio_button_unchecked', aguardando: 'schedule', encaminhada: 'check', entregue: 'done_all' };
+    const statusLabel = { criada: 'criada', aguardando: 'na fila', encaminhada: 'encaminhada', entregue: 'entregue' };
+    const av = c => ({ radius: c.kind === 'direct' ? '50%' : '13px', radiusL: c.kind === 'direct' ? '50%' : '24px', avBg: c.inv ? 'var(--ink)' : 'var(--bg3)', avFg: c.inv ? 'var(--invink)' : 'var(--ink)' });
+    const mine = s.chats.filter(c => c.ident === s.identity);
+    const fm = { all: () => true, direct: c => c.kind === 'direct', group: c => c.kind === 'group', channel: c => c.kind === 'channel' };
+    const q = s.q.trim().toLowerCase();
+    const list = mine.filter(fm[s.filter]).filter(c => !q || c.name.toLowerCase().includes(q));
+    const pub = s.identity === 'public';
+    const nm = (s.name || 'Cardeal').trim();
+    const me = pub ? { initials: nm.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase(), bg: 'var(--ink)', fg: 'var(--invink)', radius: '50%', radiusL: '50%', icon: 'public', label: 'Pública', handle: '@' + nm.toLowerCase().normalize('NFD').replace(/[^a-z0-9]/g, ''), isPub: true, isAnon: false }
+      : { initials: '7F', bg: 'var(--bg3)', fg: 'var(--ink)', radius: '13px', radiusL: '24px', icon: 'visibility_off', label: 'Anônima', handle: 'piu:b7e0…41dc', isPub: false, isAnon: true };
+    const empty = { id: '-', name: 'Nenhuma conversa', initials: '·', kind: 'direct', sub: '', via: '', viaIcon: 'hub', msgs: [], fp: [] };
+    const c = c0 && c0.ident === s.identity ? c0 : (mine[0] || empty);
+    const first = c.name.split(' ')[0];
+    const totalUnread = s.chats.reduce((a, x) => a + (x.unread || 0), 0);
+    const msgs = (c.msgs || []).map((m, i, a) => ({ ...m, isMe: m.from === 'me', isThem: m.from === 'them', isSys: m.from === 'sys', anim: mo(m.anim || 'none'),
+      gap: i && a[i - 1].from !== m.from ? '10px' : '0px', showSender: !!m.sender && (!i || a[i - 1].sender !== m.sender),
+      statusIcon: statusIcon[m.status] || '', statusLabel: statusLabel[m.status] || '', ring: s.routeMsg === m.id ? '0 0 0 2px var(--bg), 0 0 0 4px var(--ink)' : '0 0 0 0 transparent',
+      open: () => this.setState({ routeMsg: m.id, infoOpen: true }) }));
+    this.msgCount = c.id + msgs.length + (s.typing ? 't' : '');
+    const nodes = (c.route && c.route.nodes) || [];
+    const tempV = s.temp[c.id] || 'off';
+    const isMuted = !!s.muted[c.id];
+    const toggleMute = () => { this.setState(st => ({ muted: { ...st.muted, [c.id]: !st.muted[c.id] } })); this.showToast(isMuted ? c.name + ' com som de novo' : c.name + ' silenciada', isMuted ? 'notifications' : 'notifications_off'); };
+    const leave = () => {
+      if (c.kind === 'direct') this.setState(st => ({ blocked: [{ id: c.id, name: c.name, initials: c.initials, when: 'hoje' }, ...st.blocked], chats: st.chats.filter(x => x.id !== c.id), active: null, infoOpen: false }));
+      else this.setState(st => ({ chats: st.chats.filter(x => x.id !== c.id), active: null, infoOpen: false }));
+      this.showToast(c.kind === 'direct' ? first + ' bloqueado' : 'Você saiu de ' + c.name, c.kind === 'direct' ? 'block' : 'logout');
+    };
+    const dens = s.look.density === 'compact';
+    return {
+      rail: [['chats', 'forum', 'Conversas'], ['wallet', 'account_balance_wallet', 'Carteira'], ['settings', 'settings', 'Ajustes']].map(([k, icon, label]) => ({ icon, label, bg: s.nav === k ? 'var(--bg3)' : 'transparent', fill: s.nav === k ? 1 : 0,
+        hasBadge: k === 'chats' && totalUnread > 0, badge: String(totalUnread), go: () => this.goNav(k) })),
+      payInChat: () => { const p = ['marina', 'ana', 'pedro', 'joao'].includes(c.id) ? c.id : s.sendTo; this.goNav('wallet'); this.setState({ wSheet: 'send', sendTo: p, sendDone: false }); },
+      railAnim: mo('piuRail .5s .05s cubic-bezier(.2,.85,.3,1) both'), listAnim: mo('piuUp .55s .12s cubic-bezier(.2,.85,.3,1) both'), chatAnim: mo('piuUp .6s .2s cubic-bezier(.2,.85,.3,1) both'),
+      me, toggleIdentity: () => { const ni = pub ? 'anon' : 'public'; const f = s.chats.find(x => x.ident === ni); this.setState({ identity: ni, active: f ? f.id : null, routeMsg: null }); this.showToast(ni === 'anon' ? 'Identidade anônima ativa' : 'Identidade pública ativa', ni === 'anon' ? 'visibility_off' : 'public'); },
+      isChatsNav: s.nav === 'chats', isSettingsNav: s.nav === 'settings',
+      q: s.q, onQ: e => this.setState({ q: e.target.value }), kSearch: mod + ' K',
+      filters: [['all', 'Todas'], ['direct', 'Pessoas'], ['group', 'Grupos'], ['channel', 'Canais']].map(([k, label]) => ({ label, bg: s.filter === k ? 'var(--ink)' : 'var(--bg2)', fg: s.filter === k ? 'var(--invink)' : 'var(--ink)', pick: set({ filter: k }) })),
+      list: list.map((x, i) => { const last = (x.msgs || [])[x.msgs.length - 1]; const fromMe = last && last.from === 'me';
+        return { ...x, ...av(x), preview: last ? (fromMe ? 'Você: ' : last.sender ? last.sender + ': ' : '') + last.text : '', hasUnread: x.unread > 0, hasKind: !!kindIcon[x.kind], kindIcon: kindIcon[x.kind] || '', isMuted: !!s.muted[x.id],
+          bg: x.id === c.id ? 'var(--bg2)' : 'transparent', anim: mo('piuUp .45s ' + (0.18 + i * 0.045) + 's cubic-bezier(.2,.85,.3,1) both'), open: () => this.openChat(x.id) }; }),
+      noResults: !list.length, rowPad: dens ? '8px' : '11px', avSize: dens ? '38px' : '46px',
+      chat: { ...c, ...av(c), first, sub: s.typing === c.id ? 'digitando…' : c.sub, verified: !!s.verified[c.id], muteIcon: isMuted ? 'notifications_off' : 'notifications', muteLabel: isMuted ? 'Ativar som' : 'Silenciar',
+        canWrite: c.kind !== 'channel' && c.id !== '-', readOnly: c.kind === 'channel', isDirect: c.kind === 'direct' && c.id !== '-', offline: !!c.offline,
+        leaveIcon: c.kind === 'direct' ? 'block' : 'logout', leaveLabel: c.kind === 'direct' ? 'Bloquear ' + first : c.kind === 'group' ? 'Sair do grupo' : 'Deixar o canal',
+        fp: (c.fp || []).map((v, i) => ({ v, anim: 'piuUp .3s ' + (i * 0.04) + 's both' })) },
+      chatKey: c.id,
+      msgs, showTyping: s.typing === c.id, msgSize: { s: '14px', m: '15px', l: '16.5px' }[s.look.font],
+      scrollRef: this.scrollRefFn || (this.scrollRefFn = el => { this.scrollEl = el; if (el) el.scrollTop = el.scrollHeight; }),
+      draft: s.draft, onDraft: e => this.setState({ draft: e.target.value }),
+      onKey: e => { if (e.key !== 'Enter') return; const ok = s.look.enter ? !e.shiftKey : (e.metaKey || e.ctrlKey); if (ok) { e.preventDefault(); this.send(); } },
+      send: () => this.send(), sendOpacity: s.draft.trim() ? 1 : 0.35, sendScale: s.draft.trim() ? 'scale(1)' : 'scale(.85)',
+      composerHint: 'Mensagem para ' + first, enterHint: s.look.enter ? 'Enter envia · Shift+Enter quebra linha' : mod + '+Enter envia',
+      attach: () => this.showToast('Arraste arquivos para a janela ou cole com ' + mod + '+V', 'attach_file'),
+      toggleMute, infoOpen: s.infoOpen, infoBtnBg: s.infoOpen ? 'var(--bg3)' : 'transparent',
+      toggleInfo: () => this.setState(st => ({ infoOpen: !st.infoOpen, routeMsg: st.infoOpen ? null : st.routeMsg })),
+      hasRoute: !!s.routeMsg && nodes.length > 0, closeRoute: set({ routeMsg: null }),
+      route: nodes.map((n, i) => ({ n: n.n, k: n.k, hasVia: i > 0, via: (c.route.vias || [])[i - 1] || '', dot: i === 0 || i === nodes.length - 1 ? 'currentColor' : 'transparent',
+        anim: mo('piuUp .4s ' + (0.1 + i * 0.14) + 's cubic-bezier(.2,.85,.3,1) both'), travel: mo('piuTravelY 1.1s ' + (i * 0.25) + 's ease-in-out infinite') })),
+      infoActions: [{ icon: isMuted ? 'notifications_off' : 'notifications', label: isMuted ? 'Com som' : 'Silenciar', fill: 0, act: toggleMute },
+        { icon: 'search', label: 'Buscar', fill: 0, act: () => this.showToast('Busca dentro da conversa: ' + mod + '+F', 'search') },
+        c.kind === 'direct' ? { icon: 'verified', label: s.verified[c.id] ? 'Verificado' : 'Verificar', fill: s.verified[c.id] ? 1 : 0, act: () => { this.setState(st => ({ verified: { ...st.verified, [c.id]: !st.verified[c.id] } })); if (!s.verified[c.id]) this.showToast(first + ' verificado', 'verified'); } }
+          : { icon: 'person_add', label: 'Convidar', fill: 0, act: () => this.showToast('Link de convite copiado', 'link') }],
+      tempOpts: [['off', 'Não'], ['1h', '1 h'], ['24h', '24 h'], ['7d', '7 dias']].map(([k, label]) => ({ label, ...seg(tempV, k), pick: () => {
+        if (k === tempV) return;
+        const sys = { id: 'tmp' + Date.now(), from: 'sys', text: k === 'off' ? 'Mensagens temporárias desligadas.' : 'Mensagens temporárias: somem depois de ' + label + '.', time: this.now(), anim: 'piuMsgIn .35s both' };
+        this.setState(st => ({ temp: { ...st.temp, [c.id]: k }, chats: st.chats.map(x => x.id === c.id ? { ...x, msgs: [...x.msgs, sys] } : x) })); } })),
+      leaveAct: leave,
+    };
+  }
+
+  setVals(s, set, mac, mod, mo, seg) {
+    const R = (name, desc, extra) => ({ name, desc: desc || '', hasDesc: !!desc, hasIcon: false, icon: '', isToggle: false, isSeg: false, isAction: false, isBtn: false, isKbd: false,
+      track: '', knob: '', knobBg: '', toggle: () => {}, opts: [], value: '', act: () => {}, btnLabel: '', btnBg: 'var(--bg)', btnFg: 'var(--ink)', keys: [], ...extra });
+    const T = (name, desc, on, fn) => R(name, desc, { isToggle: true, ...this.tg(on), toggle: fn });
+    const S = (name, desc, opts, cur, pick) => R(name, desc, { isSeg: true, opts: opts.map(([v, l]) => ({ label: l, ...seg(cur, v), pick: () => pick(v) })) });
+    const A = (name, desc, value, act) => R(name, desc, { isAction: true, value, act: act || (() => {}) });
+    const B = (name, desc, btnLabel, act, icon, primary) => R(name, desc, { isBtn: true, btnLabel, act, hasIcon: !!icon, icon: icon || '', btnBg: primary ? 'var(--ink)' : 'var(--bg)', btnFg: primary ? 'var(--invink)' : 'var(--ink)' });
+    const K = (name, keys) => R(name, '', { isKbd: true, keys });
+    const up = (grp, k, v) => this.setState(st => ({ [grp]: { ...st[grp], [k]: v } }));
+    const fl = (grp, k) => () => this.setState(st => ({ [grp]: { ...st[grp], [k]: !st[grp][k] } }));
+    const pub = s.identity === 'public';
+    const devIcon = { this: mac ? 'laptop_mac' : 'computer', phone: 'smartphone', tablet: 'tablet_android' };
+    const pages = {
+      profile: ['account_circle', 'Perfil', 'Perfil e identidade', 'Como você aparece para os outros. Cada identidade tem chaves e contatos separados.', [
+        { title: 'IDENTIDADE', rows: [S('Identidade ativa', 'Troque a qualquer momento pelo avatar na barra lateral', [['public', 'Pública'], ['anon', 'Anônima']], s.identity, v => this.setState({ identity: v, active: (s.chats.find(x => x.ident === v) || {}).id || null })),
+          A('Código do perfil', 'Mostre ou envie para alguém adicionar você', pub ? 'piu:7f3a…c19e' : 'piu:b7e0…41dc', () => this.showToast('Código copiado', 'content_copy')),
+          B('Mostrar QR do perfil', 'Para alguém escanear com o celular', 'Mostrar', () => this.setState({ dialog: 'profileQr' }), 'qr_code_2')] }]],
+      devices: ['devices', 'Aparelhos', 'Aparelhos conectados', 'Todos usam a mesma identidade. Cada um tem sua própria chave e pode ser desconectado sozinho.', [
+        { title: 'CONECTADOS', rows: s.devices.map(d => d.kind === 'this' ? R(d.name, d.meta, { hasIcon: true, icon: devIcon.this, isAction: true, value: mac ? 'macOS 15' : 'Ubuntu 24.04' })
+          : R(d.name, d.meta, { hasIcon: true, icon: devIcon[d.kind], isBtn: true, btnLabel: 'Desconectar', act: () => this.setState({ dialog: 'revoke:' + d.id }) })) },
+        { title: 'NOVO', rows: [B('Conectar outro aparelho', 'Mostra um QR para o celular ou outro computador', 'Mostrar QR', () => this.setState({ dialog: 'pairQr' }), 'qr_code_2', true)] }]],
+      notifs: ['notifications', 'Notificações', 'Notificações', 'Avisos nativos do ' + (mac ? 'macOS' : 'sistema') + '. O Piu escuta a malha mesmo com a janela fechada, se ficar ' + (mac ? 'na barra de menus' : 'na bandeja') + '.', [
+        { title: 'AVISAR SOBRE', rows: [T('Mensagens diretas', '', s.notif.msg, fl('notif', 'msg')), T('Grupos', '', s.notif.group, fl('notif', 'group')), T('Canais', 'Só os que você marcou como importantes', s.notif.channel, fl('notif', 'channel')),
+          T('Pedidos de conversa por perto', '', s.notif.nearby, fl('notif', 'nearby')), T('Carteira LUNES', 'Recebimentos e distribuições', s.notif.wallet, fl('notif', 'wallet')),
+          R('Alertas de emergência', 'Sempre ativos quando assinados por fonte oficial', { isAction: true, value: 'sempre' })] },
+        { title: 'COMO AVISAR', rows: [S('Mostrar no aviso', '', [['always', 'Nome e texto'], ['name', 'Só o nome'], ['never', 'Nada']], s.notif.preview, v => up('notif', 'preview', v)),
+          T('Som', '', s.notif.sound, fl('notif', 'sound')), T(mac ? 'Contador no ícone do Dock' : 'Contador no ícone', '', s.notif.badge, fl('notif', 'badge')),
+          T('Não perturbe', 'Silencia tudo, exceto emergências', s.notif.dnd, fl('notif', 'dnd')),
+          B('Testar notificação', 'Mostra um aviso de exemplo agora', 'Testar', () => this.showNote({ chat: (s.chats.find(x => x.ident === s.identity) || {}).id, title: 'Marina Alves', body: 'Chego em 10 min, estou perto da praça.', initials: 'MA', round: true, test: true }), 'notifications_active')] }]],
+      privacy: ['shield_lock', 'Privacidade', 'Privacidade e segurança', 'O que os outros veem e o que fica guardado neste computador.', [
+        { title: 'VISIBILIDADE', rows: [T('Confirmação de leitura', '', s.priv.read, fl('priv', 'read')), T('Mostrar quando estou digitando', '', s.priv.typing, fl('priv', 'typing')),
+          S('Quem me encontra pelo nome', '', [['all', 'Todos'], ['contacts', 'Contatos'], ['none', 'Ninguém']], s.priv.find, v => up('priv', 'find', v))] },
+        { title: 'METADADOS', rows: [T('Atraso aleatório no envio', 'Até 30 s · dificulta correlação por horário', s.priv.delay, fl('priv', 'delay')), T('Igualar tamanho das mensagens', 'Nós intermediários não deduzem o conteúdo pelo tamanho', s.priv.pad, fl('priv', 'pad'))] },
+        { title: 'BLOQUEIO', rows: [T('Bloquear o Piu ao suspender', mac ? 'Pede Touch ID ou senha ao voltar' : 'Pede a senha do sistema ao voltar', s.priv.lockSleep, fl('priv', 'lockSleep')),
+          S('Bloquear depois de inativo', '', [['5', '5 min'], ['15', '15 min'], ['60', '1 h'], ['never', 'Nunca']], s.priv.lockAfter, v => up('priv', 'lockAfter', v))] },
+        { title: 'CONTATOS BLOQUEADOS', rows: s.blocked.length ? s.blocked.map(b => R(b.name, 'desde ' + b.when, { hasIcon: true, icon: 'block', isBtn: true, btnLabel: 'Desbloquear', act: () => this.setState({ dialog: 'unblock:' + b.id }) })) : [R('Ninguém bloqueado', '', {})] }]],
+      look: ['palette', 'Aparência', 'Aparência', 'Ajuste o Piu ao seu jeito de ler.', [
+        { title: 'TEMA E TEXTO', rows: [S('Tema', '', [['light', 'Claro'], ['dark', 'Escuro']], s.themeSel || this.props.theme || 'light', v => this.setState({ themeSel: v })),
+          S('Tamanho do texto', '', [['s', 'Pequeno'], ['m', 'Médio'], ['l', 'Grande']], s.look.font, v => up('look', 'font', v)),
+          S('Densidade da lista', '', [['comfort', 'Confortável'], ['compact', 'Compacta']], s.look.density, v => up('look', 'density', v)),
+          T('Animações', 'Desligue para uma interface mais calma', s.look.motion, fl('look', 'motion'))] }]],
+      chats: ['chat', 'Conversas', 'Conversas e mídia', 'Como escrever, o que baixar e quanto tempo guardar.', [
+        { title: 'ESCREVER', rows: [T('Enter envia a mensagem', s.look.enter ? 'Shift+Enter quebra linha' : mod + '+Enter envia', s.look.enter, fl('look', 'enter')),
+          S('Temporárias por padrão', 'Vale para conversas novas', [['off', 'Não'], ['24h', '24 h'], ['7d', '7 dias']], s.sto.temp, v => up('sto', 'temp', v))] },
+        { title: 'MÍDIA E ESPAÇO', rows: [S('Baixar mídia automaticamente', '', [['wifi', 'Rede local'], ['always', 'Sempre'], ['never', 'Nunca']], s.sto.auto, v => up('sto', 'auto', v)),
+          S('Guardar mensagens de terceiros', 'Retransmitidas por você, cifradas, sem acesso ao conteúdo', [['24', '24 h'], ['48', '48 h'], ['168', '7 dias']], s.sto.ret, v => up('sto', 'ret', v)),
+          B('Limpar cache de mídia', '312 MB · as conversas ficam', 'Limpar', () => this.showToast('312 MB liberados', 'cleaning_services'))] }]],
+      network: ['hub', 'Rede', 'Rede e malha', 'Por onde este computador conversa com os outros nós.', [
+        { title: 'TRANSPORTES', rows: [T('Rede local (Wi-Fi e cabo)', 'Descobre nós na mesma rede', s.net.lan, fl('net', 'lan')), T('Bluetooth', 'Alcance curto, sem rede nenhuma', s.net.bt, fl('net', 'bt'))] },
+        { title: 'AJUDAR A REDE', rows: [T('Retransmitir para outros', 'Seu computador vira um nó e fortalece a malha', s.net.relay, fl('net', 'relay')),
+          S('Banda para retransmitir', '', [['1', '1 Mbps'], ['5', '5 Mbps'], ['20', '20 Mbps']], s.net.bw, v => up('net', 'bw', v)), A('Nós vistos agora', '', '6 por perto')] }]],
+      system: [mac ? 'laptop_mac' : 'computer', 'Sistema', 'Sistema', mac ? 'Integração com o macOS.' : 'Integração com o seu desktop Linux.', [
+        { title: 'INICIAR', rows: [T(mac ? 'Abrir ao iniciar sessão' : 'Iniciar com o sistema', '', s.sys.login, fl('sys', 'login')),
+          T(mac ? 'Ícone na barra de menus' : 'Ícone na bandeja do sistema', 'Fechar a janela mantém o Piu recebendo', s.sys.tray, fl('sys', 'tray'))] },
+        { title: 'ATUALIZAÇÕES', rows: [S('Atualizar', 'Pacotes conferidos por assinatura antes de instalar', [['auto', 'Automático'], ['ask', 'Perguntar']], s.sys.update, v => up('sys', 'update', v)),
+          A('Versão', '', '0.4.2 · assinatura conferida'), A('Pacote', '', mac ? 'Universal · Apple Silicon e Intel' : 'AppImage · .deb · Flatpak')] }]],
+      backup: ['key', 'Backup', 'Backup das chaves', 'Sem backup, perder este computador significa perder a identidade. Ninguém consegue recuperar por você.', [
+        { title: 'GUARDAR', rows: [B('Exportar backup cifrado', 'Arquivo .piukey protegido por senha', 'Exportar', () => this.showToast('piu-cardeal.piukey salvo em Downloads', 'download'), 'download'),
+          B('Frase de recuperação', mac ? 'Pede Touch ID para mostrar' : 'Pede a senha do sistema para mostrar', s.bkShown ? 'Ocultar' : 'Mostrar', () => this.setState(st => ({ bkShown: !st.bkShown })), 'visibility', !s.bkShown)] }]],
+      lang: ['translate', 'Idioma', 'Idioma e região', 'O idioma do Piu neste computador. Cada aparelho pode usar o seu.', [
+        { title: 'IDIOMA DO APP', rows: this.langs().map(([k, n, e]) => R(n, e, { hasIcon: true, icon: s.lang === k ? 'check_circle' : 'radio_button_unchecked', isAction: s.lang === k, value: s.lang === k ? 'em uso' : '',
+          act: () => { if (s.lang === k) return; this.setState({ lang: k }); this.showToast((this.L(k).langSet || 'Idioma') + ': ' + n, 'translate'); } })) },
+        { title: 'REGIÃO', rows: [S('Formato de data e números', '', [['auto', 'Do idioma'], ['br', '31/10 · 1.234,56'], ['us', '10/31 · 1,234.56']], s.region, v => this.setState({ region: v })),
+          S('Primeiro dia da semana', '', [['sun', 'Domingo'], ['mon', 'Segunda']], s.weekStart, v => this.setState({ weekStart: v })),
+          T('Traduzir mensagens recebidas', 'Tradução feita neste computador · o texto não sai daqui', s.autoTr, () => this.setState(st => ({ autoTr: !st.autoTr }))),
+          T('Corretor ortográfico', 'Usa o dicionário do ' + (mac ? 'macOS' : 'sistema'), s.spell, () => this.setState(st => ({ spell: !st.spell })))] }]],
+      keys: ['keyboard', 'Atalhos', 'Atalhos de teclado', 'Tudo no Piu dá para fazer sem tirar a mão do teclado.', [
+        { title: 'NAVEGAR', rows: [K('Buscar conversas', [mod, 'K']), K('Próxima conversa', [mod, ']']), K('Conversa anterior', [mod, '[']), K('Abrir ajustes', [mod, ','])] },
+        { title: 'CONVERSA', rows: [K('Nova conversa', [mod, 'N']), K('Detalhes da conversa', [mod, 'I']), K('Silenciar conversa', [mod, '⇧', 'M']), K('Bloquear o Piu', [mod, 'L'])] }]],
+    };
+    const p = pages[s.page];
+    return {
+      pages: Object.keys(pages).map(k => ({ icon: pages[k][0], label: this.L(s.lang)[k] || pages[k][1], bg: s.page === k ? 'var(--bg3)' : 'transparent', weight: s.page === k ? 600 : 450, fill: s.page === k ? 1 : 0,
+        go: () => k !== s.page && this.setState(st => ({ page: k, pgSeq: st.pgSeq + 1 })) })),
+      pg: { title: p[2], desc: p[3], sections: p[4].map((sec, si) => ({ title: sec.title, anim: mo('piuUp .45s ' + (0.08 + si * 0.07) + 's cubic-bezier(.2,.85,.3,1) both'),
+        rows: sec.rows.map((r, i) => ({ ...r, border: i ? 'var(--line)' : 'transparent' })) })) },
+      pgAnim: mo('piuPg' + (s.pgSeq % 2 ? 'A' : 'B') + ' .45s cubic-bezier(.2,.85,.3,1) both'),
+      isPgProfile: s.page === 'profile', isPgBackup: s.page === 'backup', isPgChats: s.page === 'chats',
+      fpGroups: (pub ? ['7F3A', '91C2', '0B4E', 'D8A1', '55E0', '3C7F', 'A912', 'C19E'] : ['B7E0', '2D19', 'F4C8', '0A63', '9E21', '7B5D', 'C0F4', '41DC']).map((v, i) => ({ v, anim: mo('piuUp .35s ' + (0.15 + i * 0.03) + 's both') })),
+      bkWords: 'caju farol vento ponte areia lua trilho mangue sabiá rede orvalho praça'.split(' ').map((w, i) => ({ n: String(i + 1), w })), bkBlur: s.bkShown ? 'none' : 'blur(7px)',
+      usage: [['Mensagens', '41%', 'var(--ink)'], ['Mídia', '33%', 'var(--ink2)'], ['Retransmissão', '14%', 'var(--ink3)']].map(([l, w, bg], i) => ({ l, w, bg, anim: mo('piuGrowX .7s ' + (0.2 + i * 0.12) + 's cubic-bezier(.2,.85,.3,1) both') })),
+      askLogout: set({ dialog: 'logout' }),
+      ...this.overlayVals(s, set, mac, mo),
+    };
+  }
+
+  overlayVals(s, set, mac, mo) {
+    const d = s.dialog || '';
+    const close = set({ dialog: null });
+    let dlg = { icon: '', title: '', body: '', primary: '', act: close, hasSecond: true, isQr: false };
+    if (d === 'logout') dlg = { icon: 'logout', title: 'Desconectar este computador?', body: 'As chaves desta identidade serão apagadas daqui. O celular e os outros aparelhos continuam funcionando.', primary: 'Desconectar', hasSecond: true, isQr: false,
+      act: () => { this.setState(st => ({ dialog: null, phase: 'auth', authStep: 'start', authSeq: st.authSeq + 1, workDone: false, nav: 'chats' })); } };
+    if (d === 'pairQr' || d === 'profileQr') dlg = { icon: 'qr_code_2', title: d === 'pairQr' ? 'Escaneie com o novo aparelho' : 'Seu código de perfil', body: d === 'pairQr' ? 'No Piu do outro aparelho: Entrar → Conectar a outro aparelho.' : 'Quem escanear pode iniciar uma conversa com você.', primary: 'Pronto', hasSecond: false, isQr: true, act: close };
+    if (d.indexOf('revoke:') === 0) { const dev = s.devices.find(x => x.id === d.slice(7)) || {}; dlg = { icon: 'phonelink_erase', title: 'Desconectar ' + dev.name + '?', body: 'Ele perde acesso às conversas na hora. A chave dele é revogada e avisada aos seus contatos.', primary: 'Desconectar', hasSecond: true, isQr: false,
+      act: () => { this.setState(st => ({ dialog: null, devices: st.devices.filter(x => x.id !== dev.id) })); this.showToast(dev.name + ' desconectado', 'phonelink_erase'); } }; }
+    if (d.indexOf('unblock:') === 0) { const b = s.blocked.find(x => x.id === d.slice(8)) || {}; dlg = { icon: 'lock_open', title: 'Desbloquear ' + b.name + '?', body: 'Essa pessoa volta a poder enviar mensagens e pedidos de conversa para você.', primary: 'Desbloquear', hasSecond: true, isQr: false,
+      act: () => { this.setState(st => ({ dialog: null, blocked: st.blocked.filter(x => x.id !== b.id) })); this.showToast(b.name + ' desbloqueado', 'lock_open'); } }; }
+    const n = s.note, hide = n && s.notif.preview !== 'always';
+    return {
+      dialogOpen: !!s.dialog, dlg, closeDialog: close, dlgQr: this.qr(s.qrSeed + 7),
+      noteOpen: !!n, note: n ? { title: s.notif.preview === 'never' ? 'Piu' : n.title, body: hide ? 'Nova mensagem' : n.body, initials: n.initials, radius: n.round ? '50%' : '10px', app: mac ? 'PIU' : 'Piu' } : { title: '', body: '', initials: '', radius: '50%', app: '' },
+      noteLeft: mac ? 'auto' : 'calc(50% - 190px)', noteRight: mac ? '14px' : 'auto', noteTop: mac ? '52px' : '58px', noteW: mac ? '356px' : '380px', noteRadius: mac ? '18px' : '14px',
+      noteAnim: !n ? 'none' : n.leaving ? 'piuNoteOut .35s ease-in forwards' : mac ? 'piuNoteMac .55s cubic-bezier(.2,.9,.3,1.1) both' : 'piuNoteLin .5s cubic-bezier(.2,.9,.3,1.15) both',
+      openNote: () => { if (n && n.chat) this.openChat(n.chat); this.setState({ note: null }); }, closeNote: e => { e.stopPropagation(); this.setState({ note: null }); },
+      toastOpen: !!s.toast, toast: s.toast || { text: '', icon: '' },
+    };
+  }
+}
+</script>
+</body>
+</html>

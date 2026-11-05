@@ -1,0 +1,1112 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>*{box-sizing:border-box}input{font-family:inherit}input::placeholder{color:var(--ink3)}a{color:inherit}a:hover{opacity:.7}
+[data-piu-theme="light"]{--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--knob:#ffffff;--scrim:rgba(0,0,0,.28)}
+[data-piu-theme="dark"]{--bg:#0a0a0a;--bg2:#161616;--bg3:#262626;--side:#0e0e0e;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--knob:#8c8c88;--scrim:rgba(0,0,0,.62)}
+@keyframes piuUp{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuFade{from{opacity:0}to{opacity:1}}
+@keyframes piuPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
+@keyframes piuDialog{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
+@keyframes piuGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+@keyframes piuGrowX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes piuRingS{from{transform:scale(1);opacity:.55}to{transform:scale(2.3);opacity:0}}
+@keyframes piuTravel{from{left:0%}to{left:100%}}
+@keyframes piuPanel{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+@keyframes piuToast{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+</style>
+</helmet>
+<div data-piu-theme="{{ theme }}" style="width:1280px;height:820px;position:relative;overflow:hidden;border-radius:14px;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2);">
+
+  <div style="height:42px;flex:none;display:flex;align-items:center;gap:16px;padding:0 16px;background:var(--side);border-bottom:1px solid var(--line);">
+    <div style="display:flex;gap:7px;"><div style="width:12px;height:12px;border-radius:50%;background:var(--bg3);"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--bg3);"></div><div style="width:12px;height:12px;border-radius:50%;background:var(--bg3);"></div></div>
+    <div style="flex:1;display:flex;justify-content:center;">
+      <div style="height:26px;padding:0 14px;border-radius:8px;background:var(--bg2);display:flex;align-items:center;gap:8px;font:400 12px 'Geist Mono',monospace;color:var(--ink2);min-width:380px;justify-content:center;">
+        <span style="font-family:'Material Symbols Rounded';font-size:14px;line-height:1;color:var(--ink);">lock</span>piu-node.local:8420<span style="opacity:.5;">· painel local do Mini-PC da garagem</span>
+      </div>
+    </div>
+    <div style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:550;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">wifi_off</span>sem internet</div>
+  </div>
+
+  <div style="flex:1;min-height:0;display:flex;">
+    <div style="width:232px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;padding:22px 14px 16px;gap:22px;">
+      <div style="display:flex;align-items:baseline;gap:8px;padding:0 8px;">
+        <div style="font-size:30px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></div>
+        <div style="font:500 10.5px 'Geist Mono',monospace;letter-spacing:.06em;padding:2px 7px;border-radius:6px;border:1px solid var(--line2);color:var(--ink2);">PROVIDER</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;padding:10px;border-radius:14px;background:var(--bg2);">
+        <div style="width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font:600 13px Geist;flex:none;">C</div>
+        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;">
+          <div style="font-size:14px;font-weight:600;">Cardeal</div>
+          <div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ operatorSub }}</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:2px;">
+        <sc-for list="{{ nav }}" as="n" hint-placeholder-count="6">
+          <button onClick="{{ n.go }}" style="display:flex;align-items:center;gap:12px;height:40px;padding:0 12px;border:none;border-radius:11px;background:{{ n.bg }};color:{{ n.fg }};font:{{ n.weight }} 14px Geist;cursor:pointer;text-align:left;transition:background .15s;">
+            <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'FILL' {{ n.fill }}, 'wght' 350;">{{ n.icon }}</span>
+            <span style="flex:1;">{{ n.label }}</span>
+            <sc-if value="{{ n.hasBadge }}" hint-placeholder-val="{{ false }}"><span style="font:500 11px 'Geist Mono',monospace;opacity:.7;">{{ n.badge }}</span></sc-if>
+          </button>
+        </sc-for>
+      </div>
+      <div style="flex:1;"></div>
+      <div style="padding:12px;border-radius:14px;border:1px dashed var(--line2);display:flex;flex-direction:column;gap:6px;">
+        <div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">cloud_off</span>Mainnet fora de alcance</div>
+        <div style="font-size:12px;color:var(--ink2);line-height:1.4;">Última sincronização 30 out, 18:02. Créditos ficam guardados aqui até lá.</div>
+      </div>
+      <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg3);">
+        <sc-for list="{{ themeOpts }}" as="o" hint-placeholder-count="2">
+          <button onClick="{{ o.pick }}" style="flex:1;height:30px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 12.5px Geist;cursor:pointer;box-shadow:{{ o.shadow }};display:flex;align-items:center;justify-content:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">{{ o.icon }}</span>{{ o.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="flex:1;min-width:0;overflow-y:auto;scrollbar-width:thin;">
+      <div style="padding:28px 32px 0;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;">
+        <div style="display:flex;flex-direction:column;gap:6px;min-width:0;">
+          <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ page.crumb }}</div>
+          <div style="font-size:34px;font-weight:700;letter-spacing:-0.045em;line-height:1;">{{ page.title }}</div>
+          <div style="font-size:14px;color:var(--ink2);">{{ page.sub }}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex:none;">
+          <sc-if value="{{ showExport }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ exportCsv }}" style="height:40px;padding:0 16px;border-radius:20px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13.5px Geist;cursor:pointer;display:flex;align-items:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">download</span>Exportar CSV</button>
+          </sc-if>
+          <button onClick="{{ openWizard }}" style="height:40px;padding:0 18px;border-radius:20px;border:none;background:var(--ink);color:var(--invink);font:600 13.5px Geist;cursor:pointer;display:flex;align-items:center;gap:8px;transition:transform .15s;" style-active="transform:scale(0.97);"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">add</span>Adicionar equipamento</button>
+        </div>
+      </div>
+
+      <sc-if value="{{ isOverview }}" hint-placeholder-val="{{ true }}">
+        <div style="padding:24px 32px 36px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;">
+          <div style="grid-column:span 8;padding:24px;border-radius:24px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:20px;animation:piuUp .45s both;">
+            <div style="display:flex;justify-content:space-between;gap:24px;align-items:flex-start;">
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:13px;opacity:.7;">Ganhos em outubro</div>
+                <div style="display:flex;align-items:baseline;gap:10px;"><span style="font-size:60px;font-weight:650;letter-spacing:-0.055em;line-height:1;font-variant-numeric:tabular-nums;">{{ k.month }}</span><span style="font-size:16px;font-weight:600;opacity:.75;">LUNES</span></div>
+                <div style="font-size:13.5px;opacity:.75;">{{ k.todayLabel }}</div>
+              </div>
+              <div style="display:flex;gap:22px;">
+                <sc-for list="{{ k.states }}" as="x" hint-placeholder-count="3">
+                  <div style="display:flex;flex-direction:column;gap:3px;align-items:flex-end;"><div style="font-size:18px;font-weight:650;font-variant-numeric:tabular-nums;">{{ x.v }}</div><div style="font-size:11.5px;opacity:.7;">{{ x.l }}</div></div>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="height:132px;display:flex;align-items:flex-end;gap:5px;">
+                <sc-for list="{{ bars }}" as="b" hint-placeholder-count="31">
+                  <div title="{{ b.tip }}" style="flex:1;height:{{ b.h }};border-radius:3px;background:currentColor;opacity:{{ b.op }};transform-origin:bottom;animation:{{ b.anim }};"></div>
+                </sc-for>
+              </div>
+              <div style="display:flex;justify-content:space-between;font:400 11px 'Geist Mono',monospace;opacity:.6;"><span>1 out</span><span>15 out</span><span>hoje</span></div>
+            </div>
+          </div>
+          <div style="grid-column:span 4;padding:22px;border-radius:24px;background:var(--bg2);display:flex;flex-direction:column;gap:14px;animation:piuUp .45s .05s both;">
+            <div style="display:flex;align-items:center;gap:8px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">hourglass_top</span>PRÓXIMA LIQUIDAÇÃO</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:15px;font-weight:600;">Lote #0047 · outubro</div>
+              <div style="display:flex;align-items:baseline;gap:6px;"><span style="font-size:36px;font-weight:650;letter-spacing:-0.045em;font-variant-numeric:tabular-nums;">{{ k.month }}</span><span style="font-size:13px;font-weight:600;color:var(--ink2);">LUNES</span></div>
+            </div>
+            <div style="display:grid;grid-template-columns:auto 1fr;gap:8px 14px;font-size:13px;">
+              <span style="color:var(--ink2);">Fecha em</span><span style="font-weight:550;">1º de novembro</span>
+              <span style="color:var(--ink2);">Liquida</span><span style="font-weight:550;">quando um gateway alcançar a Mainnet</span>
+              <span style="color:var(--ink2);">Destino</span><span style="font:500 12px 'Geist Mono',monospace;">lunes:9Hk2…pW4a</span>
+            </div>
+            <div style="flex:1;"></div>
+            <button onClick="{{ goEarnings }}" style="height:40px;border-radius:20px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13.5px Geist;cursor:pointer;">Ver ganhos detalhados</button>
+          </div>
+          <sc-for list="{{ kpis }}" as="x" hint-placeholder-count="4">
+            <div style="grid-column:span 3;padding:18px;border-radius:20px;background:var(--bg2);display:flex;flex-direction:column;gap:6px;animation:{{ x.anim }};">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;font-variation-settings:'wght' 300;color:var(--ink);">{{ x.icon }}</span>{{ x.l }}</div>
+              <div style="font-size:30px;font-weight:650;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;">{{ x.v }}</div>
+              <div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ x.d }}</div>
+            </div>
+          </sc-for>
+          <div style="grid-column:span 8;border-radius:22px;border:1px solid var(--line2);overflow:hidden;">
+            <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px;">
+              <div style="font-size:16px;font-weight:650;">Equipamentos</div>
+              <button onClick="{{ goDevices }}" style="border:none;background:transparent;color:var(--ink2);font:550 13px Geist;cursor:pointer;display:flex;align-items:center;gap:4px;">Ver todos<span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">chevron_right</span></button>
+            </div>
+            <sc-for list="{{ devRows }}" as="d" hint-placeholder-count="3">
+              <div onClick="{{ d.open }}" style="display:grid;grid-template-columns:minmax(0,2.4fr) minmax(0,1.2fr) 90px 90px;gap:16px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);cursor:pointer;" style-hover="background:var(--bg2);">
+                <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                  <div style="width:36px;height:36px;border-radius:11px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ d.icon }}</span></div>
+                  <div style="min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ d.name }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ d.cls }} · {{ d.pub }}</div></div>
+                </div>
+                <div style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2);"><div style="width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);background:{{ d.dotBg }};animation:{{ d.dotAnim }};"></div>{{ d.statusShort }}</div>
+                <div style="font:500 12.5px 'Geist Mono',monospace;text-align:right;">{{ d.pphLabel }}</div>
+                <div style="font-size:14px;font-weight:650;text-align:right;font-variant-numeric:tabular-nums;">{{ d.todayLabel }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="grid-column:span 4;border-radius:22px;border:1px solid var(--line2);padding:16px 18px;display:flex;flex-direction:column;gap:4px;">
+            <div style="font-size:16px;font-weight:650;padding-bottom:6px;">Atividade</div>
+            <sc-for list="{{ feed }}" as="a" hint-placeholder-count="5">
+              <div style="display:flex;gap:12px;padding:9px 0;border-top:1px solid {{ a.border }};">
+                <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">{{ a.icon }}</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;">
+                  <div style="font-size:13.5px;font-weight:600;line-height:1.3;">{{ a.t }}</div>
+                  <div style="font-size:12px;color:var(--ink2);line-height:1.35;">{{ a.d }}</div>
+                </div>
+                <div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);white-space:nowrap;">{{ a.time }}</div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="grid-column:span 6;border-radius:22px;background:var(--bg2);padding:18px;display:flex;flex-direction:column;gap:14px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;"><div style="font-size:16px;font-weight:650;">Tráfego por transporte</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">hoje · 24.880 pacotes</div></div>
+            <sc-for list="{{ transports }}" as="t" hint-placeholder-count="5">
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;justify-content:space-between;font-size:13px;"><span style="display:flex;align-items:center;gap:8px;font-weight:550;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;font-variation-settings:'wght' 300;">{{ t.icon }}</span>{{ t.n }}</span><span style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">{{ t.p }}</span></div>
+                <div style="height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ t.p }};background:var(--ink);transform-origin:left;animation:{{ t.anim }};"></div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="grid-column:span 6;border-radius:22px;background:var(--bg2);padding:18px;display:flex;flex-direction:column;gap:6px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;"><div style="font-size:16px;font-weight:650;">Ganhos por tipo de entrega</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">outubro</div></div>
+            <sc-for list="{{ rates }}" as="r" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:12px;padding:9px 0;border-top:1px solid {{ r.border }};">
+                <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">{{ r.icon }}</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:13.5px;font-weight:600;">{{ r.t }}</div><div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ r.vol }}</div></div>
+                <div style="width:110px;height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ r.share }};background:var(--ink);"></div></div>
+                <div style="width:64px;text-align:right;font-size:13.5px;font-weight:650;font-variant-numeric:tabular-nums;">{{ r.v }}</div>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isDevices }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 32px 36px;display:flex;gap:16px;align-items:flex-start;">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;align-items:center;gap:8px;">
+              <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+                <button onClick="{{ f.pick }}" style="height:32px;padding:0 12px;white-space:nowrap;flex:none;border-radius:16px;border:none;background:{{ f.bg }};color:{{ f.fg }};font:500 13px Geist;cursor:pointer;">{{ f.label }}</button>
+              </sc-for>
+              <div style="flex:1;min-width:8px;"></div>
+              <div style="display:flex;align-items:center;gap:8px;height:36px;padding:0 12px;border-radius:12px;background:var(--bg2);color:var(--ink2);flex:1;min-width:120px;max-width:220px;">
+                <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">search</span>
+                <input value="{{ q }}" onChange="{{ onQ }}" placeholder="Buscar equipamento" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font-size:13.5px;color:var(--ink);">
+              </div>
+            </div>
+            <div style="border-radius:20px;border:1px solid var(--line2);overflow:hidden;">
+              <div style="display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1.1fr) 76px minmax(0,1.1fr) 80px;gap:14px;padding:11px 18px;background:var(--bg2);font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">
+                <span>EQUIPAMENTO</span><span>STATUS</span><span style="text-align:right;">PAC/H</span><span>ARMAZENAMENTO</span><span style="text-align:right;">HOJE</span>
+              </div>
+              <sc-for list="{{ devTable }}" as="d" hint-placeholder-count="3">
+                <div onClick="{{ d.open }}" style="display:grid;grid-template-columns:minmax(0,2.3fr) minmax(0,1.1fr) 76px minmax(0,1.1fr) 80px;gap:14px;align-items:center;padding:13px 18px;border-top:1px solid var(--line);cursor:pointer;background:{{ d.rowBg }};animation:{{ d.anim }};transition:background .15s;">
+                  <div style="display:flex;align-items:center;gap:12px;min-width:0;">
+                    <div style="width:38px;height:38px;border-radius:11px;background:{{ d.iconBg }};color:{{ d.iconFg }};display:flex;align-items:center;justify-content:center;flex:none;transition:background .15s;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">{{ d.icon }}</span></div>
+                    <div style="min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ d.name }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ d.cls }} · {{ d.pub }}</div></div>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink2);"><div style="width:8px;height:8px;border-radius:50%;border:1.5px solid var(--ink);background:{{ d.dotBg }};animation:{{ d.dotAnim }};flex:none;"></div>{{ d.statusShort }}</div>
+                  <div style="font:500 12.5px 'Geist Mono',monospace;text-align:right;">{{ d.pphLabel }}</div>
+                  <div style="display:flex;flex-direction:column;gap:5px;">
+                    <div style="height:5px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ d.stoPct }};background:var(--ink);"></div></div>
+                    <div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ d.stoLabel }}</div>
+                  </div>
+                  <div style="font-size:14px;font-weight:650;text-align:right;font-variant-numeric:tabular-nums;">{{ d.todayLabel }}</div>
+                </div>
+              </sc-for>
+              <sc-if value="{{ noDevices }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:28px;text-align:center;font-size:13.5px;color:var(--ink2);border-top:1px solid var(--line);">Nenhum equipamento neste filtro.</div>
+              </sc-if>
+            </div>
+            <div style="display:flex;gap:10px;align-items:flex-start;font-size:12.5px;line-height:1.45;color:var(--ink2);padding:4px 4px 0;">
+              <span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;color:var(--ink);">lock</span>
+              <span>Os equipamentos transportam só envelopes cifrados. Nenhum deles consegue ler mensagens, e cada um tem identidade técnica própria.</span>
+            </div>
+          </div>
+          <sc-if value="{{ detailOpen }}" hint-placeholder-val="{{ false }}">
+            <div style="width:360px;flex:none;border-radius:22px;border:1px solid var(--line2);padding:20px;display:flex;flex-direction:column;gap:16px;animation:piuPanel .32s cubic-bezier(.2,.9,.3,1) both;">
+              <div style="display:flex;align-items:flex-start;gap:12px;">
+                <div style="width:46px;height:46px;border-radius:14px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'wght' 350;">{{ pd.icon }}</span></div>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;"><div style="font-size:18px;font-weight:650;letter-spacing:-0.02em;">{{ pd.name }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);line-height:1.4;">{{ pd.model }}</div></div>
+                <button onClick="{{ closeDetail }}" style="width:32px;height:32px;border:none;border-radius:16px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">close</span></button>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+                <div style="display:flex;align-items:center;gap:7px;padding:6px 11px;border-radius:99px;background:{{ pd.chipBg }};color:{{ pd.chipFg }};font-size:12.5px;font-weight:600;transition:background .2s,color .2s;"><div style="width:7px;height:7px;border-radius:50%;background:currentColor;animation:{{ pd.dotAnim }};"></div>{{ pd.statusLabel }}</div>
+                <div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ pd.cls }} · ligado há {{ pd.uptime }}</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding:10px 12px;border-radius:12px;background:var(--bg2);">
+                <span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;font-variation-settings:'wght' 300;">wifi</span>
+                <span style="flex:1;min-width:0;font:500 13px 'Geist Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ pd.pub }}</span>
+                <span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;font-variation-settings:'FILL' 1;">verified</span>nome verificado</span>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                <sc-for list="{{ pd.metrics }}" as="x" hint-placeholder-count="3">
+                  <div style="padding:12px;border-radius:14px;background:var(--bg2);display:flex;flex-direction:column;gap:3px;"><div style="font-size:17px;font-weight:650;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;">{{ x.v }}</div><div style="font-size:11px;color:var(--ink2);">{{ x.l }}</div></div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">INTERFACES</div>
+                <sc-for list="{{ pd.ifaces }}" as="i" hint-placeholder-count="3">
+                  <div style="display:flex;flex-direction:column;gap:6px;">
+                    <div style="display:flex;justify-content:space-between;gap:10px;font-size:13px;"><span style="font-weight:550;">{{ i.n }}</span><span style="color:var(--ink2);font-size:12px;">{{ i.v }}</span></div>
+                    <div style="height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ i.w }};background:var(--ink);transform-origin:left;animation:piuGrowX .7s cubic-bezier(.2,.9,.3,1) both;transition:width .3s;"></div></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">RECIBOS RECENTES</div>
+                <sc-for list="{{ pd.receipts }}" as="r" hint-placeholder-count="4">
+                  <div style="display:flex;gap:10px;font:400 11.5px 'Geist Mono',monospace;opacity:{{ r.op }};"><span style="color:var(--ink2);">{{ r.t }}</span><span style="flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ r.k }} · {{ r.h }}</span><span style="font-weight:500;">{{ r.s }}</span></div>
+                </sc-for>
+                <sc-if value="{{ pd.noReceipts }}" hint-placeholder-val="{{ false }}"><div style="padding:12px;border-radius:12px;border:1px dashed var(--line2);font-size:12.5px;color:var(--ink2);text-align:center;">{{ pd.noReceiptsText }}</div></sc-if>
+              </div>
+              <div style="border-radius:16px;background:var(--bg2);overflow:hidden;">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 13px;">
+                  <div style="flex:1;font-size:13.5px;font-weight:550;">{{ pd.pauseLabel }}</div>
+                  <div onClick="{{ pd.togglePause }}" style="width:42px;height:26px;border-radius:13px;background:{{ pd.pTrack }};position:relative;cursor:pointer;transition:background .2s;"><div style="position:absolute;top:3px;left:{{ pd.pKnob }};width:20px;height:20px;border-radius:10px;background:{{ pd.pKnobBg }};box-shadow:0 1px 2px rgba(0,0,0,.15);transition:left .25s cubic-bezier(.2,.9,.3,1.3);"></div></div>
+                </div>
+                <sc-if value="{{ pd.notPassive }}" hint-placeholder-val="{{ true }}"><div onClick="{{ devUpdate }}" style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-top:1px solid var(--line);cursor:pointer;"><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><span style="font-size:13.5px;font-weight:550;">Atualizar Piu Node</span><span style="font-size:11.5px;color:var(--ink2);">0.4.3 assinada disponível</span></div><span style="font:600 12px Geist;padding:6px 11px;border-radius:13px;background:var(--ink);color:var(--invink);">Atualizar</span></div></sc-if>
+                <div onClick="{{ devRestart }}" style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px;font-weight:550;">Reiniciar</div>
+                <div onClick="{{ devRevoke }}" style="display:flex;align-items:center;gap:12px;padding:11px 13px;border-top:1px solid var(--line);cursor:pointer;font-size:13.5px;font-weight:650;">{{ pd.revokeLabel }}</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isMesh }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 32px 36px;display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;">
+          <div style="position:relative;height:520px;border-radius:24px;background-color:var(--bg2);background-image:radial-gradient(var(--line2) 1px, transparent 1.2px);background-size:22px 22px;overflow:hidden;">
+            <sc-for list="{{ links }}" as="l" hint-placeholder-count="14">
+              <div style="position:absolute;left:{{ l.x }};top:{{ l.y }};width:{{ l.len }};height:0;border-top:{{ l.w }} {{ l.style }} var(--ink);opacity:{{ l.op }};transform:rotate({{ l.deg }});transform-origin:0 0;">
+                <sc-if value="{{ l.flow }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;top:-4px;width:6px;height:6px;margin-left:-3px;border-radius:50%;background:var(--ink);animation:piuTravel {{ l.dur }} linear infinite;"></div></sc-if>
+              </div>
+            </sc-for>
+            <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="13">
+              <div style="position:absolute;left:{{ n.x }};top:{{ n.y }};transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;">
+                <sc-if value="{{ n.own }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:relative;width:46px;height:46px;">
+                    <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 2.6s ease-out infinite;"></div>
+                    <div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 400;">{{ n.icon }}</span></div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ n.peer }}" hint-placeholder-val="{{ false }}">
+                  <div style="width:32px;height:32px;border-radius:50%;background:var(--bg);border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;font-variation-settings:'wght' 400;">{{ n.icon }}</span></div>
+                </sc-if>
+                <sc-if value="{{ n.phone }}" hint-placeholder-val="{{ true }}">
+                  <div style="width:11px;height:11px;border-radius:50%;background:var(--bg);border:1.5px solid var(--ink);"></div>
+                </sc-if>
+                <sc-if value="{{ n.hasLabel }}" hint-placeholder-val="{{ false }}">
+                  <div style="position:absolute;top:100%;margin-top:6px;font:500 10.5px 'Geist Mono',monospace;white-space:nowrap;padding:2px 6px;border-radius:5px;background:{{ n.labelBg }};color:{{ n.labelFg }};">{{ n.label }}</div>
+                </sc-if>
+              </div>
+            </sc-for>
+            <div style="position:absolute;left:16px;bottom:16px;display:flex;gap:14px;padding:10px 14px;border-radius:14px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;font-size:12px;color:var(--ink2);">
+              <sc-for list="{{ legend }}" as="g" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:7px;"><div style="width:22px;height:0;border-top:{{ g.w }} {{ g.style }} var(--ink);"></div>{{ g.l }}</div>
+              </sc-for>
+            </div>
+            <div style="position:absolute;right:16px;top:16px;display:flex;align-items:center;gap:7px;padding:7px 11px;border-radius:99px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;font-size:12px;font-weight:550;"><div style="width:7px;height:7px;border-radius:50%;background:var(--ink);animation:piuBreath 1.6s ease-in-out infinite;"></div>ao vivo · seus 3 nós</div>
+          </div>
+          <div style="border-radius:24px;border:1px solid var(--line2);padding:16px 18px;display:flex;flex-direction:column;gap:2px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;padding-bottom:8px;"><div style="font-size:16px;font-weight:650;">Vizinhos</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">qualidade do enlace</div></div>
+            <sc-for list="{{ peers }}" as="p" hint-placeholder-count="6">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);">
+                <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ p.icon }}</span>
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:13.5px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ p.n }}</div><div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ p.c }} · {{ p.via }}</div></div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;width:70px;">
+                  <div style="font:500 11.5px 'Geist Mono',monospace;">{{ p.q }}</div>
+                  <div style="width:100%;height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ p.qw }};background:var(--ink);"></div></div>
+                </div>
+              </div>
+            </sc-for>
+            <div style="font-size:12px;color:var(--ink2);line-height:1.45;padding-top:10px;">Rotas são escolhidas por alcance, capacidade e energia. Mídia nunca é enviada por LoRa.</div>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isEarnings }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 32px 36px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;">
+          <sc-for list="{{ stateTiles }}" as="x" hint-placeholder-count="4">
+            <div style="grid-column:span 3;padding:18px;border-radius:20px;background:{{ x.bg }};color:{{ x.fg }};display:flex;flex-direction:column;gap:8px;">
+              <div style="display:flex;align-items:center;gap:8px;font-size:12.5px;opacity:.75;"><div style="width:8px;height:8px;border-radius:2px;background:currentColor;opacity:{{ x.op }};"></div>{{ x.l }}</div>
+              <div style="font-size:30px;font-weight:650;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;">{{ x.v }}</div>
+              <div style="font-size:12px;opacity:.7;">{{ x.d }}</div>
+            </div>
+          </sc-for>
+          <div style="grid-column:span 7;border-radius:22px;border:1px solid var(--line2);overflow:hidden;">
+            <div style="padding:16px 18px;font-size:16px;font-weight:650;">Créditos por tipo de entrega · outubro</div>
+            <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1fr) 90px;gap:12px;padding:10px 18px;background:var(--bg2);font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);"><span>TIPO</span><span>REGRA</span><span>VOLUME</span><span style="text-align:right;">LUNES</span></div>
+            <sc-for list="{{ rates }}" as="r" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.3fr) minmax(0,1fr) 90px;gap:12px;align-items:center;padding:13px 18px;border-top:1px solid var(--line);font-size:13.5px;">
+                <span style="display:flex;align-items:center;gap:10px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">{{ r.icon }}</span>{{ r.t }}</span>
+                <span style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">{{ r.rule }}</span>
+                <span style="font:400 12px 'Geist Mono',monospace;">{{ r.vol }}</span>
+                <span style="text-align:right;font-weight:650;font-variant-numeric:tabular-nums;">{{ r.v }}</span>
+              </div>
+            </sc-for>
+            <div style="padding:12px 18px;border-top:1px solid var(--line);font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">100 créditos = 1 LUNES · taxas ilustrativas</div>
+          </div>
+          <div style="grid-column:span 5;border-radius:22px;background:var(--bg2);padding:18px;display:flex;flex-direction:column;gap:14px;">
+            <div style="font-size:16px;font-weight:650;">Por equipamento</div>
+            <sc-for list="{{ perDevice }}" as="d" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:7px;">
+                <div style="display:flex;justify-content:space-between;gap:10px;font-size:13.5px;"><span style="display:flex;align-items:center;gap:8px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'wght' 300;">{{ d.icon }}</span>{{ d.name }}</span><span style="font-weight:650;font-variant-numeric:tabular-nums;">{{ d.v }}</span></div>
+                <div style="height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ d.share }};background:var(--ink);transform-origin:left;animation:piuGrowX .7s cubic-bezier(.2,.9,.3,1) both;"></div></div>
+                <div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ d.cls }} · {{ d.share }} do total</div>
+              </div>
+            </sc-for>
+            <div style="flex:1;"></div>
+            <div style="font-size:12px;color:var(--ink2);line-height:1.45;">Ganha mais quem entrega onde há pouca cobertura: rotas novas entre áreas valem 10× um texto.</div>
+          </div>
+          <div style="grid-column:span 12;border-radius:22px;border:1px solid var(--line2);overflow:hidden;">
+            <div style="padding:16px 18px;font-size:16px;font-weight:650;">Lotes de liquidação</div>
+            <div style="display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr) 120px minmax(0,1.2fr) minmax(0,1fr);gap:12px;padding:10px 18px;background:var(--bg2);font:500 11px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);"><span>LOTE</span><span>PERÍODO</span><span>ENTREGAS</span><span style="text-align:right;">LUNES</span><span>ESTADO</span><span>TRANSAÇÃO</span></div>
+            <sc-for list="{{ lots }}" as="l" hint-placeholder-count="4">
+              <div style="display:grid;grid-template-columns:110px minmax(0,1fr) minmax(0,1fr) 120px minmax(0,1.2fr) minmax(0,1fr);gap:12px;align-items:center;padding:13px 18px;border-top:1px solid var(--line);font-size:13.5px;">
+                <span style="font:500 12.5px 'Geist Mono',monospace;">{{ l.id }}</span><span>{{ l.p }}</span><span style="font:400 12px 'Geist Mono',monospace;">{{ l.n }}</span>
+                <span style="text-align:right;font-weight:650;font-variant-numeric:tabular-nums;">{{ l.v }}</span>
+                <span style="display:flex;align-items:center;gap:7px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;font-variation-settings:'FILL' {{ l.fill }};">{{ l.icon }}</span>{{ l.s }}</span>
+                <span style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">{{ l.tx }}</span>
+              </div>
+            </sc-for>
+          </div>
+          <div style="grid-column:span 12;display:flex;gap:10px;font-size:12.5px;line-height:1.45;color:var(--ink2);">
+            <span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;color:var(--ink);">policy</span>
+            <span>Cada crédito combina recibo do seu nó, confirmação do destino e auditoria por amostragem. Duplicatas, rotas circulares e tráfego artificial são rejeitados. Tempo ligado e capacidade anunciada não geram crédito.</span>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isWallet }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 32px 36px;display:grid;grid-template-columns:repeat(12,minmax(0,1fr));gap:16px;">
+          <div style="grid-column:span 7;padding:24px;border-radius:24px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:20px;">
+            <div style="display:flex;align-items:center;gap:10px;font:400 12.5px 'Geist Mono',monospace;opacity:.8;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">account_balance_wallet</span>carteira de provider · lunes:9Hk2mVq…r3pW4a<span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">content_copy</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;">
+              <div style="font-size:13px;opacity:.7;">Saldo disponível</div>
+              <div style="display:flex;align-items:baseline;gap:10px;"><span style="font-size:60px;font-weight:650;letter-spacing:-0.055em;line-height:1;font-variant-numeric:tabular-nums;">{{ balLabel }}</span><span style="font-size:16px;font-weight:600;opacity:.75;">LUNES</span></div>
+              <div style="font-size:13.5px;opacity:.75;">+ {{ k.month }} em formação no lote #0047</div>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onClick="{{ focusXfer }}" style="height:42px;padding:0 18px;border-radius:21px;border:none;background:var(--invink);color:var(--ink);font:600 14px Geist;cursor:pointer;display:flex;align-items:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">arrow_upward</span>Transferir</button>
+              <button onClick="{{ copyAddr }}" style="height:42px;padding:0 18px;border-radius:21px;border:1px solid rgba(127,127,127,.5);background:transparent;color:var(--invink);font:600 14px Geist;cursor:pointer;display:flex;align-items:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">arrow_downward</span>Receber</button>
+            </div>
+          </div>
+          <div style="grid-column:span 5;padding:20px;border-radius:24px;background:var(--bg2);display:flex;flex-direction:column;gap:14px;">
+            <div style="font-size:16px;font-weight:650;">Transferir</div>
+            <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg3);">
+              <sc-for list="{{ xferOpts }}" as="o" hint-placeholder-count="2">
+                <button onClick="{{ o.pick }}" style="flex:1;height:32px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 13px Geist;cursor:pointer;box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+              </sc-for>
+            </div>
+            <div style="font:500 12.5px 'Geist Mono',monospace;color:var(--ink2);">{{ xferDest }}</div>
+            <div style="display:flex;align-items:center;gap:10px;height:56px;padding:0 16px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;">
+              <input value="{{ xferAmt }}" onChange="{{ onXferAmt }}" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font:650 26px Geist;letter-spacing:-0.03em;color:var(--ink);font-variant-numeric:tabular-nums;">
+              <span style="font-size:13px;font-weight:600;color:var(--ink2);">LUNES</span>
+            </div>
+            <div style="display:flex;gap:6px;">
+              <sc-for list="{{ quick }}" as="q" hint-placeholder-count="3">
+                <button onClick="{{ q.pick }}" style="height:30px;padding:0 12px;border-radius:15px;border:none;background:var(--bg3);color:var(--ink);font:550 12.5px Geist;cursor:pointer;">{{ q.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ startSign }}" style="height:46px;border-radius:23px;border:none;background:var(--ink);color:var(--invink);font:600 14.5px Geist;cursor:pointer;opacity:{{ xferOp }};display:flex;align-items:center;justify-content:center;gap:8px;transition:opacity .2s;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">smartphone</span>Assinar no celular</button>
+            <div style="font-size:12px;color:var(--ink2);line-height:1.4;">A chave de assinatura fica no seu celular. Este painel só prepara a transação.</div>
+          </div>
+          <div style="grid-column:span 12;border-radius:22px;border:1px solid var(--line2);overflow:hidden;">
+            <div style="padding:16px 18px;font-size:16px;font-weight:650;">Movimentações</div>
+            <sc-for list="{{ txs }}" as="t" hint-placeholder-count="5">
+              <div style="display:grid;grid-template-columns:40px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) 120px;gap:14px;align-items:center;padding:12px 18px;border-top:1px solid var(--line);animation:{{ t.anim }};">
+                <div style="width:36px;height:36px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'wght' 300;">{{ t.icon }}</span></div>
+                <span style="font-size:14px;font-weight:600;">{{ t.t }}</span>
+                <span style="font-size:13px;color:var(--ink2);">{{ t.d }}</span>
+                <span style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">{{ t.s }}</span>
+                <span style="text-align:right;font-size:14px;font-weight:650;font-variant-numeric:tabular-nums;">{{ t.v }}</span>
+              </div>
+            </sc-for>
+          </div>
+        </div>
+      </sc-if>
+
+      <sc-if value="{{ isSettings }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:22px 32px 36px;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start;">
+          <div style="border-radius:22px;background:var(--bg2);padding:20px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Limites globais</div><div style="font-size:12.5px;color:var(--ink2);">Somados entre todos os seus equipamentos</div></div>
+            <sc-for list="{{ gLimits }}" as="g" hint-placeholder-count="3">
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;justify-content:space-between;font-size:13.5px;"><span style="font-weight:550;">{{ g.title }}</span><span style="color:var(--ink2);">{{ g.hint }}</span></div>
+                <div style="display:flex;gap:4px;padding:3px;border-radius:12px;background:var(--bg3);">
+                  <sc-for list="{{ g.opts }}" as="o" hint-placeholder-count="3">
+                    <button onClick="{{ o.pick }}" style="flex:1;height:32px;border:none;border-radius:9px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 13px Geist;cursor:pointer;box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+                  </sc-for>
+                </div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="border-radius:22px;background:var(--bg2);padding:20px 20px 8px;display:flex;flex-direction:column;">
+            <div style="display:flex;flex-direction:column;gap:3px;padding-bottom:10px;"><div style="font-size:16px;font-weight:650;">Política de tráfego</div><div style="font-size:12.5px;color:var(--ink2);">O que seus equipamentos aceitam retransmitir</div></div>
+            <sc-for list="{{ policies }}" as="p" hint-placeholder-count="4">
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--line);">
+                <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14px;font-weight:550;">{{ p.n }}</div><div style="font-size:12px;color:var(--ink2);">{{ p.d }}</div></div>
+                <div onClick="{{ p.toggle }}" style="width:42px;height:26px;border-radius:13px;background:{{ p.track }};position:relative;cursor:pointer;flex:none;opacity:{{ p.op }};transition:background .2s;"><div style="position:absolute;top:3px;left:{{ p.knob }};width:20px;height:20px;border-radius:10px;background:{{ p.knobBg }};box-shadow:0 1px 2px rgba(0,0,0,.15);transition:left .25s cubic-bezier(.2,.9,.3,1.3);"></div></div>
+              </div>
+            </sc-for>
+          </div>
+          <div style="grid-column:span 2;border-radius:22px;background:var(--bg2);padding:20px;display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1fr);gap:24px;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Idioma do painel</div><div style="font-size:12.5px;color:var(--ink2);">Vale para este painel. O app de conversa tem o próprio ajuste.</div></div>
+              <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;">
+                <sc-for list="{{ langList }}" as="l" hint-placeholder-count="11">
+                  <button onClick="{{ l.pick }}" style="display:flex;align-items:center;gap:9px;height:44px;padding:0 10px;border:none;border-radius:12px;background:{{ l.bg }};color:var(--ink);cursor:pointer;text-align:left;transition:background .15s;">
+                    <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">{{ l.icon }}</span>
+                    <span style="display:flex;flex-direction:column;min-width:0;"><span style="font:{{ l.weight }} 13.5px Geist;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ l.n }}</span><span style="font-size:11px;color:var(--ink2);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ l.e }}</span></span>
+                  </button>
+                </sc-for>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Formato de números e datas</div><div style="font-size:12.5px;color:var(--ink2);">Usado em ganhos, extratos e CSV exportado</div></div>
+              <div style="display:flex;flex-direction:column;gap:4px;padding:3px;border-radius:12px;background:var(--bg3);">
+                <sc-for list="{{ regionOpts }}" as="o" hint-placeholder-count="3">
+                  <button onClick="{{ o.pick }}" style="height:34px;border:none;border-radius:9px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 13px Geist;cursor:pointer;box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+                </sc-for>
+              </div>
+            </div>
+          </div>
+          <div style="border-radius:22px;border:1px solid var(--line2);padding:20px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Acesso a este painel</div><div style="font-size:12.5px;color:var(--ink2);">Disponível só na rede local, nunca pela internet</div></div>
+            <sc-for list="{{ sessions }}" as="x" hint-placeholder-count="2">
+              <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);">
+                <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ x.icon }}</span>
+                <div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14px;font-weight:550;">{{ x.n }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ x.d }}</div></div>
+                <span style="font-size:12px;font-weight:600;">{{ x.s }}</span>
+              </div>
+            </sc-for>
+            <button onClick="{{ endSessions }}" style="align-self:flex-start;height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13px Geist;cursor:pointer;">Encerrar outras sessões</button>
+          </div>
+          <div style="border-radius:22px;border:1px solid var(--line2);padding:20px;display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Identidade de operador</div><div style="font-size:12.5px;color:var(--ink2);">Assina seus equipamentos. Separada da sua identidade de conversa.</div></div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;font:500 15px 'Geist Mono',monospace;padding:12px 14px;border-radius:14px;background:var(--bg2);">
+              <span>A41F</span><span>0C9E</span><span>77B2</span><span>D3A0</span><span>18EF</span><span>5C64</span><span>9B0D</span><span>E2C7</span>
+            </div>
+            <div style="display:flex;gap:8px;">
+              <button onClick="{{ backupKeys }}" style="height:36px;padding:0 14px;border-radius:18px;border:none;background:var(--ink);color:var(--invink);font:600 13px Geist;cursor:pointer;">Exportar backup cifrado</button>
+              <button onClick="{{ rotateKeys }}" style="height:36px;padding:0 14px;border-radius:18px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13px Geist;cursor:pointer;">Rotacionar chaves</button>
+            </div>
+          </div>
+          <div style="grid-column:span 2;border-radius:22px;border:1px solid var(--line2);padding:20px;display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1.15fr);gap:28px;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">Nomes públicos das suas redes</div><div style="font-size:12.5px;color:var(--ink2);">Qualquer pessoa por perto vê estes nomes na lista de Wi-Fi e no app</div></div>
+              <sc-for list="{{ pubNames }}" as="x" hint-placeholder-count="4">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-top:1px solid var(--line);">
+                  <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">{{ x.icon }}</span>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font:500 13.5px 'Geist Mono',monospace;">{{ x.name }}</div><div style="font-size:12px;color:var(--ink2);">{{ x.dev }}</div></div>
+                  <span style="display:flex;align-items:center;gap:4px;font-size:12px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;font-variation-settings:'FILL' 1;">verified</span>assinado</span>
+                </div>
+              </sc-for>
+              <div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-top:6px;">piu. + até 28 caracteres · a–z, 0–9 e hífen</div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:12px;">
+              <div style="font-size:14px;font-weight:650;">Como o Piu evita imitações</div>
+              <sc-for list="{{ pubRules }}" as="r" hint-placeholder-count="3">
+                <div style="display:flex;gap:12px;">
+                  <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ r.icon }}</span>
+                  <div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:13.5px;font-weight:600;">{{ r.t }}</div><div style="font-size:12.5px;color:var(--ink2);line-height:1.45;">{{ r.d }}</div></div>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+    </div>
+  </div>
+
+  <sc-if value="{{ wizOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeWizard }}" style="position:absolute;inset:0;background:var(--scrim);z-index:40;animation:piuFade .2s ease-out both;"></div>
+    <div style="position:absolute;left:50%;top:50%;width:780px;height:620px;margin:-310px 0 0 -390px;z-index:41;">
+      <div style="width:100%;height:100%;border-radius:28px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3);display:flex;flex-direction:column;overflow:hidden;animation:piuDialog .32s cubic-bezier(.2,.9,.3,1.15) both;">
+        <div style="display:flex;align-items:center;justify-content:space-between;padding:22px 26px 0;">
+          <div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">Adicionar equipamento</div>
+          <button onClick="{{ closeWizard }}" style="width:34px;height:34px;border:none;border-radius:17px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">close</span></button>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:18px 26px;">
+          <sc-for list="{{ wizSteps }}" as="s" hint-placeholder-count="4">
+            <div style="flex:1;display:flex;flex-direction:column;gap:8px;">
+              <div style="height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="height:100%;width:{{ s.w }};background:var(--ink);transition:width .4s cubic-bezier(.2,.9,.3,1);"></div></div>
+              <div style="font-size:12.5px;font-weight:{{ s.weight }};color:{{ s.color }};">{{ s.n }} · {{ s.label }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="flex:1;min-height:0;overflow-y:auto;padding:4px 26px 16px;">
+          <sc-if value="{{ wiz0 }}" hint-placeholder-val="{{ true }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+              <sc-for list="{{ fams }}" as="o" hint-placeholder-count="5">
+                <div onClick="{{ o.pick }}" style="display:flex;gap:14px;padding:16px;border-radius:20px;border:1.5px solid {{ o.border }};background:{{ o.bg }};opacity:{{ o.op }};cursor:pointer;transition:background .2s,border-color .2s;">
+                  <div style="width:42px;height:42px;border-radius:13px;background:var(--bg3);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 300;">{{ o.icon }}</span></div>
+                  <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;"><span style="font-size:15px;font-weight:600;">{{ o.name }}</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:6px;border:1px solid var(--line2);color:var(--ink2);">{{ o.badge }}</span></div>
+                    <div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ o.cls }}</div>
+                    <div style="font-size:12.5px;color:var(--ink2);line-height:1.35;">{{ o.desc }}</div>
+                  </div>
+                </div>
+              </sc-for>
+            </div>
+          </sc-if>
+          <sc-if value="{{ wiz1 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="font-size:15px;font-weight:650;">{{ fam.step1Title }}</div>
+                <sc-if value="{{ fam.install }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg2);">
+                    <sc-for list="{{ installOpts }}" as="o" hint-placeholder-count="2">
+                      <button onClick="{{ o.pick }}" style="flex:1;height:32px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 13px Geist;cursor:pointer;box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+                    </sc-for>
+                  </div>
+                  <sc-if value="{{ installDl }}" hint-placeholder-val="{{ true }}">
+                    <div style="padding:14px;border-radius:16px;background:var(--bg2);display:flex;flex-direction:column;gap:10px;">
+                      <div style="display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 300;">deployed_code</span><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font:500 12.5px 'Geist Mono',monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ fam.pkg }}</div><div style="font-size:11.5px;color:var(--ink2);">2,1 MB · assinado Lunes · 4C9A…E1F0</div></div></div>
+                      <div style="font-size:12.5px;color:var(--ink2);line-height:1.4;">Sem internet: este Mini-PC serve o pacote na rede local. Abra a interface do equipamento e aponte para piu-node.local.</div>
+                      <button onClick="{{ copyPkg }}" style="height:36px;border-radius:18px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 13px Geist;cursor:pointer;">Copiar link local do pacote</button>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ installTerm }}" hint-placeholder-val="{{ false }}">
+                    <div style="padding:14px 16px;border-radius:16px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:8px;font:400 12.5px 'Geist Mono',monospace;line-height:1.55;">
+                      <div style="display:flex;gap:10px;"><span style="opacity:.5;">$</span><span style="flex:1;word-break:break-all;">{{ fam.cmd }}</span></div>
+                      <div style="display:flex;gap:10px;"><span style="opacity:.5;">$</span><span style="flex:1;">piu-node pair --painel piu-node.local</span></div>
+                    </div>
+                    <div style="font-size:12px;color:var(--ink2);line-height:1.4;">O pacote confere a própria assinatura antes de instalar.</div>
+                  </sc-if>
+                </sc-if>
+                <sc-if value="{{ fam.isRadio }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:14px;border-radius:16px;background:var(--bg2);font-size:13px;line-height:1.45;color:var(--ink2);">Ligue o rádio na porta USB de um Home Node ou Gateway Local. O adapter LoRa assinado é instalado sozinho.</div>
+                </sc-if>
+                <sc-if value="{{ fam.isAp }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:6px 16px;border-radius:16px;background:var(--bg2);display:flex;flex-direction:column;">
+                    <sc-for list="{{ apSteps }}" as="a" hint-placeholder-count="4">
+                      <div style="display:flex;gap:12px;padding:10px 0;border-top:1px solid {{ a.border }};">
+                        <div style="width:20px;height:20px;border-radius:50%;background:var(--ink);color:var(--invink);font:600 11px Geist;display:flex;align-items:center;justify-content:center;flex:none;">{{ a.n }}</div>
+                        <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:13.5px;font-weight:600;">{{ a.t }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);line-height:1.45;">{{ a.d }}</div></div>
+                      </div>
+                    </sc-for>
+                  </div>
+                  <div style="font-size:12px;color:var(--ink2);line-height:1.45;">Ele manda e recebe mensagens ao vivo entre quem está conectado. O que ele não faz sozinho é guardar mensagens para quem está fora e assinar recibos: isso fica com o nó pai.</div>
+                </sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:650;">{{ fam.step2Title }}<div style="width:6px;height:6px;border-radius:50%;background:var(--ink);animation:piuBreath 1.4s ease-in-out infinite;"></div></div>
+                <sc-if value="{{ scanSearching }}" hint-placeholder-val="{{ true }}">
+                  <div style="display:flex;align-items:center;gap:14px;padding:16px;border-radius:16px;border:1px dashed var(--line2);">
+                    <div style="position:relative;width:36px;height:36px;flex:none;"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 1.8s ease-out infinite;"></div><div style="position:absolute;inset:11px;border-radius:50%;background:var(--ink);"></div></div>
+                    <div style="font-size:13.5px;color:var(--ink2);">Procurando na rede local…</div>
+                  </div>
+                </sc-if>
+                <sc-if value="{{ scanFound }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:16px;border-radius:18px;border:1.5px solid var(--ink);display:flex;flex-direction:column;gap:12px;animation:piuUp .35s both;">
+                    <div style="display:flex;align-items:center;gap:12px;">
+                      <div style="width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;">{{ fam.icon }}</span></div>
+                      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">{{ fam.found }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ fam.addr }}</div></div>
+                    </div>
+                    <sc-if value="{{ fam.notAp }}" hint-placeholder-val="{{ true }}"><div style="font-size:12.5px;color:var(--ink2);">Confira se o código aparece {{ fam.where }}:</div>
+                    <div style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;">
+                      <sc-for list="{{ code }}" as="d" hint-placeholder-count="6"><div style="height:44px;border-radius:11px;background:var(--bg2);display:flex;align-items:center;justify-content:center;font:600 20px 'Geist Mono',monospace;animation:{{ d.anim }};">{{ d.v }}</div></sc-for>
+                    </div></sc-if>
+                    <sc-if value="{{ fam.isAp }}" hint-placeholder-val="{{ false }}">
+                      <div style="font-size:12.5px;color:var(--ink2);">Ligado a qual nó seu?</div>
+                      <div style="display:flex;flex-direction:column;gap:6px;">
+                        <sc-for list="{{ parentOpts }}" as="o" hint-placeholder-count="2">
+                          <div onClick="{{ o.pick }}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:12px;border:1.5px solid {{ o.border }};background:{{ o.bg }};cursor:pointer;transition:background .15s;">
+                            <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">{{ o.icon }}</span>
+                            <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;"><div style="font-size:13.5px;font-weight:600;">{{ o.name }}</div><div style="font:400 11px 'Geist Mono',monospace;color:var(--ink2);">{{ o.pub }}</div></div>
+                            <div style="width:18px;height:18px;border-radius:50%;border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;"><div style="width:9px;height:9px;border-radius:50%;background:var(--ink);opacity:{{ o.dot }};"></div></div>
+                          </div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                    <div onClick="{{ togglePaired }}" style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:13.5px;font-weight:550;">
+                      <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid var(--ink);background:{{ pairedBg }};color:var(--invink);display:flex;align-items:center;justify-content:center;transition:background .15s;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;opacity:{{ pairedOp }};">check</span></div>
+                      {{ fam.pairLabel }}
+                    </div>
+                  </div>
+                </sc-if>
+                <div style="font-size:12px;color:var(--ink2);line-height:1.45;">{{ fam.pairNote }}</div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ wiz2 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:20px;">
+              <div style="display:flex;flex-direction:column;">
+                <div style="font-size:14px;color:var(--ink2);line-height:1.4;padding-bottom:6px;">{{ fam.testIntro }}</div>
+                <sc-for list="{{ checks }}" as="k" hint-placeholder-count="5">
+                  <div style="display:flex;gap:14px;padding:11px 0;border-bottom:1px solid var(--line);opacity:{{ k.op }};transition:opacity .3s;">
+                    <span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' {{ k.fill }}, 'wght' 400;display:inline-block;animation:{{ k.anim }};">{{ k.icon }}</span>
+                    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;"><div style="font-size:14px;font-weight:600;">{{ k.t }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);line-height:1.45;">{{ k.d }}</div></div>
+                  </div>
+                </sc-for>
+              </div>
+              <div style="padding:20px;border-radius:22px;background:{{ resultBg }};color:{{ resultFg }};display:flex;flex-direction:column;gap:16px;transition:background .3s,color .3s;">
+                <div style="display:flex;flex-direction:column;gap:4px;"><div style="font-size:12.5px;opacity:.7;">{{ resultLabel }}</div><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;line-height:1.15;">{{ resultTitle }}</div></div>
+                <div style="display:flex;flex-direction:column;gap:10px;">
+                  <sc-for list="{{ measured }}" as="m" hint-placeholder-count="3">
+                    <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:10px;border-top:1px solid rgba(127,127,127,.3);"><span style="font-size:12.5px;opacity:.7;">{{ m.l }}</span><span style="font-size:18px;font-weight:650;">{{ m.v }}</span></div>
+                  </sc-for>
+                </div>
+              </div>
+            </div>
+          </sc-if>
+          <sc-if value="{{ wiz3 }}" hint-placeholder-val="{{ false }}">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+              <div style="display:flex;flex-direction:column;gap:14px;">
+                <div style="display:flex;flex-direction:column;gap:7px;">
+                  <div style="font-size:13px;font-weight:500;color:var(--ink2);">Nome do equipamento</div>
+                  <input value="{{ wizName }}" onChange="{{ onWizName }}" style="height:46px;border-radius:14px;border:none;background:var(--bg2);padding:0 14px;font-size:15px;color:var(--ink);outline:none;">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:7px;">
+                  <div style="font-size:13px;font-weight:500;color:var(--ink2);">Nome público da rede</div>
+                  <div style="display:flex;align-items:center;gap:1px;height:46px;border-radius:14px;background:var(--bg2);padding:0 14px;box-shadow:0 0 0 1.5px {{ pubCheck.ring }} inset;transition:box-shadow .2s;">
+                    <span style="font:500 15px 'Geist Mono',monospace;color:var(--ink2);">piu.</span>
+                    <input value="{{ wizPub }}" onChange="{{ onWizPub }}" placeholder="nome-do-ponto" style="flex:1;min-width:0;border:none;background:transparent;outline:none;font:500 15px 'Geist Mono',monospace;color:var(--ink);">
+                    <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'FILL' 1;">{{ pubCheck.icon }}</span>
+                  </div>
+                  <div style="font-size:12px;line-height:1.4;color:{{ pubCheck.color }};">{{ pubCheck.msg }}</div>
+                </div>
+                <sc-if value="{{ fam.notAp }}" hint-placeholder-val="{{ true }}"><sc-for list="{{ wizLimits }}" as="g" hint-placeholder-count="3">
+                  <div style="display:flex;flex-direction:column;gap:7px;">
+                    <div style="font-size:13px;font-weight:500;color:var(--ink2);">{{ g.title }}</div>
+                    <div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg2);">
+                      <sc-for list="{{ g.opts }}" as="o" hint-placeholder-count="3">
+                        <button onClick="{{ o.pick }}" style="flex:1;height:32px;border:none;border-radius:8px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 13px Geist;cursor:pointer;box-shadow:{{ o.shadow }};">{{ o.label }}</button>
+                      </sc-for>
+                    </div>
+                  </div>
+                </sc-for></sc-if>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:12px;">
+                <sc-if value="{{ fam.notAp }}" hint-placeholder-val="{{ true }}"><div style="font-size:13px;font-weight:500;color:var(--ink2);">Carteira de recebimento</div>
+                <sc-for list="{{ walletChoices }}" as="w" hint-placeholder-count="2">
+                  <div onClick="{{ w.pick }}" style="display:flex;gap:12px;padding:14px;border-radius:16px;border:1.5px solid {{ w.border }};background:{{ w.bg }};cursor:pointer;">
+                    <div style="width:20px;height:20px;border-radius:50%;border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;flex:none;margin-top:1px;"><div style="width:10px;height:10px;border-radius:50%;background:var(--ink);opacity:{{ w.dot }};"></div></div>
+                    <div style="flex:1;display:flex;flex-direction:column;gap:3px;"><div style="font-size:14px;font-weight:600;">{{ w.t }}</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">{{ w.a }}</div><div style="font-size:12px;color:var(--ink2);line-height:1.35;">{{ w.d }}</div></div>
+                  </div>
+                </sc-for></sc-if>
+                <sc-if value="{{ fam.isAp }}" hint-placeholder-val="{{ false }}">
+                  <div style="padding:16px;border-radius:16px;background:var(--bg2);display:flex;gap:12px;">
+                    <span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">toll</span>
+                    <div style="flex:1;font-size:13px;line-height:1.45;color:var(--ink2);text-wrap:pretty;">{{ apNote }}</div>
+                  </div>
+                </sc-if>
+                <div style="padding:12px 14px;border-radius:14px;border:1px dashed var(--line2);font-size:12px;line-height:1.45;color:var(--ink2);">{{ fam.result }} · aprovado no teste real. Os limites globais de Configurações continuam valendo.</div>
+              </div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;padding:16px 26px 22px;border-top:1px solid var(--line);">
+          <button onClick="{{ wizBack }}" style="height:44px;padding:0 18px;border-radius:22px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:550 14px Geist;cursor:pointer;opacity:{{ backOp }};">Voltar</button>
+          <div style="flex:1;font:400 12px 'Geist Mono',monospace;color:var(--ink2);">{{ wizHint }}</div>
+          <button onClick="{{ wizNext }}" style="height:44px;padding:0 22px;border-radius:22px;border:none;background:var(--ink);color:var(--invink);font:600 14px Geist;cursor:pointer;opacity:{{ nextOp }};transition:opacity .25s,transform .15s;" style-active="transform:scale(0.97);">{{ nextLabel }}</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ modalOpen }}" hint-placeholder-val="{{ false }}">
+    <div onClick="{{ closeModal }}" style="position:absolute;inset:0;background:var(--scrim);z-index:45;animation:piuFade .2s ease-out both;"></div>
+    <div style="position:absolute;left:50%;top:50%;width:420px;margin-left:-210px;transform:translateY(-50%);z-index:46;">
+      <div style="border-radius:28px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3);padding:28px 24px 20px;display:flex;flex-direction:column;align-items:center;gap:14px;text-align:center;animation:piuDialog .3s cubic-bezier(.2,.9,.3,1.2) both;">
+        <div style="position:relative;width:62px;height:62px;">
+          <sc-if value="{{ md.waiting }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 1.8s ease-out infinite;"></div></sc-if>
+          <div style="position:absolute;inset:0;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;animation:piuPop .4s .05s cubic-bezier(.2,.9,.3,1.4) both;"><span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'wght' 300;">{{ md.icon }}</span></div>
+        </div>
+        <div style="font-size:21px;font-weight:700;letter-spacing:-0.025em;">{{ md.title }}</div>
+        <div style="font-size:14px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">{{ md.body }}</div>
+        <sc-if value="{{ md.hasCode }}" hint-placeholder-val="{{ false }}">
+          <div style="font:600 30px 'Geist Mono',monospace;letter-spacing:.08em;padding:8px 0;">731 204</div>
+        </sc-if>
+        <div style="display:flex;flex-direction:column;gap:8px;width:100%;margin-top:6px;">
+          <button onClick="{{ md.primary }}" style="height:48px;border:none;border-radius:24px;background:var(--ink);color:var(--invink);font:600 15px Geist;cursor:pointer;">{{ md.primaryLabel }}</button>
+          <button onClick="{{ closeModal }}" style="height:44px;border:none;border-radius:22px;background:var(--bg2);color:var(--ink);font:600 14.5px Geist;cursor:pointer;">Cancelar</button>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ toastOpen }}" hint-placeholder-val="{{ false }}">
+    <div style="position:absolute;right:24px;bottom:24px;width:380px;z-index:50;border-radius:18px;background:var(--ink);color:var(--invink);padding:14px 16px;display:flex;gap:12px;align-items:center;box-shadow:0 20px 50px rgba(0,0,0,.3);animation:{{ toastAnim }};">
+      <span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;display:inline-block;animation:piuPop .4s .1s cubic-bezier(.2,.9,.3,1.4) both;">{{ toast.icon }}</span>
+      <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14px;font-weight:650;">{{ toast.title }}</div><div style="font-size:12.5px;opacity:.75;line-height:1.35;">{{ toast.body }}</div></div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1280,&quot;height&quot;:820},&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;start&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;overview&quot;,&quot;devices&quot;,&quot;mesh&quot;,&quot;earnings&quot;,&quot;wallet&quot;,&quot;settings&quot;],&quot;default&quot;:&quot;overview&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;jump&quot;:{&quot;editor&quot;:null,&quot;tsType&quot;:&quot;{screen:string,n:number}&quot;}}">
+class Component extends DCLogic {
+  state = {
+    lang: 'pt-BR', region: 'auto', langOpen: false,
+    page: (this.props && this.props.start) || 'overview', theme: null, devices: this.seed(), sel: null, filter: 'all', q: '',
+    wiz: null, modal: null, toast: null, xferTo: 'personal', xferAmt: '200', bal: 884.6, txs: this.seedTx(),
+    gBw: 50, gSto: 8, gHours: 'always', pol: { media: true, unknown: true, community: false },
+  };
+
+  seed() {
+    return [
+      { id: 'mini', name: 'Mini-PC da garagem', cls: 'Gateway Local', short: 'Intel N100', pub: 'piu.vila-esperanca', model: 'Intel N100 · Debian 12 · Piu Node 0.4.2', icon: 'dns', status: 'active', pph: 1280, today: 6.6, month: 138.37, nb: 14, sto: [3.1, 8], uptime: '12 d',
+        ifaces: [['Ethernet', '2 gateways ligados', 34], ['Wi-Fi 6 · malha', '41 de 120 Mbps', 34], ['USB · LoRa 915 MHz', '62% do ciclo permitido', 62]],
+        receipts: [['14:31', 'texto', '2 saltos', 'confirmado'], ['14:31', 'alerta LoRa', '3 saltos', 'confirmado'], ['14:30', 'arquivo 1,2 MB', '1 salto', 'confirmado'], ['14:30', 'texto', '—', 'duplicata']] },
+      { id: 'antena', name: 'Antena do telhado', cls: 'Super Node', short: 'LoRa 915 MHz', pub: 'piu.serra-norte', model: 'LoRa 915 MHz · antena 5 dBi · Raspberry Pi 4', icon: 'settings_input_antenna', status: 'active', pph: 420, today: 5.8, month: 103.04, nb: 9, sto: [0.4, 2], uptime: '31 d',
+        ifaces: [['LoRa 915 MHz', 'alcance medido 4,1 km', 48], ['Wi-Fi 2,4 GHz', '3 celulares', 12]],
+        receipts: [['14:31', 'alerta Defesa Civil', '3 saltos', 'confirmado'], ['14:28', 'texto', '4 saltos', 'confirmado'], ['14:26', 'texto', '—', 'rota circular']] },
+      { id: 'router', name: 'Roteador da sala', cls: 'Home Node', short: 'GL-MT3000', pub: 'piu.vila-esperanca-2', model: 'GL-MT3000 · OpenWrt 23.05 · Piu Node 0.4.2', icon: 'router', status: 'active', pph: 610, today: 2.9, month: 52.99, nb: 11, sto: [1.2, 4], uptime: '6 d',
+        ifaces: [['Wi-Fi Mesh 5 GHz', '18 de 40 Mbps', 45], ['Wi-Fi 2,4 GHz', '11 celulares', 28], ['Ethernet', 'Mini-PC da garagem', 22]],
+        receipts: [['14:32', 'texto', '1 salto', 'confirmado'], ['14:31', 'recibo de grupo', '2 saltos', 'confirmado'], ['14:29', 'foto 2,4 MB', '1 salto', 'confirmado']] },
+      { id: 'rep', name: 'Repetidor do quintal', cls: 'Ponto de Acesso', short: 'repetidor', pub: 'piu.vila-esperanca-3', model: 'Repetidor comum · firmware original · ligado ao Mini-PC da garagem', icon: 'wifi', status: 'active', pph: 0, today: 0, month: 0, nb: 6, sto: null, uptime: '9 d', passive: true, parent: 'mini',
+        ifaces: [['Wi-Fi 2,4 GHz', '6 celulares conectados', 30], ['Ligação ao Mini-PC', 'repetição sem fio · −61 dBm', 70]], receipts: [] },
+    ];
+  }
+  seedTx() {
+    return [
+      { icon: 'call_received', t: 'Lote #0046 liquidado', d: '1 out', s: 'tx 7c1e…a90f', v: '+512,08' },
+      { icon: 'call_made', t: 'Para carteira pessoal', d: '5 set', s: 'tx 4a90…c21e', v: '−400,00' },
+      { icon: 'call_received', t: 'Lote #0045 liquidado', d: '1 set', s: 'tx 21bd…04c3', v: '+448,44' },
+      { icon: 'call_received', t: 'Lote #0044 liquidado', d: '1 ago', s: 'tx e09a…7b11', v: '+324,08' },
+    ];
+  }
+  fams() {
+    return [
+      { id: 'router', icon: 'router', name: 'Roteador com OpenWrt', cls: 'Home Node', badge: 'Beta', desc: 'Wi-Fi Mesh 802.11s · fica ligado 24 h', pkg: 'piu-node_0.4.2_aarch64.ipk', cmd: 'opkg install ./piu-node_0.4.2_aarch64.ipk', install: true,
+        found: 'Archer C7 · OpenWrt 23.05.3', addr: '192.168.0.31 · Wi-Fi Piu-Escritório', where: 'na interface do roteador', hw: 'MIPS QCA9558 · 128 MB RAM · USB para armazenamento', ifs: 'Wi-Fi 2,4/5 GHz (802.11s) · Ethernet ×4 · USB 2.0',
+        result: 'Home Node', bw: '22 Mbps', lat: '14 ms', nb: '7', model: 'Archer C7 · OpenWrt 23.05 · Piu Node 0.4.2', short: 'Archer C7', defName: 'Roteador do escritório', defPub: 'vila-esperanca-4',
+        ifaces: [['Wi-Fi Mesh 5 GHz', 'aguardando tráfego', 3], ['Wi-Fi 2,4 GHz', 'aguardando tráfego', 3]] },
+      { id: 'linux', icon: 'computer', name: 'Computador Linux ou Raspberry Pi', cls: 'Home Node · Gateway', badge: 'Estável', desc: 'Pacote .deb ou imagem pronta para cartão SD', pkg: 'piu-node_0.4.2_arm64.deb', cmd: 'sudo apt install ./piu-node_0.4.2_arm64.deb', install: true,
+        found: 'Raspberry Pi 5 · Raspberry Pi OS 12', addr: 'raspberrypi.local · 192.168.0.42', where: 'no terminal', hw: 'ARM64 · 8 GB RAM · 54 GB livres', ifs: 'Wi-Fi 5 GHz · Bluetooth LE · Ethernet',
+        result: 'Home Node', bw: '31 Mbps', lat: '11 ms', nb: '6', model: 'Raspberry Pi 5 · Debian 12 · Piu Node 0.4.2', short: 'Raspberry Pi 5', defName: 'Raspberry do quarto', defPub: 'vila-esperanca-4',
+        ifaces: [['Wi-Fi', 'aguardando tráfego', 3], ['Bluetooth LE', 'aguardando tráfego', 3], ['Ethernet', 'aguardando tráfego', 3]] },
+      { id: 'minipc', icon: 'dns', name: 'Mini-PC com adaptadores', cls: 'Gateway Local', badge: 'Estável', desc: 'Liga Wi-Fi, LoRa, USB e Ethernet entre si', pkg: 'piu-node_0.4.2_amd64.deb', cmd: 'sudo apt install ./piu-node_0.4.2_amd64.deb', install: true,
+        found: 'mini-n95 · Debian 12', addr: 'mini-n95.local · 192.168.0.12', where: 'no terminal', hw: 'x86-64 N95 · 8 GB RAM · 210 GB livres', ifs: 'Ethernet ×2 · Wi-Fi 6 · USB ×4',
+        result: 'Gateway Local', bw: '210 Mbps', lat: '5 ms', nb: '8', model: 'Intel N95 · Debian 12 · Piu Node 0.4.2', short: 'Intel N95', defName: 'Mini-PC da sala', defPub: 'vila-esperanca-4',
+        ifaces: [['Ethernet', 'aguardando tráfego', 3], ['Wi-Fi 6', 'aguardando tráfego', 3]] },
+      { id: 'lora', icon: 'settings_input_antenna', name: 'Rádio LoRa via USB', cls: 'Super Node', badge: 'Beta', desc: '915 MHz · só rádios homologados pela Anatel', pkg: 'adapter-lora_0.2.0', cmd: '', install: false, isRadio: true,
+        found: 'Rádio LoRa USB · SX1262', addr: 'ttyACM1 · no Mini-PC da garagem', where: 'no painel do Mini-PC', hw: 'SX1262 · 915 MHz · homologação Anatel conferida', ifs: 'LoRa 915 MHz · antena externa 8 dBi',
+        result: 'Super Node', bw: '5,5 kbps', lat: '1,1 s', nb: '5', model: 'LoRa 915 MHz · USB · adapter 0.2.0', short: 'LoRa 915 MHz', defName: 'Rádio LoRa da caixa d’água', defPub: 'serra-sul',
+        ifaces: [['LoRa 915 MHz', 'aguardando tráfego', 3]] },
+      { id: 'ap', icon: 'wifi', name: 'Roteador comum ou repetidor', cls: 'Ponto de Acesso', badge: 'Sem instalação', desc: 'Manda e recebe ao vivo. Guardar e comprovar fica com o nó pai.', install: false, isAp: true, pkg: '',
+        found: 'TP-Link RE200 · repetidor', addr: 'visto pelo Mini-PC da garagem · −58 dBm', where: '', hw: '', ifs: '', result: 'Ponto de Acesso', bw: '~25 m', lat: '9 ms', nb: '6',
+        model: 'Repetidor comum · firmware original', short: 'repetidor', defName: 'Repetidor da varanda', defPub: 'vila-esperanca-4',
+        ifaces: [['Wi-Fi 2,4 GHz', 'aguardando celulares', 3], ['Ligação ao nó pai', 'repetição sem fio', 60]] },
+      { id: 'ptp', icon: 'cell_tower', name: 'Enlace de rádio ponto a ponto', cls: 'Super Node', badge: 'Em avaliação', desc: 'Liga bairros distantes · em testes de homologação', disabled: true },
+    ];
+  }
+
+  componentDidUpdate(prev) {
+    const j = this.props.jump, pj = prev.jump;
+    if (j && (!pj || j.n !== pj.n)) this.jumpTo(j.screen);
+  }
+  componentWillUnmount() { this.clearT(); clearTimeout(this.toastT); }
+  clearT() { clearTimeout(this.scanT); clearInterval(this.testT); }
+
+  jumpTo(s) {
+    const base = { wiz: null, modal: null };
+    if (s === 'detail') return this.setState({ ...base, page: 'devices', sel: 'mini' });
+    if (s === 'wizard') return this.openWiz(0);
+    if (s === 'wizPair') { this.openWiz(1); return; }
+    if (s === 'wizTest') { this.openWiz(2); return; }
+    if (s === 'sign') return this.setState({ ...base, page: 'wallet', modal: 'sign' });
+    this.setState({ ...base, page: s, sel: null });
+  }
+
+  openWiz(step) {
+    this.clearT();
+    this.setState({ modal: null, wiz: { step, fam: 'router', install: 'dl', scan: 'searching', paired: step > 1, n: 0, name: 'Roteador do escritório', pub: 'vila-esperanca-4', parent: 'mini', bw: 20, sto: 4, hours: 'always', wallet: 'provider' } });
+    if (step === 1) this.startScan();
+    if (step === 2) this.startTest();
+  }
+  patchWiz(p) { this.setState(st => ({ wiz: st.wiz ? { ...st.wiz, ...p } : st.wiz })); }
+  startScan() {
+    this.clearT();
+    this.patchWiz({ scan: 'searching', paired: false });
+    this.scanT = setTimeout(() => this.patchWiz({ scan: 'found' }), 1600);
+  }
+  startTest() {
+    this.clearT();
+    this.patchWiz({ n: 0 });
+    this.testT = setInterval(() => this.setState(st => {
+      if (!st.wiz) { clearInterval(this.testT); return null; }
+      const n = st.wiz.n + 1; if (n >= 5) clearInterval(this.testT);
+      return { wiz: { ...st.wiz, n } };
+    }), 700);
+  }
+  wizNext() {
+    const w = this.state.wiz; if (!w) return;
+    if (w.step === 0) { this.patchWiz({ step: 1 }); this.startScan(); }
+    else if (w.step === 1) { if (!w.paired) return; this.patchWiz({ step: 2 }); this.startTest(); }
+    else if (w.step === 2) { if (w.n < 5) return; this.patchWiz({ step: 3 }); }
+    else { if (!this.pubOk()) return; this.activate(); }
+  }
+  wizBack() {
+    const w = this.state.wiz; if (!w || w.step === 0) return;
+    this.clearT();
+    const step = w.step - 1;
+    this.patchWiz({ step });
+    if (step === 1) this.startScan();
+  }
+  activate() {
+    const w = this.state.wiz, fam = this.fams().find(f => f.id === w.fam), id = 'd' + Date.now();
+    const dev = { id, name: (w.name || fam.defName).trim(), cls: fam.result, short: fam.short, model: fam.model, icon: fam.icon, status: 'warming', pph: 0, today: 0, month: 0, nb: +fam.nb,
+      sto: fam.isAp ? null : [0, w.sto], uptime: 'agora', ifaces: fam.ifaces, receipts: [], fresh: true, pub: 'piu.' + w.pub, passive: !!fam.isAp, parent: w.parent };
+    if (fam.isAp) { const par = this.state.devices.find(d => d.id === w.parent); dev.model = 'Repetidor comum · firmware original · ligado ao ' + (par ? par.name : 'nó pai'); dev.status = 'active'; }
+    this.clearT();
+    this.setState(st => ({ devices: [...st.devices, dev], wiz: null, page: 'devices', sel: id, filter: 'all', q: '' }));
+    this.showToast({ icon: fam.icon, title: dev.name + ' entrou na malha', body: fam.isAp ? dev.pub + ' · leva o sinal do nó pai mais longe.' : dev.pub + ' · aquecendo, primeiros recibos em minutos.' });
+  }
+  showToast(t) {
+    clearTimeout(this.toastT);
+    this.toastSeq = (this.toastSeq || 0) + 1;
+    this.setState({ toast: { ...t, seq: this.toastSeq } });
+    this.toastT = setTimeout(() => this.setState({ toast: null }), 4200);
+  }
+  pubCheck(p) {
+    const taken = ['vila-esperanca', 'vila-esperanca-2', 'vila-esperanca-3', 'serra-norte', 'galpao', 'praca', 'escola', 'torre-serra'];
+    const own = this.state.devices.map(d => (d.pub || '').replace('piu.', ''));
+    if (!p) return { ok: false, icon: 'edit', msg: 'Escolha um nome para a rede.', color: 'var(--ink2)', ring: 'transparent' };
+    if (taken.includes(p) || own.includes(p)) return { ok: false, icon: 'error', msg: 'piu.' + p + ' já é usado por outro nó desta malha.', color: 'var(--ink)', ring: 'var(--ink)' };
+    if (/cardeal|casa|rua|apto|apartamento|numero/.test(p)) return { ok: true, icon: 'warning', msg: 'Disponível, mas evite nome ou endereço: qualquer pessoa por perto vê este nome.', color: 'var(--ink)', ring: 'var(--line2)' };
+    return { ok: true, icon: 'verified', msg: 'Disponível na malha local · será assinado pela sua chave de operador.', color: 'var(--ink2)', ring: 'transparent' };
+  }
+  pubOk() { const w = this.state.wiz; return !!w && this.pubCheck(w.pub).ok; }
+  num(s) { return parseFloat(String(s).replace(/\./g, '').replace(',', '.')) || 0; }
+
+  renderVals() {
+    const s = this.state, set = o => () => this.setState(o);
+    const fmt = n => n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const theme = s.theme || this.props.theme || 'light';
+    const seg = (cur, v) => ({ bg: cur === v ? 'var(--bg)' : 'transparent', weight: cur === v ? 600 : 450, shadow: cur === v ? '0 1px 3px rgba(0,0,0,.12)' : 'none' });
+    const tog = on => ({ track: on ? 'var(--ink)' : 'var(--bg3)', knob: on ? '19px' : '3px', knobBg: on ? 'var(--bg)' : 'var(--knob)' });
+    const devs = s.devices;
+    const month = devs.reduce((a, d) => a + d.month, 0), today = devs.reduce((a, d) => a + d.today, 0);
+    const active = devs.filter(d => d.status === 'active').length;
+    const statusShort = st => st === 'active' ? 'Ativo' : st === 'paused' ? 'Pausado' : 'Aquecendo';
+    const devView = d => ({ ...d, statusShort: statusShort(d.status), dotBg: d.status === 'active' ? 'var(--ink)' : 'transparent',
+      dotAnim: d.status === 'warming' ? 'piuBreath 1.2s ease-in-out infinite' : 'none', pphLabel: d.passive ? '—' : d.status === 'paused' ? '0' : d.pph ? d.pph.toLocaleString('pt-BR') : '—',
+      todayLabel: d.passive ? '—' : '+' + fmt(d.today), pub: d.pub || '', stoPct: d.sto ? (d.sto[0] / d.sto[1] * 100).toFixed(0) + '%' : '0%', stoLabel: d.sto ? String(d.sto[0]).replace('.', ',') + ' de ' + d.sto[1] + ' GB' : 'não guarda mensagens',
+      open: () => this.setState({ page: 'devices', sel: d.id }) });
+
+    const pages = {
+      overview: ['PAINEL LOCAL · SEM INTERNET', 'Visão geral', 'Sábado, 31 de outubro · ' + devs.length + ' equipamentos na malha do bairro'],
+      devices: ['OPERAÇÃO', 'Equipamentos', 'Roteadores, antenas e gateways que você opera'],
+      mesh: ['OPERAÇÃO', 'Malha', '27 vizinhos alcançáveis · rotas escolhidas por alcance e capacidade'],
+      earnings: ['FINANCEIRO', 'Ganhos', 'Créditos por entregas comprovadas, liquidados em LUNES'],
+      wallet: ['FINANCEIRO', 'Carteira', 'Carteira de provider, separada da sua identidade de conversa'],
+      settings: ['CONTA', 'Configurações', 'Limites e políticas aplicados a todos os equipamentos'],
+    };
+    const pg = pages[s.page] || pages.overview;
+    const navDef = [['overview', 'space_dashboard', 'Visão geral'], ['devices', 'router', 'Equipamentos', String(devs.length)], ['mesh', 'hub', 'Malha'],
+      ['earnings', 'toll', 'Ganhos'], ['wallet', 'account_balance_wallet', 'Carteira'], ['settings', 'tune', 'Configurações']];
+
+    const barsV = [3.8, 4.2, 5.1, 5.8, 4.9, 6.3, 6.9, 7.4, 6.1, 7.8, 8.2, 7.1, 8.9, 9.4, 8.7, 9.9, 10.6, 9.2, 10.8, 11.4, 10.1, 11.9, 12.6, 11.3, 12.8, 13.4, 12.2, 13.9, 14.6, 13.8, today];
+    const mx = Math.max(...barsV);
+
+    const famList = this.fams();
+    const w = s.wiz;
+    const fam = famList.find(f => f.id === (w ? w.fam : 'router')) || famList[0];
+    const sel = devs.find(d => d.id === s.sel);
+    const sd = sel || devs[0] || this.seed()[0];
+    const pdT = tog(sd.status === 'paused');
+    const parentOf = d => { const p = devs.find(x => x.id === (d && d.parent)); return p ? p.name : 'nó pai'; };
+    const parentName = parentOf(w || {});
+
+    const W = 628, H = 520;
+    const P = {
+      router: [210, 250], mini: [330, 300], antena: [430, 150], galpao: [130, 400], praca: [300, 445], escola: [505, 385], torre: [560, 70], vale: [585, 250],
+      rep: [395, 360], p1: [110, 165], p2: [80, 285], p3: [225, 120], p4: [405, 425], p5: [470, 290], p6: [180, 340],
+    };
+    const linkDef = [
+      ['router', 'mini', 'eth', 1], ['mini', 'antena', 'eth', 1], ['router', 'p1', 'ble', 1], ['router', 'p2', 'ble', 1], ['router', 'p3', 'ble', 1], ['router', 'p6', 'ble', 1],
+      ['mini', 'galpao', 'mesh', 1], ['mini', 'praca', 'mesh', 1], ['mini', 'escola', 'mesh', 1], ['mini', 'rep', 'mesh', 1], ['rep', 'p4', 'ble', 1], ['mini', 'p5', 'ble', 1],
+      ['antena', 'torre', 'lora', 1], ['antena', 'vale', 'lora', 1], ['galpao', 'praca', 'mesh', 0], ['escola', 'vale', 'lora', 0],
+    ];
+    const lineSt = { eth: ['2.5px', 'solid'], mesh: ['1.5px', 'solid'], ble: ['1px', 'dotted'], lora: ['1.5px', 'dashed'] };
+    const links = linkDef.map(([a, b, t, own], i) => {
+      const [x1, y1] = P[a], [x2, y2] = P[b], dx = x2 - x1, dy = y2 - y1;
+      return { x: x1 + 'px', y: y1 + 'px', len: Math.hypot(dx, dy).toFixed(1) + 'px', deg: (Math.atan2(dy, dx) * 180 / Math.PI).toFixed(2) + 'deg',
+        w: lineSt[t][0], style: lineSt[t][1], op: own ? 0.75 : 0.3, flow: !!own && t !== 'ble' && (s.devices.find(d => d.id === a) || {}).status !== 'paused', dur: (1.6 + (i % 4) * 0.5) + 's' };
+    });
+    const nodeDef = [
+      ['router', 'own', 'router', 'Roteador da sala'], ['mini', 'own', 'dns', 'Mini-PC da garagem'], ['antena', 'own', 'settings_input_antenna', 'Antena do telhado'],
+      ['galpao', 'peer', 'router', 'Galpão'], ['praca', 'peer', 'dns', 'Gateway Praça'], ['escola', 'peer', 'router', 'Escola Municipal'], ['torre', 'peer', 'settings_input_antenna', 'Torre Serra'], ['vale', 'peer', 'settings_input_antenna', 'Super Node Vale'], ['rep', 'ap', 'wifi', 'Repetidor do quintal'],
+      ['p1', 'phone'], ['p2', 'phone'], ['p3', 'phone'], ['p4', 'phone'], ['p5', 'phone'], ['p6', 'phone'],
+    ];
+    const nodes = nodeDef.map(([k, kind, icon, label]) => ({ x: P[k][0] + 'px', y: P[k][1] + 'px', own: kind === 'own', peer: kind === 'peer' || kind === 'ap', phone: kind === 'phone', icon: icon || '', label: label || '',
+      hasLabel: !!label, labelBg: kind === 'own' || kind === 'ap' ? 'var(--ink)' : 'var(--bg)', labelFg: kind === 'own' || kind === 'ap' ? 'var(--invink)' : 'var(--ink)' }));
+
+    const rates = [
+      ['chat_bubble', 'Texto entregue', '1 crédito / entrega', '18.420 entregas', 184.2], ['campaign', 'Alerta via rádio', '3 créditos / entrega', '1.120 entregas', 33.6],
+      ['description', 'Arquivo ou mídia', '2 créditos / MB', '3.685 MB', 73.7], ['alt_route', 'Rota nova entre áreas', '10 créditos / rota', '29 rotas', 2.9],
+    ];
+    const rateMax = Math.max(...rates.map(r => r[4]));
+    const amt = this.num(s.xferAmt);
+    const md = s.modal === 'sign'
+      ? { icon: 'smartphone', title: 'Confirme no seu celular', body: 'Abra o Piu no celular pareado e confira o código para assinar ' + fmt(amt) + ' LUNES para a ' + (s.xferTo === 'personal' ? 'carteira pessoal' : 'conta indicada') + '.', hasCode: true, waiting: true,
+          primaryLabel: 'Simular aprovação no celular', primary: () => this.setState(st => ({ modal: null, bal: st.bal - amt, txs: [{ icon: 'call_made', t: st.xferTo === 'personal' ? 'Para carteira pessoal' : 'Para lunes:7Qe1…k9Za', d: 'agora', s: 'assinada · na fila da malha', v: '−' + fmt(amt), anim: 'piuUp .4s both' }, ...st.txs] }), () => this.showToast({ icon: 'check_circle', title: 'Transferência assinada', body: 'Liquida na próxima conexão de um gateway com a Mainnet.' })) }
+      : s.modal === 'revoke'
+        ? { icon: 'key_off', title: 'Revogar ' + sd.name + '?', body: sd.passive ? 'O nome ' + sd.pub + ' deixa de ser reconhecido como seu. O roteador continua funcionando como Wi-Fi comum.' : 'A credencial é revogada em toda a malha e o equipamento deixa de retransmitir como seu. Créditos pendentes dele continuam sendo validados.', hasCode: false, waiting: false,
+            primaryLabel: 'Revogar e remover', primary: () => { const id = sd.id, nm = sd.name; this.setState(st => ({ modal: null, sel: null, devices: st.devices.filter(d => d.id !== id) })); this.showToast({ icon: 'key_off', title: 'Credencial revogada', body: nm + ' saiu da sua operação.' }); } }
+        : { icon: '', title: '', body: '', hasCode: false, waiting: false, primaryLabel: '', primary: () => {} };
+
+    const wizChecks = fam.isAp ? [
+      ['Sinal no local', '−58 dBm · cobertura estimada de 25 m'], ['Isolamento de clientes', 'desativado · celulares se enxergam'], ['Descoberta local', 'mDNS e multicast passando'],
+      ['Ligação ao nó pai', parentName + ' · 9 ms'], ['Teste com celulares', '2 celulares trocaram 40 pacotes pelo repetidor · 100% ok'],
+    ] : [
+      [fam.install ? 'Pacote Piu Node' : 'Adapter de rádio', (fam.pkg || '') + ' · assinatura Lunes conferida'], ['Hardware', fam.hw || ''], ['Interfaces', fam.ifs || ''],
+      ['Identidade técnica do nó', 'chave gerada no equipamento · assinada pelo operador'], ['Encaminhamento real', fam.isRadio ? 'alcance medido por 2 nós independentes · 3,8 km' : '120 pacotes de teste por 3 vizinhos independentes · 99% ok'],
+    ];
+    const wn = w ? w.n : 0, done = wn >= 5;
+    const filtered = devs.filter(d => (s.filter === 'all' || d.status === s.filter) && (!s.q || d.name.toLowerCase().includes(s.q.toLowerCase())));
+
+    return {
+      theme,
+      themeOpts: [['light', 'Claro', 'light_mode'], ['dark', 'Escuro', 'dark_mode']].map(([k, l, ic]) => ({ label: l, icon: ic, ...seg(theme, k), pick: set({ theme: k }) })),
+      operatorSub: 'operador · ' + devs.length + ' equipamentos',
+      nav: navDef.map(([k, ic, l, b]) => ({ icon: ic, label: l, badge: b || '', hasBadge: !!b, fill: s.page === k ? 1 : 0, weight: s.page === k ? 600 : 500,
+        bg: s.page === k ? 'var(--ink)' : 'transparent', fg: s.page === k ? 'var(--invink)' : 'var(--ink)', go: () => this.setState({ page: k, sel: null }) })),
+      page: { crumb: pg[0], title: pg[1], sub: pg[2] },
+      showExport: s.page === 'earnings' || s.page === 'wallet',
+      exportCsv: () => this.showToast({ icon: 'download', title: 'Extrato exportado', body: 'ganhos-outubro.csv salvo neste computador.' }),
+      isOverview: s.page === 'overview', isDevices: s.page === 'devices', isMesh: s.page === 'mesh', isEarnings: s.page === 'earnings', isWallet: s.page === 'wallet', isSettings: s.page === 'settings',
+      goEarnings: set({ page: 'earnings' }), goDevices: set({ page: 'devices', sel: null }),
+      k: { month: fmt(month), todayLabel: '+' + fmt(today) + ' hoje · ' + active + ' de ' + devs.length + ' equipamentos ativos',
+        states: [{ v: fmt(month - 25.6), l: 'validados' }, { v: '25,60', l: 'pendentes' }, { v: '3,92', l: 'rejeitados' }] },
+      bars: barsV.map((v, i) => ({ h: Math.max(3, v / mx * 100).toFixed(0) + '%', op: i === barsV.length - 1 ? 1 : 0.4, tip: (i + 1) + ' out · ' + fmt(v) + ' LUNES',
+        anim: 'piuGrow .6s ' + (i * 0.02).toFixed(2) + 's cubic-bezier(.2,.9,.3,1) both' })),
+      kpis: [['swap_vert', 'Pacotes entregues hoje', '24.880', '+8% vs. ontem'], ['done_all', 'Confirmados pelo destino', '97,8%', 'meta da rede: 95%'],
+        ['content_copy', 'Duplicatas descartadas', '412', 'não geram crédito'], ['hub', 'Vizinhos únicos', '27', '5 Home · 2 Super · 1 Gateway']]
+        .map(([icon, l, v, d], i) => ({ icon, l, v, d, anim: 'piuUp .45s ' + (0.1 + i * 0.05).toFixed(2) + 's both' })),
+      devRows: devs.map(devView),
+      feed: [['system_update_alt', 'Piu Node 0.4.3 disponível', 'Assinada · para 3 equipamentos', '10 min'], ['settings_input_antenna', 'Antena perto do limite de ciclo', 'LoRa a 62% do tempo permitido pela Anatel', '32 min'],
+        ['verified', 'Alcance revalidado', 'Super Node · 4,1 km por 2 nós', '2 h'], ['content_copy', '412 duplicatas descartadas', 'Não geram crédito', '3 h'], ['check_circle', 'Lote #0046 liquidado', '512,08 LUNES', '1 out']]
+        .map(([icon, t, d, time], i) => ({ icon, t, d, time, border: i ? 'var(--line)' : 'transparent' })),
+      transports: [['hub', 'Wi-Fi Mesh', '58%'], ['cable', 'Ethernet / USB', '19%'], ['wifi_tethering', 'Wi-Fi Direct (celulares)', '12%'], ['settings_input_antenna', 'LoRa 915 MHz', '7%'], ['bluetooth', 'Bluetooth LE', '4%']]
+        .map(([icon, n, p], i) => ({ icon, n, p, anim: 'piuGrowX .7s ' + (i * 0.06).toFixed(2) + 's cubic-bezier(.2,.9,.3,1) both' })),
+      rates: rates.map(([icon, t, rule, vol, v], i) => ({ icon, t, rule, vol, v: fmt(v), share: (v / rateMax * 100).toFixed(0) + '%', border: i ? 'var(--line)' : 'transparent' })),
+
+      filters: [['all', 'Todos'], ['active', 'Ativos'], ['paused', 'Pausados'], ['warming', 'Aquecendo']].map(([k, l]) => ({ label: l + ' · ' + (k === 'all' ? devs.length : devs.filter(d => d.status === k).length),
+        bg: s.filter === k ? 'var(--ink)' : 'var(--bg2)', fg: s.filter === k ? 'var(--invink)' : 'var(--ink)', pick: set({ filter: k }) })),
+      q: s.q, onQ: e => this.setState({ q: e.target.value }),
+      devTable: filtered.map(d => ({ ...devView(d), rowBg: d.id === s.sel ? 'var(--bg2)' : 'transparent', iconBg: d.id === s.sel ? 'var(--ink)' : 'var(--bg2)', iconFg: d.id === s.sel ? 'var(--invink)' : 'var(--ink)',
+        anim: d.fresh ? 'piuUp .5s .15s both' : 'none' })),
+      noDevices: !filtered.length,
+      detailOpen: !!sel, closeDetail: set({ sel: null }),
+      pd: { ...sd, statusLabel: sd.status === 'active' ? (sd.passive ? 'Vinculado à malha' : 'Ativo na malha') : sd.status === 'paused' ? (sd.passive ? 'Desvinculado' : 'Pausado por você') : 'Aquecendo',
+        chipBg: sd.status === 'active' ? 'var(--ink)' : 'var(--bg2)', chipFg: sd.status === 'active' ? 'var(--invink)' : 'var(--ink)', dotAnim: sd.status === 'paused' ? 'none' : 'piuBreath 1.6s ease-in-out infinite',
+        metrics: sd.passive ? [{ v: '—', l: 'LUNES próprios' }, { v: String(sd.nb), l: 'celulares' }, { v: parentOf(sd).split(' ')[0], l: 'nó pai' }]
+          : [{ v: '+' + fmt(sd.today), l: 'LUNES hoje' }, { v: sd.status === 'paused' ? '0' : (sd.pph ? sd.pph.toLocaleString('pt-BR') : '—'), l: 'pacotes/h' }, { v: String(sd.nb), l: 'vizinhos' }],
+        notPassive: !sd.passive, pauseLabel: sd.passive ? 'Desvincular da malha' : 'Pausar retransmissão', revokeLabel: sd.passive ? 'Revogar nome público e remover' : 'Revogar credencial e remover',
+        pub: sd.pub || '', noReceiptsText: sd.passive ? 'Pontos de acesso não assinam recibos. As entregas por ele contam para o ' + parentOf(sd) + '.' : 'Primeiros recibos em alguns minutos.',
+        ifaces: sd.ifaces.map(([n, v, wd]) => ({ n, v, w: (sd.status === 'paused' ? 0 : wd) + '%' })),
+        receipts: sd.receipts.map(([t, k, h, st]) => ({ t, k, h, s: st, op: st === 'confirmado' ? 1 : 0.5 })), noReceipts: !sd.receipts.length,
+        pTrack: pdT.track, pKnob: pdT.knob, pKnobBg: pdT.knobBg,
+        togglePause: () => this.setState(st => ({ devices: st.devices.map(d => d.id !== sd.id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' }) })) },
+      devUpdate: () => this.showToast({ icon: 'system_update_alt', title: 'Atualização assinada aplicada', body: sd.name + ' · Piu Node 0.4.3' }),
+      devRestart: () => this.showToast({ icon: 'restart_alt', title: 'Reiniciando ' + sd.name, body: 'Mensagens guardadas continuam no armazenamento local.' }),
+      devRevoke: set({ modal: 'revoke' }),
+
+      links, nodes,
+      legend: [['2.5px', 'solid', 'Ethernet / USB'], ['1.5px', 'solid', 'Wi-Fi Mesh'], ['1px', 'dotted', 'Celulares'], ['1.5px', 'dashed', 'LoRa']].map(([wd, st, l]) => ({ w: wd, style: st, l })),
+      peers: [['router', 'piu.galpao', 'Home Node', 'Wi-Fi Mesh', '98%'], ['dns', 'piu.praca', 'Gateway Local', 'Wi-Fi Mesh', '91%'], ['router', 'piu.escola', 'Home Node', 'Wi-Fi Mesh', '84%'],
+        ['settings_input_antenna', 'piu.torre-serra', 'Super Node', 'LoRa', '76%'], ['settings_input_antenna', 'Super Node Vale', 'Super Node', 'LoRa', '61%'], ['smartphone', '19 celulares', 'Mobile Nodes', 'BLE e Wi-Fi', '—'], ['gpp_bad', 'piu.praca · imitação', 'sem assinatura válida', 'Wi-Fi', 'bloqueado']]
+        .map(([icon, n, c, via, q]) => ({ icon, n, c, via, q, qw: q.indexOf('%') > 0 ? q : '0%' })),
+
+      stateTiles: [['Pagos até hoje', '1.284,60', '3 lotes · desde julho', 'var(--ink)', 'var(--invink)', 1], ['Validados', fmt(month - 25.6), 'prontos para o lote #0047', 'var(--bg2)', 'var(--ink)', 0.6],
+        ['Pendentes', '25,60', 'aguardando confirmações', 'var(--bg2)', 'var(--ink)', 0.32], ['Rejeitados', '3,92', 'duplicatas e rotas circulares', 'var(--bg2)', 'var(--ink)', 0.14]]
+        .map(([l, v, d, bg, fg, op]) => ({ l, v, d, bg, fg, op })),
+      perDevice: devs.filter(d => !d.passive).map(d => ({ icon: d.icon, name: d.name, cls: d.cls, v: fmt(d.month), share: (month ? d.month / month * 100 : 0).toFixed(0) + '%' })),
+      lots: [['#0047', 'outubro', '20.598 entregas', fmt(month), 'em formação', 'hourglass_top', 0, 'aguardando Mainnet'], ['#0046', 'setembro', '36.120 entregas', '512,08', 'liquidado', 'check_circle', 1, 'tx 7c1e…a90f'],
+        ['#0045', 'agosto', '31.904 entregas', '448,44', 'liquidado', 'check_circle', 1, 'tx 21bd…04c3'], ['#0044', 'julho', '22.871 entregas', '324,08', 'liquidado', 'check_circle', 1, 'tx e09a…7b11']]
+        .map(([id, p, n, v, st, icon, fill, tx]) => ({ id, p, n, v, s: st, icon, fill, tx })),
+
+      balLabel: fmt(s.bal),
+      focusXfer: () => this.showToast({ icon: 'arrow_upward', title: 'Preencha a transferência ao lado', body: 'A assinatura acontece no seu celular.' }),
+      copyAddr: () => this.showToast({ icon: 'content_copy', title: 'Endereço copiado', body: 'lunes:9Hk2mVq…r3pW4a' }),
+      xferOpts: [['personal', 'Carteira pessoal'], ['other', 'Outro endereço']].map(([k, l]) => ({ label: l, ...seg(s.xferTo, k), pick: set({ xferTo: k }) })),
+      xferDest: s.xferTo === 'personal' ? 'para lunes:3P8x…Q7nM · pessoal' : 'para lunes:7Qe1…k9Za · colado',
+      xferAmt: s.xferAmt, onXferAmt: e => this.setState({ xferAmt: e.target.value.replace(/[^0-9,\.]/g, '') }),
+      quick: [['25%', 0.25], ['50%', 0.5], ['Tudo', 1]].map(([l, f]) => ({ label: l, pick: set({ xferAmt: fmt(Math.floor(s.bal * f * 100) / 100) }) })),
+      xferOp: amt > 0 && amt <= s.bal ? 1 : 0.35,
+      startSign: () => { if (amt > 0 && amt <= s.bal) this.setState({ modal: 'sign' }); },
+      txs: s.txs.map(t => ({ anim: 'none', ...t })),
+
+      gLimits: [
+        { title: 'Banda total para a rede', hint: 'somando equipamentos', opts: [[20, '20 Mbps'], [50, '50 Mbps'], [100, '100 Mbps']].map(([v, l]) => ({ label: l, ...seg(s.gBw, v), pick: set({ gBw: v }) })) },
+        { title: 'Armazenamento para terceiros', hint: 'mensagens cifradas', opts: [[4, '4 GB'], [8, '8 GB'], [16, '16 GB']].map(([v, l]) => ({ label: l, ...seg(s.gSto, v), pick: set({ gSto: v }) })) },
+        { title: 'Horário de operação', hint: 'para todos', opts: [['always', 'Sempre'], ['night', '22h–7h'], ['day', '8h–18h']].map(([v, l]) => ({ label: l, ...seg(s.gHours, v), pick: set({ gHours: v }) })) },
+      ],
+      policies: [['media', 'Aceitar arquivos e mídia', 'Só por Wi-Fi e cabo; nunca por LoRa', false], ['alerts', 'Priorizar alertas oficiais', 'Sempre ativo para alertas assinados', true],
+        ['unknown', 'Limitar remetentes desconhecidos', 'Contra spam e tráfego artificial', false], ['community', 'Só comunidades que sigo', 'Reduz alcance e ganhos', false]]
+        .map(([k, n, d, locked]) => { const on = locked ? true : s.pol[k]; return { n, d, ...tog(on), op: locked ? 0.45 : 1,
+          toggle: locked ? () => {} : () => this.setState(st => ({ pol: { ...st.pol, [k]: !st.pol[k] } })) }; }),
+      sessions: [['computer', 'Este computador', 'navegador · 192.168.0.24', 'agora'], ['smartphone', 'Celular de Cardeal', 'app Piu · aprova transferências', 'pareado']].map(([icon, n, d, st]) => ({ icon, n, d, s: st })),
+      langList: [['pt-BR', 'Português (Brasil)', 'Portuguese · Brazil'], ['pt-PT', 'Português (Portugal)', 'Portuguese · Portugal'], ['en', 'English', 'Inglês'], ['es', 'Español', 'Espanhol'], ['fr', 'Français', 'Francês'], ['de', 'Deutsch', 'Alemão'], ['it', 'Italiano', 'Italiano'], ['ja', '日本語', 'Japonês'], ['zh', '中文（简体）', 'Chinês simplificado'], ['ar', 'العربية', 'Árabe'], ['hi', 'हिन्दी', 'Hindi']].map(([k, n, e]) => ({ n, e, icon: s.lang === k ? 'check_circle' : 'radio_button_unchecked', weight: s.lang === k ? 650 : 450, bg: s.lang === k ? 'var(--bg)' : 'transparent',
+        pick: () => { if (s.lang === k) return; this.setState({ lang: k }); this.showToast({ icon: 'translate', title: 'Idioma: ' + n, body: 'Aplicado a este painel. Cada equipamento mantém o próprio idioma de sistema.' }); } })),
+      regionOpts: [['auto', 'Do idioma'], ['br', '1.234,56 · 31/10'], ['us', '1,234.56 · 10/31']].map(([k, l]) => ({ label: l, ...seg(s.region, k), pick: set({ region: k }) })),
+      endSessions: () => this.showToast({ icon: 'logout', title: 'Outras sessões encerradas', body: 'Só este computador continua com acesso.' }),
+      backupKeys: () => this.showToast({ icon: 'key', title: 'Backup cifrado exportado', body: 'piu-operador.backup · protegido pela sua frase secreta' }),
+      rotateKeys: () => this.showToast({ icon: 'sync_lock', title: 'Rotação agendada', body: 'Equipamentos recebem a nova chave na próxima sincronização.' }),
+
+      wizOpen: !!w, openWizard: () => this.openWiz(0), closeWizard: () => { this.clearT(); this.setState({ wiz: null }); },
+      wizSteps: ['Equipamento', 'Conectar', 'Teste real', 'Regras'].map((l, i) => { const st = w ? w.step : 0; return { n: i + 1, label: l, w: i < st ? '100%' : i === st ? '50%' : '0%', weight: i === st ? 650 : 450, color: i <= st ? 'var(--ink)' : 'var(--ink2)' }; }),
+      wiz0: !!w && w.step === 0, wiz1: !!w && w.step === 1, wiz2: !!w && w.step === 2, wiz3: !!w && w.step === 3,
+      fams: famList.map(f => { const on = w && w.fam === f.id; return { ...f, border: on ? 'var(--ink)' : 'var(--line2)', bg: on ? 'var(--bg2)' : 'transparent', op: f.disabled ? 0.45 : 1,
+        pick: f.disabled ? () => {} : () => this.patchWiz({ fam: f.id, name: f.defName, pub: f.defPub }) }; }),
+      fam: { ...fam, isRadio: !!fam.isRadio, install: !!fam.install, isAp: !!fam.isAp, notAp: !fam.isAp,
+        step1Title: fam.isAp ? '1 · Configure o roteador' : fam.isRadio ? '1 · Conecte o rádio' : '1 · Instale o Piu Node', step2Title: fam.isAp ? '2 · Encontre e vincule' : '2 · Encontre e pareie',
+        pairLabel: fam.isAp ? 'Confirmo que este equipamento é meu' : 'O código confere',
+        pairNote: fam.isAp ? 'O nome público é assinado pela sua chave de operador. O equipamento em si não muda nem recebe software.' : 'O pareamento gera uma identidade técnica no próprio equipamento, assinada pela sua identidade de operador.',
+        testIntro: fam.isAp ? 'Conferimos o sinal e se os celulares conseguem se encontrar através dele, ligados ao seu nó.' : 'Capacidade anunciada não basta: medimos com vizinhos independentes.' },
+      apSteps: [['Nome da rede (SSID)', 'piu.' + (w ? w.pub : '') + ' · o mesmo nome público'], ['Desative o isolamento de clientes', 'às vezes chamado “AP isolation”'],
+        ['Permita multicast e mDNS', 'para os celulares se descobrirem'], ['Ligue a um nó seu', 'por cabo ou repetição sem fio']].map(([t, d], i) => ({ n: i + 1, t, d, border: i ? 'var(--line)' : 'transparent' })),
+      parentOpts: devs.filter(d => !d.passive && d.cls !== 'Super Node').map(d => { const on = w && w.parent === d.id; return { icon: d.icon, name: d.name, pub: d.pub || '', dot: on ? 1 : 0,
+        border: on ? 'var(--ink)' : 'var(--line2)', bg: on ? 'var(--bg2)' : 'transparent', pick: () => this.patchWiz({ parent: d.id }) }; }),
+      apNote: 'Pontos de acesso não geram créditos próprios. As entregas que passam por ele contam para o ' + parentName + ', que assina os recibos.',
+      wizPub: w ? w.pub : '', onWizPub: e => this.patchWiz({ pub: e.target.value.toLowerCase().normalize('NFD').replace(/ +/g, '-').replace(/[^a-z0-9-]/g, '').slice(0, 28) }),
+      pubCheck: this.pubCheck(w ? w.pub : 'x'),
+      pubNames: devs.map(d => ({ icon: d.icon, name: d.pub || '', dev: d.name + ' · ' + d.cls })),
+      pubRules: [
+        { icon: 'badge', t: 'Nome assinado', d: 'O nome é registrado com a sua chave de operador e anunciado pela malha.' },
+        { icon: 'gpp_bad', t: 'Imitações são ignoradas', d: 'Qualquer um pode criar uma rede chamada “piu.praca”. Sem assinatura válida, o app não troca mensagens com ela e avisa o usuário.' },
+        { icon: 'shield_person', t: 'Sem dados pessoais', d: 'Evite nome, sobrenome ou endereço. Prefira o bairro, um ponto de referência ou um apelido.' },
+      ],
+      installOpts: [['dl', 'Baixar pela rede local'], ['term', 'Terminal']].map(([k, l]) => ({ label: l, ...seg(w ? w.install : 'dl', k), pick: () => this.patchWiz({ install: k }) })),
+      installDl: !!w && w.install === 'dl', installTerm: !!w && w.install === 'term',
+      copyPkg: () => this.showToast({ icon: 'link', title: 'Link local copiado', body: 'http://piu-node.local:8420/pkg/' + fam.pkg }),
+      scanSearching: !!w && w.scan === 'searching', scanFound: !!w && w.scan === 'found',
+      code: ['5', '0', '3', '8', '2', '6'].map((v, i) => ({ v, anim: 'piuPop .35s ' + (i * 0.06).toFixed(2) + 's cubic-bezier(.2,.9,.3,1.4) both' })),
+      togglePaired: () => this.patchWiz({ paired: !(w && w.paired) }), pairedBg: w && w.paired ? 'var(--ink)' : 'transparent', pairedOp: w && w.paired ? 1 : 0,
+      checks: wizChecks.map(([t, d], i) => { const dn = i < wn, cur = i === wn; return { t, d, icon: dn ? 'check_circle' : cur ? 'pending' : 'radio_button_unchecked', fill: dn ? 1 : 0, op: dn || cur ? 1 : 0.4,
+        anim: dn ? 'piuPop .38s cubic-bezier(.2,.9,.3,1.4)' : 'none' }; }),
+      resultBg: done ? 'var(--ink)' : 'var(--bg2)', resultFg: done ? 'var(--invink)' : 'var(--ink)', resultLabel: done ? 'Classe aprovada' : 'Medindo…', resultTitle: done ? fam.result : 'Aguarde o teste terminar',
+      measured: (fam.isAp ? [['Cobertura', done ? fam.bw : '—'], ['Latência até o nó pai', done ? fam.lat : '—'], ['Celulares vistos', done ? fam.nb : '—']] : [['Banda medida', done ? fam.bw : '—'], ['Latência', done ? fam.lat : '—'], ['Vizinhos', done ? fam.nb : '—']]).map(([l, v]) => ({ l, v })),
+      wizName: w ? w.name : '', onWizName: e => this.patchWiz({ name: e.target.value }),
+      wizLimits: [
+        { title: 'Banda para a rede', opts: [[5, '5 Mbps'], [20, '20 Mbps'], [50, '50 Mbps']].map(([v, l]) => ({ label: l, ...seg(w ? w.bw : 20, v), pick: () => this.patchWiz({ bw: v }) })) },
+        { title: 'Armazenamento para terceiros', opts: [[1, '1 GB'], [4, '4 GB'], [8, '8 GB']].map(([v, l]) => ({ label: l, ...seg(w ? w.sto : 4, v), pick: () => this.patchWiz({ sto: v }) })) },
+        { title: 'Horário', opts: [['always', 'Sempre'], ['night', '22h–7h'], ['day', '8h–18h']].map(([v, l]) => ({ label: l, ...seg(w ? w.hours : 'always', v), pick: () => this.patchWiz({ hours: v }) })) },
+      ],
+      walletChoices: [['provider', 'Carteira de provider', 'lunes:9Hk2…pW4a', 'Recomendado. Separa ganhos de infraestrutura da sua identidade.'], ['personal', 'Carteira pessoal', 'lunes:3P8x…Q7nM', 'Mais simples, menos privado.']]
+        .map(([k, t, a, d]) => { const on = w && w.wallet === k; return { t, a, d, border: on ? 'var(--ink)' : 'var(--line2)', bg: on ? 'var(--bg2)' : 'transparent', dot: on ? 1 : 0, pick: () => this.patchWiz({ wallet: k }) }; }),
+      wizBack: () => this.wizBack(), wizNext: () => this.wizNext(), backOp: w && w.step > 0 ? 1 : 0.35,
+      nextOp: !w ? 1 : w.step === 1 ? (w.paired ? 1 : 0.35) : w.step === 2 ? (done ? 1 : 0.35) : (this.pubOk() ? 1 : 0.35),
+      nextLabel: w && w.step === 3 ? 'Ativar equipamento' : 'Continuar',
+      wizHint: !w ? '' : ['Escolha o tipo de equipamento', w.paired ? (fam.isAp ? 'Vínculo confirmado' : 'Pareado') : (fam.isAp ? 'Confirme o vínculo para continuar' : 'Confirme o código para continuar'), done ? 'Teste concluído' : 'Testando com vizinhos…', 'Revise e ative'][w.step],
+
+      modalOpen: !!s.modal, md, closeModal: set({ modal: null }),
+      toastOpen: !!s.toast, toast: s.toast || { icon: '', title: '', body: '' }, toastAnim: s.toast ? 'piuToast .4s cubic-bezier(.2,.9,.3,1.15) both' : 'none',
+    };
+  }
+}
+</script>
+</body>
+</html>

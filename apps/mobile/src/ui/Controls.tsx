@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, View } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Defs, Line, Pattern, Rect } from 'react-native-svg';
+import { useT } from '../i18n';
 import { useLayout } from '../lib/responsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { Icon } from './Icon';
@@ -53,9 +54,10 @@ export function SectionLabel({ children }: { children: string }) {
 
 /** Cabeçalho de 52 px com voltar e título opcional. */
 export function BackHeader({ title, right }: { title?: string; right?: ReactNode }) {
+  const t = useT();
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 4, height: 52 }}>
-      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Voltar" style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
+      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('common.back')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
         <Icon name="arrow_back_ios_new" size={22} />
       </Pressable>
       {title ? <T size={18} w={650} ls={-0.02} numberOfLines={1} style={{ flex: 1 }} accessibilityRole="header">{title}</T> : <View style={{ flex: 1 }} />}

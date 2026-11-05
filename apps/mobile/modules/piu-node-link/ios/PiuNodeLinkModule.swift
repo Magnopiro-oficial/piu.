@@ -12,6 +12,16 @@ public final class PiuNodeLinkModule: Module {
   public func definition() -> ModuleDefinition {
     Name("PiuNodeLink")
 
+    // WebSocket com pino (vínculo com o Piu Desktop): ainda só no Android. Os nomes existem para o
+    // JS compilar e o build do iOS não quebrar; `wsOpen` rejeita e os outros não fazem nada.
+    Events("onWsOpen", "onWsMessage", "onWsClose", "onWsError")
+
+    AsyncFunction("wsOpen") { (_: String, _: String, promise: Promise) in
+      promise.reject("ERR_NODE_LINK", "Conectar ao computador ainda não está disponível no iPhone.")
+    }
+    Function("wsSend") { (_: Int, _: String) -> Bool in false }
+    Function("wsClose") { (_: Int, _: Int, _: String) in }
+
     AsyncFunction("request") { (url: String, method: String, headers: [String: String], body: String?, pin: String, promise: Promise) in
       guard let u = URL(string: url), u.scheme == "https" else { promise.reject("ERR_NODE_LINK", "Só HTTPS."); return }
       let expected = pin.replacingOccurrences(of: ":", with: "").lowercased()

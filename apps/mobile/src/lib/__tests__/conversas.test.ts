@@ -170,3 +170,15 @@ test('abrir arquivo recebido: nome seguro para o temporário', () => {
   assert.equal(long.length, 80);
   assert.ok(long.endsWith('.jpeg'));
 });
+
+
+test('rota: prazo temporário limita a fila e não promete 48 h para uma mensagem de 24 h', () => {
+  const now = Date.now();
+  const waiting: Msg = { id: 'temp', from: 'me', text: 'oi', time: '', status: 'aguardando', at: now - 2 * 3_600_000, expiresAt: now + 22 * 3_600_000 };
+  const meta = (m: Msg) => Object.fromEntries(buildRoute(chat, m).meta.map(x => [x.l, x.v]));
+  assert.equal(meta(waiting)['Expira em'], '22 h');
+  assert.equal(meta({ ...waiting, status: 'expirada' })['Expira em'], '24 h esgotadas');
+  assert.equal(meta({ ...waiting, expiresAt: now - 1 })['Expira em'], '0 h');
+  assert.equal(meta({ ...waiting, expiresAt: now + 7 * 86400_000 })['Expira em'], '46 h');
+  assert.equal(meta({ ...waiting, status: 'lida' })['Cópias em trânsito'], 'removida');
+});

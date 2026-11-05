@@ -2,12 +2,14 @@ import * as Clipboard from 'expo-clipboard';
 import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { Linking, Pressable, RefreshControl, ScrollView, View } from 'react-native';
-import { MAINNET_PENDING, REFERRAL_REWARD, WELCOME_BONUS } from '../../data/wallet';
+import { REFERRAL_REWARD, WELCOME_BONUS } from '../../data/wallet';
 import { CREDIT_PARAMS } from '../../messaging/credits';
+import { fmtDate, fmtNumber, useT, type Key } from '../../i18n';
 import { balanceEye, maskAmount, maskBalance } from '../../lib/balanceMask';
+import { explorerAccountUrl, fromHistorySnapshot, indexerAccountId, moveRow, type HistorySnapshot } from '../../lib/lunesHistory';
 import { formatLunes, LUNES_EXPLORER } from '../../lib/lunesRpc';
 import { shareTextFile } from '../../lib/shareFile';
-import { activityRows, bonusSteps, dayLabel, lunes2, onchainView, referralStats, walletSummary } from '../../lib/walletCore';
+import { activityRows, bonusSteps, dayLabel, lunes2, onchainView, referralStats, walletSummary, whenLabel, type OnchainStatus } from '../../lib/walletCore';
 import { evidenceFileName } from '../../messaging/evidence';
 import { useMessaging, useStats } from '../../state/messaging';
 import { useSettings } from '../../state/settings';
@@ -22,31 +24,34 @@ import { T } from '../../ui/T';
 import { ReceiveSheet, SendSheet } from '../../ui/WalletSheets';
 
 const NO_TOTALS = { pendente: 0, validado: 0, em_lote: 0, rejeitado: 0, pago: 0 };
-const STATE_LABEL: Record<string, string> = { pendente: 'pendente', validado: 'validado', em_lote: 'em lote · aguardando liquidação', rejeitado: 'rejeitado', pago: 'pago' };
+const STATE_LABEL: Record<string, Key> = { pendente: 'wallet.state.pendente', validado: 'wallet.state.validado', em_lote: 'wallet.state.em_lote', rejeitado: 'wallet.state.rejeitado', pago: 'wallet.state.pago' };
 
 /** Carteira: Saldo (enviar, receber, convidar, bônus, distribuição, atividade) e Créditos de rede. */
 export default function WalletTab() {
   const { c } = useTheme();
+  const t = useT();
   const [tab, setTab] = useState<'wallet' | 'rewards'>('wallet');
   const [sheet, setSheet] = useState<'send' | 'receive' | null>(null);
-  const { lunesAddress, onchainSnap, onchainStatus, refreshOnchain } = useWallet();
+  const { lunesAddress, onchainSnap, onchainStatus, refreshOnchain, historyStatus, refreshHistory } = useWallet();
   const view = onchainView({ address: lunesAddress, snap: onchainSnap, status: onchainStatus, now: Date.now() });
-  // Lê o saldo na Mainnet ao abrir a carteira (e de novo quando o endereço muda).
-  useFocusEffect(useCallback(() => { void refreshOnchain(); }, [refreshOnchain]));
+  // Lê o saldo (nó da Mainnet) e o histórico (indexador) ao abrir a carteira e de novo quando o endereço muda.
+  const refreshAll = useCallback(() => { void refreshOnchain(); void refreshHistory(); }, [refreshOnchain, refreshHistory]);
+  useFocusEffect(refreshAll);
+  const refreshing = onchainStatus.state === 'loading' || historyStatus.state === 'loading';
 
   return (
     <Screen edges={['top']} enter="tab">
       <ScrollView contentContainerStyle={{ paddingBottom: 28 }}
-        refreshControl={lunesAddress ? <RefreshControl refreshing={onchainStatus.state === 'loading'} onRefresh={() => { void refreshOnchain(); }} tintColor={c.ink2} /> : undefined}>
+        refreshControl={lunesAddress ? <RefreshControl refreshing={refreshing} onRefresh={refreshAll} tintColor={c.ink2} /> : undefined}>
         <View style={{ paddingTop: 16, paddingHorizontal: 20, paddingBottom: 4, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-          <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">Carteira</T>
+          <T size={36} w={700} ls={-0.045} style={{ lineHeight: 38 }} accessibilityRole="header">{t('tabs.wallet')}</T>
           <View accessibilityLabel={view.pill} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 10, borderRadius: 99, borderWidth: 1, borderColor: c.line2, flexShrink: 1 }}>
             <Icon name={view.pillIcon} size={14} color={c.ink2} />
             <T size={12} w={500} color={c.ink2} numberOfLines={1}>{view.pill}</T>
           </View>
         </View>
         <View style={{ paddingTop: 12, paddingHorizontal: 20 }}>
-          <Segmented label="Carteira" value={tab} onChange={setTab} options={[['wallet', 'Saldo'], ['rewards', 'Créditos de rede']]} />
+          <Segmented label={t('tabs.wallet')} value={tab} onChange={setTab} options={[['wallet', t('wallet.tab.balance')], ['rewards', t('wallet.tab.credits')]]} />
         </View>
         {tab === 'wallet' ? <Balance onSheet={setSheet} /> : <Rewards />}
       </ScrollView>
@@ -58,7 +63,8 @@ export default function WalletTab() {
 
 function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const { c } = useTheme();
-  const { onchain, reserved, refunded, spent, earned, lunesAddress, onchainSnap, onchainStatus } = useWallet();
+  const t = useT();
+  const { onchain, reserved, refunded, spent, earned, lunesAddress, onchainSnap, onchainStatus, historySnap, historyStatus, refreshHistory } = useWallet();
   const { backupDone, hideBalance, setHideBalance } = useSettings();
   // Olho do saldo: só esconde a exibição (saldo, "a liberar", reservado); os dados ficam intactos.
   const eye = balanceEye(hideBalance);
@@ -76,12 +82,12 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const snap = view.has ? onchainSnap : null;
   const copy = () => {
     if (!lunesAddress) return;
-    void Clipboard.setStringAsync(lunesAddress).then(() => showToast({ icon: 'content_copy', title: 'Endereço copiado', body: lunesAddress })).catch(() => {});
+    void Clipboard.setStringAsync(lunesAddress).then(() => showToast({ icon: 'content_copy', title: t('wallet.addressCopied'), body: lunesAddress })).catch(() => {});
   };
   const actions: [IconName, string, () => void][] = [
-    ['arrow_upward', 'Enviar', () => onSheet('send')],
-    ['arrow_downward', 'Receber', () => onSheet('receive')],
-    ['person_add', 'Convidar', () => router.push('/invite')],
+    ['arrow_upward', t('wallet.send'), () => onSheet('send')],
+    ['arrow_downward', t('wallet.receive'), () => onSheet('receive')],
+    ['person_add', t('wallet.invite'), () => router.push('/invite')],
   ];
 
   return (
@@ -89,7 +95,7 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
       <View style={{ marginTop: 14, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 18, borderRadius: 28, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
-            <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Saldo disponível</T>
+            <T size={13} color={c.invink} style={{ opacity: 0.7 }}>{t('wallet.available')}</T>
             <Pressable onPress={() => setHideBalance(!hideBalance)} accessibilityRole="button" accessibilityLabel={eye.label} accessibilityState={{ selected: hideBalance }} hitSlop={8}
               style={{ width: 36, height: 36, marginVertical: -8, marginRight: -8, borderRadius: 18, alignItems: 'center', justifyContent: 'center', opacity: 0.85 }}>
               <Icon name={eye.icon} size={20} color={c.invink} />
@@ -101,8 +107,8 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
             <T size={15} w={600} color={c.invink} style={{ opacity: 0.75 }}>LUNES</T>
           </View>
           <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: view.stale ? 0.9 : 0.75 }}>{view.line}</T>
-          {snap && sum.reserved > 0 && <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{`${maskAmount(formatLunes(BigInt(snap.free)), hideBalance)} LUNES na conta − ${maskAmount(lunes2(sum.reserved), hideBalance)} reservado em convites (registro local)`}</T>}
-          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{sum.toRelease > 0 ? `+ ${maskAmount(lunes2(sum.toRelease), hideBalance)} a liberar · créditos de rede · ${MAINNET_PENDING}` : `Créditos de rede · ${MAINNET_PENDING}`}</T>
+          {snap && sum.reserved > 0 && <T size={12.5} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{t('wallet.reservedLine', { free: maskAmount(formatLunes(BigInt(snap.free)), hideBalance), reserved: maskAmount(lunes2(sum.reserved), hideBalance) })}</T>}
+          <T size={13} lh={1.4} color={c.invink} style={{ opacity: 0.75 }}>{sum.toRelease > 0 ? t('wallet.toRelease', { amount: maskAmount(lunes2(sum.toRelease), hideBalance), pending: t('wallet.mainnetPending') }) : t('wallet.creditsLine', { pending: t('wallet.mainnetPending') })}</T>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
           {actions.map(([icon, label, go]) => (
@@ -114,19 +120,19 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
         </View>
         {lunesAddress ? (
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(127,127,127,0.35)' }}>
-            <Pressable onPress={copy} accessibilityRole="button" accessibilityLabel={`Copiar endereço Lunes ${lunesAddress}`} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: 0.85 }}>
+            <Pressable onPress={copy} accessibilityRole="button" accessibilityLabel={t('wallet.copyAddress.a11y', { address: lunesAddress })} style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 8, opacity: 0.85 }}>
               <Icon name="content_copy" size={16} color={c.invink} />
               <T size={12} mono color={c.invink} numberOfLines={1} style={{ flex: 1 }}>{`${lunesAddress.slice(0, 10)}…${lunesAddress.slice(-6)}`}</T>
             </Pressable>
-            <Pressable onPress={() => { void Linking.openURL(LUNES_EXPLORER).catch(() => {}); }} accessibilityRole="link" accessibilityLabel="Abrir o explorador de blocos da Lunes" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.85 }}>
-              <T size={12} w={600} color={c.invink}>Explorador</T>
+            <Pressable onPress={() => { void Linking.openURL(LUNES_EXPLORER).catch(() => {}); }} accessibilityRole="link" accessibilityLabel={t('wallet.explorer.a11y')} hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.85 }}>
+              <T size={12} w={600} color={c.invink}>{t('wallet.explorer')}</T>
               <Icon name="north_east" size={14} color={c.invink} />
             </Pressable>
           </View>
         ) : (
           <Pressable onPress={() => onSheet('receive')} accessibilityRole="button" style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(127,127,127,0.35)', opacity: 0.85 }}>
             <Icon name="key" size={16} color={c.invink} />
-            <T size={12} lh={1.4} color={c.invink} style={{ flex: 1 }}>Informe o endereço da sua carteira Lunes para ver o saldo real da Mainnet. O Piu não cria chave Lunes.</T>
+            <T size={12} lh={1.4} color={c.invink} style={{ flex: 1 }}>{t('wallet.needAddress')}</T>
             <Icon name="chevron_right" size={16} color={c.invink} />
           </Pressable>
         )}
@@ -136,50 +142,56 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ width: 40, height: 40, borderRadius: 12, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name="redeem" size={22} w={300} /></View>
           <View style={{ flex: 1, gap: 2 }}>
-            <T size={15.5} w={600}>Bônus de boas-vindas</T>
-            <T size={12.5} lh={1.35} color={c.ink2}>Andamento medido neste aparelho · o pagamento depende da Lunes, ainda não ligado</T>
+            <T size={15.5} w={600}>{t('wallet.bonus')}</T>
+            <T size={12.5} lh={1.35} color={c.ink2}>{t('wallet.bonus.desc')}</T>
           </View>
           <T size={16} w={650} tabular color={c.ink2}>{lunes2(WELCOME_BONUS)}</T>
         </View>
         <View style={{ flexDirection: 'row', gap: 4 }}>
           {steps.map(([label, w]) => (
-            <View key={label} accessibilityLabel={`${label}: ${w === 100 ? 'concluído' : `${w}%`}`} style={{ flex: 1, gap: 7 }}>
+            <View key={label} accessibilityLabel={`${label}: ${w === 100 ? t('wallet.bonus.done') : `${w}%`}`} style={{ flex: 1, gap: 7 }}>
               <View style={{ height: 4, borderRadius: 2, backgroundColor: c.bg3, overflow: 'hidden' }}><View style={{ height: '100%', width: `${w}%`, backgroundColor: c.ink }} /></View>
               <T size={11} lh={1.25} w={w === 100 ? 450 : 650} color={w === 100 ? c.ink2 : c.ink}>{label}</T>
             </View>
           ))}
         </View>
-        <T size={11.5} lh={1.4} color={c.ink2}>“Identidade criada” conta com o backup cifrado das chaves feito. Um dia de uso conta quando mensagens suas chegam (com confirmação) a pelo menos 3 contatos diferentes nesse dia.</T>
+        <T size={11.5} lh={1.4} color={c.ink2}>{t('wallet.bonus.note')}</T>
       </View>
 
       <View style={{ marginTop: 12, marginHorizontal: 20, paddingTop: 18, paddingHorizontal: 16, paddingBottom: 16, borderRadius: 22, borderWidth: 1.5, borderColor: c.ink, gap: 14 }}>
         <View style={{ gap: 4 }}>
-          <T size={19} w={650} ls={-0.025}>Distribua o Piu, ganhe LUNES</T>
-          <T size={13.5} lh={1.4} color={c.ink2}>{`${REFERRAL_REWARD} LUNES para cada pessoa que instalar a partir do seu celular e ficar ativa por 7 dias.`}</T>
+          <T size={19} w={650} ls={-0.025}>{t('wallet.ref.title')}</T>
+          <T size={13.5} lh={1.4} color={c.ink2}>{t('wallet.ref.desc', { reward: REFERRAL_REWARD })}</T>
         </View>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          {[[String(refs.accepted), 'aceitaram seu convite'], [String(refs.paid), 'ativos e pagos'], [lunes2(refs.earned), 'LUNES ganhos']].map(([v, l]) => (
+          {[[String(refs.accepted), t('wallet.ref.accepted')], [String(refs.paid), t('wallet.ref.paid')], [lunes2(refs.earned), t('wallet.ref.earned')]].map(([v, l]) => (
             <View key={l} style={{ flex: 1, gap: 2 }}>
               <T size={22} w={650} ls={-0.03} tabular>{v}</T>
               <T size={11.5} color={c.ink2}>{l}</T>
             </View>
           ))}
         </View>
-        <T size={11.5} lh={1.4} color={c.ink2}>{`Quem entrou em contato pelo seu convite fica registrado neste aparelho. Os ${REFERRAL_REWARD} LUNES dependem da verificação e do pagamento pela Lunes, ainda não ligados: nenhum foi pago.`}</T>
+        <T size={11.5} lh={1.4} color={c.ink2}>{t('wallet.ref.note', { reward: REFERRAL_REWARD })}</T>
         <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button label="Convidar agora" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => router.push('/invite')} />
-          <Button label="Ver convidados" variant="outline" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => router.push('/wallet/referrals')} />
+          <Button label={t('wallet.ref.inviteNow')} height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => router.push('/invite')} />
+          <Button label={t('wallet.ref.seeInvited')} variant="outline" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => router.push('/wallet/referrals')} />
         </View>
       </View>
 
-      <SectionLabel>ATIVIDADE</SectionLabel>
-      <View style={{ marginHorizontal: 20 }}>
-        {activity.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>Nenhuma movimentação ainda. Créditos de rede, convites pagos e pagamentos aparecem aqui.</T>}
-        {activity.map((r, i) => <Row key={`${r.title}-${i}`} icon={r.icon} t={r.title} d={`${dayLabel(r.at, now)} · ${r.status}`} v={r.value} />)}
-      </View>
+      <SectionLabel>{t('wallet.moves')}</SectionLabel>
+      <LunesActivity address={lunesAddress} snap={historySnap} status={historyStatus} hidden={hideBalance} now={now} onRetry={() => { void refreshHistory(); }} onNeedAddress={() => onSheet('receive')} />
+      {/* Registros só deste aparelho (créditos de rede, convites pagos): não são movimentações da Mainnet. */}
+      {activity.length > 0 && (
+        <>
+          <SectionLabel>{t('wallet.localRecords')}</SectionLabel>
+          <View style={{ marginHorizontal: 20 }}>
+            {activity.map((r, i) => <Row key={`${r.title}-${i}`} icon={r.icon} t={r.title} d={`${dayLabel(r.at, now)} · ${r.status}`} v={maskAmount(r.value, hideBalance)} />)}
+          </View>
+        </>
+      )}
       <View style={{ marginTop: 18, marginHorizontal: 24, flexDirection: 'row', gap: 10 }}>
         <Icon name="key" size={17} />
-        <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>O saldo é lido direto da Lunes Mainnet, no último bloco finalizado. A chave da sua carteira Lunes fica com você: o Piu só guarda o endereço, cifrado neste aparelho e separado das suas identidades de conversa.</T>
+        <T size={12.5} lh={1.45} color={c.ink2} style={{ flex: 1 }}>{t('wallet.footnote')}</T>
       </View>
     </>
   );
@@ -187,6 +199,7 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
 
 function Rewards() {
   const { c } = useTheme();
+  const t = useT();
   const st = useStats(3000);
   const { evidence, ready } = useMessaging();
   const { showToast } = useStore();
@@ -197,26 +210,26 @@ function Rewards() {
     if (!file || exporting) return;
     setExporting(true);
     try {
-      await shareTextFile(evidenceFileName(Date.now()), JSON.stringify(file, null, 2), { mimeType: 'application/json', dialogTitle: 'Arquivo de evidências do Piu' });
+      await shareTextFile(evidenceFileName(Date.now()), JSON.stringify(file, null, 2), { mimeType: 'application/json', dialogTitle: t('wallet.evidence.dialog') });
     } catch (e) {
-      showToast({ icon: 'error', title: 'Arquivo não compartilhado', body: (e as Error).message || 'Tente de novo.' });
+      showToast({ icon: 'error', title: t('wallet.evidence.fail'), body: (e as Error).message || t('common.tryAgain') });
     } finally { setExporting(false); }
   };
   // Antes das chaves (ou sem nada ainda), mostra os números deste aparelho mesmo assim: zero.
-  const t = st?.credits.totals ?? NO_TOTALS;
+  const tot = st?.credits.totals ?? NO_TOTALS;
   // "Em lote": o lote da semana fechou neste aparelho e aguarda liquidação. "Pagos" só com liquidação real (ainda não existe no celular).
-  const rows: [string, number, number][] = [['Validados', t.validado, 1], ['Em lote', t.em_lote, 0.7], ['Pendentes', t.pendente, 0.45], ['Rejeitados', t.rejeitado, 0.15],
-    ...(t.pago > 0 ? [['Pagos', t.pago, 0.3] as [string, number, number]] : [])];
+  const rows: [string, number, number][] = [[t('wallet.credits.validated'), tot.validado, 1], [t('wallet.credits.batched'), tot.em_lote, 0.7], [t('wallet.credits.pending'), tot.pendente, 0.45], [t('wallet.credits.rejected'), tot.rejeitado, 0.15],
+    ...(tot.pago > 0 ? [[t('wallet.credits.paid'), tot.pago, 0.3] as [string, number, number]] : [])];
   const total = rows.reduce((a, x) => a + x[1], 0);
-  const fmt = (n: number) => n.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 });
-  const lunes = (n: number) => (n / CREDIT_PARAMS.creditsPerLunes).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fmt = (n: number) => fmtNumber(n, { minimumFractionDigits: 1, maximumFractionDigits: 1 });
+  const lunes = (n: number) => fmtNumber(n / CREDIT_PARAMS.creditsPerLunes, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
   const history: [IconName, string, string, string][] = [
-    ...(st?.credits.lots ?? []).map(l => ['account_balance_wallet', `Lote ${l.id.replace('lote-', '')} fechado`, `${new Date(l.closedAt * 1000).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} · ${lunes(l.credits)} LUNES · aguardando liquidação`, fmt(l.credits)] as [IconName, string, string, string]),
+    ...(st?.credits.lots ?? []).map(l => ['account_balance_wallet', t('wallet.lotClosed', { id: l.id.replace('lote-', '') }), `${fmtDate(l.closedAt * 1000, { day: '2-digit', month: 'short' })} · ${lunes(l.credits)} LUNES · ${t('wallet.awaitingSettlement')}`, fmt(l.credits)] as [IconName, string, string, string]),
     ...(st?.credits.list ?? []).slice(0, 12).map(x => [
       x.state === 'rejeitado' ? 'block' : x.state === 'pendente' ? 'hourglass_top' : x.state === 'em_lote' ? 'toll' : 'verified',
-      `Entrega de terceiro · ${Math.round(x.bytes / 100) / 10} KB`,
+      t('wallet.thirdPartyDelivery', { kb: fmtNumber(Math.round(x.bytes / 100) / 10) }),
       // Regra 7.6: o valor é estimado, dividido entre os relays que este aparelho conhece até ele.
-      `${new Date(x.at * 1000).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${STATE_LABEL[x.state] ?? x.state}${x.reason ? ` (${x.reason})` : ''} · estimativa${(x.relays ?? 1) > 1 ? ` ÷ ${x.relays} relays` : ''}`,
+      `${fmtDate(x.at * 1000, { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} · ${STATE_LABEL[x.state] ? t(STATE_LABEL[x.state]!) : x.state}${x.reason ? ` (${x.reason})` : ''} · ${t('wallet.estimate')}${(x.relays ?? 1) > 1 ? ` ÷ ${x.relays} relays` : ''}`,
       `${x.state === 'rejeitado' ? '' : '≈ +'}${fmt(x.credits)}`,
     ] as [IconName, string, string, string]),
   ];
@@ -224,14 +237,14 @@ function Rewards() {
     <>
       <View style={{ marginTop: 10, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 20, borderRadius: 26, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
-          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>Validados, prontos para liquidar</T>
+          <T size={13} color={c.invink} style={{ opacity: 0.7 }}>{t('wallet.credits.readyTitle')}</T>
           <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-            <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>{fmt(t.validado)}</T>
-            <T size={15} color={c.invink} style={{ opacity: 0.7 }}>créditos</T>
+            <T size={52} w={650} ls={-0.05} tabular color={c.invink} style={{ lineHeight: 54 }}>{fmt(tot.validado)}</T>
+            <T size={15} color={c.invink} style={{ opacity: 0.7 }}>{t('wallet.credits.unit')}</T>
           </View>
-          <T size={12.5} mono color={c.invink} style={{ opacity: 0.7 }}>≈ {lunes(t.validado)} LUNES · estimativa</T>
+          <T size={12.5} mono color={c.invink} style={{ opacity: 0.7 }}>≈ {lunes(tot.validado)} LUNES · {t('wallet.estimate')}</T>
         </View>
-        <View accessibilityLabel="Créditos por estado" style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: total ? 'transparent' : 'rgba(127,127,127,0.35)' }}>
+        <View accessibilityLabel={t('wallet.credits.byState')} style={{ flexDirection: 'row', height: 8, borderRadius: 4, overflow: 'hidden', gap: 2, backgroundColor: total ? 'transparent' : 'rgba(127,127,127,0.35)' }}>
           {total > 0 && rows.map(([l, n, op]) => <View key={l} style={{ width: `${(n / total) * 100}%`, backgroundColor: c.invink, opacity: op }} />)}
         </View>
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', rowGap: 10, columnGap: 16 }}>
@@ -247,29 +260,83 @@ function Rewards() {
       <View style={{ marginTop: 12, marginHorizontal: 20, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <Icon name="cloud_off" size={22} w={300} />
         <View style={{ flex: 1, gap: 2 }}>
-          <T size={14} w={600}>Pagamento dos lotes pendente</T>
-          <T size={12.5} lh={1.35} color={c.ink2}>Seus créditos ficam guardados aqui. Quando o lote da semana fecha, os validados ficam “em lote”, aguardando liquidação. O app já lê a Lunes Mainnet (saldo e blocos), mas o pagamento dos lotes depende da liquidação, que não está ligada: nenhum lote foi pago em LUNES.</T>
+          <T size={14} w={600}>{t('wallet.lots.pendingTitle')}</T>
+          <T size={12.5} lh={1.35} color={c.ink2}>{t('wallet.lots.pendingBody')}</T>
         </View>
       </View>
       <View style={{ marginTop: 12, marginHorizontal: 20, padding: 16, borderRadius: 20, backgroundColor: c.bg2, gap: 10 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <Icon name="description" size={22} w={300} />
           <View style={{ flex: 1, gap: 2 }}>
-            <T size={14} w={600}>Arquivo de evidências</T>
-            <T size={12.5} lh={1.35} color={c.ink2}>Recibos assinados por este aparelho e as provas de entrega que ele conhece, no formato que o validador lê. Leve junto com as evidências dos seus equipamentos.</T>
+            <T size={14} w={600}>{t('wallet.evidence')}</T>
+            <T size={12.5} lh={1.35} color={c.ink2}>{t('wallet.evidence.desc')}</T>
           </View>
         </View>
-        <Button label={exporting ? 'Preparando…' : 'Compartilhar evidências'} variant="outline" height={44} fontSize={14} disabled={!ready || exporting} left={<Icon name="upload" size={18} />} onPress={() => void exportEvidence()} />
-        <T size={11.5} lh={1.4} color={c.ink2}>O arquivo não tem conteúdo de mensagens nem quem conversa com quem: só identificadores de envelope, a chave técnica do nó de cada dia, assinaturas e os segredos de entrega.</T>
+        <Button label={exporting ? t('wallet.evidence.preparing') : t('wallet.evidence.share')} variant="outline" height={44} fontSize={14} disabled={!ready || exporting} left={<Icon name="upload" size={18} />} onPress={() => void exportEvidence()} />
+        <T size={11.5} lh={1.4} color={c.ink2}>{t('wallet.evidence.note')}</T>
       </View>
-      <SectionLabel>HISTÓRICO</SectionLabel>
+      <SectionLabel>{t('wallet.history')}</SectionLabel>
       <View style={{ marginHorizontal: 20 }}>
-        {history.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>Nenhum crédito ainda. Com o Modo nó ligado, cada mensagem de outra pessoa que você levar até o destino gera créditos depois que a entrega for comprovada.</T>}
+        {history.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>{t('wallet.history.empty')}</T>}
         {history.map(([icon, title, d, v], i) => <Row key={`${title}-${i}`} icon={icon} t={title} d={d} v={v} />)}
       </View>
-      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>Os valores são estimativa: a recompensa de cada entrega é dividida entre os relays do caminho, e o validador confere a divisão e o teto por nó antes de pagar.</T>
-      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 8, marginHorizontal: 24 }}>Créditos dependem de entregas comprovadas. Tempo ligado, antenas maiores ou capacidade anunciada não geram recompensa. Duplicatas são descartadas.</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 18, marginHorizontal: 24 }}>{t('wallet.credits.note1')}</T>
+      <T size={12.5} lh={1.45} color={c.ink2} style={{ marginTop: 8, marginHorizontal: 24 }}>{t('wallet.credits.note2')}</T>
     </>
+  );
+}
+
+/**
+ * Histórico real de transferências de LUNES do endereço, do indexador da Lunes (lib/lunesHistory.ts).
+ * Estados: sem endereço, consultando, sem movimentações, erro (toque para tentar de novo) e a lista,
+ * cada linha abrindo o bloco no explorador. Nada inventado: sem leitura, diz que não há.
+ */
+function LunesActivity({ address, snap, status, hidden, now, onRetry, onNeedAddress }: {
+  address: string | null; snap: HistorySnapshot | null; status: OnchainStatus; hidden: boolean; now: number;
+  onRetry: () => void; onNeedAddress: () => void;
+}) {
+  const { c } = useTheme();
+  const t = useT();
+  const note = (text: string, o: { onPress?: () => void; icon?: IconName; label?: string } = {}) => (
+    <Pressable onPress={o.onPress} disabled={!o.onPress} accessibilityRole={o.onPress ? 'button' : undefined} accessibilityLabel={o.label}
+      style={{ marginHorizontal: 20, paddingVertical: 12, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+      {o.icon && <Icon name={o.icon} size={18} color={c.ink2} />}
+      <T size={13} lh={1.45} color={c.ink2} style={{ flex: 1 }}>{text}</T>
+      {o.onPress && <Icon name="chevron_right" size={16} color={c.ink2} />}
+    </Pressable>
+  );
+  if (!address) return note(t('wallet.moves.needAddress'), { onPress: onNeedAddress, icon: 'key' });
+  const history = snap && snap.address === address ? fromHistorySnapshot(snap) : null;
+  if (!history) {
+    if (status.state === 'error') return note(t('wallet.moves.error', { error: status.error }), { onPress: onRetry, icon: 'cloud_off', label: t('wallet.moves.retry.a11y') });
+    return note(t('wallet.moves.loading'), { icon: 'cloud' });
+  }
+  const open = (url: string) => { void Linking.openURL(url).catch(() => {}); };
+  const all = explorerAccountUrl(indexerAccountId(address));
+  const updated = status.state === 'loading' ? t('wallet.moves.updating') : t('wallet.moves.updated', { when: whenLabel(history.at, now) });
+  return (
+    <View style={{ marginHorizontal: 20 }}>
+      {history.moves.length === 0 && <T size={13} lh={1.45} color={c.ink2} style={{ paddingVertical: 12, paddingHorizontal: 4 }}>{t('wallet.moves.empty')}</T>}
+      {history.moves.map(m => {
+        const r = moveRow(m, now, hidden);
+        return (
+          <Pressable key={m.id} onPress={() => open(r.url)} accessibilityRole="link" accessibilityLabel={`${r.title}, ${r.value} LUNES, ${r.detail}. ${t('wallet.moves.openExplorer')}`}>
+            <Row icon={r.icon} t={r.title} d={r.detail} v={r.value} />
+          </Pressable>
+        );
+      })}
+      {status.state === 'error' && (
+        <Pressable onPress={onRetry} accessibilityRole="button" style={{ paddingTop: 12, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Icon name="cloud_off" size={16} color={c.ink2} />
+          <T size={12} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{t('wallet.moves.offline', { updated })}</T>
+        </Pressable>
+      )}
+      <Pressable onPress={() => open(all)} accessibilityRole="link" accessibilityLabel={t('wallet.moves.all.a11y')} style={{ paddingTop: 12, paddingHorizontal: 4, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+        <T size={12} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{`${history.truncated ? `${t('wallet.moves.truncated', { shown: history.moves.length, total: history.total })} · ` : ''}${t('wallet.moves.source')}${status.state === 'error' ? '' : ` · ${updated}`}`}</T>
+        <T size={12} w={600} color={c.ink2}>{t('wallet.explorer')}</T>
+        <Icon name="north_east" size={14} color={c.ink2} />
+      </Pressable>
+    </View>
   );
 }
 

@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { pruneLegacyData } from '../lib/legacyData';
+import { fetchLunesHistory, toHistorySnapshot, type HistorySnapshot } from '../lib/lunesHistory';
 import { accountBalance, LunesRpc, planckToLunes } from '../lib/lunesRpc';
 import { readPersisted, usePersisted } from '../lib/persist';
 import { decodeSs58 } from '../lib/ss58';
@@ -30,6 +31,15 @@ interface Wallet {
   onchainStatus: OnchainStatus;
   /** Lê o saldo de novo na Mainnet (ao abrir a carteira e ao puxar a tela). */
   refreshOnchain: () => Promise<void>;
+  /**
+   * Histórico de transferências de LUNES do endereço, lido do indexador da Lunes (lib/lunesHistory.ts):
+   * última leitura guardada (para mostrar sem rede) e o estado da consulta. Separado do saldo porque
+   * a fonte é outra (indexador, não o nó): um pode falhar sem derrubar o outro.
+   */
+  historySnap: HistorySnapshot | null;
+  historyStatus: OnchainStatus;
+  /** Lê o histórico de novo (ao abrir a carteira e ao puxar a tela). */
+  refreshHistory: () => Promise<void>;
   /**
    * Convites pagos reservados (24 h), devolvidos, aceitos por quem eu convidei (pagos) e taxas de
    * pedidos que eu aceitei (a receber). Tudo é registro local: a reserva assinada em LUNES depende da
@@ -79,8 +89,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const [lunesAddress, setLunesAddressRaw] = usePersisted<string | null>('wallet.lunesAddress', null);
   const [onchainSnap, setOnchainSnap] = usePersisted<OnchainSnapshot | null>('wallet.onchain', null);
   const [onchainStatus, setOnchainStatus] = useState<OnchainStatus>({ state: 'idle' });
+  const [historySnap, setHistorySnap] = usePersisted<HistorySnapshot | null>('wallet.history', null);
+  const [historyStatus, setHistoryStatus] = useState<OnchainStatus>({ state: 'idle' });
   // Endereço sendo lido agora e o endereço atual: leitura de um endereço trocado no meio é descartada.
   const reading = useRef<string | null>(null);
+  const readingHistory = useRef<string | null>(null);
   const latest = useRef(lunesAddress);
   latest.current = lunesAddress;
   const [now, setNow] = useState(Date.now);
@@ -129,20 +142,39 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     }
   }, [lunesAddress, setOnchainSnap]);
 
+  /** Uma leitura do histórico por vez; o resultado só vale para o endereço consultado. */
+  const refreshHistory = useCallback(async () => {
+    const address = lunesAddress;
+    if (!address || readingHistory.current === address) return;
+    readingHistory.current = address;
+    setHistoryStatus({ state: 'loading' });
+    try {
+      const h = await fetchLunesHistory(address);
+      if (latest.current !== address) return;
+      setHistorySnap(toHistorySnapshot(h));
+      setHistoryStatus({ state: 'ok' });
+    } catch (e) {
+      if (latest.current === address) setHistoryStatus({ state: 'error', error: e instanceof Error ? e.message : 'Falha na consulta.' });
+    } finally {
+      if (readingHistory.current === address) readingHistory.current = null;
+    }
+  }, [lunesAddress, setHistorySnap]);
+
   const setLunesAddress = useCallback((a: string | null) => {
-    if (a == null) { setLunesAddressRaw(null); setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); return null; }
+    if (a == null) { setLunesAddressRaw(null); setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); setHistorySnap(null); setHistoryStatus({ state: 'idle' }); return null; }
     const d = decodeSs58(a);
     if (!d.ok) return d.error;
     const next = a.trim();
-    if (next !== lunesAddress) { setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); }
+    if (next !== lunesAddress) { setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); setHistorySnap(null); setHistoryStatus({ state: 'idle' }); }
     setLunesAddressRaw(next);
     return null;
-  }, [lunesAddress, setLunesAddressRaw, setOnchainSnap]);
+  }, [lunesAddress, setLunesAddressRaw, setOnchainSnap, setHistorySnap]);
 
   const onchain = onchainSnap && lunesAddress && onchainSnap.address === lunesAddress ? planckToLunes(BigInt(onchainSnap.free)) : 0;
 
   const value = useMemo<Wallet>(() => ({
     onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain,
+    historySnap, historyStatus, refreshHistory,
     reserved, refunded, spent, earned, since,
     visible,
     setVisible: v => { setVisibleUntil(v ? Date.now() + NEARBY_VISIBLE_MS : null); setNow(Date.now()); },
@@ -172,7 +204,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     },
     recordEarned: (from, fee) => setEarned(e => [{ from, amt: fee, at: Date.now() }, ...e]),
     myFee, setMyFee,
-  }), [onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
+  }), [onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain, historySnap, historyStatus, refreshHistory, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

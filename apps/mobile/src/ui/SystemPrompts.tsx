@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { useT } from '../i18n';
 import { useBattery } from '../lib/battery';
 import { usePersisted } from '../lib/persist';
 import { useNetwork } from '../state/network';
@@ -39,6 +40,7 @@ function NotifyBridge() {
  * Avisa uma vez por pausa, com o diálogo do design.
  */
 function BatteryGuard() {
+  const t = useT();
   const { onboarded } = useStore();
   const { notifs } = useSettings();
   const { relay, battery, chargingOnly, relayPaused, setRelayPaused } = useNetwork();
@@ -59,10 +61,10 @@ function BatteryGuard() {
 
   if (!open) return null;
   return (
-    <Dialog icon="battery_alert" title="Modo nó pausado"
-      body={`A bateria chegou a ${battery}%. O Piu parou de retransmitir para outras pessoas. Suas mensagens continuam funcionando.`}
-      primary="Entendi" primaryIcon="check" onPrimary={() => setOpen(false)}
-      secondary="Ajustar limite" onClose={() => { setOpen(false); router.push('/(tabs)/network'); }} />
+    <Dialog icon="battery_alert" title={t('prompt.relayPaused')}
+      body={t('prompt.relayPaused.body', { pct: battery })}
+      primary={t('prompt.gotIt')} primaryIcon="check" onPrimary={() => setOpen(false)}
+      secondary={t('prompt.adjustLimit')} onClose={() => { setOpen(false); router.push('/(tabs)/network'); }} />
   );
 }
 
@@ -71,6 +73,7 @@ function BatteryGuard() {
  * "Lembrar em 7 dias" adia; fazer o backup encerra os lembretes.
  */
 function BackupReminder() {
+  const t = useT();
   const { onboarded } = useStore();
   const { backupDone } = useSettings();
   const [since, setSince] = usePersisted<number | null>('backup.since', null);
@@ -94,9 +97,9 @@ function BackupReminder() {
   if (!open) return null;
   const later = () => { setSnooze(Date.now() + 7 * DAY); setOpen(false); };
   return (
-    <Dialog icon="key" title="Faça backup das suas chaves"
-      body="Se perder este aparelho, você perde sua identidade e seus LUNES. O backup é cifrado com uma frase que só você conhece."
-      primary="Fazer backup agora" primaryIcon="lock" onPrimary={() => { later(); router.push('/backup'); }}
-      secondary="Lembrar em 7 dias" onClose={later} />
+    <Dialog icon="key" title={t('prompt.backup')}
+      body={t('prompt.backup.body')}
+      primary={t('prompt.backup.now')} primaryIcon="lock" onPrimary={() => { later(); router.push('/backup'); }}
+      secondary={t('prompt.backup.later')} onClose={later} />
   );
 }

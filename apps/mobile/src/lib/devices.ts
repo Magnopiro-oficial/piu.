@@ -20,6 +20,9 @@ const now = () => Math.floor(Date.now() / 1000);
 
 export const thisPlatform: DevicePlatform = Platform.OS === 'android' ? 'android' : Platform.OS === 'ios' ? 'ios' : Platform.OS === 'web' ? 'web' : 'other';
 export const PLATFORM_LABEL: Record<DevicePlatform, string> = { android: 'Android', ios: 'iPhone', web: 'Navegador', other: 'Aparelho' };
+/** Nome da plataforma no idioma em uso (`t` de src/i18n); Android e iPhone não mudam. */
+export const platformName = (p: DevicePlatform, t: (k: 'platform.web' | 'platform.other') => string): string =>
+  p === 'web' ? t('platform.web') : p === 'other' ? t('platform.other') : PLATFORM_LABEL[p];
 
 const listeners = new Set<() => void>();
 const emit = () => listeners.forEach(l => l());

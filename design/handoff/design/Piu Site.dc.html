@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+
+<title>Piu · mensagens sem internet</title>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0}a{color:inherit;text-decoration:none}a:hover{opacity:.7}
+[data-piu-theme="light"]{--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32)}
+[data-piu-theme="dark"]{--bg:#0a0a0a;--bg2:#161616;--bg3:#262626;--bub:#1a1a1a;--side:#0e0e0e;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6)}
+@keyframes siteHop{0%{left:0%;opacity:0}8%{opacity:1}92%{opacity:1}100%{left:100%;opacity:0}}
+@keyframes siteRing{from{transform:scale(1);opacity:.5}to{transform:scale(2.4);opacity:0}}
+@keyframes siteUp{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
+@keyframes siteSpin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</helmet>
+<div data-piu-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;overflow-x:hidden;">
+
+  <div style="position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);">
+    <div style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;gap:28px;">
+      <a href="#topo" style="font-size:30px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></a>
+      <div style="flex:1;display:flex;gap:22px;flex-wrap:wrap;font-size:14px;font-weight:500;color:var(--ink2);">
+        <a href="#como">Como funciona</a><a href="#privacidade">Privacidade</a><a href="#provider">Seja provider</a><a href="#lunes">LUNES</a><a href="#faq">Dúvidas</a>
+      </div>
+      <div style="display:flex;gap:2px;padding:3px;border-radius:19px;border:1px solid var(--line2);flex:none;font:600 12.5px Geist;">
+        <span style="height:30px;padding:0 10px;border-radius:15px;background:var(--ink);color:var(--invink);display:flex;align-items:center;">PT</span>
+        <a href="Piu%20Site%20EN.dc.html" style="height:30px;padding:0 10px;border-radius:15px;display:flex;align-items:center;color:var(--ink2);">EN</a>
+      </div>
+      <button onClick="{{ toggleTheme }}" style="width:38px;height:38px;border-radius:19px;border:1px solid var(--line2);background:transparent;color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">{{ themeIcon }}</span></button>
+      <a href="#baixar" style="height:40px;padding:0 18px;border-radius:20px;background:var(--ink);color:var(--invink);font-size:14px;font-weight:600;display:flex;align-items:center;flex:none;">Baixar</a>
+    </div>
+  </div>
+
+  <div id="topo" style="max-width:1200px;margin:0 auto;padding:72px 24px 56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:56px;align-items:center;">
+    <div style="display:flex;flex-direction:column;gap:26px;animation:siteUp .6s both;">
+      <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);"><div style="width:8px;height:8px;border-radius:50%;background:var(--ink);"></div>LUNES NETWORK · MENSAGEIRO DESCENTRALIZADO</div>
+      <h1 style="margin:0;font-size:clamp(48px,7vw,88px);font-weight:700;letter-spacing:-0.055em;line-height:.95;text-wrap:balance;">Mensagens que voam sem internet.</h1>
+      <p style="margin:0;font-size:19px;line-height:1.5;color:var(--ink2);max-width:520px;text-wrap:pretty;">O Piu leva suas conversas de aparelho em aparelho, por Bluetooth, Wi-Fi e rádio. Sem servidor, sem operadora e cifrado de ponta a ponta. Quando a rede cai, a vizinhança continua conversando.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <a href="#baixar" style="height:54px;padding:0 24px;border-radius:27px;background:var(--ink);color:var(--invink);font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;">android</span>Baixar para Android</a>
+        <a href="#como" style="height:54px;padding:0 24px;border-radius:27px;border:1px solid var(--line2);font-size:16px;font-weight:600;display:flex;align-items:center;">Como funciona</a>
+      </div>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px;">
+        <sc-for list="{{ heroFacts }}" as="f" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">{{ f.v }}</div><div style="font-size:13px;color:var(--ink2);">{{ f.l }}</div></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;justify-content:center;position:relative;">
+      <div style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;border-radius:50%;border:1px solid var(--line2);"></div>
+      <div style="position:absolute;width:380px;height:380px;top:50%;left:50%;margin:-190px 0 0 -190px;border-radius:50%;border:1px solid var(--line2);"></div>
+      <div style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;animation:siteSpin 70s linear infinite;">
+        <div style="position:absolute;top:-6px;left:254px;width:12px;height:12px;border-radius:50%;background:var(--ink);"></div>
+        <div style="position:absolute;bottom:60px;left:40px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg);"></div>
+        <div style="position:absolute;top:120px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--ink);"></div>
+      </div>
+      <div style="position:relative;width:336px;height:722px;padding:10px;border-radius:54px;background:#0b0b0b;box-shadow:0 50px 90px -40px rgba(0,0,0,.45),0 0 0 1px var(--line2);">
+        <div style="width:316px;height:702px;border-radius:44px;overflow:hidden;position:relative;">
+          <div style="width:390px;height:844px;transform:scale(.8103);transform-origin:top left;">
+            <dc-import name="PiuApp" start="chats" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
+    <div style="max-width:1200px;margin:0 auto;padding:18px 24px;display:flex;gap:12px 36px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
+      <span style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">VIAJA POR</span>
+      <sc-for list="{{ transports }}" as="t" hint-placeholder-count="5">
+        <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:550;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ t.icon }}</span>{{ t.n }}</span>
+      </sc-for>
+    </div>
+  </div>
+
+  <div id="como" style="max-width:1200px;margin:0 auto;padding:96px 24px 40px;display:flex;flex-direction:column;gap:48px;">
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">COMO FUNCIONA</div>
+      <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Cada aparelho é um pedaço da rede.</h2>
+      <p style="margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Se o destinatário está longe, sua mensagem pula entre celulares, roteadores e antenas da vizinhança até chegar. Se ninguém está por perto, ela espera guardada, cifrada, até surgir uma rota.</p>
+    </div>
+    <div style="position:relative;padding:28px 8px 0;">
+      <div style="position:absolute;left:7%;right:7%;top:58px;height:0;border-top:1.5px dashed var(--ink);opacity:.35;"></div>
+      <div style="position:absolute;left:7%;right:7%;top:54px;height:8px;">
+        <div style="position:absolute;top:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ink);animation:siteHop 4.2s linear infinite;"></div>
+        <div style="position:absolute;top:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ink);animation:siteHop 4.2s linear 2.1s infinite;"></div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;position:relative;">
+        <sc-for list="{{ hops }}" as="h" hint-placeholder-count="5">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
+            <div style="position:relative;width:60px;height:60px;">
+              <sc-if value="{{ h.end }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:siteRing 2.4s ease-out infinite;"></div></sc-if>
+              <div style="position:absolute;inset:0;border-radius:50%;background:{{ h.bg }};color:{{ h.fg }};border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:26px;line-height:1;font-variation-settings:'wght' 300;">{{ h.icon }}</span></div>
+            </div>
+            <div style="font-size:15px;font-weight:600;">{{ h.n }}</div>
+            <div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">{{ h.via }}</div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
+      <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
+        <div style="padding:26px;border-radius:26px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;">
+          <div style="font:500 13px 'Geist Mono',monospace;color:var(--ink2);">{{ s.n }}</div>
+          <div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;">{{ s.t }}</div>
+          <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ s.d }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="max-width:1200px;margin:0 auto;padding:56px 24px 96px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line2);border:1px solid var(--line2);border-radius:28px;overflow:hidden;">
+      <sc-for list="{{ features }}" as="f" hint-placeholder-count="6">
+        <div style="padding:30px;background:var(--bg);display:flex;flex-direction:column;gap:14px;min-height:220px;">
+          <span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'wght' 250;">{{ f.icon }}</span>
+          <div style="font-size:20px;font-weight:650;letter-spacing:-0.02em;">{{ f.t }}</div>
+          <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ f.d }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div id="privacidade" style="background:var(--ink);color:var(--invink);">
+    <div style="max-width:1200px;margin:0 auto;padding:96px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;">
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">PRIVACIDADE</div>
+        <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Quem carrega não consegue ler.</h2>
+        <p style="margin:0;font-size:17px;line-height:1.55;opacity:.78;text-wrap:pretty;">Toda mensagem sai cifrada do seu aparelho. Os celulares e roteadores no caminho só transportam um envelope fechado e minimizam o que fica registrado.</p>
+        <div style="margin-top:10px;padding:20px;border-radius:22px;border:1px solid rgba(127,127,127,.45);display:flex;flex-direction:column;gap:10px;">
+          <div style="font-size:15px;font-weight:650;">O que não prometemos</div>
+          <div style="font-size:14.5px;line-height:1.55;opacity:.78;text-wrap:pretty;">Anonimato absoluto. Horários, padrões de sinal e observação física podem permitir correlação. A identidade anônima e as opções de metadados reduzem esse risco, sem eliminá-lo.</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;">
+        <sc-for list="{{ privacy }}" as="p" hint-placeholder-count="5">
+          <div style="display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35);">
+            <span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'wght' 300;">{{ p.icon }}</span>
+            <div style="flex:1;display:flex;flex-direction:column;gap:5px;"><div style="font-size:17px;font-weight:600;">{{ p.t }}</div><div style="font-size:14.5px;line-height:1.5;opacity:.75;text-wrap:pretty;">{{ p.d }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+
+  <div id="provider" style="max-width:1200px;margin:0 auto;padding:104px 24px 64px;display:flex;flex-direction:column;gap:44px;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end;">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">SEJA PROVIDER</div>
+        <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Seu roteador vale LUNES.</h2>
+      </div>
+      <p style="margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Ligue um roteador, um Raspberry Pi ou uma antena e ajude a vizinhança a se comunicar. Você recebe créditos por entrega comprovada, liquidados em LUNES. Tempo ligado e capacidade anunciada não contam: só entregas reais.</p>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
+      <sc-for list="{{ classes }}" as="c" hint-placeholder-count="4">
+        <div style="padding:22px;border-radius:22px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:10px;">
+          <div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-family:'Material Symbols Rounded';font-size:28px;line-height:1;font-variation-settings:'wght' 250;">{{ c.icon }}</span><span style="font:500 11px 'Geist Mono',monospace;padding:3px 8px;border-radius:6px;border:1px solid var(--line2);color:var(--ink2);">{{ c.tag }}</span></div>
+          <div style="font-size:18px;font-weight:650;">{{ c.t }}</div>
+          <div style="font-size:14px;line-height:1.5;color:var(--ink2);text-wrap:pretty;">{{ c.d }}</div>
+          <div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);margin-top:auto;">{{ c.ex }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="border-radius:28px;background:var(--bg2);padding:28px;display:flex;flex-direction:column;gap:20px;overflow:hidden;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;">Painel do provider, direto no seu equipamento</div><div style="font-size:14.5px;color:var(--ink2);">Abre na rede local, em piu-node.local. Funciona sem internet.</div></div>
+        <a href="Piu 7 Provider computador.dc.html" style="height:44px;padding:0 18px;border-radius:22px;background:var(--ink);color:var(--invink);font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;">Ver o painel<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">arrow_forward</span></a>
+      </div>
+      <div ref="{{ deskRef }}" style="width:100%;">
+        <div style="width:{{ deskW }};height:{{ deskH }};margin:0 auto;position:relative;overflow:hidden;border-radius:14px;">
+          <div style="width:1280px;height:820px;transform:scale({{ deskScale }});transform-origin:top left;">
+            <dc-import name="PiuProviderDesktop" theme="{{ theme }}" hint-size="1280px,820px"></dc-import>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="lunes" style="max-width:1200px;margin:0 auto;padding:40px 24px 104px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
+    <div style="padding:32px;border-radius:28px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:14px;">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">CARTEIRA LUNES</div>
+      <div style="font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1.05;text-wrap:balance;">Uma carteira dentro do app, separada das suas conversas.</div>
+      <div style="font-size:15px;line-height:1.55;opacity:.78;text-wrap:pretty;">Envie e receba LUNES até sem internet: a transação é assinada no aparelho, viaja pela malha e é liquidada quando um gateway alcança a Mainnet. Mensagens nunca vão para a blockchain.</div>
+    </div>
+    <sc-for list="{{ rewards }}" as="r" hint-placeholder-count="2">
+      <div style="padding:32px;border-radius:28px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:12px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ r.k }}</div>
+        <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:56px;font-weight:650;letter-spacing:-0.05em;line-height:1;">{{ r.v }}</span><span style="font-size:15px;font-weight:600;color:var(--ink2);">LUNES</span></div>
+        <div style="font-size:17px;font-weight:600;">{{ r.t }}</div>
+        <div style="font-size:14.5px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ r.d }}</div>
+      </div>
+    </sc-for>
+    <div style="grid-column:1/-1;font:400 12px 'Geist Mono',monospace;color:var(--ink2);">Valores ilustrativos. Orçamento, limites e critérios dependem do modelo econômico da Lunes Network. Só indicação direta, sem ganhos em níveis.</div>
+  </div>
+
+  <div id="baixar" style="background:var(--bg2);">
+    <div style="max-width:1200px;margin:0 auto;padding:96px 24px;display:flex;flex-direction:column;gap:40px;">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">BAIXAR</div>
+        <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Pegue de um amigo. Ou daqui.</h2>
+        <p style="margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Quem já tem o Piu pode passar o app para o seu celular, sem internet. A cópia é conferida pela assinatura na primeira abertura.</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;">
+        <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
+          <div style="padding:26px;border-radius:24px;background:var(--bg);display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 1px var(--line) inset;">
+            <span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'wght' 250;">{{ d.icon }}</span>
+            <div style="font-size:20px;font-weight:650;letter-spacing:-0.02em;">{{ d.t }}</div>
+            <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1;">{{ d.d }}</div>
+            <button onClick="{{ d.act }}" style="height:46px;border-radius:23px;border:{{ d.border }};background:{{ d.bg }};color:{{ d.fg }};font:600 14.5px Geist;cursor:pointer;">{{ d.cta }}</button>
+          </div>
+        </sc-for>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;border:1px dashed var(--line2);font:400 13px 'Geist Mono',monospace;color:var(--ink2);">
+        <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink);">verified</span>
+        <span>Assinatura Lunes Network · 4C9A 7B21 … 09D3 E1F0</span><span style="opacity:.6;">·</span><span>Piu 0.1.4 · SHA-256 a91f 0c3e … 52d8 7b2d</span>
+      </div>
+      <sc-if value="{{ dlNote }}" hint-placeholder-val="{{ false }}">
+        <div style="padding:16px 20px;border-radius:18px;background:var(--ink);color:var(--invink);font-size:14.5px;line-height:1.5;animation:siteUp .35s both;">{{ dlNoteText }}</div>
+      </sc-if>
+    </div>
+  </div>
+
+  <div id="faq" style="max-width:880px;margin:0 auto;padding:96px 24px;display:flex;flex-direction:column;gap:28px;">
+    <h2 style="margin:0;font-size:clamp(32px,4.5vw,48px);font-weight:700;letter-spacing:-0.045em;line-height:1;">Dúvidas</h2>
+    <div style="display:flex;flex-direction:column;">
+      <sc-for list="{{ faq }}" as="q" hint-placeholder-count="7">
+        <div style="border-top:1px solid var(--line2);">
+          <button onClick="{{ q.toggle }}" style="width:100%;display:flex;align-items:center;gap:16px;padding:22px 0;border:none;background:transparent;color:var(--ink);font:600 18px Geist;letter-spacing:-0.015em;text-align:left;cursor:pointer;">
+            <span style="flex:1;">{{ q.q }}</span>
+            <span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1;transform:rotate({{ q.rot }});transition:transform .25s;">add</span>
+          </button>
+          <sc-if value="{{ q.open }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:0 48px 24px 0;font-size:16px;line-height:1.6;color:var(--ink2);text-wrap:pretty;animation:siteUp .3s both;">{{ q.a }}</div>
+          </sc-if>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--line);">
+    <div style="max-width:1200px;margin:0 auto;padding:48px 24px 56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px;">
+      <div style="display:flex;flex-direction:column;gap:10px;">
+        <div style="font-size:40px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></div>
+        <div style="font-size:13.5px;color:var(--ink2);line-height:1.5;max-width:260px;">Um produto da Lunes Network. Comunicação comunitária, aberta e distribuída.</div>
+      </div>
+      <sc-for list="{{ footer }}" as="col" hint-placeholder-count="3">
+        <div style="display:flex;flex-direction:column;gap:10px;">
+          <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ col.t }}</div>
+          <sc-for list="{{ col.links }}" as="l" hint-placeholder-count="3"><a href="{{ l.href }}" style="font-size:14.5px;">{{ l.l }}</a></sc-for>
+        </div>
+      </sc-for>
+    </div>
+    <div style="max-width:1200px;margin:0 auto;padding:0 24px 40px;font:400 12px 'Geist Mono',monospace;color:var(--ink2);">© 2026 Lunes Network · Sem servidor central · Mensagens nunca vão para a blockchain</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { theme: null, open: 0, dl: null, deskScale: 0.6 };
+  setDeskEl(el) {
+    if (el === this.deskEl) return;
+    if (this.ro) this.ro.disconnect();
+    this.deskEl = el;
+    if (!el) return;
+    const upd = () => { const w = el.clientWidth; if (w) { const sc = Math.min(1, w / 1280); if (Math.abs(sc - this.state.deskScale) > 0.002) this.setState({ deskScale: sc }); } };
+    this.ro = new ResizeObserver(upd); this.ro.observe(el); upd();
+  }
+  componentWillUnmount() { if (this.ro) this.ro.disconnect(); }
+  renderVals() {
+    const s = this.state, theme = s.theme || this.props.theme || 'light';
+    if (!this._deskRef) this._deskRef = el => this.setDeskEl(el);
+    const dlNotes = {
+      apk: 'Download iniciado: Piu-0.1.4.apk (38,2 MB). Na primeira abertura, o app confere a própria assinatura.',
+      friend: 'Peça para quem já tem o Piu abrir Perfil → Convidar → “Ainda não tem”. O app chega por Wi-Fi Direct, sem internet.',
+      node: 'Escolha o pacote do seu equipamento: .ipk para OpenWrt, .deb para Linux e Raspberry Pi. Todos assinados.',
+    };
+    return {
+      deskRef: this._deskRef, deskScale: s.deskScale.toFixed(4), deskW: Math.floor(1280 * s.deskScale) + 'px', deskH: Math.floor(820 * s.deskScale) + 'px',
+      theme, themeIcon: theme === 'dark' ? 'light_mode' : 'dark_mode', toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
+      heroFacts: [{ v: '0', l: 'servidores centrais' }, { v: '5', l: 'tipos de conexão' }, { v: '100%', l: 'cifrado ponta a ponta' }],
+      transports: [['bluetooth', 'Bluetooth'], ['wifi_tethering', 'Wi-Fi Direct'], ['hub', 'Wi-Fi Mesh'], ['settings_input_antenna', 'Rádio LoRa'], ['cable', 'Cabo e USB']].map(([icon, n]) => ({ icon, n })),
+      hops: [['edit', 'Você', 'cifra aqui', 1], ['smartphone', 'Celular', 'Bluetooth', 0], ['router', 'Roteador', 'Wi-Fi Mesh', 0], ['settings_input_antenna', 'Antena', 'LoRa', 0], ['person', 'Destino', 'confirma', 2]]
+        .map(([icon, n, via, k]) => ({ icon, n, via, end: k === 2, bg: k ? 'var(--ink)' : 'var(--bg)', fg: k ? 'var(--invink)' : 'var(--ink)' })),
+      steps: [
+        { n: '01', t: 'Cifrada antes de sair', d: 'A mensagem é trancada no seu aparelho. Só o destinatário tem a chave para abrir.' },
+        { n: '02', t: 'Pula de nó em nó', d: 'Celulares, roteadores e antenas passam o envelope adiante pelo melhor caminho. Se não há caminho, guardam por até 48 h.' },
+        { n: '03', t: 'Chega e confirma', d: 'O destino devolve um recibo assinado. Você vê cada estado: na fila, encaminhada, entregue.' },
+      ],
+      features: [
+        ['forum', 'Conversas, grupos e canais', 'Grupos com convites e moderação. Canais públicos, privados ou secretos. Comunidades que reúnem tudo.'],
+        ['person_off', 'Identidade pública ou anônima', 'Sem telefone, sem e-mail. Duas identidades com chaves separadas, sem vínculo entre elas.'],
+        ['description', 'Arquivos em blocos', 'Fotos e documentos vão em pedaços, retomam quando a rota muda e chegam conferidos.'],
+        ['warning', 'Alertas de emergência', 'Avisos da Defesa Civil chegam por rádio, com assinatura oficial verificada.'],
+        ['radar', 'Por perto', 'Encontre perfis públicos ao redor, sem localização exata. Visível só quando você quiser.'],
+        ['schedule_send', 'Funciona fora de alcance', 'Sem rede por perto? A mensagem espera na fila e sai sozinha quando surgir uma rota.'],
+      ].map(([icon, t, d]) => ({ icon, t, d })),
+      privacy: [
+        ['lock', 'Cifrado de ponta a ponta', 'Conversas, grupos e canais privados. Nem a Lunes consegue ler.'],
+        ['hub', 'Retransmissores às cegas', 'Quem carrega sua mensagem não recebe a chave nem o conteúdo.'],
+        ['badge', 'Identidades separadas', 'Pública e anônima não compartilham chaves nem identificadores.'],
+        ['database', 'Nada na blockchain', 'Mensagens, arquivos e rotas nunca são registrados on-chain.'],
+        ['verified_user', 'Código de segurança', 'Compare com o contato pessoalmente e tenha certeza de que ninguém está no meio.'],
+      ].map(([icon, t, d]) => ({ icon, t, d })),
+      classes: [
+        ['router', 'Home Node', 'Roteador com OpenWrt ou computador ligado em casa. Guarda e entrega 24 h.', 'OpenWrt · Linux · Raspberry Pi', 'beta'],
+        ['settings_input_antenna', 'Super Node', 'Antena ou rádio de maior alcance. Liga bairros e áreas distantes.', 'LoRa 915 MHz homologado', 'beta'],
+        ['dns', 'Gateway Local', 'Mini-PC que conecta Wi-Fi, rádio, USB e cabo. Não precisa de internet.', 'Intel N100 · adaptadores', 'estável'],
+        ['wifi', 'Roteador comum', 'Sem instalar nada: vira Ponto de Acesso de um nó seu, com nome piu.alguma-coisa.', 'qualquer roteador ou repetidor', 'sem instalação'],
+      ].map(([icon, t, d, ex, tag]) => ({ icon, t, d, ex, tag })),
+      rewards: [
+        { k: 'BOAS-VINDAS', v: '10', t: 'Para quem instala', d: 'Liberado depois de 7 dias de uso real e confirmação por um contato. Um aparelho, um bônus.' },
+        { k: 'DISTRIBUIÇÃO', v: '25', t: 'Por pessoa que você trouxer', d: 'Para quem passa o app de celular para celular, quando o convidado fica ativo. Até 20 por mês.' },
+      ],
+      downloads: [
+        ['android', 'Android', 'APK assinado para Android 9 ou superior. Ou receba de alguém por perto, sem internet.', 'Baixar APK · 38 MB', 'apk', true],
+        ['phonelink_ring', 'De um amigo', 'Sem internet e sem loja: quem já tem o Piu envia o app direto para o seu celular.', 'Como receber', 'friend', false],
+        ['router', 'Piu Node', 'Para roteadores OpenWrt, Linux, Raspberry Pi e mini-PCs. Torne-se provider.', 'Ver pacotes', 'node', false],
+      ].map(([icon, t, d, cta, k, primary]) => ({ icon, t, d, cta, bg: primary ? 'var(--ink)' : 'transparent', fg: primary ? 'var(--invink)' : 'var(--ink)', border: primary ? 'none' : '1px solid var(--line2)',
+        act: () => this.setState({ dl: k }) })),
+      dlNote: !!s.dl, dlNoteText: dlNotes[s.dl] || '',
+      faq: [
+        ['Precisa de internet?', 'Não. O Piu funciona com Bluetooth, Wi-Fi local e rádio. A internet nunca é uma rota obrigatória; ela só ajuda a liquidar LUNES na Mainnet quando estiver disponível.'],
+        ['Até onde uma mensagem chega?', 'Até onde houver aparelhos e equipamentos encadeados. No bairro, celulares e roteadores bastam. Entre cidades, são necessárias antenas e nós intermediários reais.'],
+        ['Alguém no caminho pode ler minhas mensagens?', 'Não. Elas são cifradas de ponta a ponta. Quem retransmite só vê um envelope fechado e os metadados mínimos para encaminhar.'],
+        ['Funciona no iPhone?', 'O iPhone só instala apps pela App Store, e por lá a versão está a caminho. Lembre-se: no iPhone, a retransmissão acontece só com o app aberto.'],
+        ['Como eu ganho LUNES?', 'Retransmitindo mensagens de outras pessoas com entrega comprovada, operando equipamentos como provider ou trazendo novos usuários que fiquem ativos. Duplicatas e tráfego artificial são rejeitados.'],
+        ['O Piu é anônimo?', 'Você pode usar uma identidade anônima, sem nome nem telefone. Mas nenhum sistema por rádio garante anonimato absoluto: horários e padrões de sinal podem permitir correlação.'],
+        ['Preciso comprar algum equipamento?', 'Não. Celulares comuns já formam a rede. Roteadores, computadores e rádios de mercado podem participar, sem hardware oficial da Lunes.'],
+      ].map(([q, a], i) => ({ q, a, open: s.open === i, rot: s.open === i ? '45deg' : '0deg', toggle: () => this.setState({ open: s.open === i ? -1 : i }) })),
+      footer: [
+        { t: 'PRODUTO', links: [['Como funciona', '#como'], ['Privacidade', '#privacidade'], ['Baixar', '#baixar']] },
+        { t: 'PROVIDER', links: [['Seja provider', '#provider'], ['Painel do provider', 'Piu 7 Provider computador.dc.html'], ['Piu Node', '#baixar']] },
+        { t: 'PROJETO', links: [['Telas do app', 'Piu.dc.html'], ['Especificação LNNP', '#faq'], ['Documento de requisitos v1.1', '#faq']] },
+      ].map(c => ({ t: c.t, links: c.links.map(([l, href]) => ({ l, href: href.indexOf('.dc.html') > 0 ? encodeURI(href) : href })) })),
+    };
+  }
+}
+</script>
+</body>
+</html>

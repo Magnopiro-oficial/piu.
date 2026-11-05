@@ -1,6 +1,7 @@
 import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ScrollView, View } from 'react-native';
+import { fmtDate, useT } from '../../i18n';
 import { cardFromText, fingerprintOfId, inviteWords } from '../../lib/inviteLink';
 import type { ContactCard } from '../../messaging/card';
 import { useKeys } from '../../state/keys';
@@ -19,6 +20,7 @@ import { T } from '../../ui/T';
  */
 export default function AcceptInvite() {
   const { c } = useTheme();
+  const t = useT();
   const { c: raw } = useLocalSearchParams<{ c?: string }>();
   const { readCard, addFromCard, ready } = useMessaging();
   const { chats, showToast } = useStore();
@@ -28,49 +30,49 @@ export default function AcceptInvite() {
   const parsed = useMemo((): { card: ContactCard } | { error: string } | null => {
     if (!ready) return null;
     const text = cardFromText(typeof raw === 'string' ? raw : '');
-    if (!text) return { error: 'Este link não traz um convite do Piu. Peça para a pessoa enviar de novo.' };
+    if (!text) return { error: t('accept.notInvite') };
     try { return { card: readCard(text) }; } catch (e) { return { error: (e as Error).message }; }
-  }, [raw, ready, readCard]);
+  }, [raw, ready, readCard, t]);
 
   const card = parsed && 'card' in parsed ? parsed.card : null;
   const mine = !!card && !!identities && (card.id === identities.public.id || card.id === identities.anon.id);
   const exists = card ? chats.find(x => x.peer === card.id) : undefined;
   const fp = card ? fingerprintOfId(card.id) : [];
   const words = card ? inviteWords(card.pub.signPk) : [];
-  const who = card?.name || 'Identidade anônima';
+  const who = card?.name || t('identity.anon');
 
   const accept = () => {
     if (!card) return;
     if (exists) { router.replace({ pathname: '/chat/[id]', params: { id: exists.id } }); return; }
     try {
       const id = addFromCard(card);
-      showToast({ icon: 'key', title: 'Contato adicionado', body: 'Confira o código de segurança pessoalmente.' });
+      showToast({ icon: 'key', title: t('accept.added'), body: t('accept.added.body') });
       router.replace({ pathname: '/chat/[id]', params: { id } });
     } catch (e) { setError((e as Error).message); }
   };
   const leave = () => (router.canGoBack() ? router.back() : router.replace('/(tabs)'));
 
-  if (!parsed) return <Screen style={{ paddingHorizontal: 24, paddingTop: 66 }}><T size={15} color={c.ink2}>Abrindo o convite…</T></Screen>;
+  if (!parsed) return <Screen style={{ paddingHorizontal: 24, paddingTop: 66 }}><T size={15} color={c.ink2}>{t('accept.opening')}</T></Screen>;
 
   if (!card) {
     return (
       <Screen style={{ paddingHorizontal: 24 }}>
         <View style={{ flex: 1, paddingTop: 66, gap: 18 }}>
           <Icon name="gpp_bad" size={34} w={300} />
-          <T size={28} w={650} ls={-0.035} lh={1.08} accessibilityRole="header">Convite não pode ser usado</T>
+          <T size={28} w={650} ls={-0.035} lh={1.08} accessibilityRole="header">{t('accept.unusable')}</T>
           <T size={15} lh={1.45} color={c.ink2} accessibilityRole="alert">{'error' in parsed ? parsed.error : ''}</T>
           <View style={{ flex: 1 }} />
-          <Button label="Fechar" variant="soft" style={{ marginBottom: 16 }} onPress={leave} />
+          <Button label={t('common.close')} variant="soft" style={{ marginBottom: 16 }} onPress={leave} />
         </View>
       </Screen>
     );
   }
 
   const rows: [string, string, boolean?][] = [
-    ['Identidade', card.kind === 'anon' ? 'anônima · assinatura confere' : 'pública · assinatura confere'],
-    ['Chave', `${fp[0] ?? ''} ${fp[1] ?? ''} … ${fp.at(-1) ?? ''}`, true],
-    ['Convite', `uso único · vale até ${new Date(card.expiresAt * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}`],
-    ['Você conversa', card.kind === 'anon' ? 'pela sua identidade anônima' : 'pela sua identidade pública'],
+    [t('profile.identity'), card.kind === 'anon' ? t('accept.identity.anon') : t('accept.identity.public')],
+    [t('accept.key'), `${fp[0] ?? ''} ${fp[1] ?? ''} … ${fp.at(-1) ?? ''}`, true],
+    [t('accept.invite'), t('accept.invite.validUntil', { when: fmtDate(card.expiresAt * 1000, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) })],
+    [t('accept.youTalk'), card.kind === 'anon' ? t('accept.youTalk.anon') : t('accept.youTalk.public')],
   ];
 
   return (
@@ -78,11 +80,11 @@ export default function AcceptInvite() {
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: 66, gap: 22, paddingBottom: 16 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center' }} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
           <View style={{ width: 84, height: 84, borderRadius: 42, backgroundColor: c.ink, borderWidth: 4, borderColor: c.bg, alignItems: 'center', justifyContent: 'center', zIndex: 1 }}><T size={26} w={650} color={c.invink}>{card.name ? card.name.slice(0, 1).toUpperCase() : '?'}</T></View>
-          <View style={{ width: 84, height: 84, borderRadius: 42, marginLeft: -18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.ink, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><T size={13} w={500} color={c.ink2}>você</T></View>
+          <View style={{ width: 84, height: 84, borderRadius: 42, marginLeft: -18, borderWidth: 1.5, borderStyle: 'dashed', borderColor: c.ink, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><T size={13} w={500} color={c.ink2}>{t('network.radar.you')}</T></View>
         </View>
         <View style={{ gap: 10 }}>
-          <T size={30} w={650} ls={-0.035} lh={1.06} accessibilityRole="header">{mine ? 'Este convite é seu' : card.name ? `${card.name} convidou você` : 'Você recebeu um convite'}</T>
-          <T size={15} lh={1.45} color={c.ink2}>{mine ? 'Envie o link para outra pessoa. Ela abre no Piu e vocês viram contatos.' : 'Ao aceitar, as chaves públicas do convite entram nos seus contatos e a primeira conversa já começa cifrada.'}</T>
+          <T size={30} w={650} ls={-0.035} lh={1.06} accessibilityRole="header">{mine ? t('accept.mine') : card.name ? t('accept.invitedYou', { name: card.name }) : t('accept.received')}</T>
+          <T size={15} lh={1.45} color={c.ink2}>{mine ? t('accept.mine.desc') : t('accept.received.desc')}</T>
         </View>
         <View style={{ borderRadius: 20, backgroundColor: c.bg2, padding: 16, gap: 10 }}>
           <T size={15} w={600}>{who}</T>
@@ -95,15 +97,15 @@ export default function AcceptInvite() {
         </View>
         {!mine && (
           <View style={{ padding: 16, borderRadius: 20, borderWidth: 1, borderColor: c.line2, gap: 10 }}>
-            <T size={11.5} w={500} mono ls={0.05} color={c.ink2}>CÓDIGO DE SEGURANÇA</T>
-            <View accessibilityLabel={'Código: ' + words.join(', ')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+            <T size={11.5} w={500} mono ls={0.05} color={c.ink2}>{t('accept.code')}</T>
+            <View accessibilityLabel={`${t('inviteShare.code')}: ${words.join(', ')}`} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
               {words.map((w, i) => (
                 <View key={`${w}-${i}`} style={{ width: '48.5%', flexGrow: 1, height: 40, borderRadius: 12, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
                   <T size={17} w={650} ls={-0.02}>{w}</T>
                 </View>
               ))}
             </View>
-            <T size={12.5} lh={1.4} color={c.ink2}>{`Se puder, confira com ${card.name || 'quem convidou'} (ligação ou pessoalmente): a tela de convite dela mostra as mesmas 4 palavras. Diferentes, não aceite.`}</T>
+            <T size={12.5} lh={1.4} color={c.ink2}>{t('accept.code.desc', { name: card.name || t('inviteText.inviter') })}</T>
           </View>
         )}
         {error && (
@@ -114,8 +116,8 @@ export default function AcceptInvite() {
         )}
         <View style={{ flex: 1 }} />
         <View style={{ gap: 10 }}>
-          {!mine && <Button label={exists ? 'Já é seu contato · abrir' : 'Aceitar e conversar'} onPress={accept} />}
-          <Button label={mine ? 'Fechar' : 'Agora não'} variant="ghost" height={46} onPress={leave} />
+          {!mine && <Button label={exists ? t('accept.alreadyContact') : t('accept.accept')} onPress={accept} />}
+          <Button label={mine ? t('common.close') : t('accept.notNow')} variant="ghost" height={46} onPress={leave} />
         </View>
       </ScrollView>
     </Screen>

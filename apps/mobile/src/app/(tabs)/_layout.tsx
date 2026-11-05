@@ -2,14 +2,15 @@ import { Tabs, type BottomTabBarProps } from 'expo-router/js-tabs';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useT, type Key } from '../../i18n';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Icon, type IconName } from '../../ui/Icon';
 import { T } from '../../ui/T';
 
-const TABS: Record<string, [string, IconName]> = {
-  index: ['Conversas', 'chat_bubble'], nearby: ['Por perto', 'radar'], network: ['Rede', 'hub'],
-  wallet: ['Carteira', 'account_balance_wallet'], profile: ['Perfil', 'person'],
+const TABS: Record<string, [Key, IconName]> = {
+  index: ['tabs.chats', 'chat_bubble'], nearby: ['tabs.nearby', 'radar'], network: ['tabs.network', 'hub'],
+  wallet: ['tabs.wallet', 'account_balance_wallet'], profile: ['tabs.profile', 'person'],
 };
 
 export default function TabsLayout() {
@@ -24,14 +25,15 @@ export default function TabsLayout() {
 function TabBar({ state, navigateToTab }: BottomTabBarProps) {
   const { c } = useTheme();
   const insets = useSafeAreaInsets();
+  const t = useT();
   const { chats, identity } = useStore();
   const unread = chats.filter(x => x.ident === identity).reduce((n, x) => n + x.unread, 0);
   return (
     <View accessibilityRole="tablist" style={{ flexDirection: 'row', paddingTop: 8, paddingHorizontal: 12, paddingBottom: Math.max(insets.bottom, 10), minHeight: 84, backgroundColor: c.bg, borderTopWidth: 1, borderTopColor: c.line }}>
       {state.routes.map((r, i) => {
-        const [label, icon] = TABS[r.name] ?? [r.name, 'chat_bubble'];
+        const [key, icon] = TABS[r.name] ?? [null, 'chat_bubble'];
         return (
-          <Tab key={r.key} label={label} icon={icon} active={state.index === i} badge={r.name === 'index' ? unread : 0}
+          <Tab key={r.key} label={key ? t(key) : r.name} icon={icon} active={state.index === i} badge={r.name === 'index' ? unread : 0}
             onPress={() => { if (state.index !== i) navigateToTab(r.key); }} />
         );
       })}
@@ -41,6 +43,7 @@ function TabBar({ state, navigateToTab }: BottomTabBarProps) {
 
 function Tab({ label, icon, active, badge, onPress }: { label: string; icon: IconName; active: boolean; badge: number; onPress: () => void }) {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const bump = useRef(new Animated.Value(1)).current; // progresso 0 → 1
   useEffect(() => {
     if (!active || reduceMotion) return;
@@ -50,7 +53,7 @@ function Tab({ label, icon, active, badge, onPress }: { label: string; icon: Ico
   }, [active, reduceMotion, bump]);
   const color = active ? c.ink : c.ink2;
   return (
-    <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={badge ? `${label}, ${badge} não lidas` : label}
+    <Pressable accessibilityRole="tab" accessibilityState={{ selected: active }} accessibilityLabel={badge ? `${label}, ${t('common.unread', { count: badge })}` : label}
       onPress={onPress} style={{ flex: 1, alignItems: 'center', gap: 4 }}>
       <Animated.View style={{ transform: [{ scale: bump.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 0.8, 1.14, 1] }) }] }}><Icon name={icon} size={26} fill={active} color={color} /></Animated.View>
       <T size={11} w={active ? 650 : 500} color={color}>{label}</T>

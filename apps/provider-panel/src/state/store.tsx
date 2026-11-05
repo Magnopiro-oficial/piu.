@@ -1,5 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
+import { t } from '../i18n';
+import { useLang } from '../i18n/react';
 import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiDeviceLimits, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
 import { guideHidden as loadGuideHidden, setGuideHidden as saveGuideHidden } from '../lib/guide';
 import { type Live, liveDevice, liveTx } from '../lib/live';
@@ -103,10 +105,13 @@ const LIVE_MS = 10_000;
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const node = useNode();
+  const lang = useLang();
   const api = node.mode.kind === 'node' ? node.mode.api : null;
   const [theme, setThemeState] = useState<Theme>(initialTheme);
   const { route, navigate } = useHashRoute();
   const [demoDevices, setDevices] = useState<RelayNode[]>(seedDevices);
+  // Demonstração: os nomes de exemplo seguem o idioma do painel (sem perder pausas/remoções).
+  useEffect(() => { setDevices(ds => { const fresh = seedDevices(); return ds.map(d => { const s = fresh.find(x => x.id === d.id); return s ? { ...s, status: d.status, limits: d.limits } : d; }); }); setTxs(ts => ts.map(x => seedTxs().find(y => y.id === x.id) ?? x)); }, [lang]);
   /** Com piu-node: os equipamentos do operador, como o servidor devolveu. */
   const [apiDevices, setApiDevices] = useState<ApiDevice[]>([]);
   const [live, setLive] = useState<Live | null>(null);
@@ -173,17 +178,17 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const devices = useMemo<RelayNode[]>(
     () => (api ? apiDevices.map(d => ({ ...liveDevice(d, live), fresh: d.id === fresh })) : demoDevices),
-    [api, apiDevices, live, demoDevices, fresh],
+    [api, apiDevices, live, demoDevices, fresh, lang], // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   // Ajustes salvos no nó (depois de carregados, para não sobrescrever com o padrão).
   useEffect(() => {
     if (!api || !settingsLoaded.current) return;
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       node.guard(api.saveSettings({ limits, policies } as ApiSettings))
-        .catch(e => showToast({ icon: 'error', title: 'Ajuste não salvo', body: e instanceof ApiError ? e.message : 'Tente de novo.' }));
+        .catch(e => showToast({ icon: 'error', title: t('toast.settingsNotSaved'), body: e instanceof ApiError ? e.message : t('common.tryAgain') }));
     }, 400);
-    return () => window.clearTimeout(t);
+    return () => window.clearTimeout(timer);
   }, [limits, policies]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Embutido no site (iframe), acompanha o tema escolhido lá: por mensagem ou pela mesma chave salva.
@@ -219,7 +224,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             setApiDevices(ds => [...ds, r]); setFresh(r.id); setDevFilter('all'); setDevQuery('');
             return r.id;
           } catch (e) {
-            showToast({ icon: 'error', title: 'Não foi possível ativar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+            showToast({ icon: 'error', title: t('toast.cantActivate'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
             return null;
           }
         }
@@ -231,7 +236,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           // O servidor decide (e, no próprio nó, pausa o motor): o painel mostra o estado que ele devolver.
           node.guard(api.togglePause(id))
             .then(r => { setApiDevices(ds => ds.map(d => (d.id === r.id ? { ...d, status: r.status } : d))); return node.guard(api.relay()).then(relay => setLive(l => (l ? { ...l, relay } : l))); })
-            .catch(e => showToast({ icon: 'error', title: 'Não foi possível alterar', body: e instanceof ApiError ? e.message : 'Tente de novo.' }));
+            .catch(e => showToast({ icon: 'error', title: t('toast.cantChange'), body: e instanceof ApiError ? e.message : t('common.tryAgain') }));
           return;
         }
         setDevices(ds => ds.map(d => (d.id !== id ? d : { ...d, status: d.status === 'paused' ? 'active' : 'paused' })));
@@ -240,7 +245,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (api) {
           let r: { revoked: boolean } | undefined;
           try { r = await node.guard(api.revoke(id)); } catch (e) {
-            showToast({ icon: 'error', title: 'Não foi possível revogar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+            showToast({ icon: 'error', title: t('toast.cantRevoke'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
             return false;
           }
           setApiDevices(ds => ds.filter(d => d.id !== id));
@@ -257,7 +262,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           void node.guard(api.relay()).then(relay => setLive(l => (l ? { ...l, relay } : l))).catch(() => {});
           return true;
         } catch (e) {
-          showToast({ icon: 'error', title: 'Regras não salvas', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+          showToast({ icon: 'error', title: t('toast.rulesNotSaved'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
           return false;
         }
       },
@@ -270,7 +275,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         if (!api) return 'ok';
         try { await node.guard(api.restartDevice(id)); return 'ok'; } catch (e) {
           if (e instanceof NeedsReauth) return 'reauth';
-          showToast({ icon: 'error', title: 'Não foi possível reiniciar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+          showToast({ icon: 'error', title: t('toast.cantRestart'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
           return 'error';
         }
       },
@@ -281,7 +286,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             if ('pending' in r) return { pending: r.pending };
           } catch (e) {
             if (e instanceof NeedsReauth) return 'reauth';
-            showToast({ icon: 'error', title: 'Transferência não feita', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+            showToast({ icon: 'error', title: t('toast.transferFailed'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
             return 'error';
           }
           refreshWallet();
@@ -291,9 +296,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return 'ok';
       },
       approveTransfer: async (pending, approval) => {
-        if (!api) return 'Sem nó.';
+        if (!api) return t('store.noNode');
         try { await node.guard(api.approveTransfer(pending.id, approval)); }
-        catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível concluir.'; }
+        catch (e) { return e instanceof ApiError ? e.message : t('common.couldNotFinish'); }
         refreshWallet();
         return null;
       },
@@ -302,14 +307,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       refreshPhones: () => { if (api) node.guard(api.phones()).then(setPhones).catch(() => {}); },
       stepUp: async code => {
         if (!api) return null;
-        try { await node.guard(api.reauth(code)); return null; } catch (e) { return e instanceof ApiError ? e.message : 'Não foi possível confirmar.'; }
+        try { await node.guard(api.reauth(code)); return null; } catch (e) { return e instanceof ApiError ? e.message : t('common.couldNotConfirm'); }
       },
       sessions,
       revokeOtherSessions: async () => {
         if (!api) return 'ok';
         try { await node.guard(api.revokeOtherSessions()); } catch (e) {
           if (e instanceof NeedsReauth) return 'reauth';
-          showToast({ icon: 'error', title: 'Não foi possível encerrar', body: e instanceof ApiError ? e.message : 'Tente de novo.' });
+          showToast({ icon: 'error', title: t('toast.cantEnd'), body: e instanceof ApiError ? e.message : t('common.tryAgain') });
           return 'error';
         }
         node.guard(api.sessions()).then(setSessions).catch(() => {});

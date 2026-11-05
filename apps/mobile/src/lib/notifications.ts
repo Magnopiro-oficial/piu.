@@ -10,6 +10,7 @@
  *   `notify` direto (state/store.tsx, `showToast`), com o conteúdo original e a rota (`href`).
  */
 import * as Notifications from 'expo-notifications';
+import { t, type Key } from '../i18n/core';
 import { router, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
@@ -39,21 +40,22 @@ export interface NotifyInput {
 
 interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: boolean; discreet: boolean; piu: boolean; onboarded: boolean }
 
-/** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"). */
-const HIDDEN_BODY: Record<NotifyKind, string> = {
-  msg: 'Nova mensagem', group: 'Nova mensagem', channel: 'Nova publicação', nearby: 'Novo pedido de conversa',
-  wallet: 'Movimentação na carteira', network: 'Aviso da rede', alert: 'Alerta da comunidade',
+/** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"), no idioma do app. */
+const HIDDEN_BODY: Record<NotifyKind, Key> = {
+  msg: 'notify.hidden.msg', group: 'notify.hidden.msg', channel: 'notify.hidden.channel', nearby: 'notify.hidden.nearby',
+  wallet: 'notify.hidden.wallet', network: 'notify.hidden.network', alert: 'notify.hidden.alert',
 };
 
 /** Canais do Android (importância e som são fixos depois de criados, por isso um canal por modo). */
 type Mode = 'normal' | 'piu' | 'discreet' | 'quiet' | 'critical';
-const CHANNELS: Record<Mode, Notifications.NotificationChannelInput> = {
-  normal: { name: 'Mensagens e avisos', importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  piu: { name: 'Mensagens com piu', description: 'O som do Piu', importance: Notifications.AndroidImportance.HIGH, sound: 'piu.wav', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  discreet: { name: 'Avisos discretos', description: 'Sem som; um toque curto', importance: Notifications.AndroidImportance.HIGH, sound: null, enableVibrate: true, vibrationPattern: [0, 90], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  quiet: { name: 'Modo noturno', description: 'Entre 22h e 7h: sem som nem vibração', importance: Notifications.AndroidImportance.LOW, sound: null, enableVibrate: false, vibrationPattern: null, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-  critical: { name: 'Alertas graves da comunidade', description: 'Publicados por membros das suas comunidades. Não são avisos oficiais.', importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
-};
+/** Nome e descrição saem no idioma em uso quando o canal é criado (ids fixos; o nome só muda se o canal for recriado). */
+const CHANNELS = (): Record<Mode, Notifications.NotificationChannelInput> => ({
+  normal: { name: t('channel.normal'), importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+  piu: { name: t('channel.piu'), description: t('channel.piu.desc'), importance: Notifications.AndroidImportance.HIGH, sound: 'piu.wav', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+  discreet: { name: t('channel.discreet'), description: t('channel.discreet.desc'), importance: Notifications.AndroidImportance.HIGH, sound: null, enableVibrate: true, vibrationPattern: [0, 90], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+  quiet: { name: t('channel.quiet'), description: t('channel.quiet.desc'), importance: Notifications.AndroidImportance.LOW, sound: null, enableVibrate: false, vibrationPattern: null, lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+  critical: { name: t('channel.critical'), description: t('channel.critical.desc'), importance: Notifications.AndroidImportance.MAX, sound: 'default', enableVibrate: true, vibrationPattern: [0, 600, 200, 600, 200, 600], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
+});
 /** `critical-c`: canal novo (o antigo `piu-critical` era dos alertas oficiais, visível na tela bloqueada). */
 const channelId = (m: Mode) => (m === 'critical' ? 'piu-critical-c' : `piu-${m}`);
 
@@ -100,7 +102,8 @@ function ensureChannels() {
   if (Platform.OS !== 'android') return Promise.resolve();
   // O canal antigo dos alertas oficiais (CAP) sai: os alertas agora são da comunidade.
   void Notifications.deleteNotificationChannelAsync('piu-critical').catch(() => {});
-  channelsReady ??= Promise.all((Object.keys(CHANNELS) as Mode[]).map(m => Notifications.setNotificationChannelAsync(channelId(m), CHANNELS[m]))).then(() => {}).catch(() => { channelsReady = null; });
+  const channels = CHANNELS();
+  channelsReady ??= Promise.all((Object.keys(channels) as Mode[]).map(m => Notifications.setNotificationChannelAsync(channelId(m), channels[m]))).then(() => {}).catch(() => { channelsReady = null; });
   return channelsReady;
 }
 
@@ -139,7 +142,7 @@ function present(n: NotifyInput, preview: Preview): { title: string; body: strin
   // iPhone: só se as prévias do sistema estiverem em "Quando desbloqueado"). Onde não dá para
   // garantir (web, iPhone com prévias sempre), vai o texto genérico.
   if (preview === 'unlocked' && (Platform.OS === 'android' || (Platform.OS === 'ios' && iosPreviewsWhenUnlocked))) return { title: n.title, body: n.body };
-  return { title: 'Piu', body: HIDDEN_BODY[n.kind] };
+  return { title: 'Piu', body: t(HIDDEN_BODY[n.kind]) };
 }
 
 /**
@@ -155,7 +158,7 @@ export const notify = (n: NotifyInput) => deliver(n, 0);
  * bloqueada (`/lock`) continua acessível pelo link "Ver na tela bloqueada" na mesma tela.
  */
 export const sendTestNotification = () =>
-  deliver({ kind: 'msg', title: 'Piu · aviso de teste', body: 'Assim chega uma mensagem nova com a pré-visualização escolhida.', data: { href: '/(tabs)' } }, 5);
+  deliver({ kind: 'msg', title: t('notify.test.title'), body: t('notify.test.body'), data: { href: '/(tabs)' } }, 5);
 
 async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
   const c = cfg;

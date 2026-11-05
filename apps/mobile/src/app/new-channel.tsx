@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import type { ChannelType, IdentityKind } from '../data/types';
+import { useT, type Key } from '../i18n';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { fontFamily } from '../theme/fonts';
@@ -17,16 +18,17 @@ import { T } from '../ui/T';
  * convite (7 dias, até 50 usos). Público entra sem aprovação; privado e secreto pedem aprovação de um
  * admin e escondem os inscritos uns dos outros.
  */
-const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', string, string][] = [
-  ['public', 'campaign', 'Público', 'Entra quem tiver o link ou o QR, sem aprovação. Não aparece em Por perto nem em busca.'],
-  ['private', 'lock', 'Privado', 'Entra pelo link ou QR com aprovação de um admin. Inscritos não veem uns aos outros.'],
-  ['secret', 'visibility_off', 'Secreto', 'Como o privado. O nome só circula dentro do convite.'],
+const CHANNEL_TYPES: [ChannelType, 'campaign' | 'lock' | 'visibility_off', Key, Key][] = [
+  ['public', 'campaign', 'newChannel.type.public', 'newChannel.type.public.desc'],
+  ['private', 'lock', 'newChannel.type.private', 'newChannel.type.private.desc'],
+  ['secret', 'visibility_off', 'newChannel.type.secret', 'newChannel.type.secret.desc'],
 ];
 
 /** Criar canal (FUN-007): público, privado ou secreto; quem publica; com identidade pública ou anônima. */
 export default function NewChannel() {
   const { parent } = useLocalSearchParams<{ parent?: string }>();
   const { c } = useTheme();
+  const t = useT();
   const { profile, identity, showToast } = useStore();
   const { ready, createGroup } = useMessaging();
   const [name, setName] = useState('');
@@ -47,23 +49,23 @@ export default function NewChannel() {
     let id: string;
     try {
       id = createGroup({ kind: 'channel', name, desc, via: ident, memberIds: [], visibility: type, postMods: post === 'mods', approve: type !== 'public', parent, ...(prio === 'high' ? { prio: 'high' as const } : {}) });
-    } catch (e) { showToast({ icon: 'error', title: 'Não foi possível criar', body: (e as Error).message }); return; }
+    } catch (e) { showToast({ icon: 'error', title: t('newGroup.createFail'), body: (e as Error).message }); return; }
     router.dismissTo('/(tabs)');
     router.push({ pathname: '/chat/[id]', params: { id } });
   };
 
   return (
     <Screen>
-      <BackHeader title="Novo canal" />
+      <BackHeader title={t('new.channel')} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          <TextInput value={name} onChangeText={setName} placeholder="Nome do canal" placeholderTextColor={c.ink3} accessibilityLabel="Nome do canal" maxLength={60}
+          <TextInput value={name} onChangeText={setName} placeholder={t('newChannel.name')} placeholderTextColor={c.ink3} accessibilityLabel={t('newChannel.name')} maxLength={60}
             style={{ ...input, height: 52, fontSize: 16, fontFamily: fontFamily(600) }} />
-          <TextInput value={desc} onChangeText={setDesc} placeholder="Descrição (opcional)" placeholderTextColor={c.ink3} accessibilityLabel="Descrição (opcional)" maxLength={140}
+          <TextInput value={desc} onChangeText={setDesc} placeholder={t('newGroup.desc')} placeholderTextColor={c.ink3} accessibilityLabel={t('newGroup.desc')} maxLength={140}
             style={{ ...input, height: 48, fontSize: 15, fontFamily: fontFamily(400) }} />
         </View>
 
-        <SectionLabel>TIPO</SectionLabel>
+        <SectionLabel>{t('newChannel.type')}</SectionLabel>
         <View accessibilityRole="radiogroup" style={{ paddingHorizontal: 20, gap: 8 }}>
           {CHANNEL_TYPES.map(([k, icon, title, d]) => {
             const on = type === k;
@@ -72,8 +74,8 @@ export default function NewChannel() {
                 style={{ flexDirection: 'row', gap: 14, alignItems: 'flex-start', paddingVertical: 14, paddingHorizontal: 16, borderRadius: 20, borderWidth: 1.5, borderColor: on ? c.ink : c.line2, backgroundColor: on ? c.bg2 : 'transparent' }}>
                 <View style={{ width: 42, height: 42, borderRadius: 13, backgroundColor: c.bg3, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={22} w={300} /></View>
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                  <T size={15.5} w={600}>{title}</T>
-                  <T size={13} lh={1.35} color={c.ink2}>{d}</T>
+                  <T size={15.5} w={600}>{t(title)}</T>
+                  <T size={13} lh={1.35} color={c.ink2}>{t(d)}</T>
                 </View>
                 <View style={{ width: 22, height: 22, borderRadius: 11, borderWidth: 1.5, borderColor: c.ink, alignItems: 'center', justifyContent: 'center', marginTop: 2 }}>
                   <View style={{ width: 12, height: 12, borderRadius: 6, backgroundColor: c.ink, opacity: on ? 1 : 0 }} />
@@ -83,29 +85,29 @@ export default function NewChannel() {
           })}
         </View>
 
-        <SectionLabel>QUEM PUBLICA</SectionLabel>
+        <SectionLabel>{t('newChannel.whoPosts')}</SectionLabel>
         <View style={{ paddingHorizontal: 20 }}>
-          <Segmented label="Quem publica" value={post} onChange={setPost} options={[['admins', 'Só admins'], ['mods', 'Admins e moderadores']]} />
+          <Segmented label={t('newChannel.whoPosts.label')} value={post} onChange={setPost} options={[['admins', t('newChannel.whoPosts.admins')], ['mods', t('newChannel.whoPosts.mods')]]} />
         </View>
 
-        <SectionLabel>PRIORIDADE</SectionLabel>
+        <SectionLabel>{t('newChannel.priority')}</SectionLabel>
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          <Segmented label="Prioridade" value={prio} onChange={setPrio} options={[['normal', 'Normal'], ['high', 'Alta']]} />
+          <Segmented label={t('newChannel.priority.label')} value={prio} onChange={setPrio} options={[['normal', t('storage.quality.normal')], ['high', t('newChannel.priority.high')]]} />
           <T size={12.5} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>
-            {prio === 'high' ? 'Para alertas: as publicações passam à frente na fila de cada nó. Não dá para mudar depois.' : 'As publicações seguem na fila como as outras mensagens.'}
+            {prio === 'high' ? t('newChannel.priority.high.desc') : t('newChannel.priority.normal.desc')}
           </T>
         </View>
 
-        <SectionLabel>PUBLICAR COMO</SectionLabel>
+        <SectionLabel>{t('newChannel.postAs')}</SectionLabel>
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
-          <Segmented label="Publicar como" value={ident} onChange={setIdent} options={[['public', 'Identidade pública'], ['anon', 'Identidade anônima']]} />
+          <Segmented label={t('newChannel.postAs.label')} value={ident} onChange={setIdent} options={[['public', t('identity.public')], ['anon', t('identity.anon')]]} />
           <T size={12.5} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>
-            {ident === 'anon' ? 'O canal fica na sua identidade anônima, sem vínculo com o perfil público.' : myName ? `Inscritos veem que o canal é seu (${myName}).` : 'Inscritos veem que o canal é da sua identidade pública.'}
+            {ident === 'anon' ? t('newChannel.postAs.anon') : myName ? t('newChannel.postAs.named', { name: myName }) : t('newChannel.postAs.public')}
           </T>
         </View>
 
         <View style={{ paddingTop: 24, paddingHorizontal: 20 }}>
-          <Button label="Criar canal" disabled={!ok} onPress={create} />
+          <Button label={t('newChannel.create')} disabled={!ok} onPress={create} />
         </View>
       </ScrollView>
     </Screen>

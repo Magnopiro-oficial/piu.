@@ -1,6 +1,7 @@
 import { useRef } from 'react';
 import { View } from 'react-native';
 import type { Chat, Msg } from '../data/types';
+import { useT } from '../i18n';
 import { buildRoute } from '../lib/route';
 import type { RouteRec } from '../lib/routeCore';
 import type { Priority } from '../protocol/envelope';
@@ -16,16 +17,17 @@ import { T } from './T';
  */
 export function RouteSheet({ chat, msg, rec, prio, onClose }: { chat: Chat; msg: Msg; rec?: RouteRec; prio?: Priority; onClose: () => void }) {
   const { c } = useTheme();
-  const r = buildRoute(chat, msg, rec, prio);
+  const t = useT();
+  const r = buildRoute(chat, msg, rec, prio, t);
   const sheet = useRef<SheetHandle>(null);
   return (
-    <Sheet ref={sheet} onClose={onClose} label="Rota da mensagem">
+    <Sheet ref={sheet} onClose={onClose} label={t('routeSheet.title')}>
       <View style={{ gap: 6 }}>
-        <T size={22} w={700} ls={-0.03} accessibilityRole="header">Rota da mensagem</T>
+        <T size={22} w={700} ls={-0.03} accessibilityRole="header">{t('routeSheet.title')}</T>
         {!!r.text && <T size={14} color={c.ink2} numberOfLines={1}>“{r.text}”</T>}
       </View>
 
-      <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={'Etapa: ' + (r.steps.find(s => s.current)?.label ?? '')}>
+      <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={t('routeSheet.step.a11y', { step: r.steps.find(s => s.current)?.label ?? '' })}>
         {r.steps.map(s => (
           <View key={s.label} style={{ flex: 1, gap: 7 }}>
             <View style={{ height: 4, borderRadius: 2, backgroundColor: s.done ? c.ink : c.bg3 }} />
@@ -66,9 +68,9 @@ export function RouteSheet({ chat, msg, rec, prio, onClose }: { chat: Chat; msg:
 
       <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 10 }}>
         <Icon name="lock" size={18} />
-        <T size={13} lh={1.4} color={c.ink2} style={{ flex: 1 }}>Os nós intermediários transportam apenas o envelope cifrado. Nenhum deles consegue ler esta mensagem.</T>
+        <T size={13} lh={1.4} color={c.ink2} style={{ flex: 1 }}>{t('routeSheet.note')}</T>
       </View>
-      <Button label="Fechar" variant="soft" height={50} onPress={() => sheet.current?.close()} />
+      <Button label={t('common.close')} variant="soft" height={50} onPress={() => sheet.current?.close()} />
     </Sheet>
   );
 }

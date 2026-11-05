@@ -14,7 +14,7 @@
  * e nos testes (WebSocket falso que responde com JSON-RPC gravado).
  */
 import { blake2b } from '@noble/hashes/blake2.js';
-import { decodeSs58 } from './ss58';
+import { decodeSs58, encodeSs58, LUNES_SS58_PREFIX } from './ss58';
 import { twox128 } from './xxhash';
 
 /** Endereços de produção da Lunes Mainnet, nesta ordem (o de arquivo por último). */
@@ -352,3 +352,150 @@ export function formatLunes(p: bigint, max = LUNES_DECIMALS): string {
 }
 
 export const hostOfEndpoint = hostOf;
+
+// ── escrita (carteira própria, etapa 3 de docs/carteira/proposta-carteira-propria.md) ──────────
+// Este módulo continua sem assinar nada: os bytes assinados vêm de lib/extrinsic.ts (que não é
+// copiado para o piu-node), e aqui só se pergunta nonce e taxa, valida sem enviar, envia e procura
+// no bloco. Nada abaixo altera as funções de leitura acima.
+
+/** Endereço SS58 informado (57 ou 42) → sempre no prefixo 57, que é o que o nó da Lunes espera. */
+function lunesAddress(address: string): string {
+  const d = decodeSs58(address);
+  if (!d.ok) throw new Error(d.error);
+  return encodeSs58(d.publicKey, LUNES_SS58_PREFIX);
+}
+const hexOf = (x: string | Uint8Array) => (typeof x === 'string' ? toHex(fromHex(x)) : toHex(x));
+
+/** Próximo nonce da conta, contando as transações já na fila do nó (`system_accountNextIndex`). */
+export async function accountNextIndex(rpc: LunesRpc, address: string): Promise<number> {
+  const n = await rpc.call<number>('system_accountNextIndex', [lunesAddress(address)]);
+  if (!Number.isInteger(n) || n < 0) throw new Error('O nó devolveu um nonce inválido.');
+  return n;
+}
+
+export interface FeeInfo {
+  /** Taxa estimada em planck (na Lunes: só a parte por byte, 1 000 planck/byte). */
+  partialFee: bigint;
+  class: string;
+}
+const bigOf = (v: unknown): bigint => {
+  if (typeof v === 'number') return BigInt(v);
+  if (typeof v === 'string') return v.startsWith('0x') ? leUint(fromHex(v).reverse(), 0, fromHex(v).length) : BigInt(v);
+  throw new Error('O nó devolveu uma taxa em formato desconhecido.');
+};
+
+/** Taxa de um extrinsic assinado (`payment_queryInfo`), no bloco `at` ou no melhor. */
+export async function paymentQueryInfo(rpc: LunesRpc, extrinsic: string | Uint8Array, at?: string): Promise<FeeInfo> {
+  const hex = hexOf(extrinsic);
+  if (at !== undefined && !isHash(at)) throw new Error('Hash de bloco inválido (0x + 64 hex).');
+  const r = await rpc.call<{ partialFee: unknown; class?: string }>('payment_queryInfo', at ? [hex, at] : [hex]);
+  return { partialFee: bigOf(r.partialFee), class: r.class ?? '' };
+}
+
+/** Resultado de `TaggedTransactionQueue_validate_transaction`. */
+export type TransactionValidity =
+  | { ok: true; priority: bigint; longevity: number; propagate: boolean; provides: string[]; requires: string[] }
+  | { ok: false; kind: 'invalid' | 'unknown'; code: number; reason: string };
+
+const INVALID = ['Call', 'Payment', 'Future', 'Stale', 'BadProof', 'AncientBirthBlock', 'ExhaustsResources', 'Custom', 'BadMandatory', 'MandatoryValidation', 'BadSigner'];
+const UNKNOWN = ['CannotLookup', 'NoUnsignedValidator', 'Custom'];
+
+function compactAt(b: Uint8Array, o: number): { value: bigint; length: number } {
+  if (o >= b.length) throw new Error('Resposta curta demais.');
+  const mode = b[o]! & 3;
+  if (mode === 0) return { value: BigInt(b[o]! >>> 2), length: 1 };
+  if (mode === 1) { if (o + 2 > b.length) throw new Error('Resposta curta demais.'); return { value: BigInt((b[o]! | (b[o + 1]! << 8)) >>> 2), length: 2 }; }
+  if (mode === 2) { if (o + 4 > b.length) throw new Error('Resposta curta demais.'); return { value: leUint(b, o, 4) >> 2n, length: 4 }; }
+  const len = (b[o]! >>> 2) + 4;
+  if (o + 1 + len > b.length) throw new Error('Resposta curta demais.');
+  return { value: leUint(b, o + 1, len), length: 1 + len };
+}
+
+/**
+ * Decodifica `Result<ValidTransaction, TransactionValidityError>` (SCALE):
+ * `0x00` ‖ priority u64 ‖ requires Vec<Vec<u8>> ‖ provides Vec<Vec<u8>> ‖ longevity u64 ‖ propagate bool, ou
+ * `0x01` ‖ `0x00` Invalid(variante) | `0x01` Unknown(variante); `Custom` traz 1 byte a mais.
+ */
+export function decodeTransactionValidity(hex: string): TransactionValidity {
+  const b = fromHex(hex);
+  if (b.length < 2) throw new Error('Resposta curta demais.');
+  if (b[0] === 1) {
+    const kind = b[1];
+    if (b.length < 3) throw new Error('Resposta curta demais.');
+    const code = b[2]!;
+    if (kind === 0) return { ok: false, kind: 'invalid', code, reason: code === 7 ? `Custom(${b[3] ?? '?'})` : INVALID[code] ?? `Invalid(${code})` };
+    if (kind === 1) return { ok: false, kind: 'unknown', code, reason: code === 2 ? `Custom(${b[3] ?? '?'})` : UNKNOWN[code] ?? `Unknown(${code})` };
+    throw new Error(`Erro de validade desconhecido (${kind}).`);
+  }
+  if (b[0] !== 0) throw new Error(`Resultado de validação desconhecido (${b[0]}).`);
+  let o = 1;
+  const need = (n: number) => { if (o + n > b.length) throw new Error('Resposta curta demais.'); };
+  need(8); const priority = leUint(b, o, 8); o += 8;
+  const tags = (): string[] => {
+    const c = compactAt(b, o); o += c.length;
+    const out: string[] = [];
+    for (let i = 0n; i < c.value; i++) { const l = compactAt(b, o); o += l.length; const n = Number(l.value); need(n); out.push(toHex(b.slice(o, o + n))); o += n; }
+    return out;
+  };
+  const requires = tags(), provides = tags();
+  need(9);
+  const longevity = Number(leUint(b, o, 8)); o += 8;
+  return { ok: true, priority, longevity, propagate: b[o] === 1, provides, requires };
+}
+
+/**
+ * Pede ao runtime que valide o extrinsic SEM enviar (assinatura, nonce, era, saldo para a taxa):
+ * `state_call("TaggedTransactionQueue_validate_transaction", source ‖ xt ‖ blockHash, blockHash)`,
+ * no bloco `at` ou no último finalizado. Útil antes de enviar e nos testes sem gastar.
+ */
+export async function validateTransaction(rpc: LunesRpc, extrinsic: string | Uint8Array, at?: string): Promise<TransactionValidity> {
+  const xt = typeof extrinsic === 'string' ? fromHex(extrinsic) : extrinsic;
+  if (at !== undefined && !isHash(at)) throw new Error('Hash de bloco inválido (0x + 64 hex).');
+  const block = at ?? (await finalizedHead(rpc)).hash;
+  const blockBytes = fromHex(block);
+  const data = new Uint8Array(1 + xt.length + blockBytes.length);
+  data[0] = 1; // TransactionSource::Local
+  data.set(xt, 1); data.set(blockBytes, 1 + xt.length);
+  const r = await rpc.call<string>('state_call', ['TaggedTransactionQueue_validate_transaction', toHex(data), block]);
+  return decodeTransactionValidity(r);
+}
+
+/**
+ * Envia o extrinsic assinado (`author_submitExtrinsic`) e devolve o hash da transação. Erro do nó
+ * (ex.: 1010 "Inability to pay some fees") chega como `RpcError`, sem reenviar em outro endereço.
+ * Reenviar os MESMOS bytes depois de uma queda de rede é seguro: o nó recusa duplicata pelo hash.
+ */
+export async function submitExtrinsic(rpc: LunesRpc, extrinsic: string | Uint8Array): Promise<string> {
+  const hex = hexOf(extrinsic);
+  const h = await rpc.call<string>('author_submitExtrinsic', [hex]);
+  if (!isHash(h)) throw new Error('O nó não devolveu o hash da transação.');
+  return h;
+}
+
+/** Posição da transação no bloco (hash), -1 se não está nele, null se o nó não conhece o bloco. */
+export async function findExtrinsicInBlock(rpc: LunesRpc, blockHash: string, txHash: string): Promise<number | null> {
+  if (!isHash(blockHash)) throw new Error('Hash de bloco inválido (0x + 64 hex).');
+  if (!isHash(txHash)) throw new Error('Hash de transação inválido (0x + 64 hex).');
+  const b = await rpc.call<{ block: { extrinsics: string[] } } | null>('chain_getBlock', [blockHash]);
+  if (!b) return null;
+  const want = txHash.toLowerCase();
+  return b.block.extrinsics.findIndex(x => extrinsicHash(fromHex(x)) === want);
+}
+
+export interface FoundExtrinsic { blockNumber: number; blockHash: string; index: number; finalized: boolean }
+
+/**
+ * Procura a transação nos blocos `from..to` (ex.: do bloco da assinatura até o fim da era). Para no
+ * melhor bloco que o nó conhece. null se não está em nenhum (ainda).
+ */
+export async function findExtrinsic(rpc: LunesRpc, txHash: string, range: { from: number; to: number }): Promise<FoundExtrinsic | null> {
+  if (!isHash(txHash)) throw new Error('Hash de transação inválido (0x + 64 hex).');
+  const fin = await finalizedHead(rpc);
+  for (let n = range.from; n <= range.to; n++) {
+    const hash = await rpc.call<string | null>('chain_getBlockHash', [n]);
+    if (!hash) break;
+    const index = await findExtrinsicInBlock(rpc, hash, txHash);
+    if (index != null && index >= 0) return { blockNumber: n, blockHash: hash, index, finalized: n <= fin.number };
+  }
+  return null;
+}

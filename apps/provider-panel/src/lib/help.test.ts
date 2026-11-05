@@ -1,31 +1,39 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { LANGS, setLang } from '../i18n';
 import type { PageId } from '../types';
-import { GLOSSARY, HELP, termsOf } from './help';
+import { HELP_TERMS, TERM_IDS, glossary, help, termsOf } from './help';
 
 const PAGES: PageId[] = ['overview', 'devices', 'mesh', 'earnings', 'wallet', 'settings'];
 
-describe('ajuda por página', () => {
+// A ajuda vale em todos os idiomas do painel: cada verificação roda com cada dicionário carregado.
+describe.each(LANGS.map(l => l.code))('ajuda por página (%s)', lang => {
+  beforeAll(() => setLang(lang, { persist: false }));
+
   it('toda página explica o que mostra e o que fazer', () => {
     for (const p of PAGES) {
-      expect(HELP[p].what.length, p).toBeGreaterThan(30);
-      expect(HELP[p].todo.length, p).toBeGreaterThanOrEqual(2);
-      expect(HELP[p].terms.length, p).toBeGreaterThanOrEqual(2);
+      const h = help(p);
+      expect(h.what.length, p).toBeGreaterThan(30);
+      expect(h.todo.length, p).toBeGreaterThanOrEqual(2);
+      expect(h.terms.length, p).toBeGreaterThanOrEqual(2);
     }
   });
 
   it('os termos de cada página vêm do glossário, sem repetir', () => {
+    const all = Object.values(glossary());
     for (const p of PAGES) {
       const t = termsOf(p);
-      expect(t.length).toBe(new Set(HELP[p].terms).size);
-      for (const x of t) expect(Object.values(GLOSSARY)).toContain(x);
+      expect(t.length).toBe(new Set(HELP_TERMS[p]).size);
+      for (const x of t) expect(all).toContainEqual(x);
     }
   });
 
   it('o glossário explica cada termo em poucas palavras', () => {
-    for (const [id, g] of Object.entries(GLOSSARY)) {
-      expect(g.term.length, id).toBeGreaterThan(0);
-      expect(g.plain.length, id).toBeGreaterThan(20);
-      expect(g.plain.length, id).toBeLessThanOrEqual(220);
+    const g = glossary();
+    expect(Object.keys(g)).toEqual([...TERM_IDS]);
+    for (const [id, x] of Object.entries(g)) {
+      expect(x.term.length, id).toBeGreaterThan(0);
+      expect(x.plain.length, id).toBeGreaterThan(20);
+      expect(x.plain.length, id).toBeLessThanOrEqual(220);
     }
   });
 });

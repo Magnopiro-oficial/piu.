@@ -64,6 +64,12 @@ const MAX_ALERTS = 500;
 const MAX_LOOSE = 2000;
 
 export const OFFICIAL_NOTE = 'Publicado por um membro da comunidade. Não é aviso oficial.';
+/** Motivos de não poder publicar (`canPublish`), em pt-BR; a tela compara com estes para traduzir (`alerts.limit.*`). */
+export const LIMIT_MSG = {
+  wait: 'Espere 10 minutos entre um alerta e outro.',
+  max: `Você já tem ${MAX_ACTIVE_PER_MEMBER} alertas ativos nesta comunidade. Encerre um antes de publicar outro.`,
+  member: 'Só membros da comunidade publicam alertas.',
+} as const;
 
 export interface CommunityAlert {
   /** 32 hex (o id da mensagem de grupo). */
@@ -149,14 +155,27 @@ export function decodeAlertPayload(b: Uint8Array): WireAlert | null {
 }
 
 /** Confere o que a pessoa digitou antes de publicar. Devolve o motivo em português ou `null`. */
+/** O que falta no rascunho (código; a tela traduz), ou null. */
+export type DraftIssue = 'cat' | 'sev' | 'title' | 'titleLong' | 'textLong' | 'areaLong' | 'dur';
+export function draftIssue(d: { cat: string; sev: string; title: string; text: string; area?: string; dur: number }): DraftIssue | null {
+  if (!CATS.has(d.cat as AlertCategory)) return 'cat';
+  if (!SEVERITIES.some(s => s.id === d.sev)) return 'sev';
+  if (!d.title.trim()) return 'title';
+  if (d.title.trim().length > TITLE_MAX) return 'titleLong';
+  if (d.text.trim().length > TEXT_MAX) return 'textLong';
+  if ((d.area ?? '').trim().length > AREA_MAX) return 'areaLong';
+  if (!DURS.has(d.dur)) return 'dur';
+  return null;
+}
 export function checkDraft(d: { cat: string; sev: string; title: string; text: string; area?: string; dur: number }): string | null {
-  if (!CATS.has(d.cat as AlertCategory)) return 'Escolha uma categoria.';
-  if (!SEVERITIES.some(s => s.id === d.sev)) return 'Escolha a gravidade.';
-  if (!d.title.trim()) return 'Escreva um título curto.';
-  if (d.title.trim().length > TITLE_MAX) return `Título com até ${TITLE_MAX} caracteres.`;
-  if (d.text.trim().length > TEXT_MAX) return `Texto com até ${TEXT_MAX} caracteres.`;
-  if ((d.area ?? '').trim().length > AREA_MAX) return `Área com até ${AREA_MAX} caracteres.`;
-  if (!DURS.has(d.dur)) return 'Escolha a validade.';
+  const k = draftIssue(d);
+  if (k === 'cat') return 'Escolha uma categoria.';
+  if (k === 'sev') return 'Escolha a gravidade.';
+  if (k === 'title') return 'Escreva um título curto.';
+  if (k === 'titleLong') return `Título com até ${TITLE_MAX} caracteres.`;
+  if (k === 'textLong') return `Texto com até ${TEXT_MAX} caracteres.`;
+  if (k === 'areaLong') return `Área com até ${AREA_MAX} caracteres.`;
+  if (k === 'dur') return 'Escolha a validade.';
   return null;
 }
 
@@ -231,16 +250,16 @@ export class AlertBook {
     let active = 0;
     for (const x of this.alerts.values()) {
       if (x.id === except || x.community !== community || x.author !== author) continue;
-      if (Math.abs(at - x.at) < MIN_INTERVAL_SEC) return 'Espere 10 minutos entre um alerta e outro.';
+      if (Math.abs(at - x.at) < MIN_INTERVAL_SEC) return LIMIT_MSG.wait;
       const closed = this.closedAt(x, roster);
       if (x.at <= at && at < x.until && (closed === null || closed > at)) active++;
     }
-    return active >= MAX_ACTIVE_PER_MEMBER ? `Você já tem ${MAX_ACTIVE_PER_MEMBER} alertas ativos nesta comunidade. Encerre um antes de publicar outro.` : null;
+    return active >= MAX_ACTIVE_PER_MEMBER ? LIMIT_MSG.max : null;
   }
 
   /** Posso publicar agora? Motivo em português, ou `null`. */
   canPublish(community: string, author: string, now: number, roster: Roster): string | null {
-    if (!isIn(roster, author)) return 'Só membros da comunidade publicam alertas.';
+    if (!isIn(roster, author)) return LIMIT_MSG.member;
     return this.limitReason(community, author, now, roster);
   }
 

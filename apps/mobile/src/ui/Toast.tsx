@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ToastData } from '../data/types';
+import { useT } from '../i18n';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 import { Icon, type IconName } from './Icon';
@@ -19,6 +20,7 @@ export function Toast() {
 
 function ToastCard({ icon, av, title, body, action, coin, leaving, onPress }: ToastData & { leaving?: boolean; onPress: () => void }) {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const enter = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   const bar = useRef(new Animated.Value(1)).current;
@@ -50,7 +52,7 @@ function ToastCard({ icon, av, title, body, action, coin, leaving, onPress }: To
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
               <T size={14.5} w={650} numberOfLines={1} style={{ flex: 1 }}>{title}</T>
-              {!action && <T size={12} color={c.ink2}>agora</T>}
+              {!action && <T size={12} color={c.ink2}>{t('common.now')}</T>}
             </View>
             <T size={13.5} lh={1.35} color={c.ink2} numberOfLines={2}>{body}</T>
           </View>

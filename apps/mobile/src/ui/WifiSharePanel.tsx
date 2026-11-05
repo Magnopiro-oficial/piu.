@@ -4,6 +4,7 @@ import { View } from 'react-native';
 import { PiuAppShare, type WifiShareInfo } from '../../modules/piu-app-share';
 import { apkShareName, appShareError } from '../lib/appShare';
 import { downloadPageHtml, SHARE_PORT, SHARE_WINDOW_MS, shareTimeLeft, wifiPageUrl, wifiQr } from '../lib/wifiShare';
+import { useLang, useT } from '../i18n';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 import { requestWifiDirectPermission } from '../transport/permissions';
@@ -19,6 +20,8 @@ import { T } from './T';
  */
 export function WifiSharePanel({ onClose }: { onClose: () => void }) {
   const { c } = useTheme();
+  const t = useT();
+  const lang = useLang();
   const { showToast } = useStore();
   const [info, setInfo] = useState<WifiShareInfo | null>(null);
   const [state, setState] = useState<'opening' | 'open' | 'closed'>('opening');
@@ -30,17 +33,18 @@ export function WifiSharePanel({ onClose }: { onClose: () => void }) {
     if (!PiuAppShare) return;
     setState('opening');
     if (await requestWifiDirectPermission() !== 'granted') {
-      showToast({ icon: 'error', ...appShareError('ERR_NO_PERMISSION') });
+      showToast({ icon: 'error', ...appShareError('ERR_NO_PERMISSION', t) });
       if (alive.current) setState('closed');
       return;
     }
     const file = apkShareName(Constants.expoConfig?.version ?? '');
     try {
-      const r = await PiuAppShare.startWifiShare(file, downloadPageHtml(file, PiuAppShare.apkSize()), SHARE_PORT, SHARE_WINDOW_MS);
+      // A página é lida pela outra pessoa: sai no idioma de quem envia.
+      const r = await PiuAppShare.startWifiShare(file, downloadPageHtml(file, PiuAppShare.apkSize(), lang), SHARE_PORT, SHARE_WINDOW_MS);
       if (!alive.current) { void PiuAppShare.stopWifiShare(); return; }
       setInfo(r); setStartedAt(Date.now()); setNow(Date.now()); setState('open');
     } catch (e) {
-      showToast({ icon: 'error', ...appShareError((e as { code?: string })?.code ?? '') });
+      showToast({ icon: 'error', ...appShareError((e as { code?: string })?.code ?? '', t) });
       if (alive.current) setState('closed');
     }
   };
@@ -55,12 +59,12 @@ export function WifiSharePanel({ onClose }: { onClose: () => void }) {
   // Contagem dos 10 min; no fim, a rede já fechou no nativo.
   useEffect(() => {
     if (state !== 'open') return;
-    const t = setInterval(() => {
+    const timer = setInterval(() => {
       const n = Date.now();
       setNow(n);
       if (n - startedAt >= SHARE_WINDOW_MS) setState('closed');
     }, 1000);
-    return () => clearInterval(t);
+    return () => clearInterval(timer);
   }, [state, startedAt]);
 
   const close = () => { void PiuAppShare?.stopWifiShare(); onClose(); };
@@ -71,36 +75,36 @@ export function WifiSharePanel({ onClose }: { onClose: () => void }) {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         <Icon name={state === 'open' ? 'wifi_tethering' : 'portable_wifi_off'} size={18} />
         <T size={13.5} w={600} style={{ flex: 1 }}>
-          {state === 'opening' ? 'Abrindo a rede Wi-Fi Direct…' : state === 'open' ? `Rede aberta · fecha em ${shareTimeLeft(startedAt, now)}` : 'Rede fechada'}
+          {state === 'opening' ? t('wifiShare.opening') : state === 'open' ? t('wifiShare.open', { left: shareTimeLeft(startedAt, now) }) : t('wifiShare.closed')}
         </T>
       </View>
       {state === 'open' && info && (
         <>
-          <T size={12.5} w={600}>1 · No celular dela, entre nesta rede</T>
+          <T size={12.5} w={600}>{t('wifiShare.step1')}</T>
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-            <QrCode value={wifiQr(info.ssid, info.passphrase)} size={124} radius={14} label="QR para entrar na rede Wi-Fi" />
+            <QrCode value={wifiQr(info.ssid, info.passphrase)} size={124} radius={14} label={t('wifiShare.qrNetwork')} />
             <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
-              <T size={11.5} color={c.ink2}>Rede</T>
+              <T size={11.5} color={c.ink2}>{t('wifiShare.network')}</T>
               <T size={13} w={600} mono selectable>{info.ssid}</T>
-              <T size={11.5} color={c.ink2}>Senha</T>
+              <T size={11.5} color={c.ink2}>{t('wifiShare.password')}</T>
               <T size={15} w={650} mono selectable>{info.passphrase}</T>
             </View>
           </View>
-          <T size={12} lh={1.4} color={c.ink2}>Ela aponta a câmera para o código, ou escolhe a rede no Wi-Fi e digita a senha. Se o celular avisar que a rede não tem internet, toque em manter conectado.</T>
-          <T size={12.5} w={600}>2 · Ela abre a página e baixa o Piu</T>
+          <T size={12} lh={1.4} color={c.ink2}>{t('wifiShare.step1.hint')}</T>
+          <T size={12.5} w={600}>{t('wifiShare.step2')}</T>
           <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center' }}>
-            <QrCode value={url} size={96} radius={12} label="QR da página para baixar o Piu" />
+            <QrCode value={url} size={96} radius={12} label={t('wifiShare.qrPage')} />
             <View style={{ flex: 1, gap: 4, minWidth: 0 }}>
-              <T size={11.5} color={c.ink2}>No navegador</T>
+              <T size={11.5} color={c.ink2}>{t('wifiShare.inBrowser')}</T>
               <T size={13.5} w={600} mono selectable>{url}</T>
             </View>
           </View>
-          <T size={12} lh={1.4} color={c.ink2}>Toque em "Baixar o Piu", abra o arquivo e permita a instalação quando o Android pedir. Depois, ela escaneia o seu código de convite.</T>
+          <T size={12} lh={1.4} color={c.ink2}>{t('wifiShare.step2.hint')}</T>
         </>
       )}
       <View style={{ flexDirection: 'row', gap: 8 }}>
-        {state === 'closed' && <Button label="Abrir de novo" height={42} fontSize={13.5} style={{ flex: 1 }} onPress={() => void open()} />}
-        <Button label="Fechar a rede" variant="outline" height={42} fontSize={13.5} style={{ flex: 1 }} onPress={close} />
+        {state === 'closed' && <Button label={t('wifiShare.reopen')} height={42} fontSize={13.5} style={{ flex: 1 }} onPress={() => void open()} />}
+        <Button label={t('wifiShare.closeNetwork')} variant="outline" height={42} fontSize={13.5} style={{ flex: 1 }} onPress={close} />
       </View>
     </View>
   );

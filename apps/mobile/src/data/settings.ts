@@ -1,31 +1,32 @@
 // Perfil, segurança e ajustes, notificações (design/PiuApp.dc.html): textos e opções.
 // Aparelhos vêm do registro real (lib/devices.ts) e o armazenamento é medido (lib/storageUsage.ts).
+import type { Key } from '../i18n/core';
 import type { IconName } from '../ui/Icon';
 
-export const PROFILE_NOTES = {
-  public: 'Perfil público. Quem tem o seu código, ou vê você em Por perto, vê este nome.',
-  anon: 'Chaves e contatos separados. Sem vínculo público com seu perfil.',
-};
+// Textos do Perfil (notas das identidades) e da pré-visualização ficam no dicionário (src/i18n, `profile.note.*`, `notif.preview.hint.*`).
 
 // ── backup ───────────────────────────────────────────────
 export type SaveOpt = 'sd' | 'device' | 'paper';
-export const SAVE_OPTS: [SaveOpt, IconName, string, string][] = [
-  ['sd', 'sd_card', 'Arquivo cifrado no cartão SD ou pendrive', 'Sem nuvem · protegido pela frase'],
-  ['device', 'devices', 'Outro aparelho seu, por perto', 'Cópia direta, cifrada'],
-  ['paper', 'edit_note', 'Só a frase, no papel', 'Recupera chaves, não o histórico'],
+/** Título e descrição são chaves do dicionário (`backup.save.*`). */
+export const SAVE_OPTS: [SaveOpt, IconName, Key, Key][] = [
+  ['sd', 'sd_card', 'backup.save.sd', 'backup.save.sd.desc'],
+  ['device', 'devices', 'backup.save.device', 'backup.save.device.desc'],
+  ['paper', 'edit_note', 'backup.save.paper', 'backup.save.paper.desc'],
 ];
 
 // ── restaurar / migrar ───────────────────────────────────
 export type RestoreMode = 'device' | 'phrase' | 'file';
-export const RESTORE_OPTS: [RestoreMode, IconName, string, string][] = [
-  ['device', 'phonelink_ring', 'De outro aparelho seu, por perto', 'O celular antigo ainda liga. Transferência direta, cifrada.'],
-  ['phrase', 'password', 'Com a frase de 12 palavras', 'Recupera chaves e carteira. O histórico não vem.'],
-  ['file', 'sd_card', 'De um arquivo de backup', 'Cartão SD, pendrive ou outro aparelho.'],
+/** Título e descrição são chaves do dicionário (`restore.opt.*`). */
+export const RESTORE_OPTS: [RestoreMode, IconName, Key, Key][] = [
+  ['device', 'phonelink_ring', 'restore.opt.device', 'restore.opt.device.desc'],
+  ['phrase', 'password', 'restore.opt.phrase', 'restore.opt.phrase.desc'],
+  ['file', 'sd_card', 'restore.opt.file', 'restore.opt.file.desc'],
 ];
-export const MIG_META: Record<RestoreMode, { title: string; sub: string; icon: IconName; label: string; done: string }> = {
-  device: { title: 'Transferindo do aparelho antigo', sub: 'Direto entre os dois aparelhos, cifrado. Nada passa por servidor.', icon: 'phone_android', label: 'aparelho antigo', done: 'O aparelho antigo foi desconectado e as chaves de sessão foram trocadas.' },
-  phrase: { title: 'Recuperando pela frase', sub: 'As chaves são recriadas a partir das 12 palavras, neste aparelho.', icon: 'password', label: 'frase', done: 'Os contatos não vêm com a frase. Quem você adicionar de novo nos próximos 7 dias recebe um aviso assinado de troca de aparelho.' },
-  file: { title: 'Restaurando do arquivo', sub: 'Arquivo .piu cifrado com a sua senha.', icon: 'sd_card', label: 'arquivo', done: 'Os contatos do arquivo recebem um aviso assinado de troca de aparelho quando houver rota. O código de segurança de vocês não muda.' },
+/** Textos da migração por modo: chaves do dicionário (`migrate.<modo>.*`). */
+export const MIG_META: Record<RestoreMode, { title: Key; sub: Key; icon: IconName; label: Key; done: Key }> = {
+  device: { title: 'migrate.device.title', sub: 'migrate.device.sub', icon: 'phone_android', label: 'migrate.device.label', done: 'migrate.device.done' },
+  phrase: { title: 'migrate.phrase.title', sub: 'migrate.phrase.sub', icon: 'password', label: 'migrate.phrase.label', done: 'migrate.phrase.done' },
+  file: { title: 'migrate.file.title', sub: 'migrate.file.sub', icon: 'sd_card', label: 'migrate.file.label', done: 'migrate.file.done' },
 };
 
 // ── aparelhos ────────────────────────────────────────────
@@ -37,6 +38,7 @@ export interface MyDevice { id: string; icon: IconName; name: string; desc: stri
 export const MY_DEVICES: MyDevice[] = [{ id: 'this', icon: 'smartphone', name: 'Este aparelho', desc: '', tag: 'atual', current: true }];
 
 // ── notificações ─────────────────────────────────────────
+// Nome e descrição de cada tipo ficam no dicionário (`notif.type.<chave>` e `.desc`); aqui, só a ordem e o ícone.
 export type NotifKey = 'msg' | 'group' | 'channel' | 'nearby' | 'wallet' | 'network' | 'alert';
 export const NOTIF_TYPES: [NotifKey, IconName, string, string][] = [
   ['msg', 'chat_bubble', 'Conversas', 'Mensagens diretas'], ['group', 'group', 'Grupos', 'Só menções acima de 20 mensagens/h'],
@@ -45,8 +47,3 @@ export const NOTIF_TYPES: [NotifKey, IconName, string, string][] = [
   ['alert', 'warning', 'Alertas da comunidade', 'Grave toca alto; Atenção avisa normal; Informativo só na lista'],
 ];
 export type Preview = 'always' | 'unlocked' | 'never';
-export const PREVIEW_HINT: Record<Preview, string> = {
-  always: 'Nome e mensagem aparecem também na tela bloqueada.',
-  unlocked: 'Na tela bloqueada aparece só “Piu · Nova mensagem”.',
-  never: 'Nunca mostra remetente nem conteúdo, nem com o aparelho desbloqueado.',
-};

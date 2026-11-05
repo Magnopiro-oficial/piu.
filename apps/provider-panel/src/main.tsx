@@ -7,10 +7,12 @@ import '@fontsource/geist-mono/600.css';
 import 'material-symbols/rounded.css';
 import './styles.css';
 import { App } from './App';
+import { initI18n } from './i18n';
 import { NodeProvider } from './state/node';
 import { StoreProvider } from './state/store';
 
-createRoot(document.getElementById('root')!).render(
+// O dicionário do idioma detectado carrega antes da primeira renderização (sem piscar em pt-BR).
+void initI18n().then(() => createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <NodeProvider>
       <StoreProvider>
@@ -18,4 +20,4 @@ createRoot(document.getElementById('root')!).render(
       </StoreProvider>
     </NodeProvider>
   </StrictMode>,
-);
+));

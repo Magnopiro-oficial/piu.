@@ -3,7 +3,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { test } from 'node:test';
 // @ts-expect-error: script .mjs sem declaração de tipos
-import { DST, FILES, generate, SRC } from '../scripts/sync-lunes.mjs';
+import { DST, FILES, generate, SRC, I18N_DST, I18N_FILES, generateI18n } from '../scripts/sync-lunes.mjs';
 import { buildApp } from '../src/app.js';
 import { type Config, loadConfig } from '../src/config.js';
 import { fromHex, LUNES_ENDPOINTS, LunesRpc, accountBalance, systemAccountKey } from '../src/lunes/lunesRpc.js';
@@ -19,6 +19,9 @@ test('src/lunes é cópia fiel de apps/mobile/src/lib (rode `node scripts/sync-l
   if (!existsSync(SRC)) { t.skip('apps/mobile não está presente (build isolado do piu-node)'); return; }
   for (const f of FILES as string[]) {
     assert.equal(readFileSync(join(DST as string, `${f}.ts`), 'utf8'), (generate as (n: string) => string)(f), `src/lunes/${f}.ts desatualizado`);
+  }
+  for (const f of I18N_FILES as string[]) {
+    assert.equal(readFileSync(join(I18N_DST as string, `${f}.ts`), 'utf8'), (generateI18n as (n: string) => string)(f), `src/i18n/${f}.ts desatualizado`);
   }
 });
 

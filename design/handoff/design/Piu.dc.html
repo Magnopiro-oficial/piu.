@@ -1,0 +1,548 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="brand/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="brand/apple-touch-icon.png">
+
+<meta name="design_doc_mode" content="canvas">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>body{margin:0;background:#e9e8e4;color:#111;font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased}a{color:#111}a:hover{color:#555}*{box-sizing:border-box}</style>
+</helmet>
+<div style="padding:56px 64px 96px;display:flex;flex-direction:column;gap:32px;min-width:1040px;">
+  <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:40px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:10px;">
+      <div style="font-size:64px;font-weight:750;letter-spacing:-0.07em;line-height:.9;">piu<span style="color:#9a9a96;">.</span></div>
+      <div style="font-size:15px;color:#555;max-width:560px;line-height:1.45;text-wrap:pretty;">Mensageiro descentralizado da Lunes Network — funciona sem internet, por Bluetooth, Wi-Fi local e rádio. Protótipo interativo nas versões clara e escura.</div>
+    </div>
+    <div style="font:400 12px 'Geist Mono',monospace;color:#666;line-height:1.6;max-width:360px;">Toque nas mensagens para ver a rota · envie uma mensagem para ver os estados · troque a identidade pública/anônima no topo de Conversas</div>
+  </div>
+  <sc-if value="{{ isIndex }}" hint-placeholder-val="{{ false }}">
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;">
+      <sc-for list="{{ navLinks }}" as="l" hint-placeholder-count="8">
+        <a href="{{ l.href }}" style="display:flex;flex-direction:column;gap:10px;padding:20px;border-radius:20px;background:#fff;text-decoration:none;color:#111;box-shadow:0 0 0 1px rgba(0,0,0,.08);" style-hover="box-shadow:0 0 0 1.5px #111;">
+          <span style="font:500 12px 'Geist Mono',monospace;color:#777;">{{ l.n }}</span>
+          <span style="font-size:18px;font-weight:650;letter-spacing:-0.02em;">{{ l.label }}</span>
+          <span style="font-size:13px;color:#555;line-height:1.4;">{{ l.d }}</span>
+        </a>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ notIndex }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+      <a href="Piu.dc.html" style="height:32px;padding:0 12px;border-radius:16px;display:flex;align-items:center;font:500 12.5px Geist;color:#555;text-decoration:none;">← Índice</a>
+      <sc-for list="{{ navLinks }}" as="l" hint-placeholder-count="8">
+        <a href="{{ l.href }}" style="height:32px;padding:0 13px;border-radius:16px;display:flex;align-items:center;gap:6px;font:500 12.5px Geist;text-decoration:none;background:{{ l.bg }};color:{{ l.fg }};box-shadow:0 0 0 1px {{ l.border }};"><span style="font-family:'Geist Mono',monospace;opacity:.6;">{{ l.n }}</span>{{ l.label }}</a>
+      </sc-for>
+    </div>
+  </sc-if>
+  <sc-if value="{{ show.sec }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#111;color:#fff;border-radius:5px;">NOVO</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Segurança, grupos, arquivos e ajustes</span>
+    </div>
+    <div style="font-size:14px;color:#555;max-width:760px;line-height:1.45;">Lacunas da revisão da documentação. Os botões controlam os dois celulares.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <sc-for list="{{ secChips }}" as="c" hint-placeholder-count="13">
+        <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">CLARO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="backup" jump="{{ jumpS }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">ESCURO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="privacy" jump="{{ jumpS }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:16px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">RASTREABILIDADE COM O DOCUMENTO</div>
+        <sc-for list="{{ secNotes }}" as="n" hint-placeholder-count="7">
+          <div style="display:flex;gap:12px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 11.5px 'Geist Mono',monospace;color:#777;padding-top:2px;min-width:58px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;"><div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div><div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</sc-if>
+<sc-if value="{{ show.desk }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">ANTERIOR</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Piu Provider · painel para computador</span>
+    </div>
+    <div style="font-size:14px;color:#555;max-width:760px;line-height:1.45;">Servido pelo próprio Gateway na rede local (piu-node.local), sem internet. Os dois painéis abaixo são o mesmo produto em claro e escuro — os botões controlam ambos.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <sc-for list="{{ deskChips }}" as="c" hint-placeholder-count="10">
+        <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:48px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">CLARO</div>
+        <div style="box-shadow:0 40px 80px -30px rgba(0,0,0,.35);border-radius:14px;">
+          <dc-import name="PiuProviderDesktop" theme="light" jump="{{ jumpD }}" hint-size="1280px,820px"></dc-import>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">ESCURO</div>
+        <div style="box-shadow:0 40px 80px -30px rgba(0,0,0,.45);border-radius:14px;">
+          <dc-import name="PiuProviderDesktop" theme="dark" jump="{{ jumpD }}" hint-size="1280px,820px"></dc-import>
+        </div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.prov }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">ANTERIOR</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Piu Provider · roteadores, antenas e gateways</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font:500 11px 'Geist Mono',monospace;color:#777;width:92px;">A · ADESÃO</span>
+        <sc-for list="{{ provChipsA }}" as="c" hint-placeholder-count="5">
+          <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font:500 11px 'Geist Mono',monospace;color:#777;width:92px;">B · OPERAÇÃO</span>
+        <sc-for list="{{ provChipsB }}" as="c" hint-placeholder-count="4">
+          <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">A · TORNAR-SE PROVIDER</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="provIntro" jump="{{ jumpPA }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">B · PAINEL, EQUIPAMENTOS E GANHOS</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="provider" jump="{{ jumpPB }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:16px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">EQUIPAMENTOS ACEITOS</div>
+        <sc-for list="{{ provHw }}" as="n" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;min-width:18px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="height:10px;"></div>
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">COMO O PROVIDER GANHA</div>
+        <sc-for list="{{ provEarnNotes }}" as="n" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;padding-bottom:14px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;min-width:18px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="font:400 11.5px 'Geist Mono',monospace;color:#777;line-height:1.5;">Taxas de crédito ilustrativas · modelo econômico em aberto (doc. 18.2).</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.alerts }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">ANTERIOR</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Alertas, notificações e micro animações</span>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:8px;">
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font:500 11px 'Geist Mono',monospace;color:#777;width:92px;">A · DISPARAR</span>
+        <sc-for list="{{ alertChipsA }}" as="c" hint-placeholder-count="9">
+          <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
+        <span style="font:500 11px 'Geist Mono',monospace;color:#777;width:92px;">B · ABRIR</span>
+        <sc-for list="{{ alertChipsB }}" as="c" hint-placeholder-count="6">
+          <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">A · NO APP · BANNERS E ALERTAS</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="chats" jump="{{ jumpAl }}" notify="{{ notifyA }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">B · SISTEMA · TELA BLOQUEADA E DIÁLOGOS</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="lock" jump="{{ jumpBl }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">HIERARQUIA DE ALERTAS</div>
+        <sc-for list="{{ alertLevels }}" as="n" hint-placeholder-count="4">
+          <div style="display:flex;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;padding-top:14px;">MOVIMENTO</div>
+        <div style="display:flex;flex-direction:column;">
+          <sc-for list="{{ motion }}" as="m" hint-placeholder-count="7">
+            <div style="display:flex;align-items:baseline;gap:12px;padding:9px 0;border-bottom:1px solid rgba(0,0,0,.09);">
+              <div style="flex:1;font-size:13.5px;font-weight:550;">{{ m.t }}</div>
+              <div style="font:400 12px 'Geist Mono',monospace;color:#666;text-align:right;">{{ m.v }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="font-size:12.5px;color:#666;line-height:1.45;">Com “Reduzir movimento” ativo no sistema, tudo vira transição instantânea.</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.near }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">ANTERIOR</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Por perto · convite pago para conversar</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <sc-for list="{{ nearChips }}" as="c" hint-placeholder-count="5">
+        <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;display:flex;align-items:center;gap:8px;"><span style="font:500 10.5px 'Geist Mono',monospace;opacity:.6;">{{ c.side }}</span>{{ c.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">A · QUEM SE INTERESSA</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.2);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="nearby" jump="{{ jumpNA }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">B · QUEM RECEBE O CONVITE</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="requests" jump="{{ jumpNB }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">SEGURANÇA E TAXA</div>
+        <sc-for list="{{ nearNotes }}" as="n" hint-placeholder-count="6">
+          <div style="display:flex;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.wallet }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">APROVADO</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Carteira LUNES</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <sc-for list="{{ walletChips }}" as="c" hint-placeholder-count="6">
+        <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">CLARO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.2);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="wallet" jump="{{ jumpW }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">ESCURO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="referrals" jump="{{ jumpW2 }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">REGRAS E ANTIFRAUDE</div>
+        <sc-for list="{{ walletNotes }}" as="n" hint-placeholder-count="5">
+          <div style="display:flex;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+        <div style="font:400 11.5px 'Geist Mono',monospace;color:#777;line-height:1.5;">Valores ilustrativos — orçamento e limites dependem do modelo econômico (doc. 18.2).</div>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.invite }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;flex-direction:column;gap:24px;padding:32px 0 48px;border-top:1px solid rgba(0,0,0,.1);border-bottom:1px solid rgba(0,0,0,.1);">
+    <div style="display:flex;align-items:baseline;gap:12px;">
+      <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">APROVADO</span>
+      <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Convite com distribuição P2P</span>
+    </div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;">
+      <sc-for list="{{ flowChips }}" as="c" hint-placeholder-count="8">
+        <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;display:flex;align-items:center;gap:8px;"><span style="font:500 10.5px 'Geist Mono',monospace;opacity:.6;">{{ c.side }}</span>{{ c.label }}</button>
+      </sc-for>
+    </div>
+    <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">A · QUEM CONVIDA</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.2);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="invite" jump="{{ jumpA }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">B · QUEM RECEBE</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="recvPage" jump="{{ jumpB }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+      <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding-top:34px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">COMO FICA SEGURO</div>
+        <sc-for list="{{ flowNotes }}" as="n" hint-placeholder-count="5">
+          <div style="display:flex;gap:12px;padding-bottom:16px;border-bottom:1px solid rgba(0,0,0,.09);">
+            <div style="font:500 12px 'Geist Mono',monospace;color:#777;padding-top:2px;">{{ n.i }}</div>
+            <div style="display:flex;flex-direction:column;gap:4px;">
+              <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+              <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+            </div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+  </sc-if>
+<sc-if value="{{ show.base }}" hint-placeholder-val="{{ false }}">
+  <div style="display:flex;align-items:baseline;gap:12px;">
+    <span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:rgba(0,0,0,.08);color:#111;border-radius:5px;">APROVADO</span>
+    <span style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Base do aplicativo</span>
+  </div>
+  <div style="display:flex;flex-wrap:wrap;gap:6px;">
+    <sc-for list="{{ chips }}" as="c" hint-placeholder-count="12">
+      <button onClick="{{ c.go }}" style="height:34px;padding:0 14px;border-radius:17px;border:1px solid {{ c.border }};background:{{ c.bg }};color:{{ c.fg }};font:500 13px Geist,system-ui;cursor:pointer;">{{ c.label }}</button>
+    </sc-for>
+  </div>
+  <div style="display:flex;gap:72px;flex-wrap:wrap;align-items:flex-start;">
+    <sc-if value="{{ showLight }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">CLARO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.35),0 0 0 1px rgba(0,0,0,.2);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);">
+            <dc-import name="PiuApp" start="{{ start }}" jump="{{ jump }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ showDark }}" hint-placeholder-val="{{ true }}">
+      <div style="display:flex;flex-direction:column;gap:16px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">ESCURO</div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#1c1c1c;box-shadow:0 40px 80px -30px rgba(0,0,0,.45),0 0 0 1px rgba(0,0,0,.4);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);">
+            <dc-import name="PiuApp" start="{{ start }}" jump="{{ jump }}" hint-size="390px,844px"></dc-import>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+    <div style="flex:1;min-width:260px;max-width:340px;display:flex;flex-direction:column;gap:18px;padding-top:34px;">
+      <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:0.06em;color:#555;">DECISÕES</div>
+      <sc-for list="{{ notes }}" as="n" hint-placeholder-count="5">
+        <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:16px;border-bottom:1px solid rgba(0,0,0,.09);">
+          <div style="font-size:14.5px;font-weight:600;">{{ n.t }}</div>
+          <div style="font-size:13.5px;color:#555;line-height:1.45;text-wrap:pretty;">{{ n.d }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;both&quot;,&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;both&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;startScreen&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;welcome&quot;,&quot;chats&quot;,&quot;network&quot;,&quot;rewards&quot;,&quot;profile&quot;],&quot;default&quot;:&quot;chats&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;section&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;index&quot;,&quot;base&quot;,&quot;invite&quot;,&quot;wallet&quot;,&quot;near&quot;,&quot;alerts&quot;,&quot;prov&quot;,&quot;desk&quot;,&quot;sec&quot;],&quot;default&quot;:&quot;index&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { jump: null, cur: null, jumpA: null, jumpB: null, curF: null, jumpW: null, jumpW2: null, curW: null, jumpNA: null, jumpNB: null, curN: null, notifyA: null, jumpAl: null, jumpBl: null, curAl: null, jumpPA: null, jumpPB: null, curP: null, jumpD: null, curD: null, jumpS: null, curS: null };
+  renderVals() {
+    const sec = this.props.section || 'index';
+    const files = [['base', 'Piu 1 Base do app', 'Base do app', 'Onboarding, conversas, rota, rede, perfil'], ['invite', 'Piu 2 Convite P2P', 'Convite P2P', 'Enviar o app de celular para celular'],
+      ['wallet', 'Piu 3 Carteira', 'Carteira LUNES', 'Saldo, bônus e indicação direta'], ['near', 'Piu 4 Por perto', 'Por perto', 'Convite pago para conversar'],
+      ['alerts', 'Piu 5 Alertas e animacoes', 'Alertas e animações', 'Banners, diálogos, tela bloqueada'], ['prov', 'Piu 6 Provider celular', 'Provider · celular', 'Equipamentos, teste real, ganhos'],
+      ['desk', 'Piu 7 Provider computador', 'Provider · computador', 'Painel local servido pelo gateway'], ['sec', 'Piu 8 Seguranca e ajustes', 'Segurança e ajustes', 'Backup, grupos, canais, arquivos, diagnóstico']];
+    const navLinks = files.map(([k, file, label, d], i) => ({ n: String(i + 1).padStart(2, '0'), label, d, href: encodeURI(file + '.dc.html'),
+      bg: k === sec ? '#111' : '#fff', fg: k === sec ? '#fff' : '#111', border: k === sec ? '#111' : 'rgba(0,0,0,.1)' }));
+    const show = {}; files.forEach(([k]) => { show[k] = sec === k; });
+    const secChips = [['backup', 'Backup das chaves'], ['restore', 'Restaurar'], ['migrate', 'Migrar aparelho'], ['myDevices', 'Aparelhos'], ['contact', 'Verificar contato'], ['groupInfo', 'Admin do grupo'],
+      ['newChannel', 'Criar canal'], ['fileSend', 'Arquivo em blocos'], ['privacy', 'Privacidade'], ['storage', 'Armazenamento'], ['battery', 'Bateria e limites'], ['diagnostics', 'Diagnóstico'], ['provAp', 'Provider · roteador comum']]
+      .map(([k, l]) => { const on = this.state.curS === k; return { label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => ({ curS: k, jumpS: { screen: k, n: ((s.jumpS && s.jumpS.n) || 0) + 1 } })) }; });
+    const deskChips = [['overview', 'Visão geral'], ['devices', 'Equipamentos'], ['detail', 'Detalhe do equipamento'], ['mesh', 'Malha'], ['earnings', 'Ganhos'], ['wallet', 'Carteira'], ['sign', 'Assinar no celular'],
+      ['settings', 'Configurações'], ['wizard', 'Adicionar · equipamento'], ['wizPair', 'Adicionar · parear'], ['wizTest', 'Adicionar · teste']].map(([k, l]) => { const on = this.state.curD === k;
+      return { label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)', go: () => this.setState(s => ({ curD: k, jumpD: { screen: k, n: ((s.jumpD && s.jumpD.n) || 0) + 1 } })) }; });
+    const pChip = (side, k, l) => { const id = side + k, key = side === 'A' ? 'jumpPA' : 'jumpPB', on = this.state.curP === id;
+      return { label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => ({ curP: id, [key]: { screen: k, n: ((s[key] && s[key].n) || 0) + 1 } })) }; };
+    const provChipsA = [['provIntro', 'Introdução'], ['provAdd', 'Escolher equipamento'], ['provConnect', 'Conectar e parear'], ['provTest', 'Teste real'], ['provConfig', 'Regras e carteira']].map(([k, l]) => pChip('A', k, l));
+    const provChipsB = [['provider', 'Painel'], ['provDevice', 'Equipamento'], ['provEarnings', 'Ganhos e lotes'], ['dlg:revoke', 'Revogar credencial']].map(([k, l]) => pChip('B', k, l));
+    const chipSt = on => ({ bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)' });
+    const alertChipsA = [['demoSend', 'Enviar mensagem'], ['msg', 'Nova mensagem'], ['delivered', 'Entregue após fila'], ['invite', 'Pedido de conversa'], ['lunes', 'LUNES recebido'],
+      ['node', 'Novo nó'], ['expired', 'Mensagem expirou'], ['offline', 'Saiu da malha'], ['emergency', 'Alerta de emergência']].map(([k, l]) => ({ label: l, ...chipSt(this.state.curAl === 'A' + k),
+      go: () => this.setState(s => ({ curAl: 'A' + k, notifyA: { type: k, n: ((s.notifyA && s.notifyA.n) || 0) + 1 } })) }));
+    const alertChipsB = [['lock', 'Tela bloqueada'], ['lockPrivate', 'Conteúdo oculto'], ['notifSettings', 'Configurar notificações'], ['dlg:delete', 'Apagar dados · segurar'],
+      ['dlg:battery', 'Bateria baixa'], ['dlg:backup', 'Lembrete de backup']].map(([k, l]) => ({ label: l, ...chipSt(this.state.curAl === 'B' + k),
+      go: () => this.setState(s => ({ curAl: 'B' + k, jumpBl: { screen: k, n: ((s.jumpBl && s.jumpBl.n) || 0) + 1 } })) }));
+    const nDefs = [['A', 'nearby', 'Por perto'], ['A', 'nearProfile', 'Perfil público'], ['A', 'nearInvite', 'Enviar convite'], ['B', 'requests', 'Pedidos'], ['B', 'match', 'Conversa aberta']];
+    const nearChips = nDefs.map(([side, k, l]) => {
+      const id = side + k, on = this.state.curN === id, key = side === 'A' ? 'jumpNA' : 'jumpNB';
+      return { side, label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => ({ curN: id, [key]: { screen: k, n: ((s[key] && s[key].n) || 0) + 1 } })) };
+    });
+    const wDefs = [['wallet', 'Saldo'], ['send', 'Enviar'], ['receive', 'Receber'], ['referrals', 'Convidados'], ['rewards', 'Créditos de rede']];
+    const walletChips = wDefs.map(([k, l]) => {
+      const on = this.state.curW === k;
+      return { label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => { const j = { screen: k, n: ((s.jumpW && s.jumpW.n) || 0) + 1 }; return { curW: k, jumpW: j, jumpW2: j }; }) };
+    });
+    const flowDefs = [['A', 'invite', 'Convidar'], ['A', 'share', 'Compartilhar o app'], ['B', 'recvPage', 'Página local'], ['B', 'verify', 'Verificação'], ['B', 'accept', 'Aceitar convite'], ['B', 'identity', 'Criar identidade']];
+    const flowChips = flowDefs.map(([side, k, l]) => {
+      const id = side + k, on = this.state.curF === id, key = side === 'A' ? 'jumpA' : 'jumpB';
+      return { side, label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => ({ curF: id, [key]: { screen: k, n: ((s[key] && s[key].n) || 0) + 1 } })) };
+    });
+    const defs = [['welcome', 'Boas-vindas'], ['identity', 'Identidade'], ['keys', 'Chaves'], ['chats', 'Conversas'], ['chat', 'Conversa'], ['route', 'Rota da mensagem'],
+      ['queue', 'Fila offline'], ['group', 'Grupo'], ['channel', 'Canal'], ['community', 'Comunidade'], ['new', 'Nova conversa'], ['nearby', 'Por perto'], ['invite', 'Convidar'], ['network', 'Rede / modo nó'], ['wallet', 'Carteira'], ['rewards', 'Créditos'], ['profile', 'Perfil']];
+    const chips = defs.map(([k, l]) => {
+      const on = this.state.cur === k;
+      return { label: l, bg: on ? '#111' : '#fff', fg: on ? '#fff' : '#111', border: on ? '#111' : 'rgba(0,0,0,.12)',
+        go: () => this.setState(s => ({ cur: k, jump: { screen: k, n: ((s.jump && s.jump.n) || 0) + 1 } })) };
+    });
+    const layout = this.props.layout ?? 'both';
+    return {
+      show, navLinks, isIndex: sec === 'index', notIndex: sec !== 'index', secChips, jumpS: this.state.jumpS,
+      secNotes: [
+        { i: 'FUN-009', t: 'Arquivos em blocos', d: 'Envio fragmentado; pausa quando a rota vira LoRa, retoma de onde parou e confere a integridade.' },
+        { i: 'FUN-006', t: 'Administração de grupo', d: 'Membros, papéis, convite com aprovação e troca de chave ao remover alguém.' },
+        { i: 'FUN-007', t: 'Canais', d: 'Público, privado ou secreto; quem publica e com qual identidade.' },
+        { i: 'FUN-017', t: 'Limites do nó', d: 'Bateria, dados locais, armazenamento, banda e horários.' },
+        { i: 'NFR-008', t: 'Diagnóstico local', d: 'Entrega, latência, fila e expiradas por transporte e saltos, sem telemetria.' },
+        { i: '§9 · 18.2', t: 'Chaves e aparelhos', d: 'Frase de 12 palavras, migração direta, revogação de aparelho perdido e verificação de contato.' },
+        { i: 'INF-002', t: 'Roteador comum', d: 'Ponto de Acesso no celular, com nome piu.* assinado pela chave do operador.' },
+      ],
+      deskChips, jumpD: this.state.jumpD,
+      provChipsA, provChipsB, jumpPA: this.state.jumpPA, jumpPB: this.state.jumpPB,
+      provHw: [
+        { i: 'HN', t: 'Home Node', d: 'Roteador com OpenWrt (beta) ou computador Linux / Raspberry Pi. Fica ligado, guarda e entrega 24 h.' },
+        { i: 'SN', t: 'Super Node', d: 'Rádio LoRa 915 MHz homologado (beta) ou enlace ponto a ponto (em avaliação). Alcance validado por terceiros.' },
+        { i: 'GL', t: 'Gateway Local', d: 'Mini-PC ou adaptador que liga Wi-Fi, LoRa, USB e Ethernet, sem internet.' },
+        { i: '—', t: 'Sem hardware oficial', d: 'Qualquer equipamento compatível entra, desde que passe no teste real com vizinhos independentes.' },
+      ],
+      provEarnNotes: [
+        { i: '01', t: 'Por entrega comprovada', d: 'Recibo do nó + confirmação do destino + auditoria por amostragem. Tempo ligado não paga.' },
+        { i: '02', t: 'Peso por tipo', d: 'Texto, alerta via rádio, MB de arquivo e rotas novas entre áreas valem créditos diferentes.' },
+        { i: '03', t: 'Liquidação em lotes', d: 'Créditos acumulam offline e viram LUNES quando um gateway alcança a Mainnet.' },
+        { i: '04', t: 'Carteira separada', d: 'Identidade do nó, identidade social e carteira não compartilham chaves.' },
+      ],
+      alertChipsA, alertChipsB, notifyA: this.state.notifyA, jumpAl: this.state.jumpAl, jumpBl: this.state.jumpBl,
+      alertLevels: [
+        { i: '01', t: 'Emergência · tela cheia', d: 'Só com assinatura de fonte oficial verificada. Mostra origem, rota e chave. Ignora o modo noturno.' },
+        { i: '02', t: 'Diálogo · decisão', d: 'Bloqueia a tela só quando há escolha com consequência. Ações destrutivas exigem segurar o botão.' },
+        { i: '03', t: 'Banner · informação', d: 'Desce do topo, some em 4,5 s com barra de tempo. Toque abre o destino.' },
+        { i: '04', t: 'Badge e status · ambiente', d: 'Contadores, pontos de rede e ícones de entrega. Mudam sem interromper.' },
+      ],
+      motion: [
+        { t: 'Mensagem enviada', v: '340 ms · mola' }, { t: 'Status de entrega (pop)', v: '420 ms · a cada estado' }, { t: 'Digitando…', v: '1,1 s · loop' },
+        { t: 'Banner entra / sai', v: '500 / 300 ms' }, { t: 'Folha inferior', v: '380 ms · desacelera' }, { t: 'Diálogo', v: '320 ms · escala .9→1' },
+        { t: 'Aba ativa', v: '400 ms · bump' }, { t: 'Radar e rede', v: '3,2 s · pulso contínuo' }, { t: 'Segurar para apagar', v: '1,2 s' },
+      ],
+      nearChips, jumpNA: this.state.jumpNA, jumpNB: this.state.jumpNB,
+      nearNotes: [
+        { i: '01', t: 'Visível só quando você quer', d: 'Desligado por padrão, desliga sozinho em 1 h. Recíproco: para ver, você também aparece.' },
+        { i: '02', t: 'Sem localização exata', d: 'Só “muito perto / perto / mais longe”, pela força do sinal e número de saltos. Nunca mapa ou distância em metros.' },
+        { i: '03', t: 'Só identidade pública', d: 'A identidade anônima nunca aparece em Por perto.' },
+        { i: '04', t: 'Taxa definida por quem recebe', d: 'O valor fica reservado. Se aceitar, vai para quem recebeu. Se recusar ou expirar, volta em 24 h.' },
+        { i: '05', t: 'Recusa silenciosa', d: 'Quem envia não é avisado da recusa: o convite apenas expira. Novo convite só após 30 dias.' },
+        { i: '06', t: 'Bloquear e denunciar', d: 'Em todo pedido e perfil. Uma única mensagem até a pessoa aceitar.' },
+      ],
+      walletChips, jumpW: this.state.jumpW, jumpW2: this.state.jumpW2,
+      walletNotes: [
+        { i: '01', t: 'Boas-vindas · 10 LUNES', d: 'Reservado na instalação. Liberado após 7 dias de uso real e confirmação por 1 contato.' },
+        { i: '02', t: 'Distribuição · 25 LUNES por pessoa', d: 'Só indicação direta, sem níveis. Pago quando o convidado fica ativo, com 3 contatos diferentes.' },
+        { i: '03', t: 'Antifraude', d: 'Um aparelho, um bônus. Limite de 20 recompensas/mês. Instalação confirmada por nós independentes.' },
+        { i: '04', t: 'Offline-first', d: 'Transações são assinadas no aparelho, viajam pela malha e liquidam quando um gateway alcança a Mainnet.' },
+        { i: '05', t: 'Privacidade', d: 'Chaves da carteira separadas das identidades. Bônus não revelam quem conversa com quem.' },
+      ],
+      flowChips, jumpA: this.state.jumpA, jumpB: this.state.jumpB,
+      flowNotes: [
+        { i: '01', t: 'Convite assinado', d: 'O QR carrega a chave pública de quem convida. Uso único, expira em 24 h.' },
+        { i: '02', t: 'App copiado do próprio aparelho', d: 'O Piu instalado envia o seu APK por Wi-Fi Direct ou Bluetooth. Nenhuma loja, nenhuma internet.' },
+        { i: '03', t: 'Código de 4 palavras', d: 'Derivado do hash do pacote e da conexão. Igual nas duas telas = ninguém no meio.' },
+        { i: '04', t: 'Autoverificação na 1ª abertura', d: 'Assinatura Lunes, SHA-256, lista de revogação pela malha e confirmação por outros nós.' },
+        { i: '05', t: 'Limite honesto', d: 'Só Android. No iPhone, a instalação continua pela App Store; o convite funciona igual.' },
+      ],
+      chips, jump: this.state.jump, start: this.props.startScreen ?? 'chats',
+      showLight: layout !== 'dark', showDark: layout !== 'light',
+      notes: [
+        { t: 'Status da malha, não de sinal', d: 'No lugar do “online”, o app mostra nós alcançáveis e o transporte de cada conversa.' },
+        { t: 'Estados de entrega visíveis', d: 'Criada → na fila → encaminhada → entregue, com a rota completa a um toque.' },
+        { t: 'Duas identidades separadas', d: 'Pública e anônima têm chaves, contatos e conversas próprias. A troca fica no topo.' },
+        { t: 'Modo nó com limites claros', d: 'Retransmissão liga/desliga, transportes, bateria mínima e espaço para terceiros.' },
+        { t: 'Créditos sem promessa', d: 'Pendentes, validados, pagos e rejeitados; liquidação em LUNES só quando houver Mainnet.' },
+      ],
+    };
+  }
+}
+</script>
+</body>
+</html>

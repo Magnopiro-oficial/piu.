@@ -13,8 +13,11 @@ import { cookieOptions, createSession, csrfMatches, endSession, findSession, SES
 import { readPanelFile } from './static.js';
 import { BACKUP_FILENAME, OperatorKeyError, OperatorVault } from './operator.js';
 import { claimableEpochs, isLunesAddress } from './payout.js';
+import { LunesHistoryReader } from './lunes/history.js';
+import { LUNES_INDEXER } from './lunes/lunesHistory.js';
 import { LUNES_EXPLORER } from './lunes/lunesRpc.js';
 import { LunesReader } from './lunes/reader.js';
+import { LunesSigner, SigningError, type TransferStatus, transferView } from './lunes/signing.js';
 import { decodeSs58 } from './lunes/ss58.js';
 import { toHex } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
@@ -73,6 +76,13 @@ export interface AppOptions {
   backupN?: number;
   /** Leitura do saldo na Lunes Mainnet. Ausente: um leitor com `config.lunesEndpoints` (ou os de produção). */
   lunes?: LunesReader;
+  /** Histórico do endereço no indexador público da Lunes. Ausente: um leitor com o `fetch` global. */
+  lunesHistory?: LunesHistoryReader;
+  /**
+   * Pedidos de transferência assinados no celular (src/lunes/signing.ts). Ausente: um sem acompanhamento
+   * automático (quem sobe o nó, server.ts, passa o seu e chama `start()`).
+   */
+  lunesSigner?: LunesSigner;
   /**
    * Reinício pedido pelo painel (`POST /api/devices/:id/restart`): fecha o nó limpo e sai para o
    * supervisor (procd, systemd, app desktop) subir de novo. Ausente: a rota responde 409.
@@ -99,6 +109,8 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   const vault = o.vault ?? new OperatorVault(null);
   const nodePk = o.relay?.engine ? toHex(o.relay.engine.node.pk) : null;
   const lunes = o.lunes ?? new LunesReader({ endpoints: o.config.lunesEndpoints });
+  const lunesHistory = o.lunesHistory ?? new LunesHistoryReader({ now });
+  const signer = o.lunesSigner ?? new LunesSigner({ store, ...(o.config.lunesEndpoints ? { endpoints: o.config.lunesEndpoints } : {}), now });
 
   /**
    * Chave de operador → motor: o dono assina a identidade técnica do próprio nó e dos equipamentos
@@ -610,6 +622,80 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   app.delete('/api/wallet/lunes', { ...mutate(), config: strictLimit(10, '10 minutes') }, async (req, reply) => {
     if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
     store.setLunesAddress(req.piuSession!.operatorId, null, now());
+    return reply.code(204).send();
+  });
+
+  /**
+   * Histórico real do endereço configurado, lido do indexador público da Lunes (cache de 60 s). `history`
+   * é a última leitura (null se nunca houve) e `error` diz quando o indexador falhou: nunca uma lista vazia
+   * fingindo que não há movimentações. `amount` em planck, como texto.
+   */
+  app.get('/api/wallet/lunes/history', authed(), async req => {
+    const saved = store.lunesAddress(req.piuSession!.operatorId);
+    const base = { address: saved?.address ?? null, indexer: LUNES_INDEXER, explorer: LUNES_EXPLORER };
+    if (!saved) return { ...base, history: null, error: null, cached: false };
+    const h = await lunesHistory.history(saved.address);
+    return { ...base, history: h.history, error: h.error, cached: h.cached };
+  });
+
+  // ── "assinar no celular": transferências na Mainnet (docs/carteira/contrato-api.md) ──
+  const signingError = (reply: FastifyReply, e: unknown) => {
+    if (e instanceof SigningError) return fail(reply, e.status, e.message, e.extra);
+    throw e;
+  };
+  const TRANSFER_STATUS = ['pending', 'signed', 'submitted', 'in_block', 'finalized', 'failed', 'expired'];
+
+  /**
+   * Abre um pedido: o nó lê da Mainnet o contexto de assinatura (runtime, gênese, bloco, nonce, taxa) e
+   * guarda com o pedido; o celular pareado assina. Exige step-up (como as transferências de hoje), o
+   * endereço do provider configurado e um celular pareado (é ele que tem a chave). `value` em planck, texto.
+   */
+  app.post<{ Body: { dest: string; value: string } }>('/api/wallet/lunes/transfers', {
+    ...mutate(), config: strictLimit(20, '1 minute'),
+    schema: { body: { type: 'object', required: ['dest', 'value'], additionalProperties: false, properties: {
+      dest: { type: 'string', minLength: 1, maxLength: 80 }, value: { type: 'string', pattern: '^[0-9]{1,39}$' },
+    } } },
+  }, async (req, reply) => {
+    const s = req.piuSession!;
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    const saved = store.lunesAddress(s.operatorId);
+    if (!saved) return fail(reply, 409, 'Configure o endereço da carteira de provider antes de transferir.');
+    if (!store.activePhone(s.operatorId)) return fail(reply, 409, 'Pareie um celular: é ele que guarda a chave e assina a transferência.');
+    try {
+      const t = await signer.create(s.operatorId, saved.address, req.body.dest.trim(), BigInt(req.body.value));
+      return reply.code(201).send(transferView(t));
+    } catch (e) { return signingError(reply, e); }
+  });
+
+  /** Lista do operador (mais recente primeiro); `?status=pending` é o que o celular consulta para assinar. */
+  app.get<{ Querystring: { status?: TransferStatus } }>('/api/wallet/lunes/transfers', {
+    ...authed(), schema: { querystring: { type: 'object', additionalProperties: false, properties: { status: { type: 'string', enum: TRANSFER_STATUS } } } },
+  }, async req => signer.list(req.piuSession!.operatorId, req.query.status).map(transferView));
+
+  app.get<{ Params: { id: string } }>('/api/wallet/lunes/transfers/:id', { ...authed(), schema: { params: idParams } }, async (req, reply) => {
+    const t = signer.get(req.params.id, req.piuSession!.operatorId);
+    return t ? transferView(t) : fail(reply, 404, 'Pedido não encontrado.');
+  });
+
+  /**
+   * O celular devolve o extrinsic assinado. O nó confere (call exato, assinante = carteira do provider, era/
+   * nonce do pedido, assinatura sr25519), valida no runtime sem enviar e só então envia: `202` com o pedido
+   * em `submitted`. `400` se a conferência falhar (o pedido continua pendente), `422` se o runtime recusar,
+   * `502` se o nó recusar o envio (os dois viram `failed`), `503` sem resposta da rede (fica `signed`; o nó reenvia).
+   */
+  app.post<{ Params: { id: string }; Body: { extrinsic: string } }>('/api/wallet/lunes/transfers/:id/signed', {
+    ...mutate(), config: strictLimit(10, '1 minute'),
+    schema: { params: idParams, body: { type: 'object', required: ['extrinsic'], additionalProperties: false, properties: { extrinsic: { type: 'string', pattern: '^0x[0-9a-fA-F]+$', maxLength: 4096 } } } },
+  }, async (req, reply) => {
+    try {
+      const t = await signer.submitSigned(req.params.id, req.piuSession!.operatorId, req.body.extrinsic);
+      return reply.code(202).send(transferView(t));
+    } catch (e) { return signingError(reply, e); }
+  });
+
+  /** Cancela um pedido ainda não assinado (ou vencido). Já assinado/enviado: `409`. */
+  app.delete<{ Params: { id: string } }>('/api/wallet/lunes/transfers/:id', { ...mutate(), schema: { params: idParams } }, async (req, reply) => {
+    try { signer.cancel(req.params.id, req.piuSession!.operatorId); } catch (e) { return signingError(reply, e); }
     return reply.code(204).send();
   });
 

@@ -1,6 +1,7 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef, type ReactNode } from 'react';
 import { Animated, Dimensions, Easing, Modal, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeProvider';
 
 export interface SheetHandle { close: (after?: () => void) => void }
@@ -12,6 +13,7 @@ export interface SheetHandle { close: (after?: () => void) => void }
 export const Sheet = forwardRef<SheetHandle, { onClose: () => void; label: string; children: ReactNode; padH?: number; gap?: number }>(
   function Sheet({ onClose, label, children, padH = 20, gap = 18 }, ref) {
     const { c, reduceMotion } = useTheme();
+    const t = useT();
     const insets = useSafeAreaInsets();
     const scrim = useRef(new Animated.Value(0)).current;
     const y = useRef(new Animated.Value(Dimensions.get('window').height)).current;
@@ -37,7 +39,7 @@ export const Sheet = forwardRef<SheetHandle, { onClose: () => void; label: strin
     return (
       <Modal transparent visible animationType="none" onRequestClose={() => close()} statusBarTranslucent>
         <Animated.View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.scrim, opacity: scrim }}>
-          <Pressable style={{ flex: 1 }} onPress={() => close()} accessibilityRole="button" accessibilityLabel={`Fechar ${label.toLowerCase()}`} />
+          <Pressable style={{ flex: 1 }} onPress={() => close()} accessibilityRole="button" accessibilityLabel={t('sheet.close', { label: label.toLowerCase() })} />
         </Animated.View>
         <Animated.View accessibilityViewIsModal accessibilityLabel={label} style={{
           position: 'absolute', left: 0, right: 0, bottom: 0, maxHeight: '92%', backgroundColor: c.bg, borderTopLeftRadius: 30, borderTopRightRadius: 30,

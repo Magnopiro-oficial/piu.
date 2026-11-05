@@ -6,6 +6,7 @@ import type { FastifyInstance } from 'fastify';
 import { generate } from 'selfsigned';
 import { buildApp } from './app.js';
 import type { Config } from './config.js';
+import { LunesSigner } from './lunes/signing.js';
 import { loadPackages, type Manifest, releaseKey } from './packages.js';
 import { loadNodeKey, type RelayHandle, startRelay } from './relay/index.js';
 import { Pairing } from './security/pairing.js';
@@ -104,8 +105,10 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   // Pausado no painel antes de reiniciar: continua pausado.
   if (store.selfDevice()?.status === 'paused') relay?.setPaused(true);
 
+  // Transferências assinadas no celular: o nó acompanha os pedidos enviados a cada bloco (6 s).
+  const lunesSigner = new LunesSigner({ store, ...(config.lunesEndpoints ? { endpoints: config.lunesEndpoints } : {}), log: o.log });
   const app = await buildApp({
-    config, store, pairing, packages, packagesDir, relay, selfDevice, vault, restart: o.onRestart,
+    config, store, pairing, packages, packagesDir, relay, selfDevice, vault, restart: o.onRestart, lunesSigner,
     https: { key: t.key, cert: t.cert }, logger: o.logger ?? false,
     onCodeSpent: reason => {
       // Bloqueado: espera 60 s antes de gerar outro (freia quem tenta adivinhar pela rede).
@@ -119,9 +122,10 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
     await relay?.close();
     throw e;
   }
+  lunesSigner.start();
   const addr = app.server.address();
   const port = typeof addr === 'object' && addr ? addr.port : config.port;
   const host = config.allowedHosts.find(h => !h.includes(':')) ?? 'localhost';
   return { app, url: `https://${host}:${port}`, port, cert: t.cert, fingerprint: t.fingerprint, packages, issueCode, relay,
-    close: async () => { await relay?.close(); await app.close(); } };
+    close: async () => { lunesSigner.stop(); await relay?.close(); await app.close(); } };
 }

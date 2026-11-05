@@ -1,5 +1,6 @@
-import { createContext, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
+import { applyLangPref, isLang, isRegion, type LangPref, type Region } from '../i18n';
 import type { BackupRecord } from '../lib/backupStatus';
 import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 import { type HoursWindow, normHoursChoice } from '../messaging/hours';
@@ -39,6 +40,11 @@ interface Settings {
   restoreMode: RestoreMode; setRestoreMode: (m: RestoreMode) => void;
   /** Carteira: esconder o saldo na tela (só exibição; os dados não mudam). */
   hideBalance: boolean; setHideBalance: (v: boolean) => void;
+  /** "Segurança da tela" (Privacidade, só Android): FLAG_SECURE na conversa em foco, sem print nem gravação (ui/ScreenSecurity.tsx). */
+  screenSecurity: boolean; setScreenSecurity: (v: boolean) => void;
+  /** Idioma do app (`auto` = o do sistema, se suportado) e Região (formato de número e data). Só neste aparelho. */
+  lang: LangPref; setLang: (l: LangPref) => void;
+  region: Region; setRegion: (r: Region) => void;
 }
 
 const DEFAULT_NOTIFS = Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>;
@@ -64,6 +70,12 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [backupAt, setBackupAt] = usePersisted<BackupRecord | null>('set.backupAt', null);
   const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');
   const [hideBalance, setHideBalance] = usePersisted('set.hideBalance', false);
+  const [screenSecurity, setScreenSecurity] = usePersisted('set.screenSecurity', true);
+  const [lang, setLang] = usePersisted<LangPref>('set.lang', 'auto', v => (v === 'auto' || isLang(v) ? v : 'auto'));
+  const [region, setRegion] = usePersisted<Region>('set.region', 'auto', v => (isRegion(v) ? v : 'auto'));
+  // Idioma aplicado antes da primeira renderização dos filhos (sem piscar em pt-BR) e a cada troca.
+  useState(() => { applyLangPref(lang, region); return null; });
+  useEffect(() => { applyLangPref(lang, region); }, [lang, region]);
 
   const value = useMemo<Settings>(() => ({
     priv, setPriv: p => setPrivS(s => ({ ...s, ...p })),
@@ -75,8 +87,9 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     backupDone, setBackupDone, backupAt, setBackupAt,
     dropped: NONE,
     restoreMode, setRestoreMode,
-    hideBalance, setHideBalance,
-  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode, hideBalance, setHideBalance]);
+    hideBalance, setHideBalance, screenSecurity, setScreenSecurity,
+    lang, setLang, region, setRegion,
+  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode, hideBalance, setHideBalance, screenSecurity, setScreenSecurity, lang, setLang, region, setRegion]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

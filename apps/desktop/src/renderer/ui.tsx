@@ -1,0 +1,142 @@
+/**
+ * Peças reutilizadas pelas telas, com as medidas do protótipo (Piu Desktop.dc.html):
+ * ícone Material Symbols Rounded, interruptor 42×26, segmentado, diálogo, toast, QR "visual".
+ */
+import QRCode from 'qrcode';
+import { type CSSProperties, type ReactNode, useEffect, useMemo } from 'react';
+
+export const F = "Geist, 'Geist Variable', system-ui, sans-serif";
+export const FM = "'Geist Mono', ui-monospace, monospace";
+export const S = (o: CSSProperties) => o;
+
+/** Material Symbols Rounded, com eixos como no protótipo (`font-variation-settings`). */
+export function Sym({ name, size = 20, fill = 0, wght, style, className = '' }: { name: string; size?: number; fill?: 0 | 1; wght?: number; style?: CSSProperties; className?: string }) {
+  const fv = `'FILL' ${fill}, 'wght' ${wght ?? 400}, 'GRAD' 0, 'opsz' 24`;
+  return <span className={`ms ${className}`} style={{ fontSize: size, fontVariationSettings: fv, ...style }} aria-hidden="true">{name}</span>;
+}
+
+/** Interruptor do protótipo (`tg`): trilho 42×26, botão 20, anima a posição. */
+export function Toggle({ on, onChange, disabled, label }: { on: boolean; onChange?: (v: boolean) => void; disabled?: boolean; label: string }) {
+  return (
+    <div role="switch" aria-checked={on} aria-disabled={disabled} aria-label={label} tabIndex={disabled ? -1 : 0}
+      onClick={() => !disabled && onChange?.(!on)} onKeyDown={e => { if (!disabled && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); onChange?.(!on); } }}
+      style={{ width: 42, height: 26, borderRadius: 13, background: on ? 'var(--ink)' : 'var(--bg3)', position: 'relative', cursor: disabled ? 'default' : 'pointer', flex: 'none', transition: 'background .25s', opacity: disabled ? .4 : 1 }}>
+      <div style={{ position: 'absolute', top: 3, left: on ? 19 : 3, width: 20, height: 20, borderRadius: 10, background: on ? 'var(--invink)' : '#ffffff', boxShadow: '0 1px 3px rgba(0,0,0,.2)', transition: 'left .35s cubic-bezier(.2,.9,.3,1.5)' }} />
+    </div>
+  );
+}
+
+/** Segmentado do protótipo (`seg`): fundo bg3, opção ativa em bg com sombra. */
+export function Seg<T extends string>({ value, opts, onChange, bg = 'var(--bg3)' }: { value: T; opts: [T, string][]; onChange: (v: T) => void; bg?: string }) {
+  return (
+    <div style={{ display: 'flex', gap: 3, padding: 3, borderRadius: 11, background: bg, flex: 'none' }}>
+      {opts.map(([v, l]) => (
+        <button key={v} onClick={() => onChange(v)} aria-pressed={value === v}
+          style={{ height: 30, padding: '0 12px', border: 'none', borderRadius: 8, background: value === v ? 'var(--bg)' : 'transparent', color: 'var(--ink)', font: `${value === v ? 600 : 450} 12.5px ${F}`, cursor: 'pointer', boxShadow: value === v ? '0 1px 3px rgba(0,0,0,.14)' : 'none', transition: 'background .25s,box-shadow .25s' }}>{l}</button>
+      ))}
+    </div>
+  );
+}
+
+export interface DialogSpec { icon?: string; title: string; body: string; primary: string; act: () => void; hasSecond?: boolean; danger?: boolean; code?: string; content?: ReactNode }
+
+/** Diálogo do protótipo: scrim com blur, cartão 400px, ícone redondo, dois botões. */
+export function Dialog({ d, onClose }: { d: DialogSpec; onClose: () => void }) {
+  useEffect(() => { const k = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); }; window.addEventListener('keydown', k); return () => window.removeEventListener('keydown', k); }, [onClose]);
+  const hasSecond = d.hasSecond !== false;
+  return (
+    <>
+      <div onClick={onClose} style={{ position: 'absolute', inset: 0, background: 'var(--scrim)', zIndex: 70, animation: 'piuFade .25s both', backdropFilter: 'blur(3px)' }} />
+      <div style={{ position: 'absolute', left: '50%', top: '50%', width: 400, transform: 'translate(-50%,-50%)', zIndex: 71 }} role="dialog" aria-modal="true" aria-label={d.title}>
+        <div style={{ background: 'var(--bg)', borderRadius: 26, padding: '26px 22px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, textAlign: 'center', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.35)', animation: 'piuDialog .4s cubic-bezier(.2,.9,.3,1.25) both' }}>
+          {d.code ? (
+            <div style={{ padding: 16, borderRadius: 22, background: '#fff', boxShadow: '0 0 0 1px var(--line2)', position: 'relative', width: '100%' }}>
+              <div className="sel" style={{ width: '100%', minHeight: 120, font: `500 11px ${FM}`, color: '#0c0c0c', wordBreak: 'break-all', lineHeight: 1.45, textAlign: 'left' }}>{d.code}</div>
+            </div>
+          ) : d.icon ? (
+            <div style={{ width: 56, height: 56, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'piuPop .5s .1s cubic-bezier(.2,.9,.3,1.5) both' }}>
+              <Sym name={d.icon} size={27} wght={300} />
+            </div>
+          ) : null}
+          <div style={{ fontSize: 20, fontWeight: 700, letterSpacing: '-0.025em', lineHeight: 1.15, textWrap: 'pretty' }}>{d.title}</div>
+          <div style={{ fontSize: 14, color: 'var(--ink2)', lineHeight: 1.45, textWrap: 'pretty' }}>{d.body}</div>
+          {d.content && <div style={{ width: '100%', marginTop: 4 }}>{d.content}</div>}
+          <div style={{ display: 'flex', gap: 8, width: '100%', marginTop: 8 }}>
+            {hasSecond && <button onClick={onClose} style={{ flex: 1, height: 46, border: 'none', borderRadius: 23, background: 'var(--bg2)', color: 'var(--ink)', font: `600 14.5px ${F}`, cursor: 'pointer' }}>Cancelar</button>}
+            <button className="a-97" onClick={d.act} style={{ flex: 1, height: 46, border: 'none', borderRadius: 23, background: 'var(--ink)', color: 'var(--invink)', font: `600 14.5px ${F}`, cursor: 'pointer' }}>{d.primary}</button>
+          </div>
+        </div>
+      </div>
+    </>
+  );
+}
+
+export function Toast({ text, icon }: { text: string; icon: string }) {
+  return (
+    <div style={{ position: 'absolute', left: 0, right: 0, bottom: 26, display: 'flex', justifyContent: 'center', zIndex: 55, pointerEvents: 'none' }}>
+      <div style={{ height: 42, padding: '0 18px 0 14px', borderRadius: 21, background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', gap: 9, font: `550 13.5px ${F}`, boxShadow: '0 14px 34px -12px rgba(0,0,0,.45)', animation: 'piuToast .45s cubic-bezier(.2,.9,.3,1.3) both' }}>
+        <Sym name={icon} size={18} style={{ animation: 'piuPop .45s .1s cubic-bezier(.2,.9,.3,1.5) both' }} />{text}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Malha de 29×29 "ao estilo QR" do protótipo (`qr(seed)`): só visual (localizadores, miolo vazio, células
+ * aleatórias determinísticas) — NÃO é um QR legível. Usada onde o design mostra um QR indisponível.
+ */
+export function qrCells(seed: number) {
+  let x = seed * 7919 + 17; const rnd = () => (x = (x * 9301 + 49297) % 233280) / 233280;
+  const N = 29, cells: { bg: string; r: string; anim: string }[] = [];
+  const finder = (r: number, c: number) => { for (const [R, C] of [[0, 0], [0, N - 7], [N - 7, 0]]) { const i = r - R!, j = c - C!; if (i >= 0 && i < 7 && j >= 0 && j < 7) return (i === 0 || i === 6 || j === 0 || j === 6 || (i >= 2 && i <= 4 && j >= 2 && j <= 4)) ? 1 : 0; if (i >= -1 && i <= 7 && j >= -1 && j <= 7) return 0; } return -1; };
+  for (let r = 0; r < N; r++) for (let c = 0; c < N; c++) {
+    const f = finder(r, c); let on: boolean;
+    if (f >= 0) on = f === 1; else if (r >= 11 && r <= 17 && c >= 11 && c <= 17) on = false; else on = rnd() > 0.52;
+    const d = Math.round(Math.hypot(r - 14, c - 14) * 28);
+    cells.push({ bg: on ? '#0c0c0c' : 'transparent', r: f >= 0 ? '1px' : '2px', anim: on ? 'piuQr .35s ' + d + 'ms cubic-bezier(.2,.9,.3,1.5) both' : 'none' });
+  }
+  return cells;
+}
+
+/** QR de verdade (lib `qrcode`), desenhado como a malha do protótipo: módulos entram com `piuQr` a partir do centro. */
+export function RealQr({ text, size }: { text: string; size: number }) {
+  const q = useMemo(() => { try { return QRCode.create(text, { errorCorrectionLevel: 'M' }); } catch { return null; } }, [text]);
+  if (!q) return null;
+  const n = q.modules.size, data = q.modules.data;
+  const cells: ReactNode[] = [];
+  for (let r = 0; r < n; r++) for (let c = 0; c < n; c++) {
+    const on = data[r * n + c] === 1;
+    const d = Math.round(Math.hypot(r - n / 2, c - n / 2) * (28 * 29 / n));
+    cells.push(<div key={r * n + c} style={{ background: on ? '#0c0c0c' : 'transparent', borderRadius: 1, animation: on ? `piuQr .35s ${d}ms cubic-bezier(.2,.9,.3,1.5) both` : 'none' }} />);
+  }
+  return <div style={{ width: size, height: size, display: 'grid', gridTemplateColumns: `repeat(${n},minmax(0,1fr))` }}>{cells}</div>;
+}
+
+export function QrGrid({ seed, size }: { seed: number; size: number }) {
+  const cells = qrCells(seed);
+  return (
+    <div style={{ width: size, height: size, display: 'grid', gridTemplateColumns: 'repeat(29,minmax(0,1fr))' }}>
+      {cells.map((c, i) => <div key={i} style={{ background: c.bg, borderRadius: c.r, animation: c.anim }} />)}
+    </div>
+  );
+}
+
+export const initialsOf = (name: string, id: string) => {
+  const words = name.replace(/[^\p{L}\p{N}\s]/gu, ' ').trim().split(/\s+/).filter(Boolean);
+  return words.length ? words.map(w => w[0]!).slice(0, 2).join('').toUpperCase() : id.replace(/^piu:/, '').slice(0, 2).toUpperCase();
+};
+export const shortId = (id: string) => id.replace(/^piu:/, '').slice(0, 4).toUpperCase();
+/** `piu:7f3a…c19e` como no protótipo. */
+export const handleOf = (id: string) => { const h = id.replace(/^piu:/, ''); return `piu:${h.slice(0, 4)}…${h.slice(-4)}`; };
+
+export function fmtTime(sec: number) {
+  const d = new Date(sec * 1000), now = new Date();
+  if (d.toDateString() === now.toDateString()) return String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
+  const y = new Date(now); y.setDate(now.getDate() - 1);
+  if (d.toDateString() === y.toDateString()) return 'Ontem';
+  return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' }).replace('.', '');
+}
+
+export const Btn = ({ children, onClick, primary, style, className = '' }: { children: ReactNode; onClick?: () => void; primary?: boolean; style?: CSSProperties; className?: string }) => (
+  <button className={`a-94 ${className}`} onClick={onClick} style={{ height: 34, padding: '0 14px', border: 'none', borderRadius: 17, background: primary ? 'var(--ink)' : 'var(--bg)', color: primary ? 'var(--invink)' : 'var(--ink)', font: `600 13px ${F}`, cursor: 'pointer', boxShadow: '0 0 0 1px var(--line2) inset', flex: 'none', transition: 'transform .2s', ...style }}>{children}</button>
+);

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Animated, Easing, Modal, Pressable, View } from 'react-native';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
@@ -9,10 +10,12 @@ import { T } from './T';
  * Diálogo de confirmação: entra em 320 ms (scale .9 → 1), ícone com “pop”.
  * Com `hold`, a ação principal só acontece segurando o botão (~1 s), para ações irreversíveis.
  */
-export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary = 'Cancelar', onClose, hold }: {
+export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary, onClose, hold }: {
   icon: IconName; title: string; body: string; primary: string; primaryIcon?: IconName; onPrimary: () => void; secondary?: string; onClose: () => void; hold?: boolean;
 }) {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
+  secondary ??= t('common.cancel');
   const v = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
   useEffect(() => {
     if (!reduceMotion) Animated.timing(v, { toValue: 1, duration: 320, easing: Easing.bezier(0.2, 0.9, 0.3, 1.25), useNativeDriver: true }).start();
@@ -44,6 +47,7 @@ export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, sec
 /** Botão "segure para confirmar": enche da esquerda para a direita; soltar antes cancela. */
 function HoldButton({ label, icon, onDone }: { label: string; icon?: IconName; onDone: () => void }) {
   const { c } = useTheme();
+  const t = useT();
   const [pct, setPct] = useState(0);
   const timer = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
   const stop = () => { clearInterval(timer.current); setPct(0); };
@@ -58,12 +62,12 @@ function HoldButton({ label, icon, onDone }: { label: string; icon?: IconName; o
   useEffect(() => () => clearInterval(timer.current), []);
   return (
     <Pressable onPressIn={start} onPressOut={() => { if (pct < 100) stop(); }} accessibilityRole="button" accessibilityLabel={label}
-      accessibilityHint="Segure por um segundo para confirmar" accessibilityActions={[{ name: 'activate' }]} onAccessibilityAction={onDone}
+      accessibilityHint={t('dialog.holdHint')} accessibilityActions={[{ name: 'activate' }]} onAccessibilityAction={onDone}
       style={{ height: 52, borderRadius: 26, backgroundColor: c.ink, overflow: 'hidden', alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: `${pct}%`, backgroundColor: c.invink, opacity: 0.25 }} />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
         {icon && <Icon name={icon} size={19} color={c.invink} />}
-        <T size={15.5} w={600} color={c.invink}>{pct > 0 ? 'Continue segurando…' : label}</T>
+        <T size={15.5} w={600} color={c.invink}>{pct > 0 ? t('dialog.keepHolding') : label}</T>
       </View>
     </Pressable>
   );

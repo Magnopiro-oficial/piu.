@@ -2,7 +2,9 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { type AlertView, categoryOf, OFFICIAL_NOTE, severityLabel, STATUS_LABEL, type Vote } from '../messaging/communityAlerts';
+import { type AlertView, categoryOf, type Vote } from '../messaging/communityAlerts';
+import { fmtDate, useT } from '../i18n';
+import { alertCategoryName, alertSeverityName, alertStatusName, officialNote } from '../i18n/alerts';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -10,8 +12,7 @@ import { Button } from '../ui/Button';
 import { Icon, type IconName } from '../ui/Icon';
 import { T } from '../ui/T';
 
-const when = (sec: number) => new Date(sec * 1000).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
-const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one : many}`;
+const when = (sec: number) => fmtDate(sec * 1000, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
 /**
  * Alerta da comunidade em tela cheia (layout do "alerta de emergência" do design): publicado por um
@@ -20,6 +21,7 @@ const plural = (n: number, one: string, many: string) => `${n} ${n === 1 ? one :
  */
 export default function Alert() {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { showToast } = useStore();
   const { id } = useLocalSearchParams<{ id?: string }>();
@@ -52,33 +54,33 @@ export default function Alert() {
     return (
       <View style={{ flex: 1, backgroundColor: c.bg, paddingTop: insets.top + 40, paddingBottom: Math.max(insets.bottom, 16) + 16, paddingHorizontal: 24, gap: 16 }}>
         <Icon name="warning" size={34} w={300} />
-        <T size={24} w={650} ls={-0.03} accessibilityRole="header">Alerta não encontrado</T>
-        <T size={14.5} lh={1.45} color={c.ink2}>Ele pode ter vencido há mais de 24 h ou ser de uma comunidade da qual você saiu. Os alertas vigentes ficam em Ajustes → Notificações → Alertas da comunidade.</T>
+        <T size={24} w={650} ls={-0.03} accessibilityRole="header">{t('alert.notFound')}</T>
+        <T size={14.5} lh={1.45} color={c.ink2}>{t('alert.notFound.body')}</T>
         <View style={{ flex: 1 }} />
-        <Button label="Ver alertas da comunidade" height={50} onPress={() => router.replace('/notifications')} />
-        <Button label="Fechar" variant="ghost" height={46} onPress={close} />
+        <Button label={t('alert.seeAll')} height={50} onPress={() => router.replace('/notifications')} />
+        <Button label={t('common.close')} variant="ghost" height={46} onPress={close} />
       </View>
     );
   }
 
   const act = (fn: () => AlertView, ok?: { title: string; body: string }) => {
     try { fn(); if (ok) showToast({ icon: 'schedule_send', ...ok }); }
-    catch (e) { showToast({ icon: 'error', title: 'Não foi possível', body: (e as Error).message }); }
+    catch (e) { showToast({ icon: 'error', title: t('groupInfo.failed'), body: (e as Error).message }); }
   };
-  const vote = (v: Vote) => act(() => alerts.vote(a.id, v), { title: v === 'confirm' ? 'Você confirmou' : 'Você marcou “Não procede”', body: 'A classificação vai cifrada para a comunidade quando houver rota.' });
+  const vote = (v: Vote) => act(() => alerts.vote(a.id, v), { title: v === 'confirm' ? t('alert.voted.confirm') : t('alert.voted.deny'), body: t('alert.voted.body') });
   const bg = loud ? c.ink : c.bg, fg = loud ? c.invink : c.ink;
   const cat = categoryOf(a.cat);
-  const head = a.active ? `ALERTA DA COMUNIDADE · ${severityLabel(a.sev).toUpperCase()}` : `ALERTA DA COMUNIDADE · ${STATUS_LABEL[a.status].toUpperCase()}`;
+  const head = `${t('alert.head')} · ${(a.active ? alertSeverityName(a.sev, t) : alertStatusName(a.status, t)).toUpperCase()}`;
   const rows: [string, string][] = [
-    ['Estado', STATUS_LABEL[a.status]],
-    ['Classificação', `${plural(a.confirms, 'confirmação', 'confirmações')} · ${plural(a.denies, '“não procede”', '“não procede”')}`],
-    ['Categoria', cat.label],
-    ['Gravidade', severityLabel(a.sev)],
-    ...(a.area ? [['Área', a.area] as [string, string]] : []),
-    ['Comunidade', a.communityName || '—'],
-    ['Publicado por', a.mine ? 'você' : a.authorName],
-    ['Publicado', when(a.at)],
-    [a.active ? 'Vale até' : a.closedAt ? 'Encerrado' : 'Venceu', when(a.closedAt ?? a.until)],
+    [t('alert.row.state'), alertStatusName(a.status, t)],
+    [t('alert.row.votes'), `${t('alert.confirms', { count: a.confirms })} · ${t('alert.denies', { count: a.denies })}`],
+    [t('alert.row.category'), alertCategoryName(a.cat, t)],
+    [t('alert.row.severity'), alertSeverityName(a.sev, t)],
+    ...(a.area ? [[t('alert.row.area'), a.area] as [string, string]] : []),
+    [t('alert.row.community'), a.communityName || '—'],
+    [t('alert.row.author'), a.mine ? t('network.radar.you') : a.authorName],
+    [t('alert.row.published'), when(a.at)],
+    [a.active ? t('alert.row.validUntil') : a.closedAt ? t('alertStatus.closed') : t('alert.row.expired'), when(a.closedAt ?? a.until)],
   ];
   const line = 'rgba(127,127,127,0.45)';
 
@@ -105,7 +107,7 @@ export default function Alert() {
         </View>
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: line }}>
           <Icon name="info" size={17} color={fg} />
-          <T size={13} w={600} lh={1.4} color={fg} style={{ flex: 1 }}>{OFFICIAL_NOTE}{a.status === 'contested' ? ' Membros da comunidade marcaram que não procede.' : ''}</T>
+          <T size={13} w={600} lh={1.4} color={fg} style={{ flex: 1 }}>{officialNote(t)}{a.status === 'contested' ? ` ${t('alert.contestedNote')}` : ''}</T>
         </View>
         <View style={{ borderRadius: 20, borderWidth: 1, borderColor: line, paddingVertical: 14, paddingHorizontal: 16, gap: 9 }}>
           {rows.map(([l, v]) => (
@@ -119,18 +121,18 @@ export default function Alert() {
       <View style={{ gap: 10 }}>
         {a.canVote && (
           <View style={{ flexDirection: 'row', gap: 10 }}>
-            <Button label={a.myVote === 'confirm' ? 'Confirmado por você' : 'Confirmo'} variant={loud ? 'inverse' : a.myVote === 'confirm' ? 'primary' : 'outline'} height={50} style={{ flex: 1 }}
+            <Button label={a.myVote === 'confirm' ? t('alert.confirmedByYou') : t('alert.confirm')} variant={loud ? 'inverse' : a.myVote === 'confirm' ? 'primary' : 'outline'} height={50} style={{ flex: 1 }}
               onPress={() => vote('confirm')} />
-            <Button label={a.myVote === 'deny' ? 'Não procede (seu voto)' : 'Não procede'} variant={loud ? 'ghostInverse' : a.myVote === 'deny' ? 'primary' : 'outline'} height={50} style={{ flex: 1, ...(loud ? { borderWidth: 1, borderColor: line } : {}) }}
+            <Button label={a.myVote === 'deny' ? t('alert.deny.yours') : t('alert.deny')} variant={loud ? 'ghostInverse' : a.myVote === 'deny' ? 'primary' : 'outline'} height={50} style={{ flex: 1, ...(loud ? { borderWidth: 1, borderColor: line } : {}) }}
               onPress={() => vote('deny')} />
           </View>
         )}
-        {a.mine && a.active && <T size={12.5} lh={1.4} color={fg} style={{ opacity: 0.75 }}>Você publicou este alerta: quem classifica são os outros membros.</T>}
+        {a.mine && a.active && <T size={12.5} lh={1.4} color={fg} style={{ opacity: 0.75 }}>{t('alert.youPublished')}</T>}
         {a.canClose && (
-          <Button label="Encerrar alerta" variant={loud ? 'ghostInverse' : 'outline'} height={46} style={loud ? { borderWidth: 1, borderColor: line } : undefined}
-            onPress={() => act(() => alerts.close(a.id), { title: 'Alerta encerrado', body: 'O encerramento vai para a comunidade quando houver rota.' })} />
+          <Button label={t('alert.closeAlert')} variant={loud ? 'ghostInverse' : 'outline'} height={46} style={loud ? { borderWidth: 1, borderColor: line } : undefined}
+            onPress={() => act(() => alerts.close(a.id), { title: t('alert.closed'), body: t('alert.closed.body') })} />
         )}
-        <Button label="Entendi" variant={loud ? 'ghostInverse' : 'ghost'} height={50} style={loud ? { borderWidth: 1, borderColor: line } : undefined} onPress={close} />
+        <Button label={t('prompt.gotIt')} variant={loud ? 'ghostInverse' : 'ghost'} height={50} style={loud ? { borderWidth: 1, borderColor: line } : undefined} onPress={close} />
       </View>
     </View>
   );

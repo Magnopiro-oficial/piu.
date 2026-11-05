@@ -60,3 +60,7 @@ Estimativa dividida entre os relays conhecidos até o aparelho; validado e não 
 - Conteúdo de grupo com campo próprio: `ca` (alerta), `cv` (classificação, com revisão `n`) e `cc` (encerramento). Versões antigas ignoram.
 - Limite: 3 ativos por membro por comunidade e 1 a cada 10 min, conferido ao publicar e ao receber.
 - Estado calculado em cada aparelho com os votos de membros atuais (o do autor não conta): Confirmado (≥ 2 e ≥ 2× "não procede"), Contestado ("não procede" ≥ 2 e ≥ confirmações), Não confirmado; Encerrado pelo autor, admin ou moderador; Vencido pela validade. Sai do estado salvo 24 h depois de vencer.
+
+## Pedido de pagamento (regra 7.3; `lib/paymentRequest.ts`)
+- O Piu não guarda chave Lunes nem envia LUNES: quem pede manda, cifrado na sessão, o endereço Lunes dele (o salvo na Carteira), o valor em planck (opcional, texto com 8 casas) e uma descrição até 80 caracteres; vale 7 dias. Payload `pq` (`i` id de 16 hex = id da mensagem, `a` endereço, `v` planck, `d` descrição, `u` validade); "já paguei" é `pd` (`h` hash da transação e `b` do bloco, opcionais). Só contato aceito recebe; recibo `a` como no texto; versões antigas ignoram o tipo.
+- Quem pediu confere na Mainnet (saldo que subiu desde o pedido ou transação dentro do bloco finalizado, `checkSettlement`); nada vira "recebido" sem essa prova.

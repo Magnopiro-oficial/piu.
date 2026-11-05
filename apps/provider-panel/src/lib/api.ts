@@ -6,6 +6,8 @@
  * - 403 com `reauth` → operação sensível: pedir um código novo do equipamento (step-up).
  * Nada de dado sensível em log: o painel não usa console.
  */
+import { t } from '../i18n';
+
 export interface Operator { id: string; name: string }
 /** Regras do equipamento (assistente, passo "Regras"). */
 export interface ApiDeviceLimits { bw: 5 | 20 | 50; sto: 1 | 4 | 8; hours: 'always' | 'night' | 'day' }
@@ -94,7 +96,7 @@ export class ApiError extends Error {
 
 /** Mensagem do servidor (já genérica) ou uma neutra. */
 async function errorOf(r: Response) {
-  try { return ((await r.json()) as { error?: string }).error ?? 'Não foi possível concluir.'; } catch { return 'Não foi possível concluir.'; }
+  try { return ((await r.json()) as { error?: string }).error ?? t('common.couldNotFinish'); } catch { return t('common.couldNotFinish'); }
 }
 
 const isJson = (r: Response) => (r.headers.get('content-type') ?? '').includes('application/json');
@@ -138,7 +140,7 @@ export class NodeApi {
     if (r.status === 403 && isJson(r)) {
       const j = (await r.json()) as { error?: string; reauth?: boolean };
       if (j.reauth) throw new NeedsReauth(j.error);
-      throw new ApiError(403, j.error ?? 'Não permitido.');
+      throw new ApiError(403, j.error ?? t('common.notAllowed'));
     }
     if (!r.ok) throw new ApiError(r.status, await errorOf(r));
     return r.status === 204 ? (undefined as T) : ((await r.json()) as T);

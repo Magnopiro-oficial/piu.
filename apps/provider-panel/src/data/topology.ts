@@ -29,4 +29,5 @@ export const NODES: [string, NodeKind, string?, string?][] = [
 
 export const LINE_STYLE: Record<LinkKind, [string, string]> = { eth: ['2.5px', 'solid'], mesh: ['1.5px', 'solid'], ble: ['1px', 'dotted'], lora: ['1.5px', 'dashed'] };
 
-export const LEGEND: [LinkKind, string][] = [['eth', 'Ethernet / USB'], ['mesh', 'Wi-Fi Mesh'], ['ble', 'Celulares'], ['lora', 'LoRa']];
+/** Ordem da legenda; o rótulo vem do dicionário (`legend.<tipo>`). */
+export const LEGEND: LinkKind[] = ['eth', 'mesh', 'ble', 'lora'];

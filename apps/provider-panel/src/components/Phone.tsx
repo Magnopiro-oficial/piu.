@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { useT } from '../i18n/react';
 import { QrCode } from './QrCode';
 import { Icon, useEscape } from './ui';
 
@@ -33,6 +34,7 @@ function Shell({ title, body, onClose, children }: { title: string; body: string
 export function ApproveOnPhone({ request, code, phone, body, onApprove, onClose }: {
   request: string; code: string; phone: string; body: string; onApprove: (approval: string) => Promise<string | null>; onClose: () => void;
 }) {
+  const t = useT();
   const [approval, setApproval] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -46,24 +48,24 @@ export function ApproveOnPhone({ request, code, phone, body, onApprove, onClose 
     if (problem) setErr(problem);
   };
   return (
-    <Shell title="Confirme no seu celular" body={`${body} Abra o Piu em ${phone} → Nova conversa → Escanear código, e confira se o número é o mesmo.`} onClose={onClose}>
+    <Shell title={t('phone.approveTitle')} body={t('phone.approveBody', { body, phone })} onClose={onClose}>
       <div className="row" style={{ gap: 16, alignItems: 'center' }}>
-        <QrCode value={request} size={132} label="QR do pedido de transferência" />
+        <QrCode value={request} size={132} label={t('phone.qrTransfer')} />
         <div className="col" style={{ gap: 4, alignItems: 'flex-start' }}>
-          <span style={{ fontSize: 12, color: 'var(--ink2)' }}>Código de conferência</span>
-          <span className="mono" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '.08em' }} aria-label={`Código ${code.split('').join(' ')}`}>{spaced(code)}</span>
-          <span style={{ fontSize: 12, color: 'var(--ink2)' }}>vale por 5 minutos</span>
+          <span style={{ fontSize: 12, color: 'var(--ink2)' }}>{t('phone.checkCode')}</span>
+          <span className="mono" style={{ fontSize: 30, fontWeight: 600, letterSpacing: '.08em' }} aria-label={t('phone.codeAria', { code: code.split('').join(' ') })}>{spaced(code)}</span>
+          <span style={{ fontSize: 12, color: 'var(--ink2)' }}>{t('phone.valid5')}</span>
         </div>
       </div>
       <form onSubmit={submit} className="col" style={{ gap: 8, width: '100%', marginTop: 6 }}>
         <label className="col" style={{ gap: 6, textAlign: 'left' }}>
-          <span style={{ fontSize: 13, fontWeight: 550 }}>Código de aprovação que apareceu no celular</span>
+          <span style={{ fontSize: 13, fontWeight: 550 }}>{t('phone.approvalLabel')}</span>
           <input value={approval} onChange={e => { setApproval(e.target.value); setErr(null); }} autoFocus spellCheck={false} autoComplete="off" maxLength={24} placeholder="XXXX XXXX XXXX XXXX"
             className="mono" aria-invalid={!!err} style={{ height: 46, padding: '0 14px', borderRadius: 14, border: 'none', background: 'var(--bg2)', fontSize: 17, letterSpacing: '.08em', color: 'var(--ink)', outline: 'none', boxShadow: `0 0 0 1px ${err ? 'var(--ink)' : 'var(--line2)'} inset` }} />
         </label>
         {err && <div role="alert" style={{ fontSize: 13, textAlign: 'left' }}>{err}</div>}
-        <button type="submit" className="btn btn-primary" disabled={clean.length !== 16 || busy} style={{ height: 48, borderRadius: 24, fontSize: 15, opacity: clean.length === 16 ? 1 : 0.4 }}>{busy ? 'Conferindo…' : 'Concluir transferência'}</button>
-        <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>Cancelar</button>
+        <button type="submit" className="btn btn-primary" disabled={clean.length !== 16 || busy} style={{ height: 48, borderRadius: 24, fontSize: 15, opacity: clean.length === 16 ? 1 : 0.4 }}>{busy ? t('common.checking') : t('phone.finish')}</button>
+        <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>{t('common.cancel')}</button>
       </form>
     </Shell>
   );
@@ -71,6 +73,7 @@ export function ApproveOnPhone({ request, code, phone, body, onApprove, onClose 
 
 /** Parear um celular que aprova transferências: QR com o segredo + código de 6 dígitos de volta. */
 export function PairPhone({ qr, onConfirm, onClose }: { qr: string; onConfirm: (code: string) => Promise<string | null>; onClose: () => void }) {
+  const t = useT();
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const submit = async (e: FormEvent) => {
@@ -80,14 +83,14 @@ export function PairPhone({ qr, onConfirm, onClose }: { qr: string; onConfirm: (
     if (problem) { setErr(problem); setCode(''); }
   };
   return (
-    <Shell title="Parear celular" body="No celular, abra o Piu → Nova conversa → Escanear código e aponte para este QR. Ele mostra um número de 6 dígitos: digite aqui. O QR vale por 10 minutos; não o mostre a mais ninguém." onClose={onClose}>
-      <QrCode value={qr} size={168} label="QR de pareamento do celular" />
+    <Shell title={t('phone.pairTitle')} body={t('phone.pairBody')} onClose={onClose}>
+      <QrCode value={qr} size={168} label={t('phone.qrPair')} />
       <form onSubmit={submit} className="col" style={{ gap: 8, width: '100%' }}>
-        <input value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(null); }} inputMode="numeric" autoFocus aria-label="Código de 6 dígitos do celular"
+        <input value={code} onChange={e => { setCode(e.target.value.replace(/\D/g, '').slice(0, 6)); setErr(null); }} inputMode="numeric" autoFocus aria-label={t('phone.code6Aria')}
           placeholder="000 000" className="mono" style={{ height: 50, textAlign: 'center', borderRadius: 14, border: 'none', background: 'var(--bg2)', fontSize: 24, letterSpacing: '.1em', color: 'var(--ink)', outline: 'none' }} />
         {err && <div role="alert" style={{ fontSize: 13 }}>{err}</div>}
-        <button type="submit" className="btn btn-primary" disabled={code.length !== 6} style={{ height: 48, borderRadius: 24, fontSize: 15, opacity: code.length === 6 ? 1 : 0.4 }}>Confirmar</button>
-        <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>Cancelar</button>
+        <button type="submit" className="btn btn-primary" disabled={code.length !== 6} style={{ height: 48, borderRadius: 24, fontSize: 15, opacity: code.length === 6 ? 1 : 0.4 }}>{t('common.confirm')}</button>
+        <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 44, borderRadius: 22, fontSize: 14.5 }}>{t('common.cancel')}</button>
       </form>
     </Shell>
   );

@@ -1,7 +1,9 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
-import { forgetPersisted, persistNow, readPersisted } from '../lib/persist';
+import { forgetPersisted, persistNow, readPersisted, usePersisted } from '../lib/persist';
+import { accountBalance, checkSettlement, LunesOffline, LunesRpc } from '../lib/lunesRpc';
+import { judgementText, judgePayment, newPayRequest, type PaidNotice, type PaymentJudgement, type PaymentRequest, payRequestSummary } from '../lib/paymentRequest';
 import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
 import { placeFromText } from '../lib/locationCore';
 import { Priority } from '../protocol/envelope';
@@ -13,7 +15,9 @@ import { router } from 'expo-router';
 import { type Contact, Messenger, type NearPeer, type NearRequest } from '../messaging/messenger';
 import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import { policyHours } from '../messaging/hours';
-import { type AlertCategory, type AlertNotice, type AlertSeverity, type AlertView, categoryOf, OFFICIAL_NOTE, severityLabel, type Vote } from '../messaging/communityAlerts';
+import { type AlertCategory, type AlertNotice, type AlertSeverity, type AlertView, type Vote } from '../messaging/communityAlerts';
+import { t } from '../i18n/core';
+import { alertCategoryName, alertSeverityName, alertStatusName, officialNote } from '../i18n/alerts';
 import { GroupRate, groupShouldNotify } from '../messaging/mentions';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import type { EvidenceFile } from '../messaging/evidence';
@@ -36,6 +40,7 @@ import { useNetwork } from './network';
 import { useSettings } from './settings';
 import { useStore } from './store';
 import { useWallet } from './wallet';
+import { DesktopLinkBridge } from '../lib/desktopLinkSession';
 
 const STATE_KEY = 'msg.state';
 /** Último aviso de troca de aparelho aceito de cada contato (contra repetição). */
@@ -139,7 +144,42 @@ interface Messaging {
     /** Denunciar perfil: some da lista de Por perto neste aparelho. */
     hide: (profileId: string) => void;
   } | null;
+  /**
+   * Pedidos de pagamento (regra 7.3; lib/paymentRequest.ts). O Piu não envia LUNES: quem pede manda
+   * o endereço Lunes dele, quem recebe paga pela própria carteira, e quem pediu confere na Mainnet.
+   */
+  payments: {
+    /** Registro de um pedido pelo id da mensagem (aceita o prefixo `in-`). */
+    get: (msgId: string) => PayRecord | undefined;
+    /** Cria e envia ao contato da conversa. Devolve o id. Lança erro em português (sem endereço salvo, valor, texto). */
+    send: (chatId: string, input: { amount: string; desc: string }) => string;
+    /** Reenvia um pedido meu (falha ou expirado na fila), se ainda vale. */
+    resend: (id: string) => void;
+    /** Quem recebeu avisa que pagou; os hashes são opcionais (0x + 64 hex). */
+    markPaid: (id: string, proof: { txHash?: string; blockHash?: string }) => void;
+    /** Quem pediu confere na Mainnet (só leitura). Lança erro sem rede. Nunca marca "recebido" sem prova. */
+    check: (id: string) => Promise<PayCheck>;
+    /** Muda quando um registro muda. */
+    epoch: number;
+  };
 }
+
+/** Pedido de pagamento salvo no aparelho (planck como texto: JSON não guarda BigInt). */
+export interface PayRecord {
+  id: string; chatId: string; dir: 'out' | 'in';
+  address: string; planck: string | null; desc: string;
+  /** Segundos. */
+  createdAt: number; expiresAt: number;
+  /** Só `out`: saldo livre (planck) quando o pedido foi criado; null = nunca lido (a conferência pelo saldo não dá). */
+  baseline?: string | null;
+  /** "Já paguei": `in` = eu avisei; `out` = o contato avisou (sem valer como pago). */
+  paid?: { txHash?: string; blockHash?: string; at: number };
+  /** Só `out`: última conferência na Mainnet. */
+  check?: PayCheck;
+}
+export interface PayCheck { at: number; block: number; state: PaymentJudgement['state']; text: string }
+const PAYS_KEY = 'pay.requests';
+const MAX_PAYS = 200;
 
 export interface Stats {
   metrics: ReturnType<Messenger['metrics']>;
@@ -175,6 +215,19 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [alertEpoch, setAlertEpoch] = useState(0);
   const wallet = useWallet();
   const walletRef = useRef(wallet); walletRef.current = wallet;
+  // Pedidos de pagamento (os mais antigos saem quando passam de MAX_PAYS).
+  const [pays, setPays] = usePersisted<Record<string, PayRecord>>(PAYS_KEY, {});
+  const paysRef = useRef(pays); paysRef.current = pays;
+  const [payEpoch, setPayEpoch] = useState(0);
+  const putPay = useCallback((rec: PayRecord) => {
+    setPays(p => {
+      const next = { ...p, [rec.id]: rec };
+      const ids = Object.keys(next);
+      if (ids.length > MAX_PAYS) for (const id of ids.sort((a, b) => next[a]!.createdAt - next[b]!.createdAt).slice(0, ids.length - MAX_PAYS)) delete next[id];
+      return next;
+    });
+    setPayEpoch(e => e + 1);
+  }, [setPays]);
   const rotationEpoch = useSessionRotationEpoch();
   const { setProfile, setVerified, addChat: addChatRestore } = useStore();
   const importRestored = useRef((d: Record<string, unknown>) => {
@@ -226,6 +279,28 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
 
   const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping });
   handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping };
+  const putPayRef = useRef(putPay); putPayRef.current = putPay;
+
+  /** Lê o saldo livre do endereço na Mainnet, uma vez, para servir de base ao pedido criado agora. */
+  const readBaseline = useCallback(async (id: string, address: string) => {
+    const rpc = new LunesRpc();
+    try {
+      const b = await accountBalance(rpc, address);
+      const cur = paysRef.current[id];
+      // Só se ainda não há base nem conferência: uma base lida depois de pagar marcaria como "nada".
+      if (cur && cur.baseline == null && !cur.check && !cur.paid) putPayRef.current({ ...cur, baseline: b.free.toString() });
+    } catch { /* sem rede: a conferência pelo saldo fica indisponível; pelo hash continua */ } finally { rpc.close(); }
+  }, []);
+
+  /** Pedido meu: envia pela sessão e acompanha os estados como uma mensagem. */
+  const sendPay = useCallback((rec: PayRecord, r: PaymentRequest, peer: string) => {
+    const m = mRef.current;
+    if (!m) throw new Error('As chaves ainda estão carregando.');
+    const ct = m.getContact(peer);
+    if (ct?.request) m.addContact(ct); // pedir aceita o pedido de conversa, como responder
+    msgToChat.current.set(r.id, rec.chatId);
+    m.sendPayRequest(peer, r);
+  }, []);
 
   // Cria o mensageiro quando as chaves existem.
   useEffect(() => {
@@ -395,6 +470,23 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           if (expiresAt && expiresAt <= Date.now()) return;
           if (x.route) routeRef.current(cid, 'in-' + x.msgId, 'in', x.route);
           handlers.current.receive(cid, { id: 'in-' + x.msgId, from: 'them', ...textOf(x), time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
+        },
+        // Pedido de pagamento de um contato aceito: vira registro + balão na conversa dele.
+        paymentRequest: (contactId, r, _sentAt, route) => {
+          const cid = chatIdFor(contactId);
+          if (!chatsRef.current.some(c => c.id === cid) || paysRef.current[r.id]) return;
+          putPayRef.current({ id: r.id, chatId: cid, dir: 'in', address: r.address, planck: r.planck?.toString() ?? null, desc: r.desc, createdAt: r.createdAt, expiresAt: r.expiresAt });
+          if (route) routeRef.current(cid, 'in-' + r.id, 'in', route);
+          handlers.current.receive(cid, { id: 'in-' + r.id, from: 'them', text: payRequestSummary(r), time: nowHM() });
+        },
+        // O contato avisou que pagou um pedido MEU: só registra e avisa; "recebido" exige conferir na Mainnet.
+        paymentPaid: (contactId, n) => {
+          const rec = paysRef.current[n.id];
+          if (!rec || rec.dir !== 'out' || rec.chatId !== chatIdFor(contactId) || rec.paid) return;
+          putPayRef.current({ ...rec, paid: { ...(n.txHash ? { txHash: n.txHash } : {}), ...(n.blockHash ? { blockHash: n.blockHash } : {}), at: Date.now() } });
+          const chat = chatsRef.current.find(c => c.id === rec.chatId);
+          handlers.current.showToast({ kind: 'wallet', icon: 'account_balance_wallet', title: `${chat?.name ?? 'Contato'} avisou que pagou`, body: 'Confira na Mainnet antes de considerar recebido.', href: `/chat/${rec.chatId}`,
+            hidden: { title: 'Pedido de pagamento', body: 'Abra o Piu para conferir.' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: rec.chatId } }) });
         },
       },
     });
@@ -681,18 +773,72 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       usage: { activeDays: messenger.deliveryDays.activeDays(), accepted: messenger.acceptedInvites() },
     } : null),
     evidence: () => (messenger ? messenger.evidence() : null),
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat]); // eslint-disable-line react-hooks/exhaustive-deps
+    payments: {
+      get: msgId => pays[msgId.replace(/^in-/, '')],
+      send: (chatId, input) => {
+        const chat = chats.find(c => c.id === chatId);
+        if (!chat?.peer) throw new Error('Pedido de pagamento só em conversa com uma pessoa.');
+        const address = wallet.lunesAddress;
+        const r = newPayRequest({ address, amount: input.amount, desc: input.desc, now: now() });
+        const snap = wallet.onchainSnap;
+        const rec: PayRecord = { id: r.id, chatId, dir: 'out', address: r.address, planck: r.planck?.toString() ?? null, desc: r.desc, createdAt: r.createdAt, expiresAt: r.expiresAt,
+          baseline: snap && snap.address === r.address ? snap.free : null };
+        putPay(rec);
+        receive(chatId, { id: r.id, from: 'me', text: payRequestSummary(r), time: nowHM(), status: 'criada', at: Date.now() });
+        try { sendPay(rec, r, chat.peer); setMsgStatus(chatId, r.id, 'aguardando'); } catch { setMsgStatus(chatId, r.id, 'falha'); }
+        if (rec.baseline == null) void readBaseline(r.id, r.address);
+        return r.id;
+      },
+      resend: id => {
+        const rec = pays[id];
+        const chat = rec && chats.find(c => c.id === rec.chatId);
+        if (!rec || rec.dir !== 'out' || !chat?.peer) return;
+        if (rec.expiresAt <= now()) { setMsgStatus(rec.chatId, id, 'falha'); throw new Error('Este pedido venceu. Crie outro.'); }
+        const r: PaymentRequest = { id: rec.id, address: rec.address, planck: rec.planck != null ? BigInt(rec.planck) : null, desc: rec.desc, createdAt: rec.createdAt, expiresAt: rec.expiresAt };
+        try { sendPay(rec, r, chat.peer); setMsgStatus(rec.chatId, id, 'aguardando'); } catch { setMsgStatus(rec.chatId, id, 'falha'); }
+      },
+      markPaid: (id, proof) => {
+        const rec = pays[id];
+        const chat = rec && chats.find(c => c.id === rec.chatId);
+        if (!rec || rec.dir !== 'in' || !chat?.peer || !messenger) throw new Error('Pedido não encontrado.');
+        const n: PaidNotice = { id, ...(proof.txHash ? { txHash: proof.txHash.toLowerCase() } : {}), ...(proof.blockHash ? { blockHash: proof.blockHash.toLowerCase() } : {}) };
+        messenger.sendPaid(chat.peer, n);
+        putPay({ ...rec, paid: { ...(n.txHash ? { txHash: n.txHash } : {}), ...(n.blockHash ? { blockHash: n.blockHash } : {}), at: Date.now() } });
+      },
+      check: async id => {
+        const rec = pays[id];
+        if (!rec || rec.dir !== 'out') throw new Error('Pedido não encontrado.');
+        const rpc = new LunesRpc();
+        try {
+          const b = await accountBalance(rpc, rec.address);
+          // Com o hash do bloco (e da transação, se veio), confere a transação dentro dele.
+          const tx = rec.paid?.blockHash ? await checkSettlement(rpc, { blockHash: rec.paid.blockHash, ...(rec.paid.txHash ? { txHash: rec.paid.txHash } : {}) }) : undefined;
+          const j = judgePayment({ planck: rec.planck != null ? BigInt(rec.planck) : null, baseline: rec.baseline != null ? BigInt(rec.baseline) : null, free: b.free, tx });
+          const check: PayCheck = { at: Date.now(), block: b.block, state: j.state, text: judgementText(j) };
+          const cur = paysRef.current[id] ?? rec;
+          // Sem base e sem prova: a leitura de agora vira a base, para a próxima conferência comparar.
+          putPay({ ...cur, check, ...(cur.baseline == null && j.state === 'indeterminado' && j.reason === 'sem-base' ? { baseline: b.free.toString() } : {}) });
+          return check;
+        } catch (e) {
+          if (e instanceof LunesOffline) throw new Error('Sem rede até a Lunes Mainnet: não deu para conferir agora.');
+          throw e instanceof Error ? e : new Error('Falha na consulta.');
+        } finally { rpc.close(); }
+      },
+      epoch: payEpoch,
+    },
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
+  // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
+  return <Ctx.Provider value={value}>{children}<DesktopLinkBridge /></Ctx.Provider>;
 }
 
 /** Banner e notificação de um alerta da comunidade (com a rota para a tela do alerta). */
 function alertToast(v: AlertView, n: AlertNotice) {
-  const title = n.update ? `Confirmado pela comunidade · ${v.title}` : `${severityLabel(v.sev)} · ${v.title}`;
-  const body = `${v.communityName || 'Comunidade'} · ${v.area || categoryOf(v.cat).label}. ${OFFICIAL_NOTE}`;
+  const title = n.update ? `${alertStatusName('confirmed')} · ${v.title}` : `${alertSeverityName(v.sev)} · ${v.title}`;
+  const body = `${v.communityName || t('alert.row.community')} · ${v.area || alertCategoryName(v.cat)}. ${officialNote()}`;
   const go = () => router.push({ pathname: '/alert', params: { id: v.id } });
-  return { kind: 'alert' as const, critical: n.level === 'critical', icon: 'warning', title, body, action: 'Ver', href: `/alert?id=${encodeURIComponent(v.id)}`,
-    hidden: { title: 'Alerta da comunidade', body: 'Abra o Piu para ver.' }, go };
+  return { kind: 'alert' as const, critical: n.level === 'critical', icon: 'warning', title, body, action: t('alertToast.see'), href: `/alert?id=${encodeURIComponent(v.id)}`,
+    hidden: { title: t('notify.hidden.alert'), body: t('alertToast.openToSee') }, go };
 }
 
 /** Prefixo do link de convite de grupo, canal ou comunidade. */

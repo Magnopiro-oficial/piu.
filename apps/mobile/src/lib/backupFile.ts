@@ -60,9 +60,16 @@ async function deriveKey(password: string, h: Header, o: KdfProgress) {
 }
 
 /** Avalia a senha escolhida para o arquivo. `null` = boa o suficiente. */
+/** Motivo de a senha não servir (`short` = curta, `repetitive` = poucos caracteres distintos), ou null. A tela traduz. */
+export function passwordIssue(p: string): 'short' | 'repetitive' | null {
+  if (p.length < MIN_PASSWORD) return 'short';
+  if (new Set(p).size < 5) return 'repetitive';
+  return null;
+}
 export function passwordProblem(p: string): string | null {
-  if (p.length < MIN_PASSWORD) return `Use pelo menos ${MIN_PASSWORD} caracteres.`;
-  if (new Set(p).size < 5) return 'Senha repetitiva demais.';
+  const k = passwordIssue(p);
+  if (k === 'short') return `Use pelo menos ${MIN_PASSWORD} caracteres.`;
+  if (k === 'repetitive') return 'Senha repetitiva demais.';
   return null;
 }
 

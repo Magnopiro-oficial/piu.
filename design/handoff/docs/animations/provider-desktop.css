@@ -1,0 +1,51 @@
+/* Extraído de design/PiuProviderDesktop.dc.html — keyframes exatos + usos encontrados no arquivo. */
+
+/* ---- estilos globais do <helmet> (variáveis, resets, reduced-motion) ---- */
+*{box-sizing:border-box}input{font-family:inherit}input::placeholder{color:var(--ink3)}a{color:inherit}a:hover{opacity:.7}
+[data-piu-theme="light"]{--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--knob:#ffffff;--scrim:rgba(0,0,0,.28)}
+[data-piu-theme="dark"]{--bg:#0a0a0a;--bg2:#161616;--bg3:#262626;--side:#0e0e0e;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--knob:#8c8c88;--scrim:rgba(0,0,0,.62)}
+
+
+
+
+
+
+
+
+
+
+
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}}
+
+/* ---- keyframes ---- */
+@keyframes piuUp{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+/* usos: piuUp .45s both | piuUp .45s .05s both | piuUp .35s both | piuUp .4s both | piuUp .45s | piuUp .5s .15s both */
+
+@keyframes piuFade{from{opacity:0}to{opacity:1}}
+/* usos: piuFade .2s ease-out both */
+
+@keyframes piuPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
+/* usos: piuPop .4s .05s cubic-bezier(.2,.9,.3,1.4) both | piuPop .4s .1s cubic-bezier(.2,.9,.3,1.4) both | piuPop .35s | piuPop .38s cubic-bezier(.2,.9,.3,1.4) */
+
+@keyframes piuDialog{from{opacity:0;transform:scale(.94) translateY(8px)}to{opacity:1;transform:none}}
+/* usos: piuDialog .32s cubic-bezier(.2,.9,.3,1.15) both | piuDialog .3s cubic-bezier(.2,.9,.3,1.2) both */
+
+@keyframes piuGrow{from{transform:scaleY(0)}to{transform:scaleY(1)}}
+/* usos: piuGrow .6s */
+
+@keyframes piuGrowX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+/* usos: piuGrowX .7s cubic-bezier(.2,.9,.3,1) both | piuGrowX .7s */
+
+@keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
+/* usos: piuBreath 1.6s ease-in-out infinite | piuBreath 1.4s ease-in-out infinite | piuBreath 1.2s ease-in-out infinite */
+
+@keyframes piuRingS{from{transform:scale(1);opacity:.55}to{transform:scale(2.3);opacity:0}}
+/* usos: piuRingS 2.6s ease-out infinite | piuRingS 1.8s ease-out infinite */
+
+@keyframes piuTravel{from{left:0%}to{left:100%}}
+
+@keyframes piuPanel{from{transform:translateX(24px);opacity:0}to{transform:none;opacity:1}}
+/* usos: piuPanel .32s cubic-bezier(.2,.9,.3,1) both */
+
+@keyframes piuToast{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
+/* usos: piuToast .4s cubic-bezier(.2,.9,.3,1.15) both */

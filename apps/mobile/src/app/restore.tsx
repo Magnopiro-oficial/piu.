@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { RESTORE_OPTS } from '../data/settings';
 import { BackupError, openBackup, parseBackupHeader } from '../lib/backupFile';
+import { useT } from '../i18n';
 import { pickBackupFile } from '../lib/migrationIO';
 import { requestDeviceChangeNotice, requestSessionRotation, stashRestoredData } from '../lib/migrationState';
 import { isValidPhrase, PHRASE_WORDS, WORDLIST } from '../protocol';
@@ -26,8 +27,15 @@ import { T } from '../ui/T';
  * - Nos dois casos as sessões antigas saem e os contatos recebem um aviso assinado de troca de aparelho.
  * - Outro aparelho: a transferência (QR + código de 4 palavras) acontece na tela seguinte.
  */
+/** Erro do arquivo de backup no idioma em uso: o código vem de lib/backupFile.ts; a mensagem pt-BR fica lá. */
+function backupErr(e: unknown, t: ReturnType<typeof useT>): string {
+  if (!(e instanceof BackupError)) return (e as Error).message;
+  return e.code === 'AUTH' ? t('restore.err.auth') : e.code === 'CONTENT' ? t('restore.err.content') : e.code === 'PASSWORD' ? t('restore.err.password') : t('restore.err.format');
+}
+
 export default function Restore() {
   const { c } = useTheme();
+  const t = useT();
   const { restoreMode, setRestoreMode } = useSettings();
   const { restore } = useKeys();
   const [words, setWords] = useState<string[]>(Array(PHRASE_WORDS).fill(''));
@@ -39,9 +47,9 @@ export default function Restore() {
   const filled = words.every(Boolean);
   const unknown = words.filter(w => w && !WORDLIST.includes(w)).length;
   const valid = isValidPhrase(words);
-  const hint = !filled ? `${words.filter(Boolean).length} de ${PHRASE_WORDS} palavras`
-    : unknown ? `${unknown} ${unknown > 1 ? 'palavras não estão' : 'palavra não está'} na lista`
-      : valid ? 'Frase confere.' : 'As palavras não formam uma frase válida. Confira a ordem e cada palavra.';
+  const hint = !filled ? t('restore.words', { n: words.filter(Boolean).length, total: PHRASE_WORDS })
+    : unknown ? t('restore.unknownWords', { count: unknown })
+      : valid ? t('restore.phraseOk') : t('restore.phraseInvalid');
   const canGo = !busy && (restoreMode === 'device' || (restoreMode === 'phrase' && valid) || (restoreMode === 'file' && !!file && !!pw));
 
   const choose = async () => {
@@ -53,7 +61,7 @@ export default function Restore() {
       setFile(f);
     } catch (e) {
       setFile(null);
-      setErr((e as Error).message);
+      setErr(backupErr(e, t));
     }
   };
 
@@ -81,7 +89,7 @@ export default function Restore() {
       setPw('');
       router.push({ pathname: '/migrate', params: { file: file.name, hist: content.data ? String(Object.keys(content.data).length) : '0' } });
     } catch (e) {
-      setErr(e instanceof BackupError ? e.message : restoreMode === 'file' ? 'Não foi possível abrir o arquivo.' : 'Não foi possível guardar as chaves no cofre do aparelho.');
+      setErr(e instanceof BackupError ? backupErr(e, t) : restoreMode === 'file' ? t('restore.err.open') : t('restore.err.vault'));
     } finally { setBusy(false); }
   };
 
@@ -89,9 +97,9 @@ export default function Restore() {
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
-        <StepHeader step="RECUPERAR" title="Traga suas chaves para este aparelho." sub="Sem servidor: elas vêm de outro aparelho seu, da sua frase ou de um arquivo de backup." />
-        <View accessibilityRole="radiogroup" accessibilityLabel="Como recuperar" style={{ paddingHorizontal: 20, gap: 10 }}>
-          {RESTORE_OPTS.map(([k, icon, title, desc]) => <OptionCard key={k} icon={icon} title={title} desc={desc} on={restoreMode === k} onPress={() => { setRestoreMode(k); setErr(null); }} />)}
+        <StepHeader step={t('restore.step')} title={t('restore.title')} sub={t('restore.sub')} />
+        <View accessibilityRole="radiogroup" accessibilityLabel={t('restore.how')} style={{ paddingHorizontal: 20, gap: 10 }}>
+          {RESTORE_OPTS.map(([k, icon, title, desc]) => <OptionCard key={k} icon={icon} title={t(title)} desc={t(desc)} on={restoreMode === k} onPress={() => { setRestoreMode(k); setErr(null); }} />)}
         </View>
         {restoreMode === 'phrase' && (
           <View style={{ marginTop: 14, marginHorizontal: 20, gap: 8 }}>
@@ -102,27 +110,27 @@ export default function Restore() {
         {restoreMode === 'device' && (
           <View style={{ marginTop: 14, marginHorizontal: 20, padding: 14, borderRadius: 18, backgroundColor: c.bg2, flexDirection: 'row', gap: 12 }}>
             <Icon name="phonelink_ring" size={20} w={300} />
-            <T size={13} lh={1.45} color={c.ink2} style={{ flex: 1 }}>No aparelho antigo, abra o Piu em Perfil → Aparelhos → Adicionar aparelho. Os dois precisam estar lado a lado.</T>
+            <T size={13} lh={1.45} color={c.ink2} style={{ flex: 1 }}>{t('restore.device.hint')}</T>
           </View>
         )}
         {restoreMode === 'file' && (
           <View style={{ marginTop: 14, marginHorizontal: 20, padding: 14, borderRadius: 20, backgroundColor: c.bg2, gap: 10 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <Icon name="sd_card" size={22} w={300} />
-              <T size={13.5} w={file ? 600 : 400} color={file ? c.ink : c.ink2} mono={!!file} numberOfLines={1} style={{ flex: 1 }}>{file ? file.name : 'Nenhum arquivo escolhido'}</T>
+              <T size={13.5} w={file ? 600 : 400} color={file ? c.ink : c.ink2} mono={!!file} numberOfLines={1} style={{ flex: 1 }}>{file ? file.name : t('restore.noFile')}</T>
             </View>
-            <Button label={file ? 'Escolher outro arquivo' : 'Escolher arquivo .piu'} variant="outline" height={44} disabled={busy} onPress={() => { void choose(); }} />
+            <Button label={file ? t('restore.chooseOther') : t('restore.chooseFile')} variant="outline" height={44} disabled={busy} onPress={() => { void choose(); }} />
             {file && (
-              <TextInput value={pw} onChangeText={t => { setPw(t); setErr(null); }} placeholder="Senha do arquivo" placeholderTextColor={c.ink3} accessibilityLabel="Senha do arquivo"
+              <TextInput value={pw} onChangeText={v => { setPw(v); setErr(null); }} placeholder={t('backup.pw.label')} placeholderTextColor={c.ink3} accessibilityLabel={t('backup.pw.label')}
                 secureTextEntry autoCapitalize="none" autoCorrect={false} textContentType="password" editable={!busy} onSubmitEditing={() => { if (canGo) void go(); }}
                 style={{ height: 48, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.bg, color: c.ink, fontSize: 15, fontFamily: fontFamily(500) }} />
             )}
-            {busy && <T size={12.5} color={c.ink2} accessibilityLiveRegion="polite">Abrindo o arquivo… {Math.round(progress * 100)}%</T>}
+            {busy && <T size={12.5} color={c.ink2} accessibilityLiveRegion="polite">{t('restore.opening')} {Math.round(progress * 100)}%</T>}
           </View>
         )}
         {err && <T size={13} accessibilityRole="alert" style={{ paddingTop: 12, paddingHorizontal: 24 }}>{err}</T>}
         <View style={{ paddingTop: 22, paddingHorizontal: 20 }}>
-          <Button label={busy ? 'Aguarde…' : 'Continuar'} disabled={!canGo} onPress={() => { void go(); }} />
+          <Button label={busy ? t('restore.wait') : t('common.continue')} disabled={!canGo} onPress={() => { void go(); }} />
         </View>
       </ScrollView>
     </Screen>

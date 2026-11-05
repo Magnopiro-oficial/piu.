@@ -10,6 +10,7 @@
  * publicado: o texto pede o instalador a quem convidou e explica como colar o convite se o link não abrir.
  */
 import { CARD_PREFIX } from '../messaging/card';
+import { tIn, type Key, type Lang } from '../i18n/core';
 import { utf8 } from '../protocol/bytes';
 import { hash } from '../protocol/suite';
 import { codeWords } from './migration';
@@ -46,19 +47,25 @@ export function storeLinksFrom(extra: unknown): StoreLinks {
 export const hasStoreLinks = (l: StoreLinks) => !!(l.ios || l.android);
 
 /** Texto para o Share do sistema: quem convida, o link e, se houver, onde baixar o app. */
-export function inviteShareText(o: { name: string; link: string; store: StoreLinks }): string {
-  const who = o.name && o.name !== 'Você' ? `${o.name} convidou você para conversar no Piu.` : 'Você foi convidado para conversar no Piu.';
-  const lines = [who, '', `Com o Piu instalado, abra este convite (vale uma vez, por 24 h):`, o.link,
+/**
+ * Texto do convite compartilhado. Viaja para outra pessoa, então sai no idioma de quem envia (`lang`;
+ * padrão pt-BR). Os textos ficam no dicionário (src/i18n, chaves `inviteText.*`).
+ */
+export function inviteShareText(o: { name: string; link: string; store: StoreLinks }, lang: Lang = 'pt-BR'): string {
+  const t = (k: Key, vars?: Record<string, string | number>) => tIn(lang, k, vars);
+  const named = !!o.name && o.name !== 'Você' && o.name !== tIn(lang, 'common.you');
+  const who = named ? t('inviteText.who', { name: o.name }) : t('inviteText.anonWho');
+  const lines = [who, '', t('inviteText.open'), o.link,
     // Muitos apps não tornam `piu://` clicável e o navegador faz uma busca com ele.
-    '', 'Se o link não abrir, copie esta mensagem inteira, abra o Piu e cole em Nova conversa.'];
-  lines.push('', 'Ainda não tem o Piu?');
+    '', t('inviteText.fallback')];
+  lines.push('', t('inviteText.noApp'));
   if (hasStoreLinks(o.store)) {
     if (o.store.android) lines.push(`Android: ${o.store.android}`);
     if (o.store.ios) lines.push(`iPhone: ${o.store.ios}`);
   } else {
     // Antes das lojas, o instalador só vem de quem já tem o app.
-    const from = o.name && o.name !== 'Você' ? o.name : 'quem convidou';
-    lines.push(`O app ainda não está nas lojas: peça o instalador a ${from}.`);
+    const from = named ? o.name : t('inviteText.inviter');
+    lines.push(t('inviteText.notInStores', { from }));
   }
   return lines.join('\n');
 }

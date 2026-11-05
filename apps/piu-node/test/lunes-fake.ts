@@ -5,6 +5,7 @@
  * rede de produção). Dois jeitos de servir: WebSocket falso em memória (qualquer Node) e um servidor
  * WebSocket de verdade em 127.0.0.1 (para provar o WebSocket global do Node 22 com o cliente).
  */
+import { twox128 } from '../src/lunes/xxhash.js';
 import { blake2b } from '@noble/hashes/blake2.js';
 import { createHash } from 'node:crypto';
 import { createServer, type Server } from 'node:http';
@@ -21,20 +22,106 @@ const le = (v: bigint, n: number) => { const o = Buffer.alloc(n); for (let i = 0
 export const accountInfoHex = (nonce: number, free: bigint) =>
   hex(Buffer.concat([le(BigInt(nonce), 4), le(1n, 4), le(1n, 4), le(0n, 4), le(free, 16), le(0n, 16), le(0n, 16), le(1n << 127n, 16)]));
 
-export function substrate(c: { finalized: number; storage: Record<string, string> }) {
+export interface FakeChain {
+  finalized: number;
+  storage: Record<string, string>;
+  /** `state_getRuntimeVersion` (padrão: o da Mainnet conferido em 2026-11-04, 107/2). */
+  runtime?: { specVersion: number; transactionVersion: number };
+  /** `system_accountNextIndex` por endereço (prefixo 57). Ausente: 0. */
+  nonce?: Record<string, number>;
+  /** Resposta de `TaggedTransactionQueue_validate_transaction` (hex SCALE). Padrão: Ok. */
+  validity?: string | ((extrinsic: string) => string);
+  /** Extrínsecos por número de bloco (hex com prefixo de tamanho); blocos ≤ finalized existem mesmo vazios. */
+  extrinsics?: Record<number, string[]>;
+  /** `author_submitExtrinsic` recusa com erro 1010 (ex.: sem saldo para a taxa). */
+  submitError?: string | (() => string | undefined);
+  submitErrorCode?: number;
+  /** Simula envio aceito cuja resposta se perde. */
+  dropSubmitResponses?: boolean | number;
+  metadata?: string;
+  events?: Record<number, string>;
+}
+
+/** `Ok(ValidTransaction{priority 0, requires [], provides [], longevity 64, propagate true})` em SCALE. */
+export const VALID_OK = '0x00' + '0000000000000000' + '00' + '00' + '4000000000000000' + '01';
+/** `Err(Invalid(Payment))` e `Err(Invalid(BadProof))`, como a Mainnet devolveu ao spike. */
+export const INVALID_PAYMENT = '0x010001';
+export const INVALID_BAD_PROOF = '0x010004';
+
+/** Hash de um extrinsic (com o prefixo de tamanho), como o nó devolve em `author_submitExtrinsic`. */
+export const extrinsicHashOf = (hexXt: string) => hex(blake2b(Buffer.from(hexXt.slice(2), 'hex'), { dkLen: 32 }));
+
+/**
+ * Nó falso da cadeia `c` (mutável: os testes avançam `finalized` e põem extrínsecos em blocos). Responde
+ * leitura (saldo) e escrita (nonce, taxa, validação sem enviar, envio, blocos) no formato de um nó Substrate.
+ */
+export function substrate(c: FakeChain) {
   const head = (n: number) => ({ parentHash: hashOf(`bloco ${n - 1}`), number: '0x' + n.toString(16), stateRoot: hashOf(`estado ${n}`), extrinsicsRoot: hashOf(`extr ${n}`), digest: { logs: [] } });
   const calls: string[] = [];
-  const handle = (method: string, params: unknown[]): { result?: unknown; error?: { code: number; message: string } } => {
+  const submitted: string[] = [];
+  /** Melhor bloco: o finalizado ou o bloco mais alto que recebeu extrínsecos (ainda não finalizado). */
+  const best = () => Math.max(c.finalized, ...Object.keys(c.extrinsics ?? {}).map(Number));
+  // Hash → número: a gênese, o finalizado, o melhor, os blocos com extrínsecos e todo hash que este nó já
+  // entregou em `chain_getBlockHash` (como um nó de verdade, só conhece hashes que existem).
+  const byHash = new Map<string, number>();
+  const remember = (n: number) => { const h = hashOf(`bloco ${n}`); byHash.set(h, n); return h; };
+  const known = (h: unknown): number | null => {
+    for (const n of [0, c.finalized, best(), ...Object.keys(c.extrinsics ?? {}).map(Number)]) remember(n);
+    return byHash.get(h as string) ?? null;
+  };
+  const eventsKey = hex(Uint8Array.from([...twox128("System"), ...twox128("Events")]));
+  const handle = (method: string, params: unknown[]): { result?: unknown; drop?: boolean; error?: { code: number; message: string } } => {
     calls.push(method);
     switch (method) {
       case 'chain_getFinalizedHead': return { result: hashOf(`bloco ${c.finalized}`) };
-      case 'chain_getHeader': return { result: params[0] === hashOf(`bloco ${c.finalized}`) || params[0] === undefined ? head(c.finalized) : null };
-      case 'state_getStorage': return { result: c.storage[params[0] as string] ?? null };
+      case 'chain_getHeader': {
+        if (params[0] === undefined) return { result: head(best()) };
+        const n = known(params[0]);
+        return { result: n === null ? null : head(n) };
+      }
+      case 'chain_getBlockHash': {
+        const n = params[0] as number | undefined;
+        if (n === undefined) return { result: remember(best()) };
+        return { result: n <= best() ? remember(n) : null };
+      }
+      case 'chain_getBlock': {
+        const n = known(params[0]);
+        return { result: n === null ? null : { block: { header: head(n), extrinsics: c.extrinsics?.[n] ?? [] }, justifications: null } };
+      }
+      case 'state_getRuntimeVersion': {
+        const rv = c.runtime ?? { specVersion: 107, transactionVersion: 2 };
+        return { result: { specName: 'lunes-nightly', implName: 'lunes-nightly', authoringVersion: 1, implVersion: 1, stateVersion: 2, apis: [], ...rv } };
+      }
+      case 'state_getMetadata': return c.metadata ? { result: c.metadata } : { error: { code: -32601, message: 'No metadata fixture' } };
+      case 'state_getStorage': {
+        if (params[0] === eventsKey) { const n = known(params[1]); return { result: n === null ? null : c.events?.[n] ?? null }; }
+        return { result: c.storage[params[0] as string] ?? null };
+      }
       case 'system_chain': return { result: 'Cadeia de teste' };
+      case 'system_accountNextIndex': return { result: c.nonce?.[params[0] as string] ?? 0 };
+      // Lunes: só a parte por byte (1 000 planck/byte), como `payment_queryFeeDetails` mostrou no spike.
+      case 'payment_queryInfo': return { result: { weight: { refTime: 157_000_000, proofSize: 3593 }, class: 'Normal', partialFee: String(((params[0] as string).length - 2) / 2 * 1000) } };
+      case 'state_call': {
+        if (params[0] !== 'TaggedTransactionQueue_validate_transaction') return { error: { code: -32601, message: 'Method not found' } };
+        const v = c.validity ?? VALID_OK;
+        // dados = 0x01 (Local) ‖ extrinsic ‖ hash do bloco (32 bytes)
+        const xt = '0x' + (params[1] as string).slice(4, -64);
+        return { result: typeof v === 'function' ? v(xt) : v };
+      }
+      case 'author_submitExtrinsic': {
+        const submitError = typeof c.submitError === 'function' ? c.submitError() : c.submitError;
+        if (submitError) return { error: { code: c.submitErrorCode ?? 1010, message: submitError } };
+        submitted.push(params[0] as string);
+        if (c.dropSubmitResponses) {
+          if (typeof c.dropSubmitResponses === 'number') c.dropSubmitResponses--;
+          return { drop: true };
+        }
+        return { result: extrinsicHashOf(params[0] as string) };
+      }
       default: return { error: { code: -32601, message: 'Method not found' } };
     }
   };
-  return { handle, calls };
+  return { handle, calls, submitted };
 }
 
 /** WebSocket falso: endereços em `down` falham ao conectar, os outros respondem com `handle`. */
@@ -47,6 +134,7 @@ export function fakeConnect(handle: ReturnType<typeof substrate>['handle'], down
       send(data: string) {
         const m = JSON.parse(data) as { id: number; method: string; params: unknown[] };
         const r = handle(m.method, m.params);
+        if (r.drop) return;
         setTimeout(() => ws.onmessage?.({ data: JSON.stringify({ jsonrpc: '2.0', id: m.id, ...r }) }), 1);
       },
       close() { ws.readyState = 3; },

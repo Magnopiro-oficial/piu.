@@ -11,8 +11,11 @@ import { fileURLToPath } from 'node:url';
 const here = dirname(fileURLToPath(import.meta.url));
 export const SRC = join(here, '../../mobile/src/protocol');
 export const DST = join(here, '../src/protocol');
-/** Só o que o nó usa: rotear, recibos, fragmentos e o LNNP. Nada de sessões, catraca nem frase. */
-export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'router', 'fragment', 'lnnp'];
+/**
+ * Só o que o nó usa: rotear, recibos, fragmentos e o LNNP. Nada de sessões nem catraca. `phrase` entra
+ * só porque src/lunes/walletKey.ts (cópia) importa `isValidPhrase`; o nó nunca gera nem guarda frase.
+ */
+export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'router', 'fragment', 'lnnp', 'phrase'];
 
 /**
  * Ajustes só de tipo (o comportamento é idêntico) para compilar com `noUncheckedIndexedAccess`,

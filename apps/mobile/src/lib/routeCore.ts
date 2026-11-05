@@ -15,7 +15,10 @@ import { FRAME_HEADER_BYTES } from '../transport/frames';
 import { MEDIA } from '../transport/select';
 import type { Medium } from '../transport/types';
 import type { IconName } from '../ui/Icon';
-import { VIA_ICON, VIA_LABEL } from './networkCore';
+import { VIA_ICON, viaLabel } from './networkCore';
+import { t as tGlobal, type Key, type Vars } from '../i18n/core';
+/** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
+type Tr = (key: Key, vars?: Vars) => string;
 
 export interface RouteRec {
   /** Id da mensagem na conversa (o mesmo de `Msg.id`). */
@@ -43,6 +46,9 @@ export const ROUTE_HISTORY = 20;
 
 /** Rótulos de prioridade (design: "Normal" e "Alta"). */
 export const PRIORITY_LABEL: Record<Priority, string> = { [Priority.Low]: 'Baixa', [Priority.Normal]: 'Normal', [Priority.High]: 'Alta', [Priority.Critical]: 'Crítica' };
+const PRIORITY_KEY: Record<Priority, Key> = { [Priority.Low]: 'priority.low', [Priority.Normal]: 'priority.normal', [Priority.High]: 'priority.high', [Priority.Critical]: 'priority.critical' };
+/** Prioridade no idioma em uso (`PRIORITY_LABEL` é a referência pt-BR). */
+export const priorityLabel = (p: Priority, t: Tr = tGlobal) => t(PRIORITY_KEY[p]);
 
 /** Blocos em que um envelope de `bytes` vai pelo meio (cabeçalho de bloco de transport/frames.ts). */
 export function fragmentsFor(bytes: number, medium: Medium): number {
@@ -55,12 +61,12 @@ export function makeRoute(o: { msgId: string; dir: 'out' | 'in'; medium: Medium;
   return { m: o.msgId, d: o.dir, md: o.medium, ...(o.dir === 'in' && o.hops ? { h: o.hops } : {}), b: o.bytes, f: fragmentsFor(o.bytes, o.medium), p: o.priority, at: o.at };
 }
 
-const hopsText = (h: number) => (h <= 1 ? 'direto' : `${h} saltos`);
+const hopsText = (h: number, t: Tr) => (h <= 1 ? t('route.direct') : t('route.hops', { count: h }));
 
 /** Texto do meio, como no design ("Bluetooth LE · direto", "Wi-Fi Direct · 3 saltos"). */
-export function routeLabel(r: RouteRec): string {
-  const base = VIA_LABEL[r.md];
-  return r.d === 'in' && r.h ? `${base} · ${hopsText(r.h)}` : base;
+export function routeLabel(r: RouteRec, t: Tr = tGlobal): string {
+  const base = viaLabel(r.md, t);
+  return r.d === 'in' && r.h ? `${base} · ${hopsText(r.h, t)}` : base;
 }
 export const routeIcon = (r: RouteRec): IconName => VIA_ICON[r.md];
 

@@ -15,6 +15,9 @@ import type { NotifKey, Preview } from '../data/settings';
 import type { Chat } from '../data/types';
 import { type AlertView, lockAlerts } from '../messaging/communityAlerts';
 import { msgSummary } from './chatCore';
+import { t as tGlobal, type Key, type Vars } from '../i18n/core';
+/** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
+type Tr = (key: Key, vars?: Vars) => string;
 
 export interface LockItem {
   id: string;
@@ -38,7 +41,7 @@ export const notifKindOf = (c: Pick<Chat, 'kind'>): NotifKey => (c.kind === 'gro
 export function lockItems(o: {
   chats: Chat[]; preview: Preview; notifs: Record<NotifKey, boolean>;
   alerts?: AlertView[]; now: number;
-}): LockItem[] {
+}, t: Tr = tGlobal): LockItem[] {
   const hide = o.preview !== 'always';
   const out: LockItem[] = [];
   if (o.alerts && o.notifs.alert) {
@@ -46,8 +49,8 @@ export function lockItems(o: {
       if (a.until * 1000 <= o.now) continue;
       out.push({
         id: 'alert:' + a.id, critical: true,
-        title: hide ? 'Piu' : `Alerta grave · ${a.communityName || 'comunidade'}`,
-        body: hide ? 'Alerta da comunidade' : a.area ? `${a.title} · ${a.area}` : a.title,
+        title: hide ? 'Piu' : t('lock.graveAlert', { community: a.communityName || t('lock.community') }),
+        body: hide ? t('notify.hidden.alert') : a.area ? `${a.title} · ${a.area}` : a.title,
         more: 0, at: a.at * 1000, hm: '', href: `/alert?id=${encodeURIComponent(a.id)}`,
       });
     }
@@ -60,9 +63,9 @@ export function lockItems(o: {
     const last = unread.at(-1);
     if (!last) continue;
     const kind = notifKindOf(c);
-    const text = msgSummary(last);
+    const text = msgSummary(last, t);
     const body = kind === 'group' && last.sender ? `${last.sender}: ${text}` : text;
-    const neutral = kind === 'channel' ? 'Nova publicação' : unread.length > 1 ? 'Novas mensagens' : 'Nova mensagem';
+    const neutral = kind === 'channel' ? t('notify.hidden.channel') : unread.length > 1 ? t('notify.hidden.msgs') : t('notify.hidden.msg');
     msgs.push({
       id: c.id, critical: false, title: hide ? 'Piu' : c.name, body: hide ? neutral : body,
       more: unread.length - 1, at: last.at ?? null, hm: last.time, href: `/chat/${c.id}`,
@@ -74,10 +77,10 @@ export function lockItems(o: {
 }
 
 /** "agora", "5 min", "2 h" ou a hora da mensagem. */
-export function lockTime(i: Pick<LockItem, 'at' | 'hm'>, now: number): string {
+export function lockTime(i: Pick<LockItem, 'at' | 'hm'>, now: number, t: Tr = tGlobal): string {
   if (i.at == null) return i.hm;
   const min = Math.max(0, Math.round((now - i.at) / 60_000));
-  if (min < 1) return 'agora';
+  if (min < 1) return t('common.now');
   if (min < 60) return `${min} min`;
   if (min < 24 * 60) return `${Math.round(min / 60)} h`;
   return i.hm || `${Math.round(min / 1440)} d`;

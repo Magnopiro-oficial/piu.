@@ -11,6 +11,7 @@ import { isStatusBack, tempSeconds } from '../lib/status';
 import { msgSummary } from '../lib/chatCore';
 import { stripPreviews } from '../lib/storageCore';
 import { nowHM } from '../lib/text';
+import { t } from '../i18n/core';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 
 /** Operações de arquivo reais (MessagingProvider). */
@@ -74,6 +75,8 @@ interface Store {
   setTyping: (chatId: string) => void;
   /** Estou digitando nesta conversa. */
   notifyTyping: (chatId: string) => void;
+  /** Zera as não lidas e confirma a leitura ao contato, sem marcar a conversa como aberta (Piu Desktop leu a conversa). */
+  markChatRead: (chatId: string) => void;
   /** Mensagem real recebida (já decifrada e conferida). */
   /** `quiet`: entra na conversa sem banner nem notificação (ex.: grupo movimentado sem menção). */
   receive: (chatId: string, msg: Msg, opts?: { quiet?: boolean }) => void;
@@ -226,7 +229,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Comunidade conta como Canais (o mesmo tipo nos dois).
       const kind = c?.kind === 'group' ? 'group' as const : c?.kind === 'channel' || c?.kind === 'community' ? 'channel' as const : 'msg' as const;
       if (c && !c.muted) showToast({ kind, av: c.initials, title: c.name, body: msgSummary(msg), href: `/chat/${cid}`,
-        hidden: { title: 'Piu', body: kind === 'channel' ? 'Nova publicação' : 'Nova mensagem' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
+        hidden: { title: 'Piu', body: kind === 'channel' ? t('notify.hidden.channel') : t('notify.hidden.msg') }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {
       // Recebida: guarda quando chegou (prévia da tela bloqueada, lib/lockFeed.ts).
@@ -315,6 +318,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     typing,
     setTyping,
     notifyTyping: cid => { const c = chatsRef.current.find(x => x.id === cid); if (c?.peer && !c.request) signals.current?.typing(cid, c.peer); },
+    markChatRead: cid => { setChats(cs => cs.map(c => (c.id === cid && c.unread ? { ...c, unread: 0 } : c))); markRead(cid); },
     receive: (cid, msg, opts) => push(cid, msg, opts),
     setMsgStatus: (cid, mid, st) => {
       setStatus(cid, mid, st);
@@ -326,11 +330,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       if (st === 'entregue' && m.at && Date.now() - m.at > 60_000) {
         const min = Math.round((Date.now() - m.at) / 60_000);
         const wait = min >= 120 ? `${Math.round(min / 60)} h` : `${min} min`;
-        showToast({ kind: 'msg', icon: 'done_all', title: `Entregue a ${c.name}`, body: `Uma rota surgiu depois de ${wait} na fila.`, hidden: { title: 'Mensagem entregue', body: `Uma rota surgiu depois de ${wait} na fila.` }, go: open });
+        showToast({ kind: 'msg', icon: 'done_all', title: t('toast.deliveredTo', { name: c.name }), body: t('toast.routeAfter', { wait }), hidden: { title: t('toast.delivered'), body: t('toast.routeAfter', { wait }) }, go: open });
       }
       if (st === 'expirada') {
-        showToast({ kind: 'msg', icon: 'timer_off', title: 'Mensagem expirou', body: `“${quote}” não encontrou rota em ${MESSAGE_TTL_SEC / 3600} h.`, action: 'Reenviar',
-          hidden: { title: 'Mensagem expirou', body: `Uma mensagem não encontrou rota em ${MESSAGE_TTL_SEC / 3600} h.` },
+        showToast({ kind: 'msg', icon: 'timer_off', title: t('toast.expired'), body: t('toast.expired.body', { quote, hours: MESSAGE_TTL_SEC / 3600 }), action: t('chat.resend'),
+          hidden: { title: t('toast.expired'), body: t('toast.expired.hidden', { hours: MESSAGE_TTL_SEC / 3600 }) },
           go: () => { open(); retryRef.current(cid, mid); } });
       }
     },

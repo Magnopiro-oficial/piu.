@@ -2,7 +2,8 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Easing, ScrollView, View } from 'react-native';
 import { MIG_META } from '../data/settings';
-import { addDevice, PLATFORM_LABEL, thisDevice, thisDeviceKey, thisPlatform } from '../lib/devices';
+import { useT } from '../i18n';
+import { addDevice, platformName, thisDevice, thisDeviceKey, thisPlatform } from '../lib/devices';
 import { createOffer, MigrationError, type MigrationPayload, readReply, wipeOffer } from '../lib/migration';
 import { requestSessionRotation } from '../lib/migrationState';
 import { CodeQr, CodeReader, CodeWords } from '../lib/migrationUi';
@@ -32,6 +33,7 @@ type Phase = 'offer' | 'confirm' | 'progress';
  */
 export default function Migrate() {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const { restoreMode } = useSettings();
   const { finishOnboarding, onboarded, setProfile } = useStore();
   const { identities, restore } = useKeys();
@@ -43,33 +45,33 @@ export default function Migrate() {
   const [err, setErr] = useState<string | null>(null);
 
   // Oferta deste aparelho (chave efêmera só em memória; some ao sair da tela).
-  const [offer, setOffer] = useState(() => (device ? createOffer({ pk: thisDeviceKey().pk, name: PLATFORM_LABEL[thisPlatform] + ' novo', platform: thisPlatform }, now()) : null));
+  const [offer, setOffer] = useState(() => (device ? createOffer({ pk: thisDeviceKey().pk, name: t('migrate.newDeviceName', { plat: platformName(thisPlatform, t) }), platform: thisPlatform }, now()) : null));
   useEffect(() => () => { if (offer) wipeOffer(offer); }, [offer]);
-  const newOffer = () => setOffer(createOffer({ pk: thisDeviceKey().pk, name: PLATFORM_LABEL[thisPlatform] + ' novo', platform: thisPlatform }, now()));
+  const newOffer = () => setOffer(createOffer({ pk: thisDeviceKey().pk, name: t('migrate.newDeviceName', { plat: platformName(thisPlatform, t) }), platform: thisPlatform }, now()));
 
   const meta = MIG_META[restoreMode];
-  const fromLabel = device ? (got?.payload.from.name || meta.label) : meta.label;
+  const fromLabel = device ? (got?.payload.from.name || t(meta.label)) : t(meta.label);
   const items = useMemo<[string, string][]>(() => {
     const pub = identities ? short(identities.public.id) : '…';
-    const rot: [string, string] = ['Sessões antigas', 'encerradas · chaves de sessão novas com cada contato'];
+    const rot: [string, string] = [t('migrate.item.sessions'), t('migrate.item.sessions.desc')];
     if (device) return [
-      ['Identidade pública', `chaves copiadas · ${pub}`], ['Identidade anônima', 'separada · sem vínculo com a pública'],
-      ['Carteira LUNES', 'chave da carteira recuperada'], ['Aparelho de origem', `${fromLabel} · registrado em Aparelhos`],
-      ['Contatos e conversas', 'ficam no aparelho antigo · traga-os por arquivo de backup'], rot,
+      [t('identity.public'), t('migrate.item.public.copied', { id: pub })], [t('identity.anon'), t('migrate.item.anon.separate')],
+      [t('migrate.item.wallet'), t('migrate.item.wallet.desc')], [t('migrate.item.origin'), t('migrate.item.origin.desc', { from: fromLabel })],
+      [t('migrate.item.contacts'), t('migrate.item.contacts.desc')], rot,
     ];
     return [
-      ['Identidade pública', `recuperada · ${pub}`], ['Identidade anônima', 'recuperada · separada da pública'], ['Carteira LUNES', 'chave da carteira recuperada'],
-      ['Histórico de conversas', restoreMode === 'file' ? (Number(hist) ? `${hist} itens do arquivo cifrado · guardados neste aparelho` : 'o arquivo não trazia histórico') : 'não fica na frase · só por arquivo de backup'],
+      [t('identity.public'), t('migrate.item.public.restored', { id: pub })], [t('identity.anon'), t('migrate.item.anon.restored')], [t('migrate.item.wallet'), t('migrate.item.wallet.desc')],
+      [t('migrate.item.history'), restoreMode === 'file' ? (Number(hist) ? t('migrate.item.history.file', { count: Number(hist) }) : t('migrate.item.history.none')) : t('migrate.item.history.phrase')],
       rot,
     ];
-  }, [identities, device, fromLabel, restoreMode, hist]);
+  }, [identities, device, fromLabel, restoreMode, hist, t]);
   const done = phase === 'progress' && n >= items.length;
 
   useEffect(() => {
     if (phase !== 'progress') return;
     setN(0);
-    const t = setInterval(() => setN(x => { if (x + 1 >= items.length) clearInterval(t); return x + 1; }), STEP_MS);
-    return () => clearInterval(t);
+    const timer = setInterval(() => setN(x => { if (x + 1 >= items.length) clearInterval(timer); return x + 1; }), STEP_MS);
+    return () => clearInterval(timer);
   }, [phase, items.length]);
 
   // Ponto que viaja do aparelho antigo para este, pela linha tracejada.
@@ -82,13 +84,13 @@ export default function Migrate() {
   }, [reduceMotion, done, dot]);
 
   const onReply = (text: string): string | null => {
-    if (!offer) return 'Gere um QR novo.';
+    if (!offer) return t('migrate.newQrNeeded');
     try {
       setGot(readReply(offer, text, now()));
       setPhase('confirm');
       return null;
     } catch (e) {
-      return e instanceof MigrationError ? e.message : 'QR ilegível. Tente de novo.';
+      return e instanceof MigrationError ? e.message : t('devices.unreadableQr');
     }
   };
 
@@ -98,13 +100,13 @@ export default function Migrate() {
     setErr(null);
     try {
       await restore(got.payload.phrase);
-      await addDevice({ pk: got.payload.from.pk, name: got.payload.from.name || 'Aparelho antigo', platform: got.payload.from.platform, via: 'origin' });
+      await addDevice({ pk: got.payload.from.pk, name: got.payload.from.name || t('migrate.oldDevice'), platform: got.payload.from.platform, via: 'origin' });
       if (got.payload.profileName && !onboarded) setProfile({ name: got.payload.profileName });
       await requestSessionRotation('migrado de outro aparelho');
       if (offer) wipeOffer(offer);
       setPhase('progress');
     } catch {
-      setErr('Não foi possível guardar as chaves no cofre do aparelho.');
+      setErr(t('restore.err.vault'));
     }
   };
 
@@ -116,32 +118,31 @@ export default function Migrate() {
     router.replace('/(tabs)');
   };
 
-  const title = done ? 'Tudo pronto.' : !device ? meta.title : phase === 'offer' ? 'Aponte o aparelho antigo para este QR' : phase === 'confirm' ? 'Confira as 4 palavras' : 'Recebendo suas chaves';
-  const sub = !device ? (restoreMode === 'file' && file ? `${file} · aberto com a sua senha, neste aparelho.` : meta.sub)
-    : phase === 'offer' ? 'No aparelho antigo: Perfil → Aparelhos → Adicionar aparelho. Direto entre os dois, cifrado, sem servidor.'
-      : 'Se as palavras forem iguais nos dois aparelhos, ninguém se meteu no caminho.';
-  const doneNote = device ? `Chaves copiadas de ${fromLabel}, que continua em Aparelhos: desconecte-o lá se não for mais usá-lo. As chaves de sessão foram trocadas.` : meta.done;
+  const title = done ? t('migrate.allSet') : !device ? t(meta.title) : phase === 'offer' ? t('migrate.offer.title') : phase === 'confirm' ? t('migrate.confirm.title') : t('migrate.receiving');
+  const sub = !device ? (restoreMode === 'file' && file ? t('migrate.file.opened', { file }) : t(meta.sub))
+    : phase === 'offer' ? t('migrate.offer.sub') : t('migrate.confirm.sub');
+  const doneNote = device ? t('migrate.device.doneFrom', { from: fromLabel }) : t(meta.done);
 
   return (
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
-        <StepHeader step={done ? 'CONCLUÍDO' : 'MIGRAÇÃO'} title={title} sub={sub} />
+        <StepHeader step={done ? t('migrate.stepDone') : t('migrate.step')} title={title} sub={sub} />
 
         {phase === 'offer' && offer && (
           <View style={{ marginHorizontal: 20, gap: 16 }}>
             <View style={{ padding: 16, borderRadius: 24, backgroundColor: c.bg2, alignItems: 'center', gap: 6 }}>
-              <CodeQr value={offer.text} label="QR para o aparelho antigo ler" />
-              <T size={12} mono color={c.ink2}>vale 10 min · {thisDevice().id.slice(4, 12)}</T>
+              <CodeQr value={offer.text} label={t('migrate.offer.qr')} />
+              <T size={12} mono color={c.ink2}>{t('migrate.offer.valid')} · {thisDevice().id.slice(4, 12)}</T>
             </View>
-            <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 4 }}>DEPOIS, LEIA A RESPOSTA</T>
-            <CodeReader hint="O aparelho antigo mostra um QR de resposta. Aponte a câmera deste aparelho para ele." placeholder="piu-mig2:…" onRead={onReply} />
-            <Button label="Gerar outro QR" variant="ghost" height={40} fontSize={13.5} onPress={newOffer} />
+            <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingTop: 4 }}>{t('migrate.thenRead')}</T>
+            <CodeReader hint={t('migrate.reply.hint')} placeholder="piu-mig2:…" onRead={onReply} />
+            <Button label={t('migrate.anotherQr')} variant="ghost" height={40} fontSize={13.5} onPress={newOffer} />
           </View>
         )}
 
         {phase !== 'offer' && (
-          <View accessibilityLabel={`De ${fromLabel} para este aparelho`} style={{ marginTop: 8, marginHorizontal: 28, height: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+          <View accessibilityLabel={t('migrate.fromTo.a11y', { from: fromLabel })} style={{ marginTop: 8, marginHorizontal: 28, height: 110, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
             <View style={{ position: 'absolute', left: 70, right: 70, top: 48, borderTopWidth: 1.5, borderStyle: 'dashed', borderColor: c.ink, opacity: 0.45 }} />
             {!done && !reduceMotion && (
               <Animated.View style={{ position: 'absolute', top: 44, width: 7, height: 7, borderRadius: 4, backgroundColor: c.ink,
@@ -153,34 +154,34 @@ export default function Migrate() {
             </View>
             <View style={{ alignItems: 'center', gap: 8 }}>
               <View style={{ width: 62, height: 94, borderRadius: 16, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="smartphone" size={26} color={c.invink} /></View>
-              <T size={11} w={500} mono color={c.ink2}>este aparelho</T>
+              <T size={11} w={500} mono color={c.ink2}>{t('migrate.thisDevice')}</T>
             </View>
           </View>
         )}
 
         {phase === 'confirm' && got && (
           <View style={{ marginTop: 8, marginHorizontal: 20, gap: 12 }}>
-            <CodeWords words={got.code} prompt="Confira se as mesmas palavras aparecem no aparelho antigo:" />
+            <CodeWords words={got.code} prompt={t('migrate.confirm.prompt')} />
             {err && <T size={13} accessibilityRole="alert">{err}</T>}
-            <Button label="As palavras são iguais" onPress={() => { void apply(); }} />
-            <Button label="São diferentes" variant="soft" height={48} onPress={() => {
+            <Button label={t('migrate.wordsMatch')} onPress={() => { void apply(); }} />
+            <Button label={t('migrate.wordsDiffer')} variant="soft" height={48} onPress={() => {
               setGot(null); newOffer(); setPhase('offer');
               setErr(null);
             }} />
-            <T size={12.5} lh={1.45} color={c.ink2} style={{ paddingHorizontal: 4 }}>Se forem diferentes, nada é aplicado. Comece de novo com os dois aparelhos lado a lado, longe de outras pessoas.</T>
+            <T size={12.5} lh={1.45} color={c.ink2} style={{ paddingHorizontal: 4 }}>{t('migrate.differNote')}</T>
           </View>
         )}
 
         {phase === 'progress' && (
           <View style={{ paddingTop: 8, paddingHorizontal: 24 }}>
-            {items.map(([t, d], i) => {
+            {items.map(([title, d], i) => {
               const ok = i < n, cur = i === n;
               return (
-                <View key={t} accessibilityLabel={`${t}: ${ok ? 'concluído' : cur ? 'em andamento' : 'aguardando'}`}
+                <View key={title} accessibilityLabel={`${title}: ${ok ? t('wallet.bonus.done') : cur ? t('migrate.inProgress') : t('migrate.waiting')}`}
                   style={{ flexDirection: 'row', gap: 14, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: c.line, opacity: ok || cur ? 1 : 0.4 }}>
                   <Icon name={ok ? 'check_circle' : cur ? 'pending' : 'radio_button_unchecked'} size={22} fill={ok} />
                   <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
-                    <T size={15} w={600}>{t}</T>
+                    <T size={15} w={600}>{title}</T>
                     <T size={11.5} mono lh={1.45} color={c.ink2}>{d}</T>
                   </View>
                 </View>
@@ -197,7 +198,7 @@ export default function Migrate() {
         )}
         {phase === 'progress' && (
           <View style={{ paddingTop: 20, paddingHorizontal: 20 }}>
-            <Button label="Abrir o Piu" disabled={!done} onPress={open} />
+            <Button label={t('migrate.open')} disabled={!done} onPress={open} />
           </View>
         )}
       </ScrollView>

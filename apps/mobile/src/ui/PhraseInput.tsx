@@ -1,6 +1,7 @@
 import { useRef, useState } from 'react';
 import { Pressable, TextInput, type TextInputInstance, View } from 'react-native';
 import { PHRASE_WORDS, suggestWords, WORDLIST } from '../protocol';
+import { useT } from '../i18n';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from './T';
@@ -11,6 +12,7 @@ import { T } from './T';
  */
 export function PhraseInput({ words, onChange }: { words: string[]; onChange: (w: string[]) => void }) {
   const { c } = useTheme();
+  const t = useT();
   const refs = useRef<(TextInputInstance | null)[]>([]);
   const [focus, setFocus] = useState<number | null>(null);
   const set = (i: number, v: string) => {
@@ -38,14 +40,14 @@ export function PhraseInput({ words, onChange }: { words: string[]; onChange: (w
               <T size={10.5} w={500} mono color={c.ink2}>{i + 1}</T>
               <TextInput ref={r => { refs.current[i] = r; }} value={w} onChangeText={v => set(i, v)} onFocus={() => setFocus(i)} onBlur={() => setFocus(f => (f === i ? null : f))}
                 autoCapitalize="none" autoCorrect={false} autoComplete="off" spellCheck={false} returnKeyType={i < PHRASE_WORDS - 1 ? 'next' : 'done'}
-                onSubmitEditing={() => refs.current[i + 1]?.focus()} accessibilityLabel={`Palavra ${i + 1}${bad ? ', fora da lista' : ''}`}
+                onSubmitEditing={() => refs.current[i + 1]?.focus()} accessibilityLabel={`${t('phrase.word', { n: i + 1 })}${bad ? `, ${t('phrase.notInList')}` : ''}`}
                 style={{ flex: 1, minWidth: 0, height: 38, fontSize: 14.5, color: c.ink, fontFamily: fontFamily(600), paddingVertical: 0, outlineWidth: 0 }} />
             </View>
           );
         })}
       </View>
       {sugg.length > 0 && (
-        <View accessibilityLabel="Sugestões" style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
+        <View accessibilityLabel={t('phrase.suggestions')} style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
           {sugg.map(s => (
             <Pressable key={s} onPress={() => { set(focus!, s); refs.current[Math.min(PHRASE_WORDS - 1, focus! + 1)]?.focus(); }} accessibilityRole="button" accessibilityLabel={`Usar ${s}`}
               style={{ paddingVertical: 7, paddingHorizontal: 12, borderRadius: 99, borderWidth: 1, borderColor: c.line2 }}>

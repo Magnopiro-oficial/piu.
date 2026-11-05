@@ -2,6 +2,7 @@ import { router, type Href } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Circle, Defs, Pattern, Rect } from 'react-native-svg';
+import { fmtDate, useT } from '../i18n';
 import { lockItems, lockTime } from '../lib/lockFeed';
 import { useMessaging } from '../state/messaging';
 import { useSettings } from '../state/settings';
@@ -18,6 +19,7 @@ import { T } from '../ui/T';
  */
 export default function Lock() {
   const { c } = useTheme();
+  const t = useT();
   const insets = useSafeAreaInsets();
   const { preview, notifs } = useSettings();
   const { chats } = useStore();
@@ -27,8 +29,8 @@ export default function Lock() {
   const hidden = preview !== 'always';
   const now = new Date();
   const items = lockItems({ chats, preview, notifs, alerts, now: now.getTime() });
-  const date = now.toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
-  const time = now.toLocaleTimeString('pt-BR', { hour: 'numeric', minute: '2-digit' });
+  const date = fmtDate(now, { weekday: 'long', day: 'numeric', month: 'long' });
+  const time = fmtDate(now, { hour: 'numeric', minute: '2-digit' });
 
   return (
     // Fundo parado; o conteúdo entra com `fade` (design: tela cheia).
@@ -38,7 +40,7 @@ export default function Lock() {
         <Defs><Pattern id="lockdots" width={18} height={18} patternUnits="userSpaceOnUse"><Circle cx={9} cy={9} r={1} fill={c.dot} /></Pattern></Defs>
         <Rect width="100%" height="100%" fill="url(#lockdots)" />
       </Svg>
-      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel="Fechar prévia da tela bloqueada"
+      <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('lockPreview.close')}
         style={{ position: 'absolute', top: insets.top + 8, right: 14, width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
         <Icon name="close" size={20} />
       </Pressable>
@@ -49,13 +51,13 @@ export default function Lock() {
       {hidden && (
         <View style={{ alignSelf: 'center', marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: c.bg2 }}>
           <Icon name="visibility_off" size={15} color={c.ink2} />
-          <T size={12} w={550} color={c.ink2}>Conteúdo oculto na tela bloqueada</T>
+          <T size={12} w={550} color={c.ink2}>{t('lockPreview.hidden')}</T>
         </View>
       )}
       <ScrollView style={{ flex: 1 }} contentContainerStyle={{ paddingTop: 24, paddingHorizontal: 10, paddingBottom: 16, gap: 8 }}>
         {!items.length && (
           <View accessibilityLiveRegion="polite" style={{ alignSelf: 'center', marginTop: 24, paddingVertical: 10, paddingHorizontal: 16, borderRadius: 16, backgroundColor: c.bg2 }}>
-            <T size={13.5} color={c.ink2} align="center">Nenhuma notificação nova.</T>
+            <T size={13.5} color={c.ink2} align="center">{t('lockPreview.empty')}</T>
           </View>
         )}
         {items.map(n => {
@@ -81,7 +83,7 @@ export default function Lock() {
                     <T size={12} color={fg} style={{ opacity: 0.6 }}>{time}</T>
                   </View>
                   <T size={14} lh={1.35} color={fg} numberOfLines={2} style={{ opacity: 0.85 }}>{n.body}</T>
-                  {stacked && !hidden && <T size={12.5} color={fg} style={{ opacity: 0.6, marginTop: 2 }}>{n.more === 1 ? 'mais 1 mensagem' : `mais ${n.more} mensagens`}</T>}
+                  {stacked && !hidden && <T size={12.5} color={fg} style={{ opacity: 0.6, marginTop: 2 }}>{t('lockPreview.more', { count: n.more })}</T>}
                 </View>
               </View>
             </Pressable>

@@ -15,6 +15,7 @@ import { hoursAllow, type HoursPolicy } from './hours';
 import { isJpegBase64 } from './photo';
 import { mentionIds } from './mentions';
 import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
+import { type PaidNotice, type PaymentRequest, readPaidNotice, readPayRequest, type WirePaidNotice, type WirePayRequest, wirePaidNotice, wirePayRequest } from '../lib/paymentRequest';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
@@ -126,6 +127,14 @@ export interface MessengerEvents {
   nearRequest(r: NearRequest): void;
   /** Por perto: quem eu convidei aceitou. A pessoa vira contato público e a conversa abre. */
   nearAccepted(c: Contact, fee: number): void;
+  /**
+   * Pedido de pagamento (lib/paymentRequest.ts) de um contato aceito: endereço Lunes dele, valor
+   * (opcional) e descrição. `r.id` é o id da mensagem na conversa. Pagar é pela carteira Lunes da
+   * pessoa; o Piu só mostra.
+   */
+  paymentRequest(contactId: string, r: PaymentRequest, sentAt: number, route?: RouteInfo): void;
+  /** O contato avisou que pagou um pedido meu (com os hashes, se informou). Nada é marcado como pago sem conferir na Mainnet. */
+  paymentPaid(contactId: string, n: PaidNotice): void;
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
@@ -216,7 +225,10 @@ type Payload =
   | { t: 'pp'; p: string }
   /** Por perto: convite pago (id, texto até 140, taxa) e aceite de quem recebeu. Recusa não manda nada. */
   | { t: 'ni'; i: string; x: string; f: number; n?: string }
-  | { t: 'na'; i: string };
+  | { t: 'na'; i: string }
+  /** Pedido de pagamento (`pq`: id, endereço Lunes, valor em planck como texto, descrição, validade) e aviso "já paguei" (`pd`). */
+  | WirePayRequest
+  | WirePaidNotice;
 
 /** Membro em trânsito: id, nome e chaves públicas em base64url. */
 interface WireMember { id: string; n: string; s: string; a: string; b: string }
@@ -490,6 +502,30 @@ export class Messenger {
     if (!firm && c.via === 'public' && this.displayName) p.n = this.displayName.slice(0, 40);
     if (!firm && c.invite) p.k = c.invite; // prova que escaneei o QR (uso único do lado de lá)
     this.enqueue(c, p, msgId, Priority.Normal, false, e ? Math.min(TTL_SEC, e) : TTL_SEC);
+  }
+
+  /**
+   * Pedido de pagamento para um contato (regra 7.3). `r.id` vira o id da mensagem: os estados
+   * (encaminhada, entregue) chegam por `status` como nas mensagens de texto. O envelope vence junto
+   * com o pedido, se este for mais curto que o prazo da fila.
+   */
+  sendPayRequest(contactId: string, r: PaymentRequest) {
+    const c = this.contacts.get(contactId);
+    if (!c) throw new Error('Contato desconhecido.');
+    const now = this.o.now();
+    if (r.expiresAt <= now) throw new Error('Este pedido já venceu.');
+    const w = wirePayRequest(r);
+    if (!readPayRequest(w, now)) throw new Error('Pedido inválido.');
+    this.enqueue(c, w, r.id, Priority.Normal, false, Math.min(TTL_SEC, r.expiresAt - now));
+  }
+
+  /** "Já paguei" para quem pediu (só contato aceito). Sem fila própria de estados: é um aviso. */
+  sendPaid(contactId: string, n: PaidNotice) {
+    const c = this.contacts.get(contactId);
+    if (!c) throw new Error('Contato desconhecido.');
+    const w = wirePaidNotice(n);
+    if (!readPaidNotice(w)) throw new Error('Aviso inválido.');
+    this.enqueue(c, w, null, Priority.Normal);
   }
 
   /**
@@ -1745,6 +1781,22 @@ export class Messenger {
     if (p?.t === 'g' || p?.t === 'gl' || p?.t === 'gr') { this.onGroupControl(m.fromId, p); return false; }
     if (p?.t === 'ni') { this.onNearInvite(m, used, p); return false; }
     if (p?.t === 'na') { this.onNearAccept(m.fromId, m.sentAt, p); return false; }
+    if (p?.t === 'pq' || p?.t === 'pd') {
+      // Só de contato aceito: um "pedido de conversa" (código não conferido) não pode pedir dinheiro.
+      const c = this.contacts.get(m.fromId);
+      if (!c || c.request) return false;
+      if (p.t === 'pd') { const n = readPaidNotice(p); if (n) this.o.events.paymentPaid?.(c.id, n); return false; }
+      const r = readPayRequest(p, this.o.now());
+      if (!r) return false;
+      // Recibo sempre (como no texto: o anterior pode ter se perdido); mostra uma vez só.
+      this.enqueue(c, { t: 'a', i: [r.id] }, null, Priority.High);
+      const key = `${m.fromId}|${r.id}`;
+      if (this.deliveredSet.has(key)) return false;
+      this.markDelivered(key);
+      this.o.events.paymentRequest?.(c.id, r, m.sentAt, this.rx ?? undefined);
+      this.o.events.changed?.();
+      return false;
+    }
     if (p?.t === 'gj') { this.onJoinRequest(m.fromId, used, m.from, p); return false; }
     if (p?.t === 'ga') { this.onMemberInvite(m.fromId, p); return false; }
     if (p?.t === 'gv') { this.onVouch(m.fromId, p); return false; }

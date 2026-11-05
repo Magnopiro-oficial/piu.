@@ -1,4 +1,5 @@
 import { TAKEN_NAMES } from '../data/seed';
+import { t } from '../i18n';
 
 export const PUB_MAX = 28;
 
@@ -21,12 +22,12 @@ export type PubCheck = { ok: boolean; icon: string; msg: string; tone: 'muted' |
  * `real` (com piu-node): sem a lista de exemplo; a consulta aos nomes da malha e a assinatura ainda não existem.
  */
 export function checkPub(p: string, own: string[], real = false): PubCheck {
-  if (!p) return { ok: false, icon: 'edit', msg: 'Escolha um nome para a rede.', tone: 'muted', ring: 'none' };
-  if (real && own.includes(p)) return { ok: false, icon: 'error', msg: `piu.${p} já é usado por outro equipamento seu.`, tone: 'strong', ring: 'strong' };
+  if (!p) return { ok: false, icon: 'edit', msg: t('pub.choose'), tone: 'muted', ring: 'none' };
+  if (real && own.includes(p)) return { ok: false, icon: 'error', msg: t('pub.usedByYours', { name: p }), tone: 'strong', ring: 'strong' };
   if (!real && (TAKEN_NAMES.includes(p) || own.includes(p)))
-    return { ok: false, icon: 'error', msg: `piu.${p} já é usado por outro nó desta malha.`, tone: 'strong', ring: 'strong' };
+    return { ok: false, icon: 'error', msg: t('pub.usedByMesh', { name: p }), tone: 'strong', ring: 'strong' };
   if (/cardeal|casa|rua|apto|apartamento|numero/.test(p))
-    return { ok: true, icon: 'warning', msg: 'Disponível, mas evite nome ou endereço: qualquer pessoa por perto vê este nome.', tone: 'strong', ring: 'soft' };
-  if (real) return { ok: true, icon: 'check', msg: 'Não usado pelos seus equipamentos. A consulta aos nomes da malha e a assinatura ainda não existem nesta versão.', tone: 'muted', ring: 'none' };
-  return { ok: true, icon: 'verified', msg: 'Disponível na malha local · será assinado pela sua chave de operador.', tone: 'muted', ring: 'none' };
+    return { ok: true, icon: 'warning', msg: t('pub.avoidPersonal'), tone: 'strong', ring: 'soft' };
+  if (real) return { ok: true, icon: 'check', msg: t('pub.notUsedReal'), tone: 'muted', ring: 'none' };
+  return { ok: true, icon: 'verified', msg: t('pub.available'), tone: 'muted', ring: 'none' };
 }

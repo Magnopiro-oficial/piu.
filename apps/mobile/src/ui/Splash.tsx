@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
 import { SPLASH, dotDelays, splashPlan } from '../lib/splashCore';
 import { curves } from '../theme/tokens';
+import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeProvider';
 import { T } from './T';
 
@@ -52,6 +53,7 @@ interface SplashProps {
 
 export function Splash({ onExit, onDone }: SplashProps) {
   const { c, reduceMotion } = useTheme();
+  const t = useT();
   const plan = splashPlan(reduceMotion);
   const { animate } = plan;
   // Com movimento reduzido tudo começa já no lugar (1) e a saída não anima.
@@ -119,7 +121,7 @@ export function Splash({ onExit, onDone }: SplashProps) {
         <View style={styles.dots}>
           {DOTS.map((d) => <Dot key={d} delay={d} animate={animate} />)}
         </View>
-        <T mono size={11.5} w={500} ls={0.04} color={c.ink2}>procurando nós por perto</T>
+        <T mono size={11.5} w={500} ls={0.04} color={c.ink2}>{t('splash.searching')}</T>
       </Animated.View>
     </Animated.View>
   );

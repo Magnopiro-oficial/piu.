@@ -1,6 +1,7 @@
 import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { Chat } from '../data/types';
+import { useT } from '../i18n';
 import { initialsOf } from '../lib/text';
 import { isAdmin } from '../messaging/groups';
 import { chatIdForGroup, useMessaging } from '../state/messaging';
@@ -18,20 +19,21 @@ import { T } from './T';
  */
 export function RealCommunity({ chat }: { chat: Chat }) {
   const { c } = useTheme();
+  const t = useT();
   const { showToast } = useStore();
   const { groupOf, groupOps, myIdIn, groupEpoch, alerts, alertEpoch } = useMessaging();
   void alertEpoch;
   const g = groupOf(chat.id);
   void groupEpoch;
-  if (!g || !groupOps) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">Você não participa mais desta comunidade.</T></Screen>;
+  if (!g || !groupOps) return <Screen><BackHeader /><T size={15} color={c.ink2} align="center">{t('communityInfo.notMember')}</T></Screen>;
   const admin = isAdmin(g, myIdIn(g.via));
   const kids = g.children ?? [];
   const activeAlerts = (alerts?.list(g.id) ?? []).filter(a => a.active).length;
-  const sections: [string, typeof kids][] = [['GRUPOS', kids.filter(k => k.kind === 'group')], ['CANAIS', kids.filter(k => k.kind === 'channel')]];
+  const sections: [string, typeof kids][] = [[t('communityInfo.groups'), kids.filter(k => k.kind === 'group')], [t('communityInfo.channels'), kids.filter(k => k.kind === 'channel')]];
   const open = (k: { id: string; name: string }) => {
     if (groupOps.isMember(k.id)) { router.push({ pathname: '/chat/[id]', params: { id: chatIdForGroup(k.id) } }); return; }
-    try { groupOps.joinChild(g.id, k.id); showToast({ icon: 'schedule_send', title: 'Pedido enviado', body: `Os admins de ${k.name} recebem o pedido quando houver rota.` }); }
-    catch (e) { showToast({ icon: 'error', title: 'Não foi possível pedir', body: (e as Error).message }); }
+    try { groupOps.joinChild(g.id, k.id); showToast({ icon: 'schedule_send', title: t('communityInfo.requestSent'), body: t('communityInfo.requestSent.body', { name: k.name }) }); }
+    catch (e) { showToast({ icon: 'error', title: t('communityInfo.requestFail'), body: (e as Error).message }); }
   };
   return (
     <Screen>
@@ -41,31 +43,31 @@ export function RealCommunity({ chat }: { chat: Chat }) {
           <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={24} w={650} color={c.invink}>{initialsOf(g.name)}</T></View>
           <View style={{ gap: 6 }}>
             <T size={28} w={700} ls={-0.04} accessibilityRole="header">{g.name}</T>
-            <T size={14} color={c.ink2}>{`${g.members.length} ${g.members.length === 1 ? 'membro' : 'membros'} · ${kids.length} ${kids.length === 1 ? 'grupo ou canal' : 'grupos e canais'}`}</T>
+            <T size={14} color={c.ink2}>{`${t('groupInfo.membersCount', { count: g.members.length })} · ${t('communityInfo.children', { count: kids.length })}`}</T>
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>
-          <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingHorizontal: 4, paddingBottom: 4 }}>AVISOS</T>
+          <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingHorizontal: 4, paddingBottom: 4 }}>{t('communityInfo.notices')}</T>
           <View style={{ borderRadius: 18, backgroundColor: c.bg2, overflow: 'hidden' }}>
-            <Row icon="campaign" name="Avisos da comunidade" meta={admin ? 'Só admins publicam · você é admin' : 'Só admins publicam'} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })} first />
-            <Row icon="warning" name="Alertas" meta={`${activeAlerts ? `${activeAlerts} ${activeAlerts === 1 ? 'vigente' : 'vigentes'}` : 'Nenhum vigente'} · qualquer membro publica`} onPress={() => router.push({ pathname: '/alerts/[id]', params: { id: g.id } })} />
+            <Row icon="campaign" name={t('communityInfo.noticesRow')} meta={admin ? t('communityInfo.adminsPost.you') : t('communityInfo.adminsPost')} onPress={() => router.push({ pathname: '/chat/[id]', params: { id: chat.id } })} first />
+            <Row icon="warning" name={t('communityInfo.alerts')} meta={`${activeAlerts ? t('communityInfo.active', { count: activeAlerts }) : t('communityInfo.noneActive')} · ${t('communityInfo.anyonePosts')}`} onPress={() => router.push({ pathname: '/alerts/[id]', params: { id: g.id } })} />
           </View>
         </View>
         {sections.map(([title, items]) => (
           <View key={title} style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>
             <T size={11.5} w={500} mono ls={0.05} color={c.ink2} style={{ paddingHorizontal: 4, paddingBottom: 4 }}>{title}</T>
             <View style={{ borderRadius: 18, backgroundColor: c.bg2, overflow: 'hidden' }}>
-              {items.length === 0 && <View style={{ padding: 14 }}><T size={13} color={c.ink2}>Nenhum ainda.</T></View>}
+              {items.length === 0 && <View style={{ padding: 14 }}><T size={13} color={c.ink2}>{t('communityInfo.noneYet')}</T></View>}
               {items.map((k, i) => (
-                <Row key={k.id} icon={k.kind === 'channel' ? 'campaign' : 'group'} name={k.name} meta={groupOps.isMember(k.id) ? 'Você participa' : 'Toque para pedir para entrar'} onPress={() => open(k)} first={!i} />
+                <Row key={k.id} icon={k.kind === 'channel' ? 'campaign' : 'group'} name={k.name} meta={groupOps.isMember(k.id) ? t('communityInfo.youAreIn') : t('communityInfo.tapToJoin')} onPress={() => open(k)} first={!i} />
               ))}
             </View>
           </View>
         ))}
         {admin && (
           <View style={{ paddingHorizontal: 20, gap: 8 }}>
-            <Button label="Novo grupo nesta comunidade" variant="outline" height={44} fontSize={14} onPress={() => router.push({ pathname: '/new-group', params: { parent: g.id } })} />
-            <Button label="Novo canal nesta comunidade" variant="outline" height={44} fontSize={14} onPress={() => router.push({ pathname: '/new-channel', params: { parent: g.id } })} />
+            <Button label={t('communityInfo.newGroup')} variant="outline" height={44} fontSize={14} onPress={() => router.push({ pathname: '/new-group', params: { parent: g.id } })} />
+            <Button label={t('communityInfo.newChannel')} variant="outline" height={44} fontSize={14} onPress={() => router.push({ pathname: '/new-channel', params: { parent: g.id } })} />
           </View>
         )}
       </ScrollView>
