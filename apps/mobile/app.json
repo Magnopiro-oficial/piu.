@@ -22,7 +22,8 @@
         "monochromeImage": "./assets/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false,
-      "allowBackup": false
+      "allowBackup": false,
+      "package": "net.piu.app"
     },
     "web": {
       "bundler": "metro",
@@ -71,7 +72,16 @@
           "recordAudioAndroid": false,
           "enableBackgroundPlayback": false
         }
-      ]
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "useLegacyPackaging": true
+          }
+        }
+      ],
+      "./plugins/withReleaseSigning"
     ],
     "experiments": {
       "typedRoutes": true

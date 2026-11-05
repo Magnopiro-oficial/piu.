@@ -199,7 +199,9 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
               <span class="ic w250" style="font-size:30px" aria-hidden="true">{d.icon}</span>
               <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{d.title}</h3>
               <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1">{d.desc}</div>
-              <button type="button" data-note={d.note} class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</button>
+              {d.href
+                ? <a href={d.href} data-note={d.note} rel="noopener" class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</a>
+                : <button type="button" data-note={d.note} class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</button>}
             </div>
           ))}
         </div>
@@ -327,9 +329,9 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
     onScroll();
   }
 
-  // Downloads: ainda não há arquivos publicados; mostra a orientação de cada opção.
+  // Downloads: mostra a orientação de cada opção (o APK baixa pelo link e a nota explica a instalação).
   const note = document.querySelector<HTMLElement>('[data-dl-note]');
-  document.querySelectorAll<HTMLButtonElement>('button[data-note]').forEach(b =>
+  document.querySelectorAll<HTMLElement>('[data-note]').forEach(b =>
     b.addEventListener('click', () => {
       if (!note) return;
       note.hidden = false;
