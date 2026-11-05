@@ -2,6 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
+import { completePersistedWrite, missingStoredKeys } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -21,6 +22,8 @@ const WRITE_DELAY = 250;
 
 let snapshot: Record<string, unknown> = {};
 let loaded = false;
+let storageReadFailed = true;
+const unreadable = new Set<string>();
 let dataKey: Uint8Array | null = null;
 const enc = new TextEncoder(), dec = new TextDecoder();
 const MARK = 'e1:';
@@ -50,23 +53,27 @@ const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir. */
 export async function loadPersisted(): Promise<void> {
+  storageReadFailed = true;
+  unreadable.clear();
   try {
     dataKey = await loadOrCreateDataKey();
     const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
     const pairs = await AsyncStorage.multiGet(keys);
+    for (const k of missingStoredKeys(keys, pairs.map(([key]) => key))) unreadable.add(k.slice(PREFIX.length));
     const next: Record<string, unknown> = {};
     const migrate: [string, string][] = [];
     for (const [k, v] of pairs) {
-      if (v == null) continue;
       const name = k.slice(PREFIX.length);
+      if (v == null) { unreadable.add(name); continue; }
       const opened = open(name, v);
       if (opened !== undefined) { next[name] = opened; continue; }
-      if (v.startsWith(MARK)) continue; // cifrado com outra chave ou adulterado: descarta e usa o padrão
+      if (v.startsWith(MARK)) { unreadable.add(name); continue; } // não confundir corrupção com ausência
       // Formato antigo (texto puro): lê uma vez e regrava cifrado.
-      try { next[name] = JSON.parse(v); migrate.push([k, seal(name, next[name])]); } catch { /* corrompido */ }
+      try { next[name] = JSON.parse(v); migrate.push([k, seal(name, next[name])]); } catch { unreadable.add(name); }
     }
     if (migrate.length) await AsyncStorage.multiSet(migrate);
     snapshot = next;
+    storageReadFailed = false;
   } catch {
     snapshot = {};
   }
@@ -74,6 +81,8 @@ export async function loadPersisted(): Promise<void> {
 }
 
 export const isPersistLoaded = () => loaded;
+/** Uma falha geral ou no campo impede assumir que ele estava ausente. */
+export const persistedReadFailed = (key: string) => storageReadFailed || unreadable.has(key);
 
 function schedule(key: string, value: unknown) {
   clearTimeout(pending.get(key));
@@ -99,15 +108,20 @@ export async function persistNow(key: string, value: unknown): Promise<void> {
   clearTimeout(pending.get(key));
   pending.delete(key);
   const at = epoch;
+  // Mantém a atualização imediata em memória usada por assinantes existentes.
   snapshot[key] = value;
   const sealed = seal(key, value); // sem chave, falha: quem chama não deve transmitir
-  await AsyncStorage.setItem(PREFIX + key, sealed);
-  if (at !== epoch) await AsyncStorage.removeItem(PREFIX + key); // apagado enquanto gravava
+  await completePersistedWrite(at, () => epoch,
+    () => AsyncStorage.setItem(PREFIX + key, sealed),
+    () => AsyncStorage.removeItem(PREFIX + key),
+    () => {});
 }
 
 /** Apaga todos os dados do Piu neste aparelho e cancela gravações pendentes. */
 export async function clearPersisted(): Promise<void> {
   epoch += 1;
+  storageReadFailed = true;
+  unreadable.clear();
   pending.forEach(clearTimeout);
   pending.clear();
   snapshot = {};

@@ -64,7 +64,7 @@ export default function WalletTab() {
 function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
   const { c } = useTheme();
   const t = useT();
-  const { onchain, reserved, refunded, spent, earned, lunesAddress, onchainSnap, onchainStatus, historySnap, historyStatus, refreshHistory } = useWallet();
+  const { onchain, reserved, refunded, spent, earned, lunesAddress, onchainSnap, onchainStatus, historySnap, historyStatus, refreshHistory, canSign, nativeWalletReady, useOwnWallet, pendingTransfer } = useWallet();
   const { backupDone, hideBalance, setHideBalance } = useSettings();
   // Olho do saldo: só esconde a exibição (saldo, "a liberar", reservado); os dados ficam intactos.
   const eye = balanceEye(hideBalance);
@@ -92,6 +92,14 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
 
   return (
     <>
+      <View style={{ marginTop: 14, marginHorizontal: 20, padding: 16, borderRadius: 20, borderWidth: 1, borderColor: c.line2, gap: 10 }}>
+        <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+          <Icon name={canSign ? 'account_balance_wallet' : 'visibility'} size={22} />
+          <T size={15} w={650} style={{ flex: 1 }}>{t(canSign ? 'ownWallet.title' : lunesAddress ? 'ownWallet.watchTitle' : 'ownWallet.unavailableTitle')}</T>
+        </View>
+        <T size={12.5} lh={1.45} color={c.ink2}>{t(canSign ? 'ownWallet.nativeNote' : lunesAddress ? 'ownWallet.watchNote' : 'ownWallet.unavailableNote')}</T>
+        {!canSign && nativeWalletReady && <Button label={t('ownWallet.useOwn')} variant="outline" height={46} onPress={useOwnWallet} />}
+      </View>
       <View style={{ marginTop: 14, marginHorizontal: 20, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 18, borderRadius: 28, backgroundColor: c.ink, gap: 18 }}>
         <View style={{ gap: 6 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
@@ -137,6 +145,15 @@ function Balance({ onSheet }: { onSheet: (s: 'send' | 'receive') => void }) {
           </Pressable>
         )}
       </View>
+
+      {pendingTransfer && (
+        <View accessibilityLiveRegion="polite" style={{ marginTop: 12, marginHorizontal: 20, padding: 16, backgroundColor: c.bg2, borderRadius: 20, gap: 10 }}>
+          <T size={15} w={650}>{t(`ownWallet.status.${pendingTransfer.status}`)}</T>
+          {['signed', 'submitted', 'included'].includes(pendingTransfer.status) && <T size={12.5} lh={1.45} color={c.ink2}>{t('ownWallet.pendingNote')}</T>}
+          <T size={11.5} mono lh={1.45} selectable>{pendingTransfer.hash}</T>
+          <Button label={t('ownWallet.openTransfer')} variant="outline" height={46} onPress={() => onSheet('send')} />
+        </View>
+      )}
 
       <View style={{ marginTop: 12, marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>

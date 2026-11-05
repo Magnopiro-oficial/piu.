@@ -1,8 +1,18 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { Platform } from 'react-native';
+import { t } from '../i18n/core';
+import { confirmDevice } from '../lib/deviceAuth';
+import { buildTransferKeepAlive } from '../lib/extrinsic';
+import { parseLunesAmount } from '../lib/paymentRequest';
+import { walletAddressFromPhrase, withWalletKey } from '../lib/walletKey';
+import { canSignWalletAddress, walletSelection } from '../lib/walletSelection';
+import { isActiveWalletTransfer, isWalletTransferRecord, prepareWalletTransfer, retryWalletTransfer, sendWalletTransfer, trackWalletTransfer, WalletTransferError, type WalletQuote, type WalletTransferRecord } from '../lib/walletTransfer';
+import { useKeys } from './keys';
 import { pruneLegacyData } from '../lib/legacyData';
 import { fetchLunesHistory, toHistorySnapshot, type HistorySnapshot } from '../lib/lunesHistory';
-import { accountBalance, LunesRpc, planckToLunes } from '../lib/lunesRpc';
-import { readPersisted, usePersisted } from '../lib/persist';
+import { accountBalance, formatLunes, LunesRpc, planckToLunes } from '../lib/lunesRpc';
+import { persistNow, persistedReadFailed, readPersisted, usePersisted } from '../lib/persist';
+import { mustBlockWalletRecovery } from '../lib/persistSafety';
 import { decodeSs58 } from '../lib/ss58';
 import type { EarnedMove, InviteMove, OnchainSnapshot, OnchainStatus } from '../lib/walletCore';
 import { useStore } from './store';
@@ -19,13 +29,26 @@ export type InviteState = { kind: 'none' } | { kind: 'pending'; hoursLeft: numbe
 interface Wallet {
   /**
    * Saldo livre (`free`) em LUNES da conta Lunes informada, lido na Lunes Mainnet. 0 sem endereço ou
-   * antes da primeira leitura (nada inventado). O Piu não gera nem guarda chave Lunes: só lê.
+   * antes da primeira leitura (nada inventado). A chave própria deriva da frase no cofre nativo.
    */
   onchain: number;
-  /** Endereço Lunes (SS58) da pessoa, salvo cifrado no aparelho. */
+  /** Endereço selecionado: próprio, ou endereço externo salvo para consulta. */
   lunesAddress: string | null;
-  /** Salva o endereço (conferido: base58, prefixo 57 ou 42, soma de verificação). Devolve o erro, ou null. null apaga. */
+  /** Salva o endereço (conferido: base58, prefixo 57 ou 42, soma de verificação). Devolve o erro, ou null. null seleciona a própria sem apagar o endereço externo salvo. */
   setLunesAddress: (a: string | null) => string | null;
+  /** Carteira própria: mesma frase do backup, somente com cofre nativo seguro. */
+  ownAddress: string | null;
+  watchedAddress: string | null;
+  nativeWalletReady: boolean;
+  canSign: boolean;
+  canSignAddress: (address: string) => boolean;
+  useOwnWallet: () => void;
+  quoteTransfer: (dest: string, amount: string) => Promise<WalletQuote>;
+  sendTransfer: (quote: WalletQuote) => Promise<WalletTransferRecord>;
+  pendingTransfer: WalletTransferRecord | null;
+  transferRecoveryBlocked: boolean;
+  refreshTransfer: () => Promise<void>;
+  retryTransfer: () => Promise<WalletTransferRecord>;
   /** Última leitura (guardada para mostrar sem rede) e o estado da consulta. */
   onchainSnap: OnchainSnapshot | null;
   onchainStatus: OnchainStatus;
@@ -73,6 +96,11 @@ const Ctx = createContext<Wallet | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { onboarded, showToast } = useStore();
+  const { phrase, vaultIsSecure } = useKeys();
+  const derivedAddress = useMemo(() => {
+    if (Platform.OS === 'web' || !vaultIsSecure || !phrase) return null;
+    try { return walletAddressFromPhrase(phrase); } catch { return null; }
+  }, [phrase, vaultIsSecure]);
   // Campos novos (os antigos, `wallet.*` e `nearby.invited/reqStatus`, só tinham dados de exemplo e
   // são apagados por `pruneLegacyData`).
   const [invites, setInvites] = usePersisted<Record<string, number>>('nearby.invites', {});
@@ -86,7 +114,22 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   // Na primeira vez segue Privacidade → "Por perto começa" (padrão: invisível).
   const [visibleUntil, setVisibleUntil] = usePersisted<number | null>('nearby.visibleUntil',
     () => (readPersisted<{ near?: string }>('set.priv')?.near === '1h' ? Date.now() + NEARBY_VISIBLE_MS : null));
-  const [lunesAddress, setLunesAddressRaw] = usePersisted<string | null>('wallet.lunesAddress', null);
+  // O campo legado mantém o endereço externo: selecionar a própria nunca o sobrescreve.
+  const [externalAddress, setLunesAddressRaw] = usePersisted<string | null>('wallet.lunesAddress', null);
+  const [preferOwn, setPreferOwn] = usePersisted('wallet.useOwn', false);
+  const { lunesAddress, ownAddress, canSign, nativeWalletReady } = walletSelection({ native: Platform.OS !== 'web', secure: vaultIsSecure, ownAddress: derivedAddress, externalAddress, useOwn: preferOwn });
+  const [transferRecoveryBlocked] = useState(() => {
+    const value = readPersisted<unknown>('wallet.transfer');
+    return mustBlockWalletRecovery(persistedReadFailed('wallet.transfer'), value, isWalletTransferRecord);
+  });
+  const [pendingTransfer, setPendingTransfer] = useState<WalletTransferRecord | null>(() => {
+    const record = readPersisted<unknown>('wallet.transfer');
+    return isWalletTransferRecord(record) ? record : null;
+  });
+  const pendingTransferRef = useRef(pendingTransfer);
+  const transferBusy = useRef(false);
+  const walletIdentity = useRef({ phrase, ownAddress, nativeWalletReady });
+  walletIdentity.current = { phrase, ownAddress, nativeWalletReady };
   const [onchainSnap, setOnchainSnap] = usePersisted<OnchainSnapshot | null>('wallet.onchain', null);
   const [onchainStatus, setOnchainStatus] = useState<OnchainStatus>({ state: 'idle' });
   const [historySnap, setHistorySnap] = usePersisted<HistorySnapshot | null>('wallet.history', null);
@@ -161,19 +204,104 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   }, [lunesAddress, setHistorySnap]);
 
   const setLunesAddress = useCallback((a: string | null) => {
-    if (a == null) { setLunesAddressRaw(null); setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); setHistorySnap(null); setHistoryStatus({ state: 'idle' }); return null; }
-    const d = decodeSs58(a);
-    if (!d.ok) return d.error;
-    const next = a.trim();
-    if (next !== lunesAddress) { setOnchainSnap(null); setOnchainStatus({ state: 'idle' }); setHistorySnap(null); setHistoryStatus({ state: 'idle' }); }
-    setLunesAddressRaw(next);
+    if (a !== null) {
+      const d = decodeSs58(a);
+      if (!d.ok) return d.error;
+    }
+    const next = a?.trim() ?? ownAddress;
+    // Mudança imediata da referência também descarta consultas em voo antes do próximo render.
+    latest.current = next;
+    if (next !== lunesAddress) {
+      setOnchainSnap(null); setOnchainStatus({ state: 'idle' });
+      setHistorySnap(null); setHistoryStatus({ state: 'idle' });
+    }
+    if (a === null) setPreferOwn(true);
+    else { setLunesAddressRaw(a.trim()); setPreferOwn(false); }
     return null;
-  }, [lunesAddress, setLunesAddressRaw, setOnchainSnap, setHistorySnap]);
+  }, [lunesAddress, ownAddress, setLunesAddressRaw, setPreferOwn, setOnchainSnap, setHistorySnap]);
+  const useOwnWallet = useCallback(() => { setLunesAddress(null); }, [setLunesAddress]);
+  const canSignAddress = useCallback((address: string) => nativeWalletReady && canSignWalletAddress(address, ownAddress), [nativeWalletReady, ownAddress]);
+
+  const requireOwn = useCallback((from?: string) => {
+    if (transferRecoveryBlocked || persistedReadFailed('wallet.transfer')) throw new WalletTransferError('persistence', t('ownWallet.recoveryError'));
+    const current = walletIdentity.current;
+    if (!current.nativeWalletReady || !current.phrase || !current.ownAddress) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+    const address = from ?? latest.current;
+    if (!canSignWalletAddress(address, current.ownAddress)) throw new WalletTransferError('signing', t('ownWallet.watchOnly'));
+    if (from && !canSignWalletAddress(latest.current, from)) throw new WalletTransferError('signing', t('ownWallet.accountChanged'));
+    return { phrase: current.phrase, address: address! };
+  }, [transferRecoveryBlocked]);
+
+  const saveTransfer = useCallback(async (record: WalletTransferRecord) => {
+    // A Promise só resolve com o registro cifrado em disco: o motor não pode enviar antes disso.
+    await persistNow('wallet.transfer', record);
+    pendingTransferRef.current = record;
+    setPendingTransfer(record);
+  }, []);
+
+  const quoteTransfer = useCallback(async (dest: string, amount: string) => {
+    const { address } = requireOwn();
+    if (isActiveWalletTransfer(pendingTransferRef.current) || transferBusy.current) throw new WalletTransferError('busy', t('ownWallet.busy'));
+    const value = parseLunesAmount(amount);
+    if (value === null || value <= 0n) throw new WalletTransferError('invalid', t('ownWallet.amountInvalid'));
+    const quote = await prepareWalletTransfer({ from: address, dest, value: value.toString() });
+    requireOwn(address);
+    return quote;
+  }, [requireOwn]);
+
+  const sendTransfer = useCallback(async (quote: WalletQuote) => {
+    requireOwn(quote.from);
+    if (transferBusy.current || isActiveWalletTransfer(pendingTransferRef.current)) throw new WalletTransferError('busy', t('ownWallet.busy'));
+    transferBusy.current = true;
+    try {
+      return await sendWalletTransfer(quote, {
+        active: () => pendingTransferRef.current,
+        authorize: async fresh => {
+          requireOwn(fresh.from);
+          const result = await confirmDevice(t('ownWallet.auth', { amount: formatLunes(BigInt(fresh.value)), dest: fresh.dest }));
+          if (result !== 'ok') return false;
+          requireOwn(fresh.from);
+          return true;
+        },
+        sign: fresh => {
+          const { phrase: words } = requireOwn(fresh.from);
+          return withWalletKey(words, key => buildTransferKeepAlive(key, { dest: fresh.dest, value: BigInt(fresh.value), ctx: { ...fresh.ctx, tip: BigInt(fresh.ctx.tip) } }));
+        },
+        save: async record => {
+          const firstSave = pendingTransferRef.current?.hash !== record.hash;
+          if (firstSave) requireOwn(record.from);
+          await saveTransfer(record);
+          // Se a conta mudou enquanto o cofre gravava, a assinatura fica registrada, mas não sai.
+          if (firstSave) requireOwn(record.from);
+        },
+      });
+    } finally { transferBusy.current = false; }
+  }, [requireOwn, saveTransfer]);
+
+  const refreshTransfer = useCallback(async () => {
+    const record = pendingTransferRef.current;
+    if (!record || !isActiveWalletTransfer(record) || transferBusy.current) return;
+    transferBusy.current = true;
+    try {
+      await trackWalletTransfer(record, { save: saveTransfer });
+      void refreshOnchain(); void refreshHistory();
+    } finally { transferBusy.current = false; }
+  }, [saveTransfer, refreshOnchain, refreshHistory]);
+
+  const retryTransfer = useCallback(async () => {
+    const record = pendingTransferRef.current;
+    if (!record) throw new WalletTransferError('invalid', t('ownWallet.unavailable'));
+    requireOwn(record.from);
+    if (transferBusy.current) throw new WalletTransferError('busy', t('ownWallet.busy'));
+    transferBusy.current = true;
+    try { return await retryWalletTransfer(record, { save: saveTransfer }); }
+    finally { transferBusy.current = false; }
+  }, [requireOwn, saveTransfer]);
 
   const onchain = onchainSnap && lunesAddress && onchainSnap.address === lunesAddress ? planckToLunes(BigInt(onchainSnap.free)) : 0;
 
   const value = useMemo<Wallet>(() => ({
-    onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain,
+    onchain, lunesAddress, setLunesAddress, ownAddress, watchedAddress: externalAddress, nativeWalletReady, canSign, canSignAddress, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchainSnap, onchainStatus, refreshOnchain,
     historySnap, historyStatus, refreshHistory,
     reserved, refunded, spent, earned, since,
     visible,
@@ -204,7 +332,7 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     },
     recordEarned: (from, fee) => setEarned(e => [{ from, amt: fee, at: Date.now() }, ...e]),
     myFee, setMyFee,
-  }), [onchain, lunesAddress, setLunesAddress, onchainSnap, onchainStatus, refreshOnchain, historySnap, historyStatus, refreshHistory, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
+  }), [onchain, lunesAddress, setLunesAddress, ownAddress, externalAddress, nativeWalletReady, canSign, canSignAddress, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchainSnap, onchainStatus, refreshOnchain, historySnap, historyStatus, refreshHistory, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
