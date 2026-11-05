@@ -14,6 +14,9 @@ extraResources:
   - from: assets
     to: assets
     filter: ["tray*.png", "icon.png"]
+# Nome dos instaladores com SO + arquitetura, para os .dmg x64 e arm64 não colidirem no mesmo
+# release (ex.: "Piu Provider-0.1.0-mac-arm64.dmg", "Piu Provider-0.1.0-win-x64.exe").
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
 asar: true
 electronFuses:
   runAsNode: false
@@ -38,3 +41,16 @@ mac:
   hardenedRuntime: true
 dmg:
   title: Piu Provider
+win:
+  # NSIS x64. Sem assinatura (sem certificado): o SmartScreen avisa na instalação.
+  # O ícone .ico é gerado pelo electron-builder a partir do PNG 1024x1024.
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: assets/icon.png
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  deleteAppDataOnUninstall: false
+  shortcutName: Piu Provider

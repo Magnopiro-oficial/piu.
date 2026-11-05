@@ -1,0 +1,101 @@
+# Release do Piu Desktop (apps/desktop, Electron) — PREPARADO, mas fica inerte enquanto a pasta
+# apps/desktop não tiver package.json (o job `check` detecta e pula o build).
+# Quando o app existir, espera-se a mesma forma do provider-desktop: scripts `deps` (opcional),
+# `dist:mac` / `dist:linux` / `dist:win` que aceitem argumentos extras do electron-builder
+# (`-- --x64 --publish never`), ou ao menos `build` + electron-builder.yml com saída em `release/`.
+#
+# Gera macOS x64 + arm64 (.dmg/.zip), Linux x64 (.AppImage/.deb) e Windows x64 (.exe NSIS),
+# SHA256SUMS.txt e, quando disparado por tag `desktop-v*`, um GitHub Release em RASCUNHO.
+#
+# Como disparar
+#   - Tag:      git tag desktop-v0.1.0 && git push origin desktop-v0.1.0
+#   - Manual:   Actions → "Release · Piu Desktop" → Run workflow → version (ex.: 0.1.0).
+#               Sem `tag`, só artefatos do run. Com `tag` (existente), release em rascunho.
+#
+# Assinatura/notarização desligadas: ver o cabeçalho de release-electron.yml.
+
+name: Release · Piu Desktop
+
+on:
+  push:
+    tags: ['desktop-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão (semver, sem prefixo; ex.: 0.1.0)"
+        required: true
+        type: string
+      tag:
+        description: "Tag existente para anexar o release em rascunho (ex.: desktop-v0.1.0). Vazio = só artefatos"
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-desktop-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Parâmetros e existência de apps/desktop
+    runs-on: ubuntu-latest
+    outputs:
+      exists: ${{ steps.p.outputs.exists }}
+      version: ${{ steps.p.outputs.version }}
+      tag: ${{ steps.p.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          # hashFiles não funciona em `if` de job; por isso a checagem é aqui, com o código baixado.
+          if [[ -f apps/desktop/package.json ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::warning::apps/desktop/package.json não existe ainda: build do Piu Desktop pulado."
+          fi
+          if [[ "$EVENT" == "push" ]]; then
+            tag="$REF_NAME"
+            version="${tag#desktop-v}"
+          else
+            tag="$IN_TAG"
+            version="$IN_VERSION"
+            if [[ -n "$tag" && "$tag" != desktop-v* ]]; then
+              echo "::error::A tag deve começar com desktop-v (recebido: $tag)"; exit 1
+            fi
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "versão=$version tag=${tag:-<nenhuma>}"
+
+  installers:
+    name: Instaladores
+    needs: check
+    if: needs.check.outputs.exists == 'true'
+    permissions:
+      contents: write
+      actions: read
+    uses: ./.github/workflows/release-electron.yml
+    with:
+      app_name: Piu Desktop
+      app_dir: apps/desktop
+      artifact_prefix: piu-desktop
+      version: ${{ needs.check.outputs.version }}
+      tag: ${{ needs.check.outputs.tag }}
+    secrets:
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}

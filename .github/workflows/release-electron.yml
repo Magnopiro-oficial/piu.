@@ -1,0 +1,266 @@
+# Workflow REUTILIZÁVEL (workflow_call): gera os instaladores de um app Electron do monorepo
+# (apps/provider-desktop → "Piu Provider"; apps/desktop → "Piu Desktop") e, quando chamado a
+# partir de uma tag, anexa tudo a um GitHub Release em RASCUNHO (o dono revisa e publica).
+#
+# Quem chama: release-provider-desktop.yml (tags provider-v*) e release-desktop.yml (tags desktop-v*).
+#
+# Matriz de build
+#   macOS Intel (x64)          macos-15-intel   (.dmg + .zip)   ← macos-13 foi aposentado pelo GitHub
+#   macOS Apple Silicon (arm64) macos-14         (.dmg + .zip)
+#   Linux x64                   ubuntu-latest    (.AppImage + .deb)
+#   Windows x64                 windows-latest   (.exe NSIS)
+#
+# Assinatura de código / notarização: DESLIGADAS (não há certificados).
+#   - CSC_IDENTITY_AUTO_DISCOVERY=false impede o electron-builder de procurar um certificado no
+#     keychain do runner e falhar.
+#   - As variáveis abaixo são lidas de secrets OPCIONAIS; sem eles ficam vazias e nada muda.
+#       CSC_LINK / CSC_KEY_PASSWORD          certificado .p12 (base64) e senha — macOS e Windows
+#       APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarização (macOS)
+#   - Para ligar de verdade: criar os secrets no repositório E remover `identity: null` do
+#     electron-builder.yml do app (ou trocar por `mac.notarize: true`). O passo "Assinatura" só
+#     avisa qual é o estado; não assina nada enquanto o yml do app desligar a identidade.
+#
+# Publicação pelo electron-builder: desligada (`--publish never`). Quem cria o release é `gh`.
+
+name: Release · Electron (reutilizável)
+
+on:
+  workflow_call:
+    inputs:
+      app_name:
+        description: "Nome do produto (ex.: Piu Provider)"
+        required: true
+        type: string
+      app_dir:
+        description: "Pasta do app no monorepo (ex.: apps/provider-desktop)"
+        required: true
+        type: string
+      version:
+        description: "Versão semver sem prefixo (ex.: 0.1.0). Vazio = a do package.json"
+        required: false
+        type: string
+        default: ''
+      tag:
+        description: "Tag do release (ex.: provider-v0.1.0). Vazio = só artefatos, sem release"
+        required: false
+        type: string
+        default: ''
+      artifact_prefix:
+        description: "Prefixo dos artefatos (ex.: piu-provider)"
+        required: true
+        type: string
+      output_dir:
+        description: Pasta de saída do electron-builder (directories.output), relativa ao app
+        required: false
+        type: string
+        default: release
+      node_version:
+        description: Versão do Node
+        required: false
+        type: string
+        default: '22'
+    secrets:
+      CSC_LINK:
+        required: false
+      CSC_KEY_PASSWORD:
+        required: false
+      APPLE_ID:
+        required: false
+      APPLE_APP_SPECIFIC_PASSWORD:
+        required: false
+      APPLE_TEAM_ID:
+        required: false
+
+# Menor privilégio por padrão; só o job `release` escreve (releases).
+permissions:
+  contents: read
+
+defaults:
+  run:
+    # Bash em todos os SOs (no Windows é o Git Bash do runner): mesmos scripts, mesmos caminhos.
+    shell: bash
+
+jobs:
+  build:
+    name: ${{ inputs.app_name }} · ${{ matrix.label }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: macos-x64
+            os: macos-15-intel
+            platform: mac
+            arch: x64
+          - label: macos-arm64
+            os: macos-14
+            platform: mac
+            arch: arm64
+          - label: linux-x64
+            os: ubuntu-latest
+            platform: linux
+            arch: x64
+          - label: windows-x64
+            os: windows-latest
+            platform: win
+            arch: x64
+    env:
+      APP_DIR: ${{ inputs.app_dir }}
+      # Sem certificado: não procurar identidade no keychain (senão o build do macOS falha).
+      CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      # Secrets opcionais de assinatura/notarização (vazios = desligado).
+      CSC_LINK: ${{ secrets.CSC_LINK }}
+      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Sem telemetria/avisos de update do electron-builder; cache do Electron por runner.
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: ${{ inputs.node_version }}
+
+      - name: Versão
+        id: ver
+        working-directory: ${{ inputs.app_dir }}
+        env:
+          INPUT_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          current="$(node -p "require('./package.json').version")"
+          want="${INPUT_VERSION:-$current}"
+          if [[ ! "$want" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Versão inválida: '$want' (esperado semver, ex.: 0.1.0)"; exit 1
+          fi
+          if [[ "$want" != "$current" ]]; then
+            echo "package.json em $current; instalador sairá como $want (sem commit)"
+            npm version "$want" --no-git-tag-version --allow-same-version
+          fi
+          echo "version=$want" >> "$GITHUB_OUTPUT"
+
+      - name: "Dependências (deps do app, ex.: piu-node e painel) e npm ci"
+        working-directory: ${{ inputs.app_dir }}
+        run: |
+          set -euo pipefail
+          npm run deps --if-present
+          npm ci
+
+      - name: Assinatura / notarização (estado)
+        run: |
+          if [[ -n "${CSC_LINK}" ]]; then
+            echo "::notice::CSC_LINK presente. A assinatura só acontece se o electron-builder.yml do app não tiver 'identity: null'."
+          else
+            echo "::notice::Sem certificado (CSC_LINK vazio): instaladores NÃO assinados. macOS: botão direito → Abrir. Windows: aviso do SmartScreen."
+          fi
+          if [[ -n "${APPLE_ID}" && -n "${APPLE_TEAM_ID}" ]]; then
+            echo "::notice::Credenciais Apple presentes; notarização depende de 'mac.notarize: true' no electron-builder.yml."
+          fi
+
+      - name: Build + instaladores (${{ matrix.platform }} ${{ matrix.arch }})
+        working-directory: ${{ inputs.app_dir }}
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          ARCH: ${{ matrix.arch }}
+        run: |
+          set -euo pipefail
+          # Usa o script dist:<so> do app quando existir (ele já monta painel + processo principal);
+          # senão, build genérico + electron-builder direto.
+          if node -e "process.exit(require('./package.json').scripts?.['dist:'+process.env.PLATFORM] ? 0 : 1)"; then
+            npm run "dist:${PLATFORM}" -- "--${ARCH}" --publish never
+          else
+            npm run build --if-present
+            npx electron-builder "--${PLATFORM}" "--${ARCH}" --publish never
+          fi
+
+      - name: Coletar instaladores
+        id: collect
+        working-directory: ${{ inputs.app_dir }}
+        env:
+          OUT_DIR: ${{ inputs.output_dir }}
+        run: |
+          set -euo pipefail
+          out="${OUT_DIR:-release}"
+          mkdir -p ../../_installers
+          shopt -s nullglob
+          files=( "$out"/*.dmg "$out"/*.zip "$out"/*.AppImage "$out"/*.deb "$out"/*.exe )
+          if [[ ${#files[@]} -eq 0 ]]; then echo "::error::Nenhum instalador em $out"; ls -la "$out" || true; exit 1; fi
+          for f in "${files[@]}"; do cp "$f" ../../_installers/; done
+          ls -la ../../_installers
+
+      - name: SHA-256 (por plataforma)
+        working-directory: _installers
+        run: |
+          set -euo pipefail
+          if command -v sha256sum >/dev/null; then sha256sum -- * > "SHA256SUMS-${{ matrix.label }}.txt"; else shasum -a 256 -- * > "SHA256SUMS-${{ matrix.label }}.txt"; fi
+          cat "SHA256SUMS-${{ matrix.label }}.txt"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ inputs.artifact_prefix }}-${{ steps.ver.outputs.version }}-${{ matrix.label }}
+          path: _installers/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release em rascunho (${{ inputs.tag }})
+    if: inputs.tag != ''
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write   # criar o release em rascunho
+      actions: read     # baixar os artefatos deste run com `gh run download`
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Baixar artefatos do run (gh, sem action de terceiros)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --dir _dl_raw
+          mkdir -p _dl
+          find _dl_raw -type f ! -name 'SHA256SUMS-*.txt' -exec mv -t _dl/ {} +
+          ls -la _dl
+
+      - name: SHA256SUMS.txt (consolidado)
+        working-directory: _dl
+        run: |
+          set -euo pipefail
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - name: Criar/atualizar release em RASCUNHO
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ inputs.tag }}
+          TITLE: ${{ inputs.app_name }} ${{ inputs.version }}
+          APP_DIR: ${{ inputs.app_dir }}
+        run: |
+          set -euo pipefail
+          notes="Instaladores de ${APP_DIR} (${TAG}).
+
+          **Sem assinatura de código nem notarização.**
+          - macOS: na primeira abertura, botão direito no app → Abrir.
+          - Windows: o SmartScreen avisa; \"Mais informações\" → \"Executar assim mesmo\".
+          - Linux: \`chmod +x\` no AppImage, ou \`sudo apt install ./*.deb\`.
+
+          Confira o SHA-256 em \`SHA256SUMS.txt\`."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe: enviando arquivos (--clobber)"
+            gh release upload "$TAG" _dl/* --clobber
+          else
+            gh release create "$TAG" _dl/* --draft --verify-tag --title "$TITLE" --notes "$notes"
+          fi
+          echo "::notice::Release em rascunho criado/atualizado: $TAG (publicar manualmente)"
