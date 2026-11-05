@@ -174,11 +174,19 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
+          OUT_DIR: ${{ inputs.output_dir }}
         run: |
           set -euo pipefail
           # Windows no contêiner com Wine: o HOME (/github/home) não pertence ao usuário do contêiner e
           # o Wine se recusa a criar a configuração lá; usa um prefixo próprio.
-          if [[ "$PLATFORM" == win ]]; then export WINEPREFIX=/tmp/wineprefix; mkdir -p "$WINEPREFIX"; fi
+          # Além disso, o Wine traduz o caminho para o formato do Windows, que ignora o ponto no fim do
+          # nome da pasta ("piu."): o build do Windows roda numa cópia em /tmp/src e devolve o resultado.
+          if [[ "$PLATFORM" == win ]]; then
+            export WINEPREFIX=/tmp/wineprefix; mkdir -p "$WINEPREFIX"
+            rm -rf /tmp/src && cp -a "$GITHUB_WORKSPACE" /tmp/src
+            here="$PWD"; cd "/tmp/src/$APP_DIR"
+            trap 'mkdir -p "$here/${OUT_DIR:-release}"; cp -a "/tmp/src/$APP_DIR/${OUT_DIR:-release}/." "$here/${OUT_DIR:-release}/" 2>/dev/null || true' EXIT
+          fi
           # Usa o script dist:<so> do app quando existir (ele já monta painel + processo principal);
           # senão, build genérico + electron-builder direto.
           if node -e "process.exit(require('./package.json').scripts?.['dist:'+process.env.PLATFORM] ? 0 : 1)"; then
