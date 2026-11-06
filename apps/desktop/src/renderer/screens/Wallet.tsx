@@ -3,8 +3,9 @@
  * quártico), esconder saldo, ações, movimentações e créditos de rede. Só leitura por enquanto:
  * o endereço Lunes é informado e o saldo vem da Mainnet; Enviar/Converter ficam "em breve".
  */
+import QRCode from 'qrcode';
 import { type Dispatch, type SetStateAction, useEffect, useRef, useState } from 'react';
-import type { Prefs, WalletState } from '../../shared/types';
+import type { DesktopPaymentState, Prefs, WalletState } from '../../shared/types';
 import { type DialogSpec, F, FM, Sym } from '../ui';
 
 interface Props { prefs: Prefs; updatePrefs: (p: Partial<Prefs>) => Promise<void>; toast: (text: string, icon?: string) => void; setDialog: Dispatch<SetStateAction<DialogSpec | null>>; seq: number }
@@ -16,12 +17,19 @@ const shortAddr = (a: string) => `${a.slice(0, 6)}…${a.slice(-4)}`;
 
 export function Wallet({ prefs, updatePrefs, toast, setDialog, seq }: Props) {
   const [w, setW] = useState<WalletState | null>(null);
-  const [sheet, setSheet] = useState<'receive' | 'address' | null>(null);
+  const [sheet, setSheet] = useState<'receive' | 'address' | 'send' | null>(null);
+  const [payment, setPayment] = useState<DesktopPaymentState>({ state: 'blocked', reason: 'Verificando o registro de pagamentos…' });
+  const [destination, setDestination] = useState('');
+  const [amount, setAmount] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [qr, setQr] = useState('');
   const [addr, setAddr] = useState(prefs.walletAddress ?? '');
   const [balT, setBalT] = useState<number | null>(null);
   const raf = useRef(0);
   const lastTarget = useRef<number | null>(null);
   useEffect(() => { void window.piu.wallet().then(setW); return window.piu.on('wallet', setW); }, []);
+  useEffect(() => { void window.piu.walletPayment().then(setPayment); return window.piu.on('walletPayment', setPayment); }, []);
+  useEffect(() => { let active = true; setQr(''); if (prefs.walletAddress) void QRCode.toDataURL(prefs.walletAddress, { width: 220, margin: 2 }).then(v => { if (active) setQr(v); }).catch(() => {}); return () => { active = false; }; }, [prefs.walletAddress]);
   useEffect(() => { setAddr(prefs.walletAddress ?? ''); if (!prefs.walletAddress) setSheet('address'); }, [prefs.walletAddress]);
 
   const hidden = w?.hidden ?? prefs.hideBalance;
@@ -39,9 +47,15 @@ export function Wallet({ prefs, updatePrefs, toast, setDialog, seq }: Props) {
   const shownN = balT == null ? target : balT;
   const bars = Array(7).fill(0);
   const saveAddr = async () => { try { await window.piu.setWalletAddress(addr.trim() || null); setSheet(null); toast(addr.trim() ? 'Endereço salvo · lendo a Mainnet' : 'Endereço removido', 'account_balance_wallet'); } catch (e) { toast((e as Error).message, 'error'); } };
+  const activePayment = payment.state === 'payment' && !['finalized', 'failed', 'cancelled'].includes(payment.payment.status);
+  const submitPayment = async () => {
+    if (busy) return; setBusy(true);
+    try { setPayment(await window.piu.requestWalletPayment({ dest: destination.trim(), amount: amount.trim() })); }
+    catch (e) { toast((e as Error).message, 'error'); } finally { setBusy(false); }
+  };
   const status = !w?.address ? 'informe seu endereço Lunes' : w.status === 'loading' ? 'lendo na Mainnet…' : w.status === 'error' ? w.error ?? 'falha ao ler' : w.status === 'ok' ? `bloco #${w.block} · ${(w.endpoint ?? '').replace(/^wss?:\/\//, '')}` : 'sem leitura ainda';
   const actions: [string, string, () => void][] = [
-    ['north_east', 'Enviar', () => toast('Enviar LUNES chega numa próxima versão', 'cloud_off')],
+    ['north_east', 'Enviar', () => setSheet(sheet === 'send' ? null : 'send')],
     ['south_west', 'Receber', () => setSheet(sheet === 'receive' ? null : 'receive')],
     ['swap_horiz', 'Converter', () => toast('Conversão disponível quando a malha alcançar a Mainnet', 'cloud_off')],
   ];
@@ -88,7 +102,7 @@ export function Wallet({ prefs, updatePrefs, toast, setDialog, seq }: Props) {
             <div style={{ padding: '4px 4px 8px', font: `500 11.5px ${FM}`, letterSpacing: '.05em', color: 'var(--ink2)' }}>MOVIMENTAÇÕES</div>
             <div style={{ borderRadius: 20, background: 'var(--bg2)', overflow: 'hidden' }}>
               <div style={{ padding: '26px 16px', textAlign: 'center', fontSize: 13.5, color: 'var(--ink2)', lineHeight: 1.45, animation: 'piuUp .45s .3s cubic-bezier(.2,.85,.3,1) both' }}>
-                Nenhuma movimentação ainda.<br /><span style={{ fontSize: 12.5, color: 'var(--ink3)' }}>Histórico da Mainnet e créditos de retransmissão chegam numa próxima versão.</span>
+                {payment.state === 'payment' ? <>Último pedido: {payment.payment.amount} LUNES · {payment.payment.status}<br /><span style={{ fontSize: 12.5, color: 'var(--ink3)' }}>Abra Enviar para ver os detalhes do pedido.</span></> : <>Nenhum pedido registrado neste computador.<br /><span style={{ fontSize: 12.5, color: 'var(--ink3)' }}>Histórico completo da Mainnet ainda não está disponível.</span></>}
               </div>
             </div>
           </div>
@@ -97,19 +111,33 @@ export function Wallet({ prefs, updatePrefs, toast, setDialog, seq }: Props) {
           {sheet && (
             <div style={{ borderRadius: 24, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 24px 60px -30px rgba(0,0,0,.35)', padding: 20, display: 'flex', flexDirection: 'column', gap: 16, animation: 'piuSide .45s cubic-bezier(.2,.85,.3,1) both' }}>
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-                <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>{sheet === 'receive' ? 'Receber LUNES' : 'Endereço Lunes'}</div>
+                <div style={{ fontSize: 18, fontWeight: 700, letterSpacing: '-0.02em' }}>{sheet === 'receive' ? 'Receber LUNES' : sheet === 'send' ? 'Enviar LUNES' : 'Endereço Lunes'}</div>
                 <button onClick={() => setSheet(null)} aria-label="Fechar" style={{ width: 30, height: 30, border: 'none', borderRadius: 15, background: 'var(--bg2)', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sym name="close" size={17} /></button>
               </div>
               {sheet === 'receive' ? (
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
                   <div style={{ padding: 14, borderRadius: 20, background: 'var(--bg2)', width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, animation: 'piuPop .55s cubic-bezier(.2,.9,.3,1.25) both' }}>
-                    <Sym name="qr_code_2" size={44} wght={300} style={{ color: 'var(--ink3)' }} />
-                    <div style={{ font: `500 12px ${FM}`, color: 'var(--ink2)' }}>QR em breve · copie o endereço</div>
+                    {qr ? <img src={qr} width={220} height={220} alt="QR do endereço Lunes" style={{ maxWidth: '100%', height: 'auto' }} /> : <div style={{ font: `500 12px ${FM}`, color: 'var(--ink2)' }}>Informe um endereço para gerar o QR.</div>}
                   </div>
                   <div className="a-98 sel" onClick={() => { if (prefs.walletAddress) { void window.piu.copy(prefs.walletAddress); toast('Endereço copiado', 'content_copy'); } }} style={{ width: '100%', minHeight: 42, padding: '8px 12px', borderRadius: 12, background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, font: `500 12px ${FM}`, cursor: 'pointer', wordBreak: 'break-all', textAlign: 'center' }}>
                     {prefs.walletAddress ?? 'sem endereço'}<Sym name="content_copy" size={16} />
                   </div>
                   <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.45, textAlign: 'center', textWrap: 'pretty' }}>Transferências para este endereço aparecem no saldo depois de finalizadas na Mainnet.</div>
+                </div>
+              ) : sheet === 'send' ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.5 }}>Vincule o celular e confirme nele o destino, valor e taxa. A assinatura e a autorização acontecem no celular.</div>
+                  <div style={{ fontSize: 12, color: 'var(--ink2)', wordBreak: 'break-all' }}>Origem: {w?.address ?? 'informe seu endereço Lunes'}</div>
+                  <input value={destination} onChange={e => setDestination(e.target.value)} placeholder="Endereço de destino Lunes" aria-label="Endereço de destino Lunes" spellCheck={false} style={{ height: 44, borderRadius: 12, border: 'none', background: 'var(--bg2)', padding: '0 14px', font: `500 13px ${FM}`, color: 'var(--ink)' }} />
+                  <input value={amount} onChange={e => setAmount(e.target.value)} placeholder="Valor em LUNES (ex.: 1,5)" aria-label="Valor em LUNES" inputMode="decimal" style={{ height: 44, borderRadius: 12, border: 'none', background: 'var(--bg2)', padding: '0 14px', font: `500 13px ${FM}`, color: 'var(--ink)' }} />
+                  <button className="a-97" disabled={busy || payment.state === 'blocked' || activePayment || !w?.address || !destination.trim() || !amount.trim()} onClick={() => void submitPayment()} style={{ minHeight: 46, border: 'none', borderRadius: 23, background: 'var(--ink)', color: 'var(--invink)', font: `600 14.5px ${F}`, cursor: 'pointer' }}>Revisar no celular</button>
+                  {payment.state === 'blocked' && <div role="alert" style={{ fontSize: 12.5, color: 'var(--ink2)' }}>{payment.reason}</div>}
+                  {payment.state === 'payment' && <div role="status" style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.5, wordBreak: 'break-all' }}>
+                    <strong>{({ waiting: 'Aguardando o celular', review: 'Confira e autorize no celular', signed: 'Assinado no celular', submitted: 'Enviado à rede', included: 'Incluído em bloco', finalized: 'Finalizado', failed: 'Falhou na rede', cancelled: 'Cancelado no celular', unknown: 'Estado incerto: confira o histórico no celular antes de tentar novamente' } as const)[payment.payment.status]}</strong><br />
+                    {payment.payment.amount} LUNES para {payment.payment.dest}
+                    {payment.payment.hash && <><br />Hash: {payment.payment.hash}</>}
+                    {payment.payment.error && <><br />{payment.payment.error}</>}
+                  </div>}
                 </div>
               ) : (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>

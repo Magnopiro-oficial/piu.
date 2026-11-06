@@ -74,3 +74,16 @@ test('snapshot e eventos do celular viram o modelo do desktop (sem dados de exem
   s = applyLinkEvent(s.contacts, s.conv, { t: 'event', k: 'typing', chatId: 'c2', on: true }, now);
   assert.equal(s.contacts.length, 2);
 });
+
+
+test('snapshot e eventos preservam grupos, canais, permissão e remetente', () => {
+  const now = 1_700_000_000;
+  const group = { id: 'g', ident: 'public' as const, kind: 'group' as const, name: 'Equipe', initials: 'EQ', time: '', unread: 0, group: 'abc', owner: true, sub: '3 membros' };
+  const channel = { id: 'c', ident: 'public' as const, kind: 'channel' as const, name: 'Avisos', initials: 'AV', time: '', unread: 0, group: 'def' };
+  let state = stateFromSnapshot({ t: 'snapshot', contacts: [], chats: [group, channel], messages: { g: [{ id: 'm', from: 'them', text: 'olá', time: '', sender: 'Ana' }] } }, now);
+  assert.deepEqual(state.contacts.map(c => [c.kind, c.canPost, c.subtitle]), [['group', true, '3 membros'], ['channel', false, undefined]]);
+  assert.equal(state.conv.byContact.g![0]!.sender, 'Ana');
+  const changed = applyLinkEvent(state.contacts, state.conv, { t: 'event', k: 'chat', chat: { ...channel, owner: true } }, now);
+  assert.equal(changed.contacts.find(c => c.id === 'c')!.canPost, true);
+  assert.equal(changed.contacts.find(c => c.id === 'c')!.kind, 'channel');
+});

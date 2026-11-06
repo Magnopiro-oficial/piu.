@@ -5,6 +5,7 @@
  */
 import { type Dispatch, type SetStateAction, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ConversationSummary, MeInfo, Message, NetworkStatus, Prefs } from '../../shared/types';
+import { canSendToConversation, conversationKind, filterConversationKind } from '../../shared/conversations';
 import { type DialogSpec, F, FM, Sym, fmtTime, initialsOf, shortId } from '../ui';
 
 type Filter = 'all' | 'direct' | 'group' | 'channel';
@@ -64,7 +65,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
     if (!active) { setMsgs([]); setSafety([]); return; }
     void window.piu.getMessages(active).then(setMsgs);
     void window.piu.markRead(active);
-    if (linked) setSafety([]); else void window.piu.safetyCode(active).then(setSafety).catch(() => setSafety([]));
+    if (linked || active.startsWith('group:')) setSafety([]); else void window.piu.safetyCode(active).then(setSafety).catch(() => setSafety([]));
   }, [active, onConversationOpen, linked]);
   useEffect(() => () => onConversationOpen(false), [onConversationOpen]);
   useEffect(() => { const el = scrollEl.current; if (el) el.scrollTop = el.scrollHeight; }, [msgs.length, active]);
@@ -81,13 +82,14 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
   const mine = useMemo(() => (linked ? all : all.filter(c => c.contact.via === prefs.identity)), [all, prefs.identity, linked]);
   const list = useMemo(() => {
     const qq = q.trim().toLowerCase();
-    // Grupos e canais ainda não existem no computador: os filtros ficam, as listas vêm vazias.
-    const byKind = filter === 'all' || filter === 'direct' ? mine : [];
+    const byKind = filterConversationKind(mine, filter);
     return byKind.filter(c => !qq || nameOf(c.contact).toLowerCase().includes(qq) || c.contact.id.includes(qq));
   }, [mine, filter, q]);
   useEffect(() => { if (active && !mine.some(c => c.contact.id === active)) setActive(null); }, [mine, active]);
 
   const conv = mine.find(c => c.contact.id === active) ?? null;
+  const collective = !!conv && conversationKind(conv.contact) !== 'direct';
+  const canWrite = !!conv && canSendToConversation(conv.contact);
   const links = net?.lan.links ?? 0;
   const lanOn = net?.lan.state === 'running';
   const totalUnread = all.reduce((a, c) => a + c.unread, 0);
@@ -95,7 +97,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
 
   const send = async () => {
     const text = draft.trim();
-    if (!conv || !text) return;
+    if (!conv || !text || !canSendToConversation(conv.contact)) return;
     try {
       const m = await window.piu.sendText(conv.contact.id, text);
       fresh.current.add(m.id);
@@ -121,6 +123,32 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
     });
   };
 
+  const createCollective = async () => {
+    try {
+      const candidates = (await window.piu.listGroupCandidates()).filter(c => c.via === prefs.identity && !c.request);
+      if (!candidates.length) { toast('Adicione e aceite contatos desta identidade para criar um grupo ou canal.', 'error'); return; }
+      let name = '';
+      let kind: 'group' | 'channel' = filter === 'channel' ? 'channel' : 'group';
+      const selected = new Set<string>();
+      setDialog({ icon: 'group_add', title: 'Novo grupo ou canal', body: 'Selecione contatos aceitos desta identidade. A participação é enviada pela conversa cifrada de cada pessoa.', primary: 'Criar',
+        content: <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <input autoFocus aria-label="Nome" placeholder="Nome do grupo ou canal" maxLength={60} onChange={e => { name = e.target.value; }} style={{ height: 42, borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--bg2)', padding: '0 12px', color: 'var(--ink)' }} />
+          <select aria-label="Tipo" defaultValue={kind} onChange={e => { kind = e.target.value as 'group' | 'channel'; }} style={{ height: 40, borderRadius: 10, background: 'var(--bg2)', color: 'var(--ink)' }}><option value="group">Grupo · membros podem publicar</option><option value="channel">Canal · só administradores publicam</option></select>
+          <div style={{ maxHeight: 180, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {candidates.map(c => <label key={c.id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}><input type="checkbox" onChange={e => { if (e.target.checked) selected.add(c.id); else selected.delete(c.id); }} />{nameOf(c)}</label>)}
+          </div>
+        </div>,
+        act: async () => {
+          if (!name.trim() || !selected.size) { toast('Informe o nome e selecione pelo menos um contato.', 'error'); return; }
+          try {
+            const group = await window.piu.createGroup({ kind, name: name.trim(), via: prefs.identity, memberIds: [...selected] });
+            const rows = await window.piu.listConversations(); setAll(rows); setFilter('all'); setActive(group.id); setDialog(null); toast('Conversa criada', 'group_add');
+          } catch (e) { toast((e as Error).message, 'error'); }
+        },
+      });
+    } catch (e) { toast((e as Error).message, 'error'); }
+  };
+
   const showMyCode = async () => {
     try {
       const card = await window.piu.myCard(prefs.identity);
@@ -143,12 +171,12 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
 
   // Conversa aberta: subtítulo, via e rota com dados reais.
   const first = conv ? nameOf(conv.contact).split(' ')[0]! : '';
-  const offline = !!conv && conv.pending > 0 && links === 0;
-  const sub = !conv ? '' : linked ? 'conectado ao celular · ele cifra e envia' : conv.contact.request ? 'pedido de conversa · confira o código' : offline ? `fora de alcance · ${conv.pending} na fila` : links > 0 ? `rede local · ${links} vizinho${links > 1 ? 's' : ''}` : 'sem vizinhos agora';
+  const offline = !linked && !!conv && conv.pending > 0 && links === 0;
+  const sub = !conv ? '' : linked ? (conv.contact.subtitle ?? 'conectado ao celular · ele cifra e envia') : conv.contact.request ? 'pedido de conversa · confira o código' : offline ? `fora de alcance · ${conv.pending} na fila` : links > 0 ? `rede local · ${links} vizinho${links > 1 ? 's' : ''}` : 'sem vizinhos agora';
   const via = linked ? 'pelo celular vinculado · rede local' : links > 0 ? `Wi-Fi local · ${links} vizinho${links > 1 ? 's' : ''}` : lanOn ? 'sem vizinhos · fila guardada' : 'rede local desligada';
   const viaIcon = linked ? 'smartphone' : links > 0 ? 'hub' : 'schedule';
   const sel = msgs.find(m => m.id === routeMsg) ?? null;
-  const routeNodes = !sel || !conv ? [] : sel.dir === 'out'
+  const routeNodes = !sel || !conv || (linked && collective) ? [] : sel.dir === 'out'
     ? [{ n: 'Você', k: 'Este computador' }, sel.route ? { n: `Vizinho · ${sel.route.peer.slice(0, 4).toUpperCase()}`, k: 'Nó LNNP · rede local' } : { n: 'Aguardando rota', k: 'na fila (vale 48 h)' }, { n: nameOf(conv.contact), k: sel.status === 'entregue' ? 'Destino · recibo cifrado' : sel.status === 'expirada' ? 'Expirada sem recibo' : 'Destino' }]
     : [{ n: nameOf(conv.contact), k: 'Origem' }, { n: sel.route ? `Vizinho · ${sel.route.peer.slice(0, 4).toUpperCase()}` : 'Malha', k: sel.route?.hops ? `${sel.route.hops} salto${sel.route.hops > 1 ? 's' : ''}` : 'Nó LNNP' }, { n: 'Você', k: 'Este computador · decifrada' }];
   const routeVias = !sel ? [] : sel.dir === 'out' ? [sel.route ? `Wi-Fi local · ${sel.route.bytes} B` : 'aguardando rota', sel.status === 'entregue' ? 'recibo dentro da sessão' : 'malha'] : [sel.route ? `Wi-Fi local · ${sel.route.bytes} B` : 'malha', 'Double Ratchet'];
@@ -165,6 +193,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
               </div>
             ) : (
               <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                <button className="h-bg2" onClick={createCollective} title="Criar grupo ou canal" aria-label="Criar grupo ou canal" style={{ width: 28, height: 28, border: '1px solid var(--line2)', borderRadius: 14, background: 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sym name="group_add" size={15} /></button>
                 <button className="h-bg2" onClick={addByCode} title="Adicionar pelo código" aria-label="Adicionar pelo código" style={{ width: 28, height: 28, border: '1px solid var(--line2)', borderRadius: 14, background: 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sym name="person_add" size={15} /></button>
                 <button className="h-bg2" onClick={showMyCode} title="Meu código" aria-label="Meu código" style={{ height: 24, padding: '0 9px', borderRadius: 12, border: '1px solid var(--line2)', background: 'transparent', display: 'flex', alignItems: 'center', gap: 5, font: `500 11px ${FM}`, color: 'var(--ink2)', cursor: 'pointer' }}>
                   <Sym name={identityPill[0]!} size={13} />{identityPill[1]}
@@ -190,7 +219,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
             return (
               <div key={c.contact.id} className="h-x3 a-98 conv" role="button" tabIndex={0} aria-current={c.contact.id === active} onClick={() => setActive(c.contact.id)} onKeyDown={e => { if (e.key === 'Enter') setActive(c.contact.id); }}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: `${dens ? 8 : 11}px 10px`, borderRadius: 14, background: c.contact.id === active ? 'var(--bg2)' : 'transparent', cursor: 'pointer', transition: 'background .2s,transform .2s', animation: `piuUp .45s ${0.18 + i * 0.045}s cubic-bezier(.2,.85,.3,1) both` }}>
-                <div style={{ width: dens ? 38 : 46, height: dens ? 38 : 46, borderRadius: '50%', background: anon ? 'var(--bg3)' : 'var(--ink)', color: anon ? 'var(--ink)' : 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `600 14px ${F}`, flex: 'none', transition: 'width .25s,height .25s' }}>{initialsOf(c.contact.name, c.contact.id)}</div>
+                <div style={{ width: dens ? 38 : 46, height: dens ? 38 : 46, borderRadius: conversationKind(c.contact) === 'direct' ? '50%' : 14, background: anon ? 'var(--bg3)' : 'var(--ink)', color: anon ? 'var(--ink)' : 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `600 14px ${F}`, flex: 'none', transition: 'width .25s,height .25s' }}>{initialsOf(c.contact.name, c.contact.id)}</div>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -229,7 +258,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
                 <div style={{ fontSize: 12.5, color: 'var(--ink2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
               </div>
               <button className="a-88 nodrag" onClick={() => toast('Silenciar conversa chega numa próxima versão', 'notifications_off')} title="Silenciar" style={{ width: 38, height: 38, border: 'none', borderRadius: 11, background: 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .2s' }}><Sym name="notifications" size={21} /></button>
-              <button className="a-88 nodrag" onClick={() => { setInfoOpen(o => !o); if (infoOpen) setRouteMsg(null); }} title="Detalhes" aria-pressed={infoOpen} style={{ width: 38, height: 38, border: 'none', borderRadius: 11, background: infoOpen ? 'var(--bg3)' : 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s,transform .2s' }}><Sym name="side_navigation" size={21} /></button>
+              <button className="a-88 nodrag" disabled={collective} onClick={() => { setInfoOpen(o => !o); if (infoOpen) setRouteMsg(null); }} title="Detalhes" aria-pressed={infoOpen} style={{ width: 38, height: 38, border: 'none', borderRadius: 11, background: infoOpen ? 'var(--bg3)' : 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s,transform .2s' }}><Sym name="side_navigation" size={21} /></button>
             </>
           ) : (
             <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -252,7 +281,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
               const gap = i && a[i - 1]!.dir !== m.dir ? 10 : 0;
               const anim = fresh.current.has(m.id) ? (m.dir === 'out' ? 'piuMsgIn .38s cubic-bezier(.2,.9,.3,1.3) both' : 'piuMsgIn .4s cubic-bezier(.2,.9,.3,1.3) both') : 'none';
               const ring = routeMsg === m.id ? '0 0 0 2px var(--bg), 0 0 0 4px var(--ink)' : '0 0 0 0 transparent';
-              const open = (e: React.MouseEvent) => { e.stopPropagation(); setRouteMsg(m.id); setInfoOpen(true); };
+              const open = (e: React.MouseEvent) => { e.stopPropagation(); if (collective) return; setRouteMsg(m.id); setInfoOpen(true); };
               return m.dir === 'out' ? (
                 <div key={m.id} className="h-up1 sel" onClick={open} style={{ alignSelf: 'flex-end', maxWidth: '68%', padding: '8px 12px 6px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--ink)', color: 'var(--invink)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2, marginTop: gap, animation: anim, transformOrigin: 'bottom right', boxShadow: ring, transition: 'box-shadow .25s,transform .2s' }}>
                   <div style={{ fontSize: msgSize, lineHeight: 1.4, textWrap: 'pretty', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
@@ -262,6 +291,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
                 </div>
               ) : (
                 <div key={m.id} className="h-up1 sel" onClick={open} style={{ alignSelf: 'flex-start', maxWidth: '68%', padding: '8px 14px 6px 12px', borderRadius: '20px 20px 20px 6px', background: 'var(--bub)', color: 'var(--ink)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2, marginTop: gap, boxShadow: `0 0 0 1px var(--line) inset, ${ring}`, animation: anim, transformOrigin: 'bottom left', transition: 'box-shadow .25s,transform .2s' }}>
+                  {collective && m.sender && <div style={{ fontSize: 12.5, fontWeight: 650 }}>{m.sender}</div>}
                   <div style={{ fontSize: msgSize, lineHeight: 1.4, textWrap: 'pretty', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
                   <div style={{ alignSelf: 'flex-end', fontSize: 11, color: 'var(--ink2)', fontVariantNumeric: 'tabular-nums' }}>{fmtTime(m.at)}</div>
                 </div>
@@ -273,10 +303,12 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
                 <div style={{ fontSize: 13, lineHeight: 1.4, color: 'var(--ink2)', textWrap: 'pretty' }}>A mensagem fica guardada neste computador e é entregue quando surgir uma rota pela rede local. Expira em 48 h.</div>
               </div>
             )}
-            {conv && msgs.length === 0 && !conv.contact.request && <div style={{ alignSelf: 'center', marginTop: 40, fontSize: 13.5, color: 'var(--ink2)' }}>Nenhuma mensagem ainda. Escreva a primeira.</div>}
+            {conv && msgs.length === 0 && !conv.contact.request && <div style={{ alignSelf: 'center', marginTop: 40, fontSize: 13.5, color: 'var(--ink2)' }}>{canWrite ? 'Nenhuma mensagem ainda. Escreva a primeira.' : 'Nenhuma mensagem ainda.'}</div>}
           </div>
         </div>
-        {conv && (
+        {conv && (!canWrite ? (
+          <div role="status" style={{ borderTop: '1px solid var(--line)', padding: '18px 24px', fontSize: 13, color: 'var(--ink2)' }}>Somente leitura · permissões definidas no celular</div>
+        ) : (
           <div style={{ flex: 'none', borderTop: '1px solid var(--line)', padding: '10px 20px 12px', display: 'flex', flexDirection: 'column', gap: 7 }}>
             <div style={{ maxWidth: 760, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <button className="h-rot" onClick={() => toast(`Arquivos chegam numa próxima versão`, 'attach_file')} title="Anexar" style={{ width: 42, height: 42, borderRadius: 21, border: 'none', background: 'var(--bg2)', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', transition: 'transform .3s cubic-bezier(.2,.9,.3,1.5)' }}><Sym name="attach_file" size={23} wght={300} /></button>
@@ -291,10 +323,10 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
               <span>{prefs.enterSends ? 'Enter envia · Shift+Enter quebra linha' : `${mod}+Enter envia`}</span>
             </div>
           </div>
-        )}
+        ))}
       </div>
 
-      {conv && infoOpen && (
+      {conv && infoOpen && !collective && (
         <div style={{ width: 320, flex: 'none', borderLeft: '1px solid var(--line)', overflowY: 'auto', scrollbarWidth: 'thin', animation: 'piuSide .4s cubic-bezier(.2,.85,.3,1) both' }}>
           <div style={{ padding: '14px 14px 0', display: 'flex', justifyContent: 'flex-end' }}>
             <button className="h-bg2" onClick={() => { setInfoOpen(false); setRouteMsg(null); }} aria-label="Fechar detalhes" style={{ width: 32, height: 32, border: 'none', borderRadius: 10, background: 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Sym name="close" size={20} /></button>

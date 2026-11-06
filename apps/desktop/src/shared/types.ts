@@ -29,6 +29,8 @@ export interface Message {
   at: number;
   status: MessageStatus;
   route?: Route;
+  /** Nome do remetente em conversa coletiva espelhada do celular. */
+  sender?: string;
   /** Quando saiu deste computador para um vizinho (s). */
   forwardedAt?: number;
   /** Quando o recibo cifrado do destino voltou (s). */
@@ -40,6 +42,12 @@ export interface ContactInfo {
   name: string;
   /** Qual das MINHAS identidades conversa com este contato. */
   via: IdentityKind;
+  /** Tipo informado pelo celular; ausente em contatos antigos significa conversa direta. */
+  kind?: 'direct' | 'group' | 'channel' | 'community' | 'unknown';
+  /** Permissão de escrita recebida do celular para conversas coletivas. */
+  canPost?: boolean;
+  /** Subtítulo real informado pelo celular, quando presente. */
+  subtitle?: string;
   /** Escreveu primeiro, usando o meu convite (pedido de conversa). */
   request: boolean;
 }
@@ -160,6 +168,9 @@ export const DEFAULT_PREFS: Prefs = {
   lan: true, notifPreview: 'always', notifSound: true, identity: 'public', fontSize: 'm', density: 'comfort', enterSends: true,
 };
 
+export type { DesktopPayment, DesktopPaymentState, PaymentRequestInput } from './paymentTypes';
+import type { DesktopPaymentState, PaymentRequestInput } from './paymentTypes';
+
 /** Eventos do processo principal para o renderer. */
 export interface PiuEvents {
   /** A lista de conversas (ou algo nela) mudou: recarregue. */
@@ -168,6 +179,7 @@ export interface PiuEvents {
   message: { contactId: string; message: Message };
   network: NetworkStatus;
   wallet: WalletState;
+  walletPayment: DesktopPaymentState;
   session: SessionInfo;
   /** Preferências mudaram (no processo principal: aplicar segurança da tela etc.). */
   prefs: Prefs;
@@ -186,6 +198,7 @@ export interface PiuApi {
   restoreIdentity(o: { phrase: string[]; name: string }): Promise<void>;
   /** Frase de recuperação guardada no cofre (Backup → Mostrar frase). */
   revealPhrase(): Promise<string[] | null>;
+  exportIdentityBackup(password: string): Promise<'saved' | 'cancelled'>;
   suggestWords(prefix: string): Promise<string[]>;
   /** Apaga identidade, conversas e chaves deste computador. */
   eraseAll(): Promise<void>;
@@ -193,6 +206,8 @@ export interface PiuApi {
   myCard(kind: IdentityKind, fresh?: boolean): Promise<{ card: string; expiresAt: number; id: string }>;
   addContactByCard(text: string): Promise<ContactInfo>;
   listConversations(): Promise<ConversationSummary[]>;
+  listGroupCandidates(): Promise<ContactInfo[]>;
+  createGroup(options: { kind: 'group' | 'channel'; name: string; via: IdentityKind; memberIds: string[] }): Promise<ContactInfo>;
   getMessages(contactId: string): Promise<Message[]>;
   sendText(contactId: string, text: string): Promise<Message>;
   markRead(contactId: string): Promise<void>;
@@ -205,6 +220,8 @@ export interface PiuApi {
   removePeer(address: string): Promise<PeerInfo[]>;
 
   wallet(): Promise<WalletState>;
+  walletPayment(): Promise<DesktopPaymentState>;
+  requestWalletPayment(input: PaymentRequestInput): Promise<DesktopPaymentState>;
   setWalletAddress(address: string | null): Promise<WalletState>;
   refreshWallet(): Promise<WalletState>;
 

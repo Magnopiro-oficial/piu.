@@ -42,7 +42,11 @@ export const CLOSE_BAD_VERSION = 4002;
 // ── modelo do celular → modelo do desktop ───────────────────────
 const STATUS: Record<string, MessageStatus> = { criada: 'criada', aguardando: 'aguardando', encaminhada: 'encaminhada', entregue: 'entregue', expirada: 'expirada' };
 
-export const contactFromChat = (c: LinkChat): ContactInfo => ({ id: c.id, name: c.name, via: c.ident === 'anon' ? 'anon' : 'public', request: !!c.request });
+export const contactFromChat = (c: LinkChat): ContactInfo => {
+  const kind: NonNullable<ContactInfo['kind']> = ['direct', 'group', 'channel', 'community'].includes(c.kind) ? c.kind : 'unknown';
+  return { id: c.id, name: c.name, via: c.ident === 'anon' ? 'anon' : 'public', request: !!c.request, kind,
+    ...(kind !== 'direct' ? { canPost: c.owner === true } : {}), ...(c.sub ? { subtitle: c.sub } : {}) };
+};
 
 /** `at` do celular é em ms; `time` é só o texto. Mensagens do sistema (`sys`) não entram na lista. */
 export function messageFromLink(chatId: string, m: LinkMsg, nowSec: number): Message | null {
@@ -51,6 +55,7 @@ export function messageFromLink(chatId: string, m: LinkMsg, nowSec: number): Mes
   return {
     id: m.id, contactId: chatId, dir, text: m.text, at: m.at ? Math.floor(m.at / 1000) : nowSec,
     status: dir === 'in' ? 'recebida' : STATUS[m.status ?? ''] ?? 'entregue',
+    ...(m.sender ? { sender: m.sender } : {}),
   };
 }
 

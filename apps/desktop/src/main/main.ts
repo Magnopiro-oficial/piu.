@@ -7,6 +7,7 @@
  */
 import { app, BrowserWindow, clipboard, dialog, ipcMain, Menu, type MenuItemConstructorOptions, nativeTheme, Notification, safeStorage, session, shell } from 'electron';
 import { hostname } from 'node:os';
+import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PiuCore } from './core';
@@ -118,11 +119,22 @@ function registerIpc() {
     createIdentity: (o: { kind: 'public' | 'anon'; name: string }) => core.createIdentity(o),
     restoreIdentity: (o: { phrase: string[]; name: string }) => core.restoreIdentity(o),
     revealPhrase: () => core.revealPhrase(),
+    exportIdentityBackup: async (password: string) => {
+      if (typeof password !== 'string') throw new Error('Senha inválida.');
+      const options = { title: 'Salvar backup cifrado', defaultPath: 'piu-identidade.piu', filters: [{ name: 'Backup Piu', extensions: ['piu'] }] };
+      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+      if (result.canceled || !result.filePath) return 'cancelled';
+      const encrypted = await core.exportIdentityBackup(password);
+      await writeFile(result.filePath, encrypted, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
+      return 'saved';
+    },
     suggestWords: (p: string) => core.suggestWords(String(p)),
     eraseAll: () => core.eraseAll(),
     myCard: (kind: 'public' | 'anon', fresh?: boolean) => core.myCard(kind, !!fresh),
     addContactByCard: (text: string) => core.addContactByCard(String(text)),
     listConversations: () => core.listConversations(),
+    listGroupCandidates: () => core.listGroupCandidates(),
+    createGroup: (options) => core.createGroup(options),
     getMessages: (id: string) => core.getMessages(String(id)),
     sendText: (id: string, text: string) => core.sendText(String(id), String(text)),
     markRead: (id: string) => core.markRead(String(id)),
@@ -132,6 +144,8 @@ function registerIpc() {
     addPeer: (a: string) => core.addPeer(String(a)),
     removePeer: (a: string) => core.removePeer(String(a)),
     wallet: () => core.wallet(),
+    walletPayment: () => core.walletPayment(),
+    requestWalletPayment: (input) => core.requestWalletPayment(input),
     setWalletAddress: (a: string | null) => core.setWalletAddress(a === null ? null : String(a)),
     refreshWallet: () => core.refreshWallet(),
     getPrefs: () => core.prefs(),
@@ -151,7 +165,7 @@ function registerIpc() {
     if (!fn) throw new Error(`Método desconhecido: ${method}`);
     return fn(...(args as never[]));
   });
-  for (const ev of ['conversations', 'message', 'network', 'wallet', 'session', 'prefs', 'link', 'notice'] as PiuEventName[]) core.events.on(ev, p => send(ev, p));
+  for (const ev of ['conversations', 'message', 'network', 'wallet', 'walletPayment', 'session', 'prefs', 'link', 'notice'] as PiuEventName[]) core.events.on(ev, p => send(ev, p));
   core.events.on('prefs', applyScreenSecurity);
   core.events.on('incoming', (p: { contact: ContactInfo; text: string; isNew: boolean }) => notifyIncoming(p.contact, p.text, p.isNew));
 }

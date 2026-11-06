@@ -16,11 +16,11 @@ async function until(cond: () => boolean, what: string, ms = 8000) {
   }
 }
 
-interface Log { messages: { from: ContactInfo; text: string; isNew: boolean; route?: Route }[]; status: { msgId: string; status: string; route?: Route }[] }
+interface Log { groups: { contact: ContactInfo; change: string }[]; groupMessages: { contact: ContactInfo; sender: string; text: string }[]; messages: { from: ContactInfo; text: string; isNew: boolean; route?: Route }[]; status: { msgId: string; status: string; route?: Route }[] }
 
 const cleanup: (() => Promise<unknown>)[] = [];
 async function person(name: string, peers: string[], state?: string) {
-  const log: Log = { messages: [], status: [] };
+  const log: Log = { messages: [], status: [], groups: [], groupMessages: [] };
   const { keys, phrase } = createIdentity();
   const lan = new LnnpLanTransport({ node: keys.node, listen: '127.0.0.1', port: 0, discoveryPort: null, broadcast: [], peers, beaconMs: 150, handshakeTimeoutMs: 2000 });
   const mesh = new MeshNode({
@@ -28,6 +28,8 @@ async function person(name: string, peers: string[], state?: string) {
     events: {
       message: (from, m, isNew) => log.messages.push({ from, text: m.text, isNew, route: m.route ? { peer: m.route.peer, via: m.route.via, bytes: m.route.bytes, hops: m.route.hops } : undefined }),
       status: (msgId, status, route) => log.status.push({ msgId, status, route }),
+      groupChanged: (contact, change) => log.groups.push({ contact, change }),
+      groupMessage: (contact, m, sender) => log.groupMessages.push({ contact, sender, text: m.text }),
     },
   });
   await mesh.start(100);
@@ -111,4 +113,39 @@ test('desktop → piu-node (relay real) → desktop: store-and-forward por um n�
   // O nó nunca abriu nada: só guardou e repassou (sem identidade local, inbox vazia).
   assert.equal(relay.engine.counters.delivered, 0);
   assert.ok(relay.engine.counters.forwarded >= 1);
+});
+
+
+test('grupos e canais nativos: distribuição cifrada, mensagens, permissões e persistência', async t => {
+  t.after(closeAll);
+  const B = await person('Bia', []);
+  const A = await person('Ana', [`127.0.0.1:${B.lan.port}`]);
+  await until(() => A.lan.linkCount === 1 && B.lan.linkCount === 1, 'enlace');
+  const bia = A.mesh.addContactByCard(B.mesh.myCard('public').card);
+  A.mesh.sendText(bia.id, 'oi');
+  await until(() => B.log.messages.length === 1, 'pedido');
+  B.mesh.sendText(A.mesh.ids.publicId, 'olá');
+  await until(() => A.log.messages.length === 1, 'resposta');
+  const group = A.mesh.createGroup({ kind: 'group', name: 'Equipe', via: 'public', memberIds: [bia.id] });
+  await until(() => B.mesh.listGroups().some(g => g.id === group.id), 'grupo distribuído');
+  assert.equal(B.mesh.listGroups().find(g => g.id === group.id)?.canPost, true);
+  A.mesh.sendText(group.id, 'mensagem protegida');
+  await until(() => B.log.groupMessages.length === 1, 'mensagem do grupo');
+  assert.equal(B.log.groupMessages[0]?.text, 'mensagem protegida');
+  assert.equal(B.log.groupMessages[0]?.sender, 'Ana');
+  const ch = A.mesh.createGroup({ kind: 'channel', name: 'Avisos', via: 'public', memberIds: [bia.id] });
+  await until(() => B.mesh.listGroups().some(g => g.id === ch.id), 'canal distribuído');
+  assert.equal(B.mesh.listGroups().find(g => g.id === ch.id)?.canPost, false);
+  assert.throws(() => B.mesh.sendText(ch.id, 'não autorizado'), /Só admins/);
+  A.mesh.setGroupRole(ch.id, B.mesh.ids.publicId, 'admin');
+  await until(() => B.mesh.listGroups().find(g => g.id === ch.id)?.canPost === true, 'permissão concedida');
+  B.mesh.sendText(ch.id, 'publicação autorizada');
+  await until(() => A.log.groupMessages.some(m => m.text === 'publicação autorizada'), 'publicação do admin');
+  A.mesh.setGroupRole(ch.id, B.mesh.ids.publicId, 'member');
+  await until(() => B.mesh.listGroups().find(g => g.id === ch.id)?.canPost === false, 'permissão revogada');
+  assert.throws(() => B.mesh.sendText(ch.id, 'revogado'), /Só admins/);
+  assert.throws(() => B.mesh.createGroup({ kind: 'group', name: ' ', via: 'public', memberIds: [] }), /nome/);
+  assert.throws(() => A.mesh.sendText('group:invalido', 'x'), /desconhecido/);
+  const restored = new MeshNode({ keys: identityFromPhrase(A.phrase), transports: [], relay: false, displayName: 'Ana', state: A.mesh.export(), events: {} });
+  assert.deepEqual(restored.listGroups().map(g => g.id).sort(), [group.id, ch.id].sort());
 });

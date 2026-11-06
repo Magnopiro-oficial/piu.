@@ -44,7 +44,7 @@ interface Wallet {
   canSignAddress: (address: string) => boolean;
   useOwnWallet: () => void;
   quoteTransfer: (dest: string, amount: string) => Promise<WalletQuote>;
-  sendTransfer: (quote: WalletQuote) => Promise<WalletTransferRecord>;
+  sendTransfer: (quote: WalletQuote, guard?: () => boolean) => Promise<WalletTransferRecord>;
   pendingTransfer: WalletTransferRecord | null;
   transferRecoveryBlocked: boolean;
   refreshTransfer: () => Promise<void>;
@@ -249,13 +249,14 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     return quote;
   }, [requireOwn]);
 
-  const sendTransfer = useCallback(async (quote: WalletQuote) => {
+  const sendTransfer = useCallback(async (quote: WalletQuote, guard?: () => boolean) => {
     requireOwn(quote.from);
     if (transferBusy.current || isActiveWalletTransfer(pendingTransferRef.current)) throw new WalletTransferError('busy', t('ownWallet.busy'));
     transferBusy.current = true;
     try {
       return await sendWalletTransfer(quote, {
         active: () => pendingTransferRef.current,
+        guard,
         authorize: async fresh => {
           requireOwn(fresh.from);
           const result = await confirmDevice(t('ownWallet.auth', { amount: formatLunes(BigInt(fresh.value)), dest: fresh.dest }));

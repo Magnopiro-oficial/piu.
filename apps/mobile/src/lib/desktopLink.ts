@@ -243,8 +243,8 @@ export type LinkEvent = { t: 'event' } & (
   | { k: 'typing'; chatId: string; on: boolean }
 );
 export type Command = { op: 'send'; chatId: string; text: string; ref?: string } | { op: 'read' | 'typing'; chatId: string; ref?: string };
-export type PhoneMessage = Snapshot | LinkEvent | { t: 'ack'; ref?: string; ok: boolean; error?: string } | { t: 'ping' } | { t: 'pong' } | { t: 'bye'; reason?: string };
-export type DesktopMessage = ({ t: 'cmd' } & Command) | { t: 'ready'; name?: string } | { t: 'ping' } | { t: 'pong' } | { t: 'bye'; reason?: string };
+export type PhoneMessage = Snapshot | LinkEvent | { t: 'payment_status'; id: string; status: import('./desktopPayment').DesktopPaymentStatus; hash?: string; error?: string } | { t: 'ack'; ref?: string; ok: boolean; error?: string } | { t: 'ping' } | { t: 'pong' } | { t: 'bye'; reason?: string };
+export type DesktopMessage = { t: 'payment_request'; id: string; expectedFrom: string; dest: string; amount: string } | ({ t: 'cmd' } & Command) | { t: 'ready'; name?: string } | { t: 'ping' } | { t: 'pong' } | { t: 'bye'; reason?: string };
 export type LinkMessage = PhoneMessage | DesktopMessage;
 
 const isId = (x: unknown): x is string => typeof x === 'string' && x.length > 0 && x.length <= MAX_ID;

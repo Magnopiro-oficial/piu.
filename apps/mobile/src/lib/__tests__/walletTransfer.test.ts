@@ -177,3 +177,29 @@ test('prova indexer: aceita boolean estrito e bloco/índice exatos, recusa hash 
   data.extrinsic.success = true; data.block.hash = hashOf('outra cadeia'); assert.equal((await readWalletExecution(r, block, { fetch: fetcher })).ok, null);
   data.block.hash = block.hash; data.extrinsic.extrinsicIndex = 1; assert.equal((await readWalletExecution(r, block, { fetch: fetcher })).ok, null);
 });
+
+test('guarda de sessão impede assinar após perda antes ou durante biometria', async t => {
+  const c = chain(); t.after(() => c.rpc.close());
+  const q = await prepareWalletTransfer(input, { rpc: c.rpc });
+  const before = callbacks();
+  await assert.rejects(sendWalletTransfer(q, { ...before.options, guard: () => false }, { rpc: c.rpc }), code('session_lost'));
+  assert.deepEqual(before.counts(), { authorized: 0, signed: 0 });
+  const during = callbacks(); let connected = true;
+  await assert.rejects(sendWalletTransfer(q, { ...during.options, guard: () => connected, authorize: async () => { connected = false; return true; } }, { rpc: c.rpc }), code('session_lost'));
+  assert.equal(during.counts().signed, 0); assert.equal(c.submissions.length, 0);
+});
+
+test('queda depois da assinatura persiste os mesmos bytes sem transmitir', async t => {
+  const c = chain(); t.after(() => c.rpc.close());
+  const q = await prepareWalletTransfer(input, { rpc: c.rpc }); const b = callbacks(); let connected = true;
+  const record = await sendWalletTransfer(q, { ...b.options, guard: () => connected, save: async r => { await b.options.save(r); connected = false; } }, { rpc: c.rpc });
+  assert.equal(record.status, 'signed'); assert.match(record.error ?? '', /desconectado/);
+  assert.equal(record.hash, b.current()?.hash); assert.equal(b.counts().signed, 1); assert.equal(c.submissions.length, 0);
+});
+
+test('guarda recusa assinatura se sessão cair durante a nova cotação', async t => {
+  const c = chain(); t.after(() => c.rpc.close()); const q = await prepareWalletTransfer(input, { rpc: c.rpc });
+  const b = callbacks(); let checks = 0;
+  await assert.rejects(sendWalletTransfer(q, { ...b.options, guard: () => ++checks < 3 }, { rpc: c.rpc }), code('session_lost'));
+  assert.equal(b.counts().authorized, 1); assert.equal(b.counts().signed, 0); assert.equal(c.submissions.length, 0);
+});

@@ -3,7 +3,7 @@
  * página com título 30px, descrição e seções em cartões bg2 (linhas de 56px: interruptor, segmentado,
  * valor, botão, teclas). O que não tem backend real fica marcado "em breve", sem fingir.
  */
-import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
+import { type CSSProperties, type Dispatch, type ReactNode, type SetStateAction, useEffect, useState } from 'react';
 import { screenSecurityFor, SCREEN_SECURITY_DESC } from '../../shared/screenSecurity';
 import type { MeInfo, NetworkStatus, PeerInfo, Prefs, SessionInfo } from '../../shared/types';
 import { Btn, type DialogSpec, F, FM, handleOf, initialsOf, Seg, Sym, Toggle } from '../ui';
@@ -25,6 +25,41 @@ const PAGES: [Page, string, string][] = [
 ];
 
 const Soon = () => <div style={{ font: `500 12.5px ${FM}`, color: 'var(--ink2)' }}>em breve</div>;
+
+/** O estado da senha é limpo ao fechar o formulário; a frase nunca passa por ele. */
+function BackupExport({ toast }: { toast: Props['toast'] }) {
+  const [open, setOpen] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmation, setConfirmation] = useState('');
+  const [busy, setBusy] = useState(false);
+  const clear = () => { setPassword(''); setConfirmation(''); setOpen(false); };
+  const error = password.length < 10 ? 'Use pelo menos 10 caracteres.' : new Set(password).size < 5 ? 'Senha repetitiva demais.' : password !== confirmation ? 'As senhas precisam ser iguais.' : null;
+  const submit = async () => {
+    if (busy || error) return;
+    setBusy(true);
+    try {
+      const result = await window.piu.exportIdentityBackup(password);
+      clear();
+      if (result === 'saved') toast('Backup cifrado salvo', 'check');
+    } catch (e) {
+      toast(e instanceof Error ? e.message : 'Não foi possível salvar o backup.', 'error');
+    } finally { setPassword(''); setConfirmation(''); setBusy(false); }
+  };
+  const input: CSSProperties = { width: '100%', boxSizing: 'border-box', height: 44, borderRadius: 12, border: '1px solid var(--line2)', background: 'var(--bg)', color: 'var(--ink)', padding: '0 12px', font: `400 14px ${F}` };
+  return <>
+    <Row name="Exportar backup cifrado" desc="Arquivo .piu com as chaves; não inclui contatos nem conversas" icon="download" first>
+      <Btn onClick={() => { if (!busy) { if (open) clear(); else setOpen(true); } }}>{open ? 'Cancelar' : 'Exportar'}</Btn>
+    </Row>
+    {open && <form onSubmit={e => { e.preventDefault(); void submit(); }} style={{ display: 'flex', flexDirection: 'column', gap: 10, padding: 16, borderTop: '1px solid var(--line)' }}>
+      <div style={{ fontSize: 13, color: 'var(--ink2)', lineHeight: 1.45 }}>Escolha uma senha para cifrar o arquivo. Guarde-a em local seguro: sem ela, não é possível restaurar o backup.</div>
+      <label style={{ fontSize: 13, fontWeight: 600 }}>Senha do backup<input style={input} type="password" autoComplete="off" spellCheck={false} value={password} onChange={e => setPassword(e.target.value)} disabled={busy} /></label>
+      <label style={{ fontSize: 13, fontWeight: 600 }}>Confirme a senha<input style={input} type="password" autoComplete="off" spellCheck={false} value={confirmation} onChange={e => setConfirmation(e.target.value)} disabled={busy} /></label>
+      {(password || confirmation) && error && <div role="status" style={{ fontSize: 12.5, color: 'var(--ink2)' }}>{error}</div>}
+      <button type="submit" disabled={busy || !!error} style={{ height: 44, border: 'none', borderRadius: 22, background: 'var(--ink)', color: 'var(--invink)', font: `600 14px ${F}`, cursor: 'pointer', opacity: busy || error ? .5 : 1 }}>{busy ? 'Cifrando e salvando…' : 'Escolher onde salvar'}</button>
+    </form>}
+  </>;
+}
+
 
 /** Linha de uma seção (56px mínimo), com ícone opcional e o controle à direita. */
 function Row({ name, desc, icon, first, children, onClick }: { name: string; desc?: string; icon?: string; first?: boolean; children?: ReactNode; onClick?: () => void }) {
@@ -235,7 +270,7 @@ export function Settings(p: Props) {
       case 'backup': return (
         <>
           <Section title="GUARDAR" i={0}>
-            <Row name="Exportar backup cifrado" desc="Arquivo .piukey protegido por senha" icon="download" first><Soon /></Row>
+            <BackupExport toast={toast} />
             <Row name="Frase de recuperação" desc={`Guardada no ${mac ? 'Keychain' : win ? 'cofre do Windows' : 'chaveiro do sistema'}; mostre só com ninguém olhando`} icon="visibility">
               <Btn primary={!bkShown} onClick={() => { if (bkShown) { setBkShown(false); return; } void window.piu.revealPhrase().then(w => { if (!w) { toast('Nenhuma frase guardada', 'error'); return; } setBkWords(w); setBkShown(true); }); }}>{bkShown ? 'Ocultar' : 'Mostrar'}</Btn>
             </Row>

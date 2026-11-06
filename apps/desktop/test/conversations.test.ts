@@ -92,3 +92,28 @@ test('estado serializa e volta igual (JSON)', () => {
   const back = JSON.parse(JSON.stringify(s)) as ConversationsState;
   assert.deepEqual(messagesOf(back, ana.id), messagesOf(s, ana.id));
 });
+
+
+test('filtros distinguem pessoas, grupos e canais e permissões são conservadoras', async () => {
+  const { canSendToConversation, conversationKind, filterConversationKind, summaries, emptyState } = await import('../src/shared/conversations');
+  const direct = { id: 'd', name: 'Pessoa', via: 'public' as const, request: false };
+  const group = { ...direct, id: 'g', kind: 'group' as const, canPost: true };
+  const channel = { ...direct, id: 'c', kind: 'channel' as const, canPost: false };
+  const community = { ...direct, id: 'v', kind: 'community' as const, canPost: true };
+  const unknown = { ...direct, id: 'x', kind: 'unknown' as const, canPost: true };
+  const rows = summaries(emptyState(), [direct, group, channel, community, unknown]);
+  assert.equal(conversationKind(direct), 'direct');
+  assert.deepEqual(filterConversationKind(rows, 'direct').map(c => c.contact.id), ['d']);
+  assert.deepEqual(filterConversationKind(rows, 'group').map(c => c.contact.id), ['g']);
+  assert.deepEqual(filterConversationKind(rows, 'channel').map(c => c.contact.id), ['c']);
+  assert.equal(filterConversationKind(rows, 'all').length, 5);
+  assert.equal(canSendToConversation(direct), true); assert.equal(canSendToConversation(group), true);
+  assert.equal(canSendToConversation(channel), false); assert.equal(canSendToConversation({ ...group, canPost: undefined }), false);
+  assert.equal(canSendToConversation(unknown), false);
+});
+
+test('mensagens recebidas em grupos preservam o remetente', () => {
+  const state = receiveIncoming(emptyState(), { id: 'g-msg', contactId: 'group:1', text: 'olá', at: 5, sender: 'Ana' });
+  assert.equal(messagesOf(state, 'group:1')[0]?.sender, 'Ana');
+  assert.equal(messagesOf(JSON.parse(JSON.stringify(state)), 'group:1')[0]?.sender, 'Ana');
+});

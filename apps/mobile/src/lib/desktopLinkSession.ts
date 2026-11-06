@@ -17,6 +17,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { PiuNodeLink } from '../../modules/piu-node-link';
 import { useStore } from '../state/store';
+import { canDesktopSend, parseDesktopPayment, validPaymentId, type DesktopPaymentRequest, type DesktopPaymentStatus } from './desktopPayment';
 import {
   buildSnapshot, certPin, type Command, DesktopLinkError, diffChats, diffTyping, FrameOpener, FrameSealer, type LinkEvent, type LinkMessage, type LinkOffer,
   parseCommand, parseLinkQr, phoneHandshake, type Snapshot, wsUrl,
@@ -44,6 +45,7 @@ export interface LinkState {
   error?: string;
   /** Quadros cifrados enviados e recebidos (diagnóstico na tela). */
   sent: number; received: number;
+  payment?: DesktopPaymentRequest;
 }
 
 /** Sem resposta do computador ao abrir a conexão. */
@@ -94,12 +96,13 @@ interface Session {
   /** Id da conexão no módulo nativo (null até `wsOpen` resolver). */
   wsId: number | null; open: boolean;
   sealer: FrameSealer; opener: FrameOpener; wipe: () => void; offer: LinkOffer;
-  confirmed: boolean; closed: boolean;
+  confirmed: boolean; desktopReady: boolean; closed: boolean; token: number; seenPayments: Set<string>; paymentStarted: boolean; paymentTimer?: Timer;
   /** `hello` em JSON, enviado quando o socket abrir. */
   pendingHello?: string;
   connectTimer?: Timer; pingTimer?: ReturnType<typeof setInterval>; deadTimer?: Timer;
 }
 let session: Session | null = null;
+let nextToken = 0;
 let listening = false;
 
 /** Assina os eventos do módulo nativo uma vez; cada evento vai para a sessão com aquele `id`. */
@@ -122,7 +125,8 @@ function listen() {
 
 function teardown(s: Session) {
   s.closed = true;
-  clearTimeout(s.connectTimer); clearInterval(s.pingTimer); clearTimeout(s.deadTimer);
+  clearTimeout(s.connectTimer); clearInterval(s.pingTimer); clearTimeout(s.deadTimer); clearTimeout(s.paymentTimer);
+  if (state.payment?.token === s.token) set({ payment: undefined });
   if (s.wsId !== null) { try { PiuNodeLink?.wsClose(s.wsId, 1000, 'bye'); } catch { /* já fechado */ } }
   s.wipe();
   if (session === s) session = null;
@@ -172,6 +176,44 @@ function handleCommand(s: Session, raw: LinkMessage) {
   } catch { ack(s, ref, false, 'Não deu para executar no celular.'); }
 }
 
+
+/** Each request is bound to this exact confirmed connection; never reuse an ID. */
+function handlePayment(s: Session, raw: LinkMessage) {
+  const id = (raw as { id?: unknown }).id;
+  if (!validPaymentId(id)) return;
+  if (s.seenPayments.has(id)) { sendFrame(s, { t: 'payment_status', id, status: 'error', error: 'Pedido duplicado.' }); return; }
+  if (s.seenPayments.size >= 1024) { sendFrame(s, { t: 'payment_status', id, status: 'error', error: 'Limite de pedidos nesta sessão.' }); return; }
+  s.seenPayments.add(id);
+  const payment = parseDesktopPayment(raw, s.token, Date.now());
+  if (!payment || !s.confirmed || !s.desktopReady || state.phase !== 'connected' || state.payment) {
+    sendFrame(s, { t: 'payment_status', id, status: 'error', error: 'Pedido inválido ou sessão indisponível.' }); return;
+  }
+  s.paymentStarted = false;
+  set({ payment });
+  sendFrame(s, { t: 'payment_status', id, status: 'review' });
+  s.paymentTimer = setTimeout(() => {
+    if (session === s && !s.paymentStarted && state.payment?.id === id) {
+      sendFrame(s, { t: 'payment_status', id, status: 'cancelled' }); set({ payment: undefined });
+    }
+  }, 120_000);
+}
+export function desktopPaymentActive(p: DesktopPaymentRequest): boolean {
+  const s = session;
+  return !!s && s.token === p.token && !s.closed && s.open && s.confirmed && s.desktopReady && state.phase === 'connected' && state.payment?.id === p.id;
+}
+export function startDesktopPayment(p: DesktopPaymentRequest): boolean {
+  if (!desktopPaymentActive(p) || !session || (!session.paymentStarted && Date.now() >= p.expiresAt)) return false;
+  session.paymentStarted = true; clearTimeout(session.paymentTimer); return true;
+}
+export function desktopPaymentStatus(p: DesktopPaymentRequest, status: DesktopPaymentStatus, hash?: string, error?: string): void {
+  if (!desktopPaymentActive(p) || !session) return;
+  sendFrame(session, { t: 'payment_status', id: p.id, status, ...(hash ? { hash } : {}), ...(error ? { error: error.slice(0, 300) } : {}) });
+}
+export function finishDesktopPayment(p: DesktopPaymentRequest): void {
+  if (!desktopPaymentActive(p) || !session) return;
+  clearTimeout(session.paymentTimer); set({ payment: undefined });
+}
+
 /** Conexão TLS aberta (certificado conferido pelo pino): manda o hello e passa a conferir as palavras. */
 function onOpen(s: Session) {
   if (s.closed || s.wsId === null || !PiuNodeLink) return;
@@ -191,11 +233,12 @@ function onWire(s: Session, data: unknown) {
   set({ received: state.received + 1 });
   armDeadman(s);
   switch (msg.t) {
-    case 'ready': { const n = typeof msg.name === 'string' ? msg.name.trim().slice(0, MAX_NAME) : ''; if (n) set({ name: n }); break; }
+    case 'ready': { s.desktopReady = true; const n = typeof msg.name === 'string' ? msg.name.trim().slice(0, MAX_NAME) : ''; if (n) set({ name: n }); break; }
     case 'ping': sendFrame(s, { t: 'pong' }); break;
     case 'pong': break;
     case 'bye': teardown(s); set({ phase: 'idle', words: undefined, since: undefined, error: undefined }); break;
     case 'cmd': handleCommand(s, msg); break;
+    case 'payment_request': handlePayment(s, msg); break;
     default: break; // tipo desconhecido: ignora (compatibilidade com versões futuras do desktop)
   }
 }
@@ -211,7 +254,7 @@ export function startLink(qrText: string): string | null {
   stopLink();
   listen();
   const hs = phoneHandshake(offer);
-  const s: Session = { wsId: null, open: false, sealer: new FrameSealer(hs.keys.send), opener: new FrameOpener(hs.keys.recv), wipe: hs.wipe, offer, confirmed: false, closed: false };
+  const s: Session = { wsId: null, open: false, sealer: new FrameSealer(hs.keys.send), opener: new FrameOpener(hs.keys.recv), wipe: hs.wipe, offer, confirmed: false, desktopReady: false, closed: false, token: ++nextToken, seenPayments: new Set(), paymentStarted: false };
   session = s;
   set({ phase: 'connecting', host: `${offer.host}:${offer.port}`, name: undefined, words: hs.words, since: undefined, error: undefined, sent: 0, received: 0 });
   s.connectTimer = setTimeout(() => fail(s, 'O computador não respondeu. Confira se os dois estão na mesma Wi-Fi e se o Piu Desktop está mostrando o QR.'), CONNECT_TIMEOUT_MS);
@@ -275,7 +318,8 @@ export function DesktopLinkBridge(): null {
     setLinkBridge({
       snapshot: () => buildSnapshot(latest.current.chats, latest.current.verified),
       send: (chatId, text) => {
-        if (!latest.current.chats.some(c => c.id === chatId)) return false;
+        const chat = latest.current.chats.find(c => c.id === chatId);
+        if (!chat || !canDesktopSend(chat)) return false;
         latest.current.send(chatId, text);
         return true;
       },

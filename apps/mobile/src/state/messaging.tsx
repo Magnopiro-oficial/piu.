@@ -41,6 +41,7 @@ import { useSettings } from './settings';
 import { useStore } from './store';
 import { useWallet } from './wallet';
 import { DesktopLinkBridge } from '../lib/desktopLinkSession';
+import { DesktopPayment } from '../ui/DesktopPayment';
 
 const STATE_KEY = 'msg.state';
 /** Último aviso de troca de aparelho aceito de cada contato (contra repetição). */
@@ -829,7 +830,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
-  return <Ctx.Provider value={value}>{children}<DesktopLinkBridge /></Ctx.Provider>;
+  return <Ctx.Provider value={value}>{children}<DesktopLinkBridge /><DesktopPayment /></Ctx.Provider>;
 }
 
 /** Banner e notificação de um alerta da comunidade (com a rota para a tela do alerta). */

@@ -3,6 +3,7 @@
  * envelopes selados, fila store-and-forward, convites) ligada aos transportes do computador.
  * Puro TypeScript (sem Electron): testado em test/mesh.test.ts, inclusive contra um piu-node real.
  */
+import { canPost, type GroupState } from '../../../mobile/src/messaging/groups';
 import { decodeCard, encodeCard } from '../../../mobile/src/messaging/card';
 import { type Contact, type IncomingText, Messenger, type MessengerEvents, type RouteInfo } from '../../../mobile/src/messaging/messenger';
 import { toHex } from '../../../mobile/src/protocol/bytes';
@@ -16,6 +17,9 @@ export interface MeshEvents {
   /** Texto de um contato (novo ou conhecido). `isNew`: apareceu como pedido de conversa. */
   message(contact: ContactInfo, m: IncomingText, isNew: boolean): void;
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada', route?: Route): void;
+  /** Conversas coletivas mudam sem expor suas chaves ao renderer. */
+  groupChanged(contact: ContactInfo, change: 'joined' | 'updated' | 'removed'): void;
+  groupMessage(contact: ContactInfo, m: IncomingText, sender: string): void;
   /** Algo no estado do Messenger mudou (salvar). */
   changed(): void;
   /** Vizinhos/enlaces mudaram. */
@@ -50,6 +54,8 @@ export class MeshNode {
       message: (contactId, m) => { const c = this.messenger.getContact(contactId); if (c) o.events.message?.(toContactInfo(c), m, false); },
       newContact: (c, m) => o.events.message?.(toContactInfo(c), m, true),
       status: (msgId, status, route) => o.events.status?.(msgId, status, toRoute(route)),
+      groupUpdated: (g, change) => o.events.groupChanged?.(this.groupInfo(g), change),
+      groupMessage: (id, _from, sender, m) => { const g = this.messenger.getGroup(id); if (g) o.events.groupMessage?.(this.groupInfo(g), m, sender); },
       changed: () => o.events.changed?.(),
     };
     this.messenger = new Messenger({
@@ -126,6 +132,36 @@ export class MeshNode {
     return toContactInfo(this.messenger.getContact(card.id)!);
   }
 
+  private groupInfo(g: GroupState): ContactInfo {
+    return { id: `group:${g.id}`, name: g.name, via: g.via, kind: g.kind, request: false,
+      canPost: canPost(g, this.o.keys.identities[g.via].id), subtitle: g.desc || undefined };
+  }
+
+  listGroups(): ContactInfo[] { return this.messenger.listGroups().map(g => this.groupInfo(g)); }
+
+  createGroup(options: Parameters<Messenger['createGroup']>[0]): ContactInfo {
+    if (!options.name.trim()) throw new Error('O nome não pode ficar vazio.');
+    const group = this.messenger.createGroup(options);
+    const contact = this.groupInfo(group);
+    this.o.events.groupChanged?.(contact, 'joined');
+    this.messenger.tick();
+    return contact;
+  }
+
+  updateGroup(id: string, patch: Parameters<Messenger['updateGroup']>[1]) {
+    const group = this.messenger.updateGroup(this.groupId(id), patch);
+    this.o.events.groupChanged?.(this.groupInfo(group), 'updated');
+    this.messenger.tick();
+  }
+  addGroupMembers(id: string, ids: string[]) { const g = this.messenger.addMembers(this.groupId(id), ids); this.o.events.groupChanged?.(this.groupInfo(g), 'updated'); this.messenger.tick(); }
+  removeGroupMember(id: string, memberId: string) { const g = this.messenger.removeMember(this.groupId(id), memberId); this.o.events.groupChanged?.(this.groupInfo(g), 'updated'); this.messenger.tick(); }
+  setGroupRole(id: string, memberId: string, role: 'admin' | 'mod' | 'member') { const g = this.messenger.setRole(this.groupId(id), memberId, role); this.o.events.groupChanged?.(this.groupInfo(g), 'updated'); this.messenger.tick(); }
+  leaveGroup(id: string) { const gid = this.groupId(id); const g = this.messenger.getGroup(gid); this.messenger.leaveGroup(gid); if (g) this.o.events.groupChanged?.(this.groupInfo(g), 'removed'); this.messenger.tick(); }
+  private groupId(id: string): string {
+    if (!/^group:[0-9a-f]{32}$/.test(id)) throw new Error('Grupo desconhecido.');
+    return id.slice(6);
+  }
+
   listContacts(): ContactInfo[] { return this.messenger.listContacts().map(toContactInfo); }
   removeContact(id: string) { this.messenger.removeContact(id); }
 
@@ -141,6 +177,11 @@ export class MeshNode {
 
   /** Cifra e enfileira; devolve o id da mensagem (estados chegam por `events.status`, já durante esta chamada). */
   sendText(contactId: string, text: string, msgId = this.newMessageId()): string {
+    if (contactId.startsWith('group:')) {
+      this.messenger.sendGroupText(this.groupId(contactId), msgId, text);
+      this.messenger.tick();
+      return msgId;
+    }
     this.messenger.sendText(contactId, msgId, text);
     // Responder a um pedido de conversa o transforma em conversa normal.
     const c = this.messenger.getContact(contactId);

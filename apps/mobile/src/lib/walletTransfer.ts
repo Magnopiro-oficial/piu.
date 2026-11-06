@@ -36,9 +36,11 @@ export interface WalletTransferSend extends WalletTransferSave {
   authorize: (quote: WalletQuote) => Promise<boolean>;
   sign: (quote: WalletQuote) => Promise<{ hex: string; hash: string }> | { hex: string; hash: string };
   active: () => WalletTransferRecord | null;
+  /** Optional session guard; absent for ordinary local transfers. */
+  guard?: () => boolean;
 }
 export class WalletTransferError extends Error {
-  constructor(readonly code: 'cancelled' | 'review_required' | 'busy' | 'invalid' | 'runtime' | 'funds' | 'signing' | 'persistence', message: string, readonly quote?: WalletQuote) { super(message); }
+  constructor(readonly code: 'cancelled' | 'review_required' | 'busy' | 'invalid' | 'runtime' | 'funds' | 'signing' | 'persistence' | 'session_lost', message: string, readonly quote?: WalletQuote) { super(message); }
 }
 const U128 = (1n << 128n) - 1n;
 const integer = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
@@ -134,18 +136,24 @@ export async function sendWalletTransfer(quote: WalletQuote, callbacks: WalletTr
   if (sending.has(from) || isActiveWalletTransfer(callbacks.active())) throw new WalletTransferError('busy', 'Já existe um pagamento em andamento. Acompanhe o mesmo hash.');
   sending.add(from);
   try {
-    if (!await callbacks.authorize(quote)) throw new WalletTransferError('cancelled', 'Assinatura cancelada. Nada foi enviado.');
+    const requireSession = () => { if (callbacks.guard && !callbacks.guard()) throw new WalletTransferError('session_lost', 'Conexão com o computador encerrada.'); };
+    requireSession();
+    const authorized = await callbacks.authorize(quote);
+    requireSession();
+    if (!authorized) throw new WalletTransferError('cancelled', 'Assinatura cancelada. Nada foi enviado.');
     const fresh = await prepareWalletTransfer(quote, deps);
     if (fresh.fee !== quote.fee || fresh.available !== quote.available || fresh.total !== quote.total || fresh.ctx.nonce !== quote.ctx.nonce || fresh.ctx.specVersion !== quote.ctx.specVersion || fresh.ctx.transactionVersion !== quote.ctx.transactionVersion || fresh.ctx.genesisHash !== quote.ctx.genesisHash) {
       throw new WalletTransferError('review_required', 'Saldo, taxa ou nonce mudaram. Confira os valores novamente antes de assinar.', fresh);
     }
     if (isActiveWalletTransfer(callbacks.active())) throw new WalletTransferError('busy', 'Já existe um pagamento em andamento.');
+    requireSession();
     const signed = await callbacks.sign(fresh);
     const hash = checkedSigned(fresh, signed);
     return withRpc(deps, async rpc => {
       const actualFee = (await paymentQueryInfo(rpc, signed.hex, fresh.ctx.blockHash)).partialFee;
       if (actualFee.toString() !== fresh.fee) {
         const revised = await prepareWalletTransfer(fresh, { ...deps, rpc });
+        if (callbacks.guard) throw new WalletTransferError('session_lost', 'A taxa mudou após a assinatura. Não repita o pedido automaticamente.');
         throw new WalletTransferError('review_required', 'A taxa mudou. Confira novamente antes de assinar.', revised);
       }
       const validity = await validateTransaction(rpc, signed.hex);
@@ -153,14 +161,15 @@ export async function sendWalletTransfer(quote: WalletQuote, callbacks: WalletTr
       const at = nowOf(deps);
       const record: WalletTransferRecord = { id: hash, from: fresh.from, dest: fresh.dest, value: fresh.value, fee: fresh.fee, hash, hex: signed.hex.toLowerCase(), ctx: fresh.ctx, validUntil: fresh.ctx.blockNumber + 64, status: 'signed', createdAt: at, updatedAt: at, scanned: fresh.ctx.blockNumber };
       await saveRecord(record, callbacks); // Não mover depois de author_submitExtrinsic.
-      return broadcast(record, callbacks, { ...deps, rpc });
+      return broadcast(record, callbacks, { ...deps, rpc }, callbacks.guard);
     });
   } finally { sending.delete(from); }
 }
 
-async function broadcast(record: WalletTransferRecord, callbacks: WalletTransferSave, deps: WalletTransferDeps): Promise<WalletTransferRecord> {
+async function broadcast(record: WalletTransferRecord, callbacks: WalletTransferSave, deps: WalletTransferDeps, guard?: () => boolean): Promise<WalletTransferRecord> {
   return withRpc(deps, async rpc => {
     let next: WalletTransferRecord;
+    if (guard && !guard()) return saveRecord({ ...record, error: 'Computador desconectado antes do envio. Assinatura guardada; não repita o pagamento.', updatedAt: nowOf(deps) }, callbacks);
     try {
       const returned = await submitExtrinsic(rpc, record.hex);
       next = returned.toLowerCase() === record.hash ? { ...record, status: 'submitted', updatedAt: nowOf(deps), error: undefined } : { ...record, updatedAt: nowOf(deps), error: 'A resposta devolveu outro hash. Acompanhando apenas o hash calculado neste aparelho; não refaça o pagamento.' };

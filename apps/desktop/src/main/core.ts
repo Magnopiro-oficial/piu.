@@ -5,7 +5,10 @@
  */
 import { EventEmitter } from 'node:events';
 import { join } from 'node:path';
+import { PaymentJournal, paymentActive } from './paymentJournal';
+import type { DesktopPaymentState, PaymentRequestInput } from '../shared/paymentTypes';
 import { DesktopLinkServer } from './desktopLink';
+import { createIdentityBackup } from './backup';
 import { createIdentity, type DerivedKeys, identityFromPhrase, suggestWords } from './identity';
 import { MeshNode } from './mesh';
 import { type AppState, Store } from './store';
@@ -16,7 +19,7 @@ import {
   applyStatus, appendOutgoing, type ConversationsState, emptyState, markRead, messagesOf, receiveIncoming, removeConversation, summaries,
 } from '../shared/conversations';
 import {
-  type ConversationSummary, DEFAULT_PREFS, type IdentityKind, type LinkState, type MeInfo, type Message, type NetworkStatus, type PiuEventName, type PiuEvents, type Prefs, type SessionInfo, type WalletState,
+  type ContactInfo, type ConversationSummary, DEFAULT_PREFS, type IdentityKind, type LinkState, type MeInfo, type Message, type NetworkStatus, type PiuEventName, type PiuEvents, type Prefs, type SessionInfo, type WalletState,
 } from '../shared/types';
 import { BleTransportStub } from '../transport/bleStub';
 import { LnnpLanTransport, parsePeerAddress } from '../transport/lnnpLan';
@@ -42,8 +45,11 @@ export class PiuCore {
   private mesh: MeshNode | null = null;
   private lan: LnnpLanTransport | null = null;
   private ble = new BleTransportStub();
+  private paymentJournal: PaymentJournal | null = null;
+  private linkWasReady = false;
   private walletState: WalletState = emptyWallet(null, false);
   private walletReader = new WalletReader();
+  private walletReadVersion = 0;
   private walletTimer: NodeJS.Timeout | null = null;
   private saveTimer: NodeJS.Timeout | null = null;
   readonly events = new EventEmitter();
@@ -53,7 +59,12 @@ export class PiuCore {
   constructor(private o: CoreOptions) {
     this.vault = new Vault(join(o.userData, 'vault'), o.safeStorage);
     this.link = new DesktopLinkServer({ host: o.link?.host, listen: o.link?.listen, name: o.hostname, tlsDir: join(o.userData, 'link-tls'), log: m => this.log(m) });
-    this.link.on('state', (s: LinkState) => { this.emit('link', s); this.emit('session', this.session()); if (s.state === 'linked' && s.synced) this.emit('conversations', undefined); });
+    this.link.on('state', (s: LinkState) => {
+      const ready = s.state === 'linked' && s.synced;
+      if (this.linkWasReady && !ready && this.paymentJournal) { try { this.paymentJournal.disconnected(); } catch { /* fail closed */ } this.emit('walletPayment', this.walletPayment()); }
+      this.linkWasReady = ready;
+      this.emit('link', s); this.emit('session', this.session()); if (s.state === 'linked' && s.synced) this.emit('conversations', undefined); });
+    this.link.on('paymentStatus', (message: unknown) => { try { this.paymentJournal?.update(message); } catch { /* fail closed */ } this.emit('walletPayment', this.walletPayment()); });
     this.link.on('conversations', () => this.emit('conversations', undefined));
     this.link.on('message', (p: { contactId: string; message: Message }) => { this.emit('message', p); if (p.message.dir === 'in') this.events.emit('incoming', { contact: this.link.listConversations().find(c => c.contact.id === p.contactId)?.contact ?? { id: p.contactId, name: '', via: 'public', request: false }, text: p.message.text, isNew: false }); });
   }
@@ -81,6 +92,7 @@ export class PiuCore {
   async open() {
     const key = await this.vault.dataKey().catch(() => null);
     if (key) {
+      try { this.paymentJournal = new PaymentJournal(join(this.o.userData, 'payments.bin'), key); } catch { this.paymentJournal = null; }
       this.store = new Store(join(this.o.userData, 'state.bin'), key);
       const saved = this.store.load();
       if (saved) this.state = { ...this.state, ...saved, prefs: { ...DEFAULT_PREFS, ...saved.prefs } };
@@ -110,6 +122,17 @@ export class PiuCore {
           if (msg) this.emit('message', { contactId: contact.id, message: msg });
           this.emit('conversations', undefined);
           this.events.emit('incoming', { contact, text: m.text, isNew });
+        },
+        groupChanged: () => { this.scheduleSave(); this.emit('conversations', undefined); },
+        groupMessage: (contact, m, sender) => {
+          const before = this.state.conversations;
+          const route = m.route ? { peer: m.route.peer, via: m.route.via, bytes: m.route.bytes, hops: m.route.hops, priority: m.route.priority } : undefined;
+          this.setConversations(receiveIncoming(before, { id: m.msgId, contactId: contact.id, text: m.text, at: m.sentAt, sender, route }));
+          if (before === this.state.conversations) return;
+          const msg = messagesOf(this.state.conversations, contact.id).find(x => x.id === m.msgId);
+          if (msg) this.emit('message', { contactId: contact.id, message: msg });
+          this.emit('conversations', undefined);
+          this.events.emit('incoming', { contact, text: m.text, isNew: false });
         },
         status: (msgId, status, route) => {
           const before = this.state.conversations;
@@ -178,6 +201,7 @@ export class PiuCore {
 
   async createIdentity(o: { kind: IdentityKind; name: string }): Promise<{ phrase: string[] }> {
     if (this.mesh) throw new Error('Já existe uma identidade neste computador.');
+    if (!['off', 'dropped'].includes(this.link.state.state)) throw new Error('Desconecte o celular antes de criar ou restaurar uma identidade própria.');
     if (!this.vault.secure) throw new Error('O cofre do sistema não está disponível; a frase não pode ser guardada com segurança neste computador.');
     const { phrase, keys } = createIdentity();
     await this.vault.setPhrase(phrase);
@@ -192,6 +216,7 @@ export class PiuCore {
 
   async restoreIdentity(o: { phrase: string[]; name: string }): Promise<void> {
     if (this.mesh) throw new Error('Já existe uma identidade neste computador.');
+    if (!['off', 'dropped'].includes(this.link.state.state)) throw new Error('Desconecte o celular antes de criar ou restaurar uma identidade própria.');
     if (!this.vault.secure) throw new Error('O cofre do sistema não está disponível; a frase não pode ser guardada com segurança neste computador.');
     const keys = identityFromPhrase(o.phrase);
     await this.vault.setPhrase(o.phrase.map(w => w.trim().toLowerCase()));
@@ -209,10 +234,17 @@ export class PiuCore {
   }
 
   revealPhrase() { return this.vault.getPhrase(); }
+  exportIdentityBackup(password: string) { return createIdentityBackup(this.vault, password); }
   suggestWords(prefix: string) { return suggestWords(prefix, 6); }
 
   /** Apaga tudo deste computador: frase, chave de dados e estado. */
   async eraseAll() {
+    const payment = this.walletPayment();
+    if (payment.state === 'blocked' || (payment.state === 'payment' && paymentActive(payment.payment))) throw new Error('Há pagamento pendente ou registro inacessível. Confira no celular antes de apagar os dados.');
+    try { require('node:fs').rmSync(join(this.o.userData, 'payments.bin'), { force: true }); } catch { throw new Error('Não foi possível remover o registro de pagamentos.'); }
+    this.paymentJournal = null;
+    this.walletReadVersion++;
+    this.walletState = emptyWallet(null, DEFAULT_PREFS.hideBalance);
     await this.mesh?.stop();
     this.mesh = null; this.lan = null; this.keys = null;
     if (this.walletTimer) clearInterval(this.walletTimer);
@@ -228,7 +260,19 @@ export class PiuCore {
   addContactByCard(text: string) { const c = this.requireMesh().addContactByCard(text); this.scheduleSave(); this.emit('conversations', undefined); return c; }
   listConversations(): ConversationSummary[] {
     if (this.viaPhone) return this.link.listConversations();
-    return this.mesh ? summaries(this.state.conversations, this.mesh.listContacts()) : [];
+    return this.mesh ? summaries(this.state.conversations, [...this.mesh.listContacts(), ...this.mesh.listGroups()]) : [];
+  }
+  listGroupCandidates(): ContactInfo[] {
+    if (this.viaPhone) return [];
+    return this.requireMesh().listContacts().filter(c => !c.request);
+  }
+  createGroup(o: { kind: 'group' | 'channel'; name: string; via: IdentityKind; memberIds: string[] }): ContactInfo {
+    if (!o || (o.kind !== 'group' && o.kind !== 'channel') || (o.via !== 'public' && o.via !== 'anon') || typeof o.name !== 'string' || !o.name.trim() || o.name.length > 80 || !Array.isArray(o.memberIds) || !o.memberIds.length || o.memberIds.length > 100 || o.memberIds.some(id => typeof id !== 'string')) throw new Error('Dados do grupo inválidos.');
+    const mesh = this.requireMesh();
+    const allowed = new Set(mesh.listContacts().filter(c => !c.request && c.via === o.via).map(c => c.id));
+    if (new Set(o.memberIds).size !== o.memberIds.length || o.memberIds.some(id => !allowed.has(id))) throw new Error('Selecione contatos aceitos da mesma identidade.');
+    const group = mesh.createGroup({ kind: o.kind, name: o.name.trim(), via: o.via, memberIds: o.memberIds });
+    this.scheduleSave(); this.emit('conversations', undefined); return group;
   }
   getMessages(contactId: string): Message[] { return this.viaPhone ? this.link.getMessages(contactId) : messagesOf(this.state.conversations, contactId); }
 
@@ -293,10 +337,20 @@ export class PiuCore {
 
   // ── carteira ─────────────────────────────────────────────
   wallet() { return this.walletState; }
+  walletPayment(): DesktopPaymentState { return this.paymentJournal?.state ?? { state: 'blocked', reason: 'O cofre local não está disponível para proteger o envio.' }; }
+  requestWalletPayment(input: PaymentRequestInput): DesktopPaymentState {
+    if (!this.paymentJournal) throw new Error('O cofre local não está disponível para proteger o envio.');
+    if (!this.viaPhone || this.link.state.state !== 'linked' || !this.link.state.synced) throw new Error('Vincule e sincronize o celular antes de enviar.');
+    const p = this.paymentJournal.create(this.walletState.address, input);
+    this.emit('walletPayment', this.walletPayment());
+    try { this.link.requestPayment(p); } catch { try { this.paymentJournal.disconnected(); } catch { /* fail closed */ } }
+    const state = this.walletPayment(); this.emit('walletPayment', state); return state;
+  }
 
   async setWalletAddress(address: string | null) {
     const a = address?.trim() || null;
     if (a) { const err = validateAddress(a); if (err) throw new Error(err); }
+    this.walletReadVersion++;
     this.setPrefs({ walletAddress: a });
     this.walletState = emptyWallet(a, this.state.prefs.hideBalance);
     this.emit('wallet', this.walletState);
@@ -305,9 +359,13 @@ export class PiuCore {
 
   async refreshWallet() {
     if (!this.walletState.address) return this.walletState;
+    const version = ++this.walletReadVersion;
     this.walletState = { ...this.walletState, status: 'loading' };
-    this.emit('wallet', this.walletState);
-    this.walletState = await this.walletReader.read(this.walletState);
+    const requested = this.walletState;
+    this.emit('wallet', requested);
+    const result = await this.walletReader.read(requested);
+    if (version !== this.walletReadVersion || this.walletState.address !== requested.address) return this.walletState;
+    this.walletState = { ...result, hidden: this.walletState.hidden };
     this.emit('wallet', this.walletState);
     return this.walletState;
   }

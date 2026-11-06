@@ -1,3 +1,6 @@
+import { parsePaymentStatus } from './paymentJournal';
+import type { DesktopPayment } from '../shared/paymentTypes';
+import { canSendToConversation } from '../shared/conversations';
 /**
  * Servidor do vínculo com o celular (lado do desktop): WebSocket na rede local (0.0.0.0, porta
  * aleatória), QR renovado a cada 30 s enquanto ninguém conectou, handshake pela lib compartilhada
@@ -127,6 +130,8 @@ export class DesktopLinkServer extends EventEmitter {
           return;
         }
         const m = this.opener!.open(text);
+        const paymentStatus = parsePaymentStatus(m);
+        if (paymentStatus) { if (this.state.state === 'linked') this.emit('paymentStatus', paymentStatus); return; }
         if (!isPhoneMessage(m)) return;
         this.onMessage(m as PhoneMessage);
       } catch (e) {
@@ -226,6 +231,10 @@ export class DesktopLinkServer extends EventEmitter {
   /** Texto para uma conversa do celular: vai como comando (`ref` = id local); o celular cifra, envia e devolve a mensagem/estados. */
   sendText(contactId: string, text: string): Message {
     if (!this.linked) throw new Error('Sem celular vinculado agora.');
+    const contact = this.contacts.find(c => c.id === contactId);
+    if (!contact) throw new Error('Conversa não encontrada no celular.');
+    if (!canSendToConversation(contact)) throw new Error('Esta conversa é somente leitura no celular.');
+    if (!text.trim()) throw new Error('Escreva algo antes de enviar.');
     const msgId = `d${this.now().toString(36)}-${(++this.seq).toString(36)}`;
     const message: Message = { id: msgId, contactId, dir: 'out', text, at: this.nowSec(), status: 'aguardando' };
     this.conv = { ...this.conv, byContact: { ...this.conv.byContact, [contactId]: [...(this.conv.byContact[contactId] ?? []), message] } };
@@ -233,6 +242,11 @@ export class DesktopLinkServer extends EventEmitter {
     this.send({ t: 'cmd', op: 'send', chatId: contactId, text, ref: msgId });
     this.emit('conversations');
     return message;
+  }
+
+  requestPayment(p: DesktopPayment) {
+    if (this.state.state !== 'linked' || !this.state.synced) throw new Error('Vincule e sincronize o celular antes de enviar.');
+    this.send({ t: 'payment_request', id: p.id, expectedFrom: p.expectedFrom, dest: p.dest, amount: p.amount } as unknown as DesktopMessage);
   }
 
   private send(m: DesktopMessage) {

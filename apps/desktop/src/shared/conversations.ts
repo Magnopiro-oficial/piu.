@@ -28,10 +28,10 @@ export function appendOutgoing(s: ConversationsState, m: { id: string; contactId
 }
 
 /** Mensagem recebida de um contato (não lida até `markRead`). Repetida (mesmo id) não duplica. */
-export function receiveIncoming(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number; route?: Route }): ConversationsState {
+export function receiveIncoming(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number; route?: Route; sender?: string }): ConversationsState {
   const list = messagesOf(s, m.contactId);
   if (list.some(x => x.id === m.id)) return s;
-  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'in', text: m.text, at: m.at, status: 'recebida', ...(m.route ? { route: m.route } : {}) };
+  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'in', text: m.text, at: m.at, status: 'recebida', ...(m.sender ? { sender: m.sender } : {}), ...(m.route ? { route: m.route } : {}) };
   return withList(s, m.contactId, [...list, msg]);
 }
 
@@ -93,4 +93,13 @@ export function filterSummaries(list: ConversationSummary[], query: string, filt
     if (!q) return true;
     return r.contact.name.toLowerCase().includes(q) || r.contact.id.toLowerCase().includes(q);
   });
+}
+
+/** Tipo de contatos persistidos antes da inclusão de grupos. */
+export const conversationKind = (c: ContactInfo) => c.kind ?? 'direct';
+/** Em conversas coletivas, a permissão deve ter sido explicitamente concedida pelo celular. */
+export const canSendToConversation = (c: ContactInfo) => conversationKind(c) === 'direct' || (conversationKind(c) !== 'unknown' && c.canPost === true);
+/** Filtros visíveis do desktop, sem converter comunidades em canais ou pessoas. */
+export function filterConversationKind(list: ConversationSummary[], kind: 'all' | 'direct' | 'group' | 'channel'): ConversationSummary[] {
+  return kind === 'all' ? list : list.filter(row => conversationKind(row.contact) === kind);
 }

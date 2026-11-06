@@ -138,3 +138,33 @@ test('vínculo: certificado diferente do pino é recusado pelo celular; sessão 
   await until(() => !!phone.closed, 'sessão derrubada');
   assert.equal(srv.state.state, 'dropped');
 });
+
+
+test('vínculo: só envia para conversas existentes e coletivas com permissão do celular', async t => {
+  const dir = tmp();
+  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir });
+  t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
+  const s = await srv.start(); if (s.state !== 'waiting') throw new Error('estado');
+  const phone = await fakePhone(s.uri);
+  await until(() => srv.state.state === 'confirm', 'confirmação');
+  srv.confirm();
+  const base = { ident: 'public' as const, initials: 'EQ', time: '', unread: 0 };
+  phone.send({ t: 'snapshot', contacts: [], chats: [
+    { ...base, id: 'grupo', kind: 'group', name: 'Grupo', group: 'g', owner: true },
+    { ...base, id: 'canal', kind: 'channel', name: 'Canal', group: 'c' },
+  ], messages: {} });
+  await until(() => srv.state.state === 'linked' && srv.state.synced, 'snapshot');
+  assert.throws(() => srv.sendText('desconhecida', 'oi'), /não encontrada/);
+  assert.throws(() => srv.sendText('canal', 'oi'), /somente leitura/);
+  assert.throws(() => srv.sendText('grupo', '  '), /Escreva/);
+  assert.deepEqual(srv.getMessages('canal'), []);
+  srv.sendText('grupo', 'olá ao grupo');
+  await until(() => phone.inbox.some(m => m.t === 'cmd' && m.op === 'send' && m.chatId === 'grupo'), 'mensagem de grupo');
+  phone.send({ t: 'event', k: 'chat', chat: { ...base, id: 'canal', kind: 'channel', name: 'Canal', group: 'c', owner: true } });
+  await until(() => srv.listConversations().find(x => x.contact.id === 'canal')?.contact.canPost === true, 'permissão concedida');
+  srv.sendText('canal', 'anúncio');
+  await until(() => phone.inbox.some(m => m.t === 'cmd' && m.op === 'send' && m.chatId === 'canal'), 'mensagem de canal');
+  phone.send({ t: 'event', k: 'chat', chat: { ...base, id: 'grupo', kind: 'group', name: 'Grupo', group: 'g' } });
+  await until(() => srv.listConversations().find(x => x.contact.id === 'grupo')?.contact.canPost === false, 'permissão revogada');
+  assert.throws(() => srv.sendText('grupo', 'nova'), /somente leitura/);
+});
