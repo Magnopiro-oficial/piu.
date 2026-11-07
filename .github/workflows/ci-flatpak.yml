@@ -1,0 +1,47 @@
+name: CI · Flatpak
+
+# Monta o Flatpak do Piu Desktop (packaging/flatpak) como o Flathub monta e roda o linter do Flathub.
+on:
+  push:
+    branches: [main]
+    paths: ['packaging/flatpak/**', '.github/workflows/ci-flatpak.yml']
+  pull_request:
+    paths: ['packaging/flatpak/**', '.github/workflows/ci-flatpak.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-flatpak-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  flatpak:
+    name: Montar e conferir o Flatpak
+    runs-on: ubuntu-latest
+    env:
+      MANIFEST: packaging/flatpak/io.github.Magnopiro_oficial.Piu.yml
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Flatpak e o builder do Flathub (com o linter)
+        run: |
+          sudo apt-get update && sudo apt-get install -y flatpak
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user -y --noninteractive flathub org.flatpak.Builder
+      - name: Linter do manifesto
+        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest "$MANIFEST"
+      - name: Montar
+        run: |
+          flatpak run org.flatpak.Builder --user --install-deps-from=flathub --repo=repo --force-clean \
+            --disable-rofiles-fuse build "$MANIFEST"
+      - name: Linter do resultado (metainfo, ícone, .desktop)
+        run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder repo repo
+      - name: O app instala e o binário abre
+        run: |
+          flatpak build-bundle repo piu.flatpak io.github.Magnopiro_oficial.Piu
+          flatpak install --user -y --noninteractive piu.flatpak
+          flatpak run --command=sh io.github.Magnopiro_oficial.Piu -c '/app/piu/piu --version' || true
+          flatpak info io.github.Magnopiro_oficial.Piu

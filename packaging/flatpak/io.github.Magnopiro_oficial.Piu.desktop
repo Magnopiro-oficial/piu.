@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Piu
+GenericName=Mensageiro
+Comment=Mensageiro da malha Piu: conversa pela rede local, sem internet
+Exec=piu %U
+Icon=io.github.Magnopiro_oficial.Piu
+Terminal=false
+Categories=Network;InstantMessaging;Chat;
+Keywords=mensagem;chat;offline;malha;lunes;
+StartupWMClass=Piu

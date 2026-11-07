@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Magnopiro_oficial.Piu</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>AGPL-3.0-only</project_license>
+  <name>Piu</name>
+  <summary>Mensageiro que funciona sem internet</summary>
+  <developer id="io.github.Magnopiro_oficial">
+    <name>Lunes Network</name>
+  </developer>
+  <description>
+    <p>O Piu é o mensageiro da Lunes que funciona sem internet: as mensagens viajam de aparelho em aparelho, cifradas de ponta a ponta.</p>
+    <p>No computador, o Piu entra na rede local como nó LNNP e conversa com os celulares e computadores por perto. Quando houver internet, ela também é usada.</p>
+    <ul>
+      <li>Mensagens cifradas de ponta a ponta</li>
+      <li>Funciona na rede local, sem servidor central</li>
+      <li>Liga ao Piu do celular pelo QR code</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.Magnopiro_oficial.Piu.desktop</launchable>
+  <url type="homepage">https://github.com/Magnopiro-oficial/piu.</url>
+  <url type="bugtracker">https://github.com/Magnopiro-oficial/piu./issues</url>
+  <url type="vcs-browser">https://github.com/Magnopiro-oficial/piu.</url>
+  <categories>
+    <category>Network</category>
+    <category>InstantMessaging</category>
+  </categories>
+  <content_rating type="oars-1.1">
+    <content_attribute id="social-chat">intense</content_attribute>
+    <content_attribute id="social-contacts">intense</content_attribute>
+  </content_rating>
+  <supports>
+    <control>pointing</control>
+    <control>keyboard</control>
+  </supports>
+  <!-- O Flathub exige pelo menos uma captura de tela por URL pública (ver README.md). -->
+  <releases>
+    <release version="0.1.1" date="2026-11-07"/>
+    <release version="0.1.0" date="2026-11-07"/>
+  </releases>
+</component>

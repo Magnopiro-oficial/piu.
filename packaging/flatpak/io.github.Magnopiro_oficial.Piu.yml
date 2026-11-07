@@ -1,0 +1,47 @@
+# Flatpak do Piu Desktop para o Flathub. Reaproveita o .deb do release (o mesmo binário do site),
+# conferido pelo SHA-256 do SHA256SUMS.txt. Nova versão: troque url e sha256 e acrescente <release> no metainfo.
+app-id: io.github.Magnopiro_oficial.Piu
+runtime: org.freedesktop.Platform
+runtime-version: '24.08'
+sdk: org.freedesktop.Sdk
+base: org.electronjs.Electron2.BaseApp
+base-version: '24.08'
+command: piu
+separate-locales: false
+finish-args:
+  - --share=ipc
+  - --socket=fallback-x11
+  - --socket=wayland
+  - --device=dri
+  # LNNP: anúncio e conversa na rede local (UDP/TCP 8423), além da internet quando houver.
+  - --share=network
+  - --talk-name=org.freedesktop.Notifications
+  # Ícone da bandeja (StatusNotifierItem).
+  - --talk-name=org.kde.StatusNotifierWatcher
+modules:
+  - name: piu
+    buildsystem: simple
+    sources:
+      - type: file
+        url: https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.1/Piu-0.1.1-linux-amd64.deb
+        sha256: 017894785e4fb678b84cd462bf65a578d174cff88fcfec1d55aed6080c1de5c3
+        dest-filename: piu.deb
+        only-arches: [x86_64]
+      - type: file
+        path: piu.sh
+      - type: file
+        path: io.github.Magnopiro_oficial.Piu.desktop
+      - type: file
+        path: io.github.Magnopiro_oficial.Piu.metainfo.xml
+      - type: file
+        path: io.github.Magnopiro_oficial.Piu.png
+    build-commands:
+      - ar x piu.deb data.tar.xz
+      - tar -xf data.tar.xz ./opt/Piu
+      - cp -a opt/Piu "${FLATPAK_DEST}/piu"
+      # O sandbox do Chromium no Flatpak é o zypak (da BaseApp); o chrome-sandbox setuid não serve aqui.
+      - rm -f "${FLATPAK_DEST}/piu/chrome-sandbox"
+      - install -Dm755 piu.sh "${FLATPAK_DEST}/bin/piu"
+      - install -Dm644 io.github.Magnopiro_oficial.Piu.desktop -t "${FLATPAK_DEST}/share/applications"
+      - install -Dm644 io.github.Magnopiro_oficial.Piu.metainfo.xml -t "${FLATPAK_DEST}/share/metainfo"
+      - install -Dm644 io.github.Magnopiro_oficial.Piu.png "${FLATPAK_DEST}/share/icons/hicolor/512x512/apps/io.github.Magnopiro_oficial.Piu.png"
