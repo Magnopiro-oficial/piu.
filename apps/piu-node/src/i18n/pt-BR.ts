@@ -6,10 +6,12 @@
  */
 import { piu11PtBR } from './piu11/pt-BR.js';
 import { pontosPtBR } from './pontos/pt-BR.js';
+import { linkDesktopPtBR } from './linkDesktop/pt-BR.js';
 
 export const ptBR = {
   ...piu11PtBR,
   ...pontosPtBR,
+  ...linkDesktopPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',
@@ -82,8 +84,8 @@ export const ptBR = {
   'network.relay.desc': 'Retransmitir mensagens cifradas de outras pessoas. No iPhone, só enquanto o app está aberto.',
   'network.provider.count': { one: 'Provider · {count} equipamento', other: 'Provider · {count} equipamentos' },
   'network.provider.be': 'Seja um provider',
-  'network.provider.paired': 'Pareado com este celular · ganhos no painel do equipamento',
-  'network.provider.pitch': 'Use seu roteador ou antena para transmitir e ganhar LUNES',
+  'network.provider.paired': 'Pareado com este celular · recibos no painel do equipamento',
+  'network.provider.pitch': 'Use seu roteador ou antena para ajudar a rede · recompensas em LUNES ainda não abriram',
   'network.diag': 'Diagnóstico local',
   'network.diag.delivered': '{pct}% entregues em 7 dias',
   'network.diag.noSends': 'Sem envios nesta semana',
@@ -133,8 +135,8 @@ export const ptBR = {
   'wallet.bonus.desc': 'Andamento medido neste aparelho · o pagamento depende da Lunes, ainda não ligado',
   'wallet.bonus.done': 'concluído',
   'wallet.bonus.note': '“Identidade criada” conta com o backup cifrado das chaves feito. Um dia de uso conta quando mensagens suas chegam (com confirmação) a pelo menos 3 contatos diferentes nesse dia.',
-  'wallet.ref.title': 'Distribua o Piu, ganhe LUNES',
-  'wallet.ref.desc': '{reward} LUNES para cada pessoa que instalar a partir do seu celular e ficar ativa por 7 dias.',
+  'wallet.ref.title': 'Distribua o Piu',
+  'wallet.ref.desc': 'Quando o programa abrir: {reward} LUNES para cada pessoa que instalar a partir do seu celular e ficar ativa por 7 dias. Ainda não abriu: hoje nada é pago.',
   'wallet.ref.accepted': 'aceitaram seu convite',
   'wallet.ref.paid': 'ativos e pagos',
   'wallet.ref.earned': 'LUNES ganhos',
@@ -459,7 +461,7 @@ export const ptBR = {
   'invite.newCode': 'Novo código gerado',
   'invite.newCode.body': 'O anterior foi revogado. Este vale por 24 h, para uma pessoa.',
   'invite.generate': 'Gerar novo código',
-  'invite.reward': 'para você quando a pessoa ficar ativa por 7 dias. Ela ganha 10 de boas-vindas.',
+  'invite.reward': 'para você, e 10 de boas-vindas para a pessoa, depois de 7 dias de uso, quando o programa abrir. Ainda não abriu: hoje nada é pago.',
   'invite.hasPiu': 'A PESSOA JÁ TEM O PIU?',
   'invite.yes': 'Sim, já tem',
   'invite.yes.desc': 'Ela escaneia o código acima no Piu (Adicionar contato) ou com a câmera do celular. A conversa já começa cifrada.',
@@ -1460,12 +1462,12 @@ export const ptBR = {
   'prov.refresh': 'Atualizar',
   'prov.receipts.value': '{own} deste nó · {kept} guardados para o validador',
   'provIntro.title': 'Transforme seu roteador em infraestrutura.',
-  'provIntro.sub': 'Seu equipamento entrega mensagens cifradas da vizinhança, sem conseguir ler nenhuma, e você recebe LUNES por cada entrega comprovada.',
+  'provIntro.sub': 'Seu equipamento entrega mensagens cifradas da vizinhança, sem conseguir ler nenhuma, e ajuda a rede a funcionar. Recompensas em LUNES por entrega comprovada estão previstas para quando o programa abrir: ainda não abriu e hoje nada é pago.',
   'provIntro.step1': 'Conecte o equipamento',
   'provIntro.step2': 'Passe no teste real',
-  'provIntro.step3': 'Ganhe por entregas',
+  'provIntro.step3': 'Ajude a rede',
   'provIntro.which': 'QUE EQUIPAMENTO VOCÊ TEM',
-  'provIntro.note': 'Você ganha por entregas úteis validadas, não por tempo ligado nem por capacidade anunciada. Nenhum hardware oficial é exigido.',
+  'provIntro.note': 'Quando o programa abrir, as recompensas vão contar entregas úteis validadas, não tempo ligado nem capacidade anunciada. Hoje nada é pago. Nenhum hardware oficial é exigido.',
   'provAdd.step': 'PASSO 1 · EQUIPAMENTO',
   'provAdd.title': 'O que você vai conectar?',
   'provConnect.step': 'PASSO 2 · CONEXÃO',
@@ -1478,7 +1480,7 @@ export const ptBR = {
   'provConnect.copied': 'Comando copiado',
   'provConnect.copyCmd.a11y': '{step}. Copiar comando: {cmd}',
   'provConnect.apNote': 'Ele manda e recebe ao vivo. Guardar para quem está fora e assinar recibos fica com o nó pai, que é um equipamento com Piu Node pareado aqui.',
-  'provConnect.pkgNote': 'O pacote confere a própria assinatura antes de instalar. O teste real e os ganhos ficam no painel do equipamento.',
+  'provConnect.pkgNote': 'O pacote confere a própria assinatura antes de instalar. O teste real e os recibos ficam no painel do equipamento.',
   'provConnect.pair': 'Parear este celular',
   'provConnect.pair.desc': 'Leia o QR de “Parear celular” no painel. Este celular mostra 6 dígitos para você digitar lá.',
   'provConnect.scanPanel': 'Escanear o QR do painel',
