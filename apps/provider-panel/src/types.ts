@@ -1,5 +1,5 @@
 export type Theme = 'light' | 'dark';
-export type PageId = 'overview' | 'devices' | 'mesh' | 'earnings' | 'wallet' | 'settings';
+export type PageId = 'overview' | 'devices' | 'mesh' | 'gateway' | 'earnings' | 'wallet' | 'settings';
 export type DeviceStatus = 'active' | 'paused' | 'warming';
 export type DeviceFilter = 'all' | DeviceStatus;
 export type NodeClass = 'Home Node' | 'Super Node' | 'Gateway Local' | 'Ponto de Acesso';

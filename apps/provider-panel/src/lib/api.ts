@@ -65,6 +65,16 @@ export interface ApiDay extends ApiTotals { day: string }
 export type ApiHistory = { enabled: false } | { enabled: true; sampleMs: number; today: string; samples: ApiSample[]; days: ApiDay[]; unsampled: ApiTotals };
 /** `GET /api/relay/receipts`: recibos guardados para o validador (só horário e se são deste nó). */
 export type ApiReceipts = { enabled: false } | { enabled: true; kept: number; keptOwn: number; max: number; recent: { at: number; own: boolean }[] };
+/** Uma carga que passou pelo gateway: hash da transação (0x…) ou do pacote, estado e horário (s). */
+export interface ApiGatewayItem { ref: string; kind: 'tx' | 'evidence'; status: 'queued' | 'pool' | 'included' | 'finalized' | 'invalid' | 'accepted' | 'error'; reason: string | null; at: number }
+/**
+ * `GET /api/gateway`: contadores reais desde que o nó subiu (`startedAt`, ms) e as últimas cargas.
+ * `available: false`: motor LNNP desligado (`relay-off`) ou gateway desligado pela configuração (`config`).
+ */
+export type ApiGateway =
+  | { available: false; reason: 'config' | 'relay-off'; enabled: false; inboxUrl: string | null; changedAt: number | null }
+  | { available: true; enabled: boolean; online: boolean; inbox: boolean; inboxUrl: string | null; changedAt: number | null; startedAt: number | null;
+      counters: { sent: number; finalized: number; refused: number; queued: number; forwarded: number; errors: number }; recent: ApiGatewayItem[] };
 export interface ApiSession { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }
 export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
 /** `GET /api/settings`: com `owner` (só os ajustes do dono deste equipamento valem no motor). */
@@ -193,5 +203,8 @@ export class NodeApi {
   removeRelayPeer = (address: string) => this.call<void>('DELETE', `/api/relay/peers/${encodeURIComponent(address)}`);
   history = () => this.call<ApiHistory>('GET', '/api/relay/history');
   receipts = () => this.call<ApiReceipts>('GET', '/api/relay/receipts');
+  gateway = () => this.call<ApiGateway>('GET', '/api/gateway');
+  /** Só o dono, com step-up (NeedsReauth). Caixa só https:// (ApiError 400 com o motivo). */
+  setGateway = (v: { enabled: boolean; inboxUrl: string | null }) => this.call<{ enabled: boolean; inboxUrl: string | null; changedAt: number }>('PUT', '/api/gateway', v);
   logout = () => this.call<{ ok: true }>('POST', '/api/logout');
 }

@@ -31,7 +31,8 @@ body {
   background: var(--bg); color: var(--ink);
   font-family: var(--sans); -webkit-font-smoothing: antialiased; letter-spacing: -0.005em;
 }
-button, input { font-family: inherit; letter-spacing: inherit; }
+/* Como no design: botões e campos herdam a fonte, mas não o letter-spacing do corpo. */
+button, input { font-family: inherit; }
 button { color: inherit; }
 input::placeholder { color: var(--ink3); }
 a { color: inherit; }
@@ -147,6 +148,10 @@ a:hover { opacity: .7; }
 
 .scroll-thin { scrollbar-width: thin; }
 
+/* App do Mac: a faixa superior arrasta a janela (duplo clique amplia); os controles continuam clicáveis. */
+.win-drag { -webkit-app-region: drag; user-select: none; }
+.win-drag button, .win-drag a, .win-drag input { -webkit-app-region: no-drag; }
+
 /* ── responsivo ─────────────────────────────────────────
    ≥ 1180 px: como o design. 760–1179: barra lateral só com ícones, cartões em 2 colunas.
    < 760 (celular na rede local): navegação embaixo, 1 coluna, tabelas viram lista, toque ≥ 44 px.
@@ -169,6 +174,8 @@ a:hover { opacity: .7; }
   .devices-layout { flex-direction: column; align-items: stretch !important; }
   .dev-detail { width: auto !important; }
   .mesh-grid { grid-template-columns: minmax(0, 1fr) !important; }
+  #cfg-lang { grid-template-columns: minmax(0, 1fr) !important; }
+  .topbar-addr { min-width: 0 !important; }
 }
 
 @media (max-width: 759px) {

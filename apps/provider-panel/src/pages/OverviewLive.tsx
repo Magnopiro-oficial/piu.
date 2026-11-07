@@ -45,7 +45,7 @@ export function OverviewLive() {
   ].sort((a, b) => b[3] - a[3]).slice(0, 6);
 
   return (
-    <div className="grid12 page-body">
+    <div className="grid12 page-body" style={{ paddingTop: 24 }}>
       <SetupGuide />
       <section className="span8 card-ink col" style={{ padding: 24, borderRadius: 24, gap: 20, animation: 'piuUp .45s both' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>

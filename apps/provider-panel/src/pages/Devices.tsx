@@ -59,7 +59,7 @@ export function Devices() {
                   </div>
                   <div className="col" style={{ minWidth: 0, gap: 2 }}>
                     <div className="ellipsis" style={{ fontSize: 14.5, fontWeight: 600 }}>{d.name}</div>
-                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.pub ? ` · ${d.pub}` : d.telemetry === 'live' ? ` · ${t('common.thisNode')}` : ''}{d.parent ? ` · ${t('dv.parentPrefix', { name: parentName(devices, d.parent) })}` : ''}</div>
+                    <div className="mono ellipsis" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{d.cls}{d.pub ? ` · ${d.pub}` : d.telemetry === 'live' ? ` · ${t('common.thisNode')}` : ''}</div>
                   </div>
                 </div>
                 <DeviceStatusCell d={d} />

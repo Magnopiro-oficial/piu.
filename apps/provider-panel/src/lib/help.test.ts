@@ -3,7 +3,7 @@ import { LANGS, setLang } from '../i18n';
 import type { PageId } from '../types';
 import { HELP_TERMS, TERM_IDS, glossary, help, termsOf } from './help';
 
-const PAGES: PageId[] = ['overview', 'devices', 'mesh', 'earnings', 'wallet', 'settings'];
+const PAGES: PageId[] = ['overview', 'devices', 'mesh', 'gateway', 'earnings', 'wallet', 'settings'];
 
 // A ajuda vale em todos os idiomas do painel: cada verificação roda com cada dicionário carregado.
 describe.each(LANGS.map(l => l.code))('ajuda por página (%s)', lang => {

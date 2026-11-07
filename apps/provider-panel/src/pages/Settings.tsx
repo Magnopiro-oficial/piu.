@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { Dialog } from '../components/Overlays';
 import { PasswordDialog, RestoreDialog, StepUpDialog } from '../components/Pair';
 import { PairPhone } from '../components/Phone';
-import { LANGS, dateFormat, setLang, t, type Key, type Lang } from '../i18n';
+import { LANGS, REGIONS, dateFormat, getRegion, setLang, setRegion, t, type Key, type Lang } from '../i18n';
 import { useLang, useT } from '../i18n/react';
 import { ApiError, NeedsReauth, type ApiOperatorKey } from '../lib/api';
 import { downloadText } from '../lib/io';
@@ -116,6 +116,8 @@ export function Settings() {
         })}
       </section>
 
+      <LanguageCard />
+
       <section className="card-line col" style={{ borderRadius: 22, padding: 20, gap: 12 }}>
         <CardHead title={t('st.access')} sub={t('st.accessSub')} />
         {rows.map(([icon, n, d, s]) => (
@@ -165,8 +167,6 @@ export function Settings() {
         </>)}
       </section>
 
-      <LanguageCard />
-
       <section className="card-line settings-wide" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1.15fr)', gap: 28 }}>
         <div className="col" style={{ gap: 10 }}>
           <CardHead title={t('st.pubNames')} sub={t('st.pubNamesSub')} />
@@ -202,14 +202,16 @@ export function Settings() {
 }
 
 /**
- * “Idioma do painel” (como no design): grade com o nome nativo e o nome no idioma atual, o atual
- * marcado. Vale só para este navegador; o app de conversa tem o próprio ajuste.
+ * “Idioma do painel” + “Formato de números e datas” (como no design: um cartão bg2 de largura total,
+ * 1,6fr / 1fr). O idioma é a grade com o nome nativo e o nome no idioma atual; o formato troca só
+ * separadores e a ordem dia/mês (ganhos, extratos, CSV). Os dois valem só para este navegador.
  */
 function LanguageCard() {
   const t = useT();
   const lang = useLang();
   const { showToast } = useStore();
   const [busy, setBusy] = useState<Lang | null>(null);
+  const region = getRegion();
   const pick = async (code: Lang, native: string) => {
     if (code === lang || busy) return;
     setBusy(code);
@@ -217,23 +219,41 @@ function LanguageCard() {
     catch { /* dicionário não carregou: fica no idioma atual */ }
     finally { setBusy(null); }
   };
+  // Amostras na própria região (1.234,56 · 31/10 e 1,234.56 · 10/31), como no design.
+  const sample = (locale: string) => `${new Intl.NumberFormat(locale, { minimumFractionDigits: 2 }).format(1234.56)} · ${new Intl.DateTimeFormat(locale, { day: '2-digit', month: '2-digit' }).format(new Date(2026, 9, 31))}`;
   return (
-    <section id="cfg-lang" className="card-line settings-wide col" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, gap: 10 }}>
-      <CardHead title={t('lang.title')} sub={t('lang.note')} />
-      <div role="radiogroup" aria-label={t('lang.title')} className="lang-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 4 }}>
-        {LANGS.map(l => {
-          const on = l.code === lang;
-          return (
-            <button key={l.code} type="button" role="radio" aria-checked={on} lang={l.code} aria-busy={busy === l.code || undefined} onClick={() => void pick(l.code, l.native)}
-              style={{ display: 'flex', alignItems: 'center', gap: 9, height: 44, padding: '0 10px', border: 'none', borderRadius: 12, background: on ? 'var(--bg2)' : 'transparent', color: 'var(--ink)', cursor: on ? 'default' : 'pointer', textAlign: 'left', transition: 'background .15s', opacity: busy && busy !== l.code ? 0.6 : 1 }}>
-              <Icon name={on ? 'check_circle' : 'radio_button_unchecked'} size={18} fill={on ? 1 : 0} />
-              <span className="col" style={{ minWidth: 0 }}>
-                <span className="ellipsis" style={{ fontSize: 13.5, fontWeight: on ? 650 : 450 }}>{l.native}</span>
-                <span className="ellipsis" lang={lang} style={{ fontSize: 11, color: 'var(--ink2)' }}>{t(`lang.name.${l.code}` as Key)}</span>
-              </span>
-            </button>
-          );
-        })}
+    <section id="cfg-lang" className="card-soft settings-wide" style={{ gridColumn: 'span 2', borderRadius: 22, padding: 20, display: 'grid', gridTemplateColumns: 'minmax(0,1.6fr) minmax(0,1fr)', gap: 24 }}>
+      <div className="col" style={{ gap: 10, minWidth: 0 }}>
+        <CardHead title={t('lang.title')} sub={t('lang.note')} />
+        <div role="radiogroup" aria-label={t('lang.title')} className="lang-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(3,minmax(0,1fr))', gap: 4 }}>
+          {LANGS.map(l => {
+            const on = l.code === lang;
+            return (
+              <button key={l.code} type="button" role="radio" aria-checked={on} lang={l.code} aria-busy={busy === l.code || undefined} onClick={() => void pick(l.code, l.native)}
+                style={{ display: 'flex', alignItems: 'center', gap: 9, height: 44, padding: '0 10px', border: 'none', borderRadius: 12, background: on ? 'var(--bg)' : 'transparent', color: 'var(--ink)', cursor: on ? 'default' : 'pointer', textAlign: 'left', transition: 'background .15s', opacity: busy && busy !== l.code ? 0.6 : 1 }}>
+                <Icon name={on ? 'check_circle' : 'radio_button_unchecked'} size={18} />
+                <span className="col" style={{ minWidth: 0 }}>
+                  <span className="ellipsis" style={{ fontSize: 13.5, fontWeight: on ? 650 : 450 }}>{l.native}</span>
+                  <span className="ellipsis" lang={lang} style={{ fontSize: 11, color: 'var(--ink2)' }}>{t(`lang.name.${l.code}` as Key)}</span>
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <div className="col" style={{ gap: 10, minWidth: 0 }}>
+        <CardHead title={t('region.title')} sub={t('region.note')} />
+        <div role="radiogroup" aria-label={t('region.title')} className="col" style={{ gap: 4, padding: 3, borderRadius: 12, background: 'var(--bg3)' }}>
+          {REGIONS.map(r => {
+            const on = r === region;
+            return (
+              <button key={r} type="button" role="radio" aria-checked={on} onClick={() => setRegion(r)}
+                style={{ height: 34, border: 'none', borderRadius: 9, background: on ? 'var(--bg)' : 'transparent', color: 'var(--ink)', fontSize: 13, fontWeight: on ? 600 : 450, cursor: 'pointer', boxShadow: on ? '0 1px 3px rgba(0,0,0,.12)' : 'none' }}>
+                {r === 'auto' ? t('region.auto') : sample(r === 'br' ? 'pt-BR' : 'en-US')}
+              </button>
+            );
+          })}
+        </div>
       </div>
     </section>
   );

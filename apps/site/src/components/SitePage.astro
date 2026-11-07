@@ -2,20 +2,38 @@
 import Base from '../layouts/Base.astro';
 import type { Dict } from '../i18n/pt';
 import PhoneDemo from './PhoneDemo';
+import DesktopDemo from './DesktopDemo';
 import { url } from '../lib/url';
+import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SHA256, groupHex } from '../lib/androidRelease';
+import { DESKTOP, DESKTOP_OSES, DESKTOP_SIG_URL, PROVIDER, RELEASE_KEY_FILE, RELEASE_KEY_FPR, fmtFpr, shortSha, type DesktopOs } from '../lib/desktopRelease';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
 const isPt = t.lang.startsWith('pt');
 const panelSrc = url('/painel/');
 const repo = 'https://github.com/Magnopiro-oficial/piu.';
+
+// Revelação na rolagem (design): cabeçalhos em "entry 0% cover 30%"; cartões escalonados em 8% a cada coluna;
+// nós do diagrama de saltos em 7%. Os valores vão para --rva, lido por .rv em site.css.
+const card = (i: number) => `--rva: entry ${(i % 3) * 8}% cover ${28 + (i % 3) * 8}%`;
+const hop = (i: number) => `--rva: entry ${5 + i * 7}% cover ${30 + i * 7}%`;
+// Instante (s) em que o pacote do diagrama passa por cada nó (siteHop 4.2s; dois pacotes defasados em 2.1s).
+const HOP_PING = [0.15, 1.12, 0, 0.98, 1.95];
+const words = t.hero.title.split(' ');
+const OS_ICON: Record<DesktopOs, string> = { mac: 'laptop_mac', linux: 'terminal', win: 'desktop_windows' };
+const DEFAULT_OS: DesktopOs = 'mac';
+const d = t.desktop;
+const dlNote = (file: string, tip: string) => `${d.started}${file}. ${tip}`;
+const pa = t.provider.app;
+// Assinatura GPG só com chave criada E arquivo .asc publicado no release.
+const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
 ---
 <Base t={t} alt={alt}>
   <header class="nav">
     <div class="wrap nav-in">
       <a href="#topo" class="logo" style="font-size:30px" aria-label="Piu">piu<span>.</span></a>
       <nav class="nav-links" aria-label="Seções">
-        <a href="#como">{t.nav.how}</a><a href="#privacidade">{t.nav.privacy}</a><a href="#provider">{t.nav.provider}</a><a href="#lunes">{t.nav.lunes}</a><a href="#faq">{t.nav.faq}</a>
+        <a href="#como">{t.nav.how}</a><a href={url(t.rede.path)}>{t.nav.network}</a><a href="#privacidade">{t.nav.privacy}</a><a href="#provider">{t.nav.provider}</a><a href="#lunes">{t.nav.lunes}</a><a href="#desktop">{t.nav.desktop}</a><a href="#faq">{t.nav.faq}</a>
       </nav>
       <div class="lang" role="group" aria-label={t.nav.langLabel}>
         {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href={url("/")} lang="pt-BR" hreflang="pt-BR">PT</a>}
@@ -35,23 +53,38 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
   <main>
     <section id="topo" class="wrap hero">
       <div class="hero-copy">
-        <div class="kicker" style="display:flex;align-items:center;gap:8px"><div class="dot8"></div>{t.hero.kicker}</div>
-        <h1>{t.hero.title}</h1>
-        <p class="hero-lead">{t.hero.lead}</p>
-        <div style="display:flex;gap:10px;flex-wrap:wrap">
+        <div class="kicker" style="display:flex;align-items:center;gap:8px"><div class="dot8" aria-hidden="true"></div>{t.hero.kicker}</div>
+        <!-- Título palavra por palavra: cada palavra sobe de dentro de uma máscara (siteWord .95s, atraso .12s + 80 ms). -->
+        <h1>{words.map((w, i) => <><span class="word-mask"><span class="word" style={`--d:${(0.12 + i * 0.08).toFixed(2)}s`}>{w}</span></span>{i < words.length - 1 ? ' ' : ''}</>)}</h1>
+        <p class="hero-lead up" style="--d:.55s">{t.hero.lead}</p>
+        <div class="up" style="--d:.68s;display:flex;gap:10px;flex-wrap:wrap">
           <a href="#baixar" class="pill pill-ink" style="height:54px;padding:0 24px;font-size:16px"><span class="ic" style="font-size:21px" aria-hidden="true">android</span>{t.hero.primary}</a>
           <a href="#como" class="pill pill-line" style="height:54px;padding:0 24px;font-size:16px">{t.hero.secondary}</a>
         </div>
-        <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px">
+        <a href="#desktop" class="hero-desktop up" style="--d:.78s"><span class="ic" style="font-size:19px" aria-hidden="true">laptop_mac</span>{t.hero.desktop}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_forward</span></a>
+        <div class="up" style="--d:.9s;display:flex;gap:22px;flex-wrap:wrap;padding-top:8px">
           {t.hero.facts.map(f => (
-            <div class="col" style="gap:2px"><div data-count style="font-size:24px;font-weight:650;letter-spacing:-0.03em;font-variant-numeric:tabular-nums">{f.v}</div><div style="font-size:13px;color:var(--ink2)">{f.l}</div></div>
+            <div class="col" style="gap:2px"><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;font-variant-numeric:tabular-nums">{f.v}</div><div style="font-size:13px;color:var(--ink2)">{f.l}</div></div>
           ))}
         </div>
       </div>
       <div class="phone-stage">
+        <!-- 3 ondas saindo do celular (siteRing 3.6s, defasadas em 1,2 s) -->
+        <div class="ring" style="--d:1.2s" aria-hidden="true"></div>
+        <div class="ring" style="--d:2.4s" aria-hidden="true"></div>
+        <div class="ring" style="--d:3.6s" aria-hidden="true"></div>
+        <!-- órbita contrária (siteSpinR 46s) -->
+        <div class="spin-r" aria-hidden="true">
+          <div style="position:absolute;top:-4px;left:186px;width:8px;height:8px;border-radius:50%;background:var(--ink)"></div>
+          <div style="position:absolute;bottom:44px;right:44px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg)"></div>
+        </div>
+        <!-- 3 selos flutuantes (siteChip + siteFloat) -->
+        <div class="chip" style="--d:1.10s;--fd:5.2s;--fdl:1.8s;left:max(0px,calc(50% - 290px));top:110px" aria-hidden="true"><span><span class="ic" style="font-size:17px">{t.hero.chips[0][0]}</span>{t.hero.chips[0][1]}</span></div>
+        <div class="chip" style="--d:1.32s;--fd:5.9s;--fdl:2.2s;right:max(0px,calc(50% - 300px));top:44%" aria-hidden="true"><span><span class="ic" style="font-size:17px">{t.hero.chips[1][0]}</span>{t.hero.chips[1][1]}</span></div>
+        <div class="chip" style="--d:1.54s;--fd:6.6s;--fdl:2.6s;left:max(0px,calc(50% - 270px));bottom:110px" aria-hidden="true"><span><span class="ic" style="font-size:17px">{t.hero.chips[2][0]}</span>{t.hero.chips[2][1]}</span></div>
         <div class="orbit" style="width:520px;height:520px;margin:-260px 0 0 -260px"></div>
         <div class="orbit" style="width:380px;height:380px;margin:-190px 0 0 -190px"></div>
-        <div aria-hidden="true" style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;animation:siteSpin 70s linear infinite">
+        <div class="spin" aria-hidden="true">
           <div style="position:absolute;top:-6px;left:254px;width:12px;height:12px;border-radius:50%;background:var(--ink)"></div>
           <div style="position:absolute;bottom:60px;left:40px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg)"></div>
           <div style="position:absolute;top:120px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--ink)"></div>
@@ -62,17 +95,20 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
       </div>
     </section>
 
+    <!-- Faixa de transportes em rolagem infinita: a lista é repetida 6× e o trilho anda -50% (siteMarquee 34s). -->
     <div class="band">
-      <div class="wrap band-in">
-        <span class="kicker">{t.transports.label}</span>
-        {t.transports.items.map(([icon, n]) => (
-          <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:550"><span class="ic w300" style="font-size:20px" aria-hidden="true">{icon}</span>{n}</span>
-        ))}
+      <span class="kicker">{t.transports.label}</span>
+      <div class="marquee">
+        <div class="marquee-track">
+          {Array.from({ length: 6 }, () => t.transports.items).flat().map(([icon, n], i) => (
+            <span aria-hidden={i >= t.transports.items.length ? 'true' : undefined}><span class="ic w300" style="font-size:20px" aria-hidden="true">{icon}</span>{n}</span>
+          ))}
+        </div>
       </div>
     </div>
 
     <section id="como" class="wrap col" style="padding-top:96px;padding-bottom:40px;gap:48px">
-      <div class="col" style="gap:14px;max-width:720px">
+      <div class="col rv" style="gap:14px;max-width:720px">
         <div class="kicker">{t.how.kicker}</div>
         <h2 class="h2">{t.how.title}</h2>
         <p class="lead">{t.how.lead}</p>
@@ -84,9 +120,9 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
           {t.how.hops.map(([icon, n, via], i) => {
             const k = i === 0 ? 1 : i === t.how.hops.length - 1 ? 2 : 0;
             return (
-              <li class="col" style="align-items:center;gap:12px;text-align:center">
+              <li class="col rv" style={`align-items:center;gap:12px;text-align:center;${hop(i)}`}>
                 <div class="hop-ic">
-                  {k === 2 && <div style="animation:siteRing 2.4s ease-out infinite" aria-hidden="true"></div>}
+                  <div class="hop-ping" style={`--d:${HOP_PING[i]}s`} aria-hidden="true"></div>
                   <div class:list={['hop-face', { inv: k > 0 }]}><span class="ic w300" style="font-size:26px" aria-hidden="true">{icon}</span></div>
                 </div>
                 <div style="font-size:15px;font-weight:600">{n}</div>
@@ -97,8 +133,8 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
         </ol>
       </div>
       <div class="cards3">
-        {t.how.steps.map(s => (
-          <div class="step">
+        {t.how.steps.map((s, i) => (
+          <div class="step rv" style={card(i)}>
             <div class="mono" style="font-size:13px;font-weight:500;color:var(--ink2)">{s.n}</div>
             <h3 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.025em">{s.title}</h3>
             <div class="t-body">{s.desc}</div>
@@ -109,8 +145,8 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
 
     <div class="wrap" style="padding-top:56px;padding-bottom:96px">
       <div class="features">
-        {t.features.map(f => (
-          <div class="feature">
+        {t.features.map((f, i) => (
+          <div class="feature rv" style={card(i)}>
             <span class="ic w250" style="font-size:30px" aria-hidden="true">{f.icon}</span>
             <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{f.title}</h3>
             <div class="t-body">{f.desc}</div>
@@ -121,7 +157,7 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
 
     <section id="privacidade" class="inverted">
       <div class="wrap privacy">
-        <div class="col" style="gap:18px">
+        <div class="col rv" style="gap:18px">
           <div class="kicker" style="color:inherit;opacity:.7">{t.privacy.kicker}</div>
           <h2 class="h2">{t.privacy.title}</h2>
           <p class="lead soft" style="color:inherit">{t.privacy.lead}</p>
@@ -131,8 +167,8 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
           </div>
         </div>
         <ul class="col" style="list-style:none;margin:0;padding:0">
-          {t.privacy.items.map(p => (
-            <li style="display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35)">
+          {t.privacy.items.map((p, i) => (
+            <li class="rv" style={`display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35);${card(i)}`}>
               <span class="ic w300" style="font-size:24px" aria-hidden="true">{p.icon}</span>
               <div class="col" style="flex:1;gap:5px"><div style="font-size:17px;font-weight:600">{p.title}</div><div style="font-size:14.5px;line-height:1.5;opacity:.75;text-wrap:pretty">{p.desc}</div></div>
             </li>
@@ -141,14 +177,31 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
       </div>
     </section>
 
+    <section id="seguranca" class="wrap col" style="padding-top:104px;padding-bottom:8px;gap:40px;scroll-margin-top:68px">
+      <div class="col rv" style="gap:14px;max-width:720px">
+        <div class="kicker">{t.security.kicker}</div>
+        <h2 class="h2">{t.security.title}</h2>
+        <p class="lead">{t.security.lead}</p>
+      </div>
+      <div class="features sec">
+        {t.security.items.map((f, i) => (
+          <div class="feature rv" style={card(i)}>
+            <span class="ic w250" style="font-size:30px" aria-hidden="true">{f.icon}</span>
+            <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{f.title}</h3>
+            <div class="t-body">{f.desc}</div>
+          </div>
+        ))}
+      </div>
+    </section>
+
     <section id="provider" class="wrap col" style="padding-top:104px;padding-bottom:64px;gap:44px">
-      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end">
+      <div class="rv" style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end">
         <div class="col" style="gap:14px"><div class="kicker">{t.provider.kicker}</div><h2 class="h2">{t.provider.title}</h2></div>
         <p class="lead">{t.provider.lead}</p>
       </div>
       <div class="grid-cls">
-        {t.provider.classes.map(c => (
-          <div class="cls">
+        {t.provider.classes.map((c, i) => (
+          <div class="cls rv" style={card(i)}>
             <div style="display:flex;align-items:center;justify-content:space-between"><span class="ic w250" style="font-size:28px" aria-hidden="true">{c.icon}</span><span class="tag">{c.tag}</span></div>
             <h3 style="margin:0;font-size:18px;font-weight:650">{c.title}</h3>
             <div style="font-size:14px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{c.desc}</div>
@@ -161,22 +214,46 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
           <div class="col" style="gap:6px"><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em">{t.provider.panelTitle}</div><div style="font-size:14.5px;color:var(--ink2)">{t.provider.panelSub}</div></div>
           <a href={panelSrc} class="pill pill-ink" style="height:44px;padding:0 18px;font-size:14px;gap:8px">{t.provider.panelCta}<span class="ic" style="font-size:18px" aria-hidden="true">arrow_forward</span></a>
         </div>
+        <!-- Prévia em perspectiva (siteDeskIn) conforme a rolagem; o iframe é escalado pelo script. -->
         <div data-desk style="width:100%">
-          <div class="desk-box" style="width:1280px;height:820px">
-            <iframe src={panelSrc} title={t.provider.panelFrame} loading="lazy"></iframe>
+          <div class="desk-box rv-desk">
+            <iframe class="desk-fit" src={panelSrc} title={t.provider.panelFrame} loading="lazy"></iframe>
           </div>
         </div>
+      </div>
+      <!-- Piu Provider para computador: arquivos do release provider-v<versão> (releases.json); sem release, "em breve". -->
+      <div class="prov-app rv" id="provider-app">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div class="col" style="gap:6px;min-width:0;flex:1 1 280px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="ic w250" style="font-size:28px" aria-hidden="true">computer</span><h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{pa.title}</h3>{!PROVIDER.published && <span class="tag">{pa.soon}</span>}</div>
+            <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{PROVIDER.published ? pa.desc : `${pa.desc} ${pa.soonNote}`}</div>
+          </div>
+          {PROVIDER.published && <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href={PROVIDER.releaseUrl} target="_blank" rel="noopener">{pa.release}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_outward</span></a>}
+        </div>
+        {PROVIDER.published && (
+          <div class="dl-files">
+            {PROVIDER.files.map((f, i) => (
+              <div class="dl-file" style={`--d:${(i * 0.06).toFixed(2)}s`}>
+                <div class="col" style="gap:3px;min-width:0">
+                  <div style="font-size:15.5px;font-weight:600">{pa.files[f.id] ?? f.file}</div>
+                  <div class="mono">{f.file} · {f.size} · SHA-256 {shortSha(f.sha256)}</div>
+                </div>
+                <a class="pill pill-line" href={f.url} rel="noopener" data-note={dlNote(f.file, d.files[f.id]?.tip ?? d.tip)}><span class="ic" style="font-size:17px" aria-hidden="true">download</span>{d.dl}</a>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </section>
 
     <section id="lunes" class="wrap" style="padding-top:40px;padding-bottom:104px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px">
-      <div class="inverted col" style="padding:32px;border-radius:28px;gap:14px">
+      <div class="inverted col rv" style="padding:32px;border-radius:28px;gap:14px">
         <div class="kicker" style="color:inherit;opacity:.7">{t.lunes.kicker}</div>
         <h2 style="margin:0;font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1.05;text-wrap:balance">{t.lunes.title}</h2>
         <div class="soft" style="font-size:15px;line-height:1.55;text-wrap:pretty">{t.lunes.lead}</div>
       </div>
-      {t.lunes.rewards.map(r => (
-        <div class="col" style="padding:32px;border-radius:28px;border:1px solid var(--line2);gap:12px">
+      {t.lunes.rewards.map((r, i) => (
+        <div class="col rv" style={`padding:32px;border-radius:28px;border:1px solid var(--line2);gap:12px;${card(i)}`}>
           <div class="kicker">{r.k}</div>
           <div style="display:flex;align-items:baseline;gap:8px"><span style="font-size:56px;font-weight:650;letter-spacing:-0.05em;line-height:1">{r.v}</span><span style="font-size:15px;font-weight:600;color:var(--ink2)">LUNES</span></div>
           <h3 style="margin:0;font-size:17px;font-weight:600">{r.title}</h3>
@@ -188,33 +265,133 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
 
     <section id="baixar" style="background:var(--bg2)">
       <div class="wrap col" style="padding-top:96px;padding-bottom:96px;gap:40px">
-        <div class="col" style="gap:14px;max-width:720px">
+        <div class="col rv" style="gap:14px;max-width:720px">
           <div class="kicker">{t.download.kicker}</div>
           <h2 class="h2">{t.download.title}</h2>
           <p class="lead">{t.download.lead}</p>
         </div>
         <div class="cards3" style="gap:12px">
-          {t.download.options.map(d => (
-            <div class="dl">
-              <span class="ic w250" style="font-size:30px" aria-hidden="true">{d.icon}</span>
-              <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{d.title}</h3>
-              <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1">{d.desc}</div>
-              {d.href
-                ? <a href={d.href} data-note={d.note} rel="noopener" class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</a>
-                : <button type="button" data-note={d.note} class:list={['pill', d.primary ? 'pill-ink' : 'pill-line']}>{d.cta}</button>}
+          {t.download.options.map((o, i) => (
+            <div class="dl rv" style={card(i)}>
+              <span class="ic w250" style="font-size:30px" aria-hidden="true">{o.icon}</span>
+              <h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{o.title}</h3>
+              <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1">{o.desc}</div>
+              {o.href
+                ? <a href={o.href} data-note={o.note} rel="noopener" class:list={['pill', o.primary ? 'pill-ink' : 'pill-line']}>{o.cta}</a>
+                : <button type="button" data-note={o.note} class:list={['pill', o.primary ? 'pill-ink' : 'pill-line']}>{o.cta}</button>}
             </div>
           ))}
         </div>
+
+        <!-- Piu Desktop: abas por sistema (a aba inicial segue o sistema do visitante, via script), botão principal,
+             prévia ao vivo do app, lista de pacotes do release desktop-v<versão> (releases.json; "em breve" sem release) e linha de assinatura/SHA. -->
+        <div id="desktop" class="desktop rv" style="--rva: entry 0% cover 22%" data-desktop>
+          <div class="desktop-head">
+            <div class="col" style="gap:12px">
+              <div class="kicker" style="display:flex;align-items:center;gap:8px"><span class="ic" style="font-size:18px;color:var(--ink)" aria-hidden="true">laptop_mac</span>{d.kicker}</div>
+              <h3>{d.title}</h3>
+              <p style="margin:0;font-size:16px;line-height:1.55;color:var(--ink2);max-width:540px;text-wrap:pretty">{d.lead}</p>
+            </div>
+            <div class="col" style="gap:12px">
+              <div class="os-tabs" role="tablist" aria-label={d.tabsLabel}>
+                {DESKTOP_OSES.map(os => (
+                  <button type="button" role="tab" id={`tab-${os}`} aria-controls={`panel-${os}`} aria-selected={os === DEFAULT_OS ? 'true' : 'false'} data-os={os}>
+                    <span class="ic" style="font-size:18px" aria-hidden="true">{OS_ICON[os]}</span>{d.os[os].tab}
+                  </button>
+                ))}
+              </div>
+              {DESKTOP_OSES.map(os => { const m = DESKTOP.mainFile(os); return (
+                <div class="col" style="gap:12px" data-os-main={os} hidden={os !== DEFAULT_OS}>
+                  {m?.url ? (
+                    <a class="dl-main" href={m.url} rel="noopener" data-note={dlNote(m.file, d.files[m.id]?.tip ?? d.tip)}>
+                      <span class="ic" style="font-size:26px" aria-hidden="true">download</span>
+                      <span><b>{d.os[os].label}</b><small>{d.os[os].sub}{m.size ? ` · ${m.size}` : ''}</small></span>
+                      <span class="ic" style="font-size:20px" aria-hidden="true">arrow_forward</span>
+                    </a>
+                  ) : (
+                    <div class="dl-main is-soon" role="note">
+                      <span class="ic" style="font-size:26px" aria-hidden="true">schedule</span>
+                      <span><b>{d.os[os].tab} · {d.soon}</b><small>{d.os[os].sub}</small></span>
+                    </div>
+                  )}
+                  <div style="font-size:12.5px;color:var(--ink2);text-align:center">{d.os[os].req}</div>
+                </div>
+              ); })}
+            </div>
+          </div>
+          <div data-desk style="width:100%">
+            <div class="desk-box rv-desk" style="box-shadow:0 40px 90px -40px rgba(0,0,0,.5),0 0 0 1px var(--line2)">
+              <div class="desk-fit" role="region" aria-label={d.previewLabel}><DesktopDemo client:load os={DEFAULT_OS} /></div>
+            </div>
+          </div>
+          {DESKTOP_OSES.map(os => (
+            <div id={`panel-${os}`} role="tabpanel" aria-labelledby={`tab-${os}`} class="col" style="gap:20px" data-os-panel={os} hidden={os !== DEFAULT_OS}>
+              <div class="dl-files">
+                {DESKTOP.filesFor(os).map((f, i) => (
+                  <div class="dl-file" style={`--d:${(i * 0.06).toFixed(2)}s`}>
+                    <div class="col" style="gap:3px;min-width:0">
+                      <div style="font-size:15.5px;font-weight:600">{d.files[f.id]?.t ?? f.file}</div>
+                      <div class="mono">{f.file}{f.size ? ` · ${f.size}` : ''}{f.sha256 ? ` · SHA-256 ${shortSha(f.sha256)}` : ''}</div>
+                    </div>
+                    {f.url
+                      ? <a class="pill pill-line" href={f.url} rel="noopener" data-note={dlNote(f.file, d.files[f.id]?.tip ?? d.tip)}><span class="ic" style="font-size:17px" aria-hidden="true">download</span>{d.dl}</a>
+                      : <span class="tag" style="justify-self:start">{d.soon}</span>}
+                  </div>
+                ))}
+              </div>
+              <div class="dl-open"><span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">shield</span><div><b>{d.os[os].openTitle}</b>{d.os[os].open}</div></div>
+            </div>
+          ))}
+          {DESKTOP.published ? (
+            <div class="sig-line">
+              <span class="ic" style="font-size:17px;color:var(--ink)" aria-hidden="true">verified</span>
+              <span>{signed ? d.sigNoteSigned : d.sigNote}</span>
+              {DESKTOP.sumsUrl && <a href={DESKTOP.sumsUrl} target="_blank" rel="noopener">{d.sums}</a>}
+              {signed && (<><span style="opacity:.6">·</span><a href={DESKTOP_SIG_URL} target="_blank" rel="noopener">{d.sigFile}</a><span style="opacity:.6">·</span><a href={url('/' + RELEASE_KEY_FILE)} download>{d.keyLink}</a></>)}
+              <span style="opacity:.6">·</span><a href={DESKTOP.releaseUrl} target="_blank" rel="noopener">{d.release}</a>
+            </div>
+          ) : (
+            <div class="sig-line">
+              <span class="ic" style="font-size:17px;color:var(--ink)" aria-hidden="true">schedule</span>
+              <span>{d.soonNote}</span>
+            </div>
+          )}
+          {signed && (
+            <div class="sig-line">
+              <span class="ic" style="font-size:17px;color:var(--ink)" aria-hidden="true">key</span>
+              <span>{d.keyFpr} <span class="mono">{fmtFpr(RELEASE_KEY_FPR)}</span></span>
+              <span>{d.verify} <code class="mono">gpg --import {RELEASE_KEY_FILE} && gpg --verify SHA256SUMS.txt.asc && sha256sum -c --ignore-missing SHA256SUMS.txt</code></span>
+            </div>
+          )}
+        </div>
+
         <div class="mono" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;border:1px dashed var(--line2);font-size:13px;color:var(--ink2)">
           <span class="ic" style="font-size:18px;color:var(--ink)" aria-hidden="true">verified</span>
-          <span>{t.download.signature[0]}</span><span style="opacity:.6">·</span><span>{t.download.signature[1]}</span>
+          <span>{t.download.signature[0]} · <span style="user-select:all">{groupHex(ANDROID_CERT_SHA256, true)}</span></span>
+          {ANDROID_PUBLISHED && <><span style="opacity:.6">·</span><span>{ANDROID_FILE} · {t.download.signature[1]} <span style="user-select:all">{groupHex(ANDROID_SHA256)}</span></span></>}
         </div>
-        <a href={repo} target="_blank" rel="noopener" class="gh-card">
+
+        <!-- Como verificar o download: comando por sistema; GPG só com RELEASE_KEY_FPR (bloco do #desktop). -->
+        <div id="verificar" class="col rv" style="gap:18px;scroll-margin-top:84px">
+          <div class="col" style="gap:8px;max-width:720px">
+            <h3 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.025em">{t.download.verify.title}</h3>
+            <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{t.download.verify.lead}</div>
+          </div>
+          <div class="verify-grid">
+            {t.download.verify.items.map(v => (
+              <div class="dl-open">
+                <span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">{v.icon}</span>
+                <div style="min-width:0"><b>{v.os}</b>{v.how}<code class="mono cmd">{v.cmd}</code></div>
+              </div>
+            ))}
+          </div>
+          <div class="dl-open"><span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">phonelink_ring</span><div>{t.download.verify.friend}</div></div>
+        </div>
+        <a href={repo} target="_blank" rel="noopener" class="gh-card rv">
           <span class="gh-ic"><svg viewBox="0 0 16 16" width="26" height="26" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg></span>
           <span class="col" style="flex:1;gap:4px;min-width:0"><span style="font-size:18px;font-weight:650;letter-spacing:-0.02em">{t.download.source.title}</span><span style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{t.download.source.desc}</span></span>
           <span class="pill pill-ink" style="height:44px;padding:0 18px;font-size:14px;gap:8px">{t.download.source.cta}<span class="ic" style="font-size:18px" aria-hidden="true">arrow_outward</span></span>
         </a>
-        <div data-dl-note role="status" aria-live="polite" hidden style="padding:16px 20px;border-radius:18px;background:var(--ink);color:var(--invink);font-size:14.5px;line-height:1.5;animation:siteUp .35s both"></div>
       </div>
     </section>
 
@@ -246,6 +423,15 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
     </div>
     <div class="wrap mono" style="padding-bottom:40px;font-size:12px;color:var(--ink2)">{t.footer.legal}</div>
   </footer>
+
+  <!-- Toast de download: fixo no rodapé, entra com siteToast e some em 6,5 s (ou no X). -->
+  <div class="toast-wrap" data-toast hidden>
+    <div class="toast" role="status" aria-live="polite">
+      <span class="ic" style="font-size:20px" aria-hidden="true">download_done</span>
+      <span style="flex:1" data-toast-text></span>
+      <button type="button" aria-label={t.download.toastClose} data-toast-close><span class="ic" style="font-size:18px" aria-hidden="true">close</span></button>
+    </div>
+  </div>
 </Base>
 
 <script>
@@ -259,69 +445,17 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
     frame?.contentWindow?.postMessage({ type: 'piu-theme', theme: next }, location.origin);
   });
 
-  // Painel embutido: escala 1280×820 para caber na largura do cartão.
-  const desk = document.querySelector<HTMLElement>('[data-desk]');
-  const box = desk?.querySelector<HTMLElement>('.desk-box');
-  const frame = desk?.querySelector<HTMLIFrameElement>('iframe');
-  if (desk && box && frame) {
-    const fit = () => {
-      const sc = Math.min(1, desk.clientWidth / 1280);
-      box.style.width = Math.floor(1280 * sc) + 'px';
-      box.style.height = Math.floor(820 * sc) + 'px';
-      frame.style.transform = `scale(${sc.toFixed(4)})`;
-    };
-    new ResizeObserver(fit).observe(desk);
-    fit();
+  // Prévias de 1280×820 (painel do provider e Piu Desktop): escala para caber na largura do cartão.
+  for (const desk of document.querySelectorAll<HTMLElement>('[data-desk]')) {
+    const box = desk.querySelector<HTMLElement>('.desk-box');
+    const fit = desk.querySelector<HTMLElement>('.desk-fit');
+    if (!box || !fit) continue;
+    const apply = () => { fit.style.transform = `scale(${Math.min(1, box.clientWidth / 1280).toFixed(4)})`; };
+    new ResizeObserver(apply).observe(box);
+    apply();
   }
 
-  // Micro-animações (respeitam "reduzir movimento"):
-  // - entrada suave ao rolar, em cascata dentro de cada grupo;
-  // - contadores do topo sobem até o valor;
-  // - barra do topo ganha sombra ao rolar.
-  const still = matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const REVEAL = [
-    '.band-in > *', 'main > section:not(#topo) .kicker', 'main > section:not(#topo) .h2', 'main > section:not(#topo) .lead',
-    '.hops-grid > li', '.step', '.feature', '#privacidade li', '.cls', '.desk-card', '#lunes > div', '.dl', '.gh-card', '.faq details',
-  ].join(',');
-  if (!still && 'IntersectionObserver' in window) {
-    const els = [...document.querySelectorAll<HTMLElement>(REVEAL)];
-    const vh = innerHeight;
-    const io = new IntersectionObserver(entries => {
-      for (const e of entries) {
-        if (!e.isIntersecting) continue;
-        const el = e.target as HTMLElement;
-        io.unobserve(el);
-        el.classList.add('in');
-        // Depois da entrada, sai do estado de animação (o hover fica livre do atraso da cascata).
-        setTimeout(() => el.classList.remove('rv', 'in'), 900 + Number(el.style.getPropertyValue('--i') || 0) * 80);
-      }
-    }, { rootMargin: '0px 0px -8% 0px', threshold: 0.12 });
-    for (const el of els) {
-      // O que já está na tela ao abrir fica como está (sem piscar).
-      if (el.getBoundingClientRect().top < vh * 0.92) continue;
-      const sibs = el.parentElement ? [...el.parentElement.children].filter(c => c.matches(REVEAL)) : [];
-      el.style.setProperty('--i', String(Math.min(6, Math.max(0, sibs.indexOf(el)))));
-      el.classList.add('rv');
-      io.observe(el);
-    }
-  }
-  if (!still) {
-    for (const el of document.querySelectorAll<HTMLElement>('[data-count]')) {
-      const m = /^(\D*)(\d+)(.*)$/.exec(el.textContent?.trim() ?? '');
-      if (!m) continue;
-      const [, pre, num, post] = m;
-      const end = Number(num);
-      if (!end) continue;
-      const t0 = performance.now() + 250;
-      const step = (now: number) => {
-        const k = Math.min(1, Math.max(0, (now - t0) / 1100));
-        el.textContent = pre + Math.round(end * (1 - Math.pow(1 - k, 3))) + post;
-        if (k < 1) requestAnimationFrame(step);
-      };
-      el.textContent = pre + '0' + post;
-      requestAnimationFrame(step);
-    }
-  }
+  // Barra do topo ganha sombra ao rolar.
   const nav = document.querySelector<HTMLElement>('.nav');
   if (nav) {
     const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
@@ -329,16 +463,47 @@ const repo = 'https://github.com/Magnopiro-oficial/piu.';
     onScroll();
   }
 
-  // Downloads: mostra a orientação de cada opção (o APK baixa pelo link e a nota explica a instalação).
-  const note = document.querySelector<HTMLElement>('[data-dl-note]');
-  document.querySelectorAll<HTMLElement>('[data-note]').forEach(b =>
-    b.addEventListener('click', () => {
-      if (!note) return;
-      note.hidden = false;
-      note.textContent = b.dataset.note ?? '';
-      note.style.animation = 'none';
-      void note.offsetWidth;
-      note.style.animation = '';
-    }),
-  );
+  // Toast de download: mostra a orientação de cada opção e some em 6,5 s.
+  const toast = document.querySelector<HTMLElement>('[data-toast]');
+  const toastText = toast?.querySelector<HTMLElement>('[data-toast-text]');
+  const toastBox = toast?.querySelector<HTMLElement>('.toast');
+  let toastT = 0;
+  const hideToast = () => { if (toast) toast.hidden = true; clearTimeout(toastT); };
+  const note = (text: string) => {
+    if (!toast || !toastText || !toastBox) return;
+    clearTimeout(toastT);
+    toastText.textContent = text;
+    toast.hidden = false;
+    // Reinicia a animação de entrada quando um aviso substitui outro.
+    toastBox.style.animation = 'none';
+    void toastBox.offsetWidth;
+    toastBox.style.animation = '';
+    toastT = window.setTimeout(hideToast, 6500);
+  };
+  toast?.querySelector('[data-toast-close]')?.addEventListener('click', hideToast);
+  document.querySelectorAll<HTMLElement>('[data-note]').forEach(b => b.addEventListener('click', () => note(b.dataset.note ?? '')));
+
+  // Piu Desktop: a aba inicial segue o sistema do visitante; a troca mostra o botão, a lista e a prévia do sistema.
+  type Os = 'mac' | 'linux' | 'win';
+  const section = document.querySelector<HTMLElement>('[data-desktop]');
+  if (section) {
+    const detect = (): Os => {
+      const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
+      // userAgentData só existe em navegadores Chromium; `platform` (obsoleto, mas universal) é o reserva.
+      const p = (nav.userAgentData?.platform || navigator.platform || '').toLowerCase();
+      const ua = navigator.userAgent;
+      if (p.includes('win')) return 'win';
+      if ((/linux|x11|cros/.test(p) || /Linux|X11|CrOS/.test(ua)) && !/Android/.test(ua)) return 'linux';
+      return 'mac';
+    };
+    const tabs = [...section.querySelectorAll<HTMLButtonElement>('[role="tab"][data-os]')];
+    const pick = (os: Os) => {
+      for (const b of tabs) b.setAttribute('aria-selected', String(b.dataset.os === os));
+      for (const el of section.querySelectorAll<HTMLElement>('[data-os-main],[data-os-panel]')) el.hidden = (el.dataset.osMain ?? el.dataset.osPanel) !== os;
+      document.documentElement.dataset.piuDesktopOs = os;
+      dispatchEvent(new CustomEvent('piu-desktop-os'));
+    };
+    for (const b of tabs) b.addEventListener('click', () => pick(b.dataset.os as Os));
+    pick(detect());
+  }
 </script>

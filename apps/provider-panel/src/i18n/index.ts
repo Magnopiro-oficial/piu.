@@ -90,6 +90,31 @@ export function detectLang(): Lang {
 export const getLang = (): Lang => current;
 export const localeOf = (lang: Lang = current) => LANGS.find(l => l.code === lang)?.locale ?? 'pt-BR';
 
+// ── formato de números e datas (Configurações → "Formato de números e datas") ──
+/** `auto`: o da região do idioma; `br`: 1.234,56 · 31/10; `us`: 1,234.56 · 10/31. Salvo neste navegador. */
+export type Region = 'auto' | 'br' | 'us';
+export const REGIONS: readonly Region[] = ['auto', 'br', 'us'];
+const REGION_KEY = 'piu-region';
+const REGION_LOCALE: Record<Exclude<Region, 'auto'>, string> = { br: 'pt-BR', us: 'en-US' };
+let region: Region = 'auto';
+const isRegion = (x: unknown): x is Region => typeof x === 'string' && (REGIONS as readonly string[]).includes(x);
+function savedRegion(): Region {
+  try { const v = localStorage.getItem(REGION_KEY); return isRegion(v) ? v : 'auto'; } catch { return 'auto'; }
+}
+export const getRegion = (): Region => region;
+/** Locale dos números (e das datas só com números) no idioma `lang`, respeitando o formato escolhido. */
+const numberLocaleOf = (lang: Lang) => (region === 'auto' ? localeOf(lang) : REGION_LOCALE[region]);
+/** Troca o formato de números e datas, salva a escolha e avisa quem escuta (sem trocar o idioma). */
+export function setRegion(r: Region, { persist = true }: { persist?: boolean } = {}) {
+  if (persist) { try { localStorage.setItem(REGION_KEY, r); } catch { /* sem armazenamento: vale só nesta aba */ } }
+  if (r === region) return;
+  region = r;
+  nfCache.clear(); dfCache.clear();
+  for (const fn of listeners) fn();
+}
+/** Muda quando o idioma ou o formato muda (para o React renderizar de novo). */
+export const getLocaleKey = (): string => `${current}|${region}`;
+
 export function subscribe(fn: () => void) {
   listeners.add(fn);
   return () => { listeners.delete(fn); };
@@ -125,6 +150,7 @@ export async function setLang(lang: Lang, { persist = true }: { persist?: boolea
 /** Inicializa com o idioma detectado (chamado antes da primeira renderização). */
 export async function initI18n(): Promise<Lang> {
   const lang = detectLang();
+  region = savedRegion();
   try { await setLang(lang, { persist: false }); } catch { current = DEFAULT_LANG; applyToDocument(current); }
   return current;
 }
@@ -152,7 +178,8 @@ export function tIn(lang: Lang, key: Key, vars?: Vars): string {
   if (v === undefined) return key;
   if (typeof v !== 'string') {
     const n = Number(vars?.count ?? 0);
-    const cat = pluralRules(lang).select(n) as keyof Plural;
+    // No pt-BR o CLDR põe o 0 no singular ("0 vizinho"); no Brasil se diz "0 vizinhos".
+    const cat = (lang === 'pt-BR' && n === 0 ? 'other' : pluralRules(lang).select(n)) as keyof Plural;
     v = v[cat] ?? v.other;
   }
   return interpolate(lang, v, vars);
@@ -166,14 +193,19 @@ const nfCache = new Map<string, Intl.NumberFormat>();
 export function numberFormat(opts?: Intl.NumberFormatOptions, lang: Lang = current): Intl.NumberFormat {
   const k = lang + JSON.stringify(opts ?? {});
   let f = nfCache.get(k);
-  if (!f) { f = new Intl.NumberFormat(localeOf(lang), opts); nfCache.set(k, f); }
+  if (!f) { f = new Intl.NumberFormat(numberLocaleOf(lang), opts); nfCache.set(k, f); }
   return f;
 }
 const dfCache = new Map<string, Intl.DateTimeFormat>();
+/**
+ * Datas só com números (31/10, 10/31) seguem o formato escolhido; com mês ou dia da semana por
+ * extenso, ficam no idioma do painel (o formato não troca palavras de idioma).
+ */
 export function dateFormat(opts?: Intl.DateTimeFormatOptions, lang: Lang = current): Intl.DateTimeFormat {
   const k = lang + JSON.stringify(opts ?? {});
   let f = dfCache.get(k);
-  if (!f) { f = new Intl.DateTimeFormat(localeOf(lang), opts); dfCache.set(k, f); }
+  const words = !!opts && (opts.weekday !== undefined || opts.era !== undefined || opts.dateStyle !== undefined || (typeof opts.month === 'string' && !['numeric', '2-digit'].includes(opts.month)));
+  if (!f) { f = new Intl.DateTimeFormat(words ? localeOf(lang) : numberLocaleOf(lang), opts); dfCache.set(k, f); }
   return f;
 }
 /** Separador decimal da região atual ("," em pt-BR, "." em en). */

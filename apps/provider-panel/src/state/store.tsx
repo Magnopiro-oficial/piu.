@@ -9,7 +9,7 @@ import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, Toa
 import { useNode } from './node';
 
 // ── rota (hash) ─────────────────────────────────────────
-const PAGES: PageId[] = ['overview', 'devices', 'mesh', 'earnings', 'wallet', 'settings'];
+const PAGES: PageId[] = ['overview', 'devices', 'mesh', 'gateway', 'earnings', 'wallet', 'settings'];
 type Route = { page: PageId; sel: string | null };
 
 function parseHash(): Route {

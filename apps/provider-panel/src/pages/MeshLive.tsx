@@ -41,7 +41,7 @@ export function MeshLive() {
           })}
           <div style={{ position: 'absolute', left: cx, top: cy, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             <div style={{ position: 'relative', width: 46, height: 46 }}>
-              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: flowing ? 'piuRingS 3.2s ease-out infinite' : 'none' }} />
+              <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: flowing ? 'piuRingS 2.6s ease-out infinite' : 'none' }} />
               <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={self?.icon ?? 'router'} size={22} wght={400} /></div>
             </div>
             <div className="mono" style={{ position: 'absolute', top: '100%', marginTop: 6, fontSize: 10.5, fontWeight: 500, whiteSpace: 'nowrap', padding: '2px 6px', borderRadius: 5, background: 'var(--ink)', color: 'var(--invink)' }}>{self?.name ?? t('common.thisNode')}</div>

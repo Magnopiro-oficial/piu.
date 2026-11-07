@@ -25,6 +25,7 @@ export const HELP_TERMS: Record<PageId, TermId[]> = {
   overview: ['node', 'neighbor', 'envelope', 'receipt', 'duplicate'],
   devices: ['node', 'techId', 'accessPoint', 'parentNode', 'publicName'],
   mesh: ['neighbor', 'link', 'multicast'],
+  gateway: ['node', 'validator', 'lunes', 'deviceCode'],
   earnings: ['receipt', 'batch', 'validator', 'settlement', 'lunes'],
   wallet: ['providerWallet', 'lunes', 'settlement', 'deviceCode'],
   settings: ['bandwidth', 'storage', 'hours', 'operatorKey', 'backup'],

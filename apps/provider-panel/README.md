@@ -5,7 +5,7 @@ Vite + React + TypeScript. Feito para ser servido pelo daemon `piu-node` na rede
 
 ```bash
 npm install
-npm run dev        # http://localhost:8420
+npm run dev        # http://localhost:8420 (só este computador; outro aparelho: npm run dev -- --host)
 npm run build      # gera dist/ (base relativa, dá para servir de qualquer caminho)
 npm run typecheck
 npm test           # Vitest: lógica do guia e da ajuda (src/lib/*.test.ts)

@@ -177,7 +177,7 @@ export function AddDeviceWizard() {
                               })()}</div>
                             </div>
                           </div>
-                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>{t('wz.serveNote')}</div>
+                          <div style={{ fontSize: 12.5, color: 'var(--ink2)', lineHeight: 1.4 }}>{real ? t('wz.serveNoteNode', { host: window.location.host }) : t('wz.serveNote')}</div>
                           {(() => {
                             const m = packages.find(p => p.file === fam.pkg);
                             return (

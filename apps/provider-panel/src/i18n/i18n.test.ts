@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from 'vitest';
-import { LANGS, decimalSeparator, dictOf, loadLang, matchLang, setLang, t, tIn, type Dict, type Plural } from './index';
+import { LANGS, dateFormat, decimalSeparator, dictOf, getLocaleKey, getRegion, loadLang, matchLang, numberFormat, setLang, setRegion, t, tIn, type Dict, type Plural } from './index';
 import { ptBR } from './pt-BR';
 
 const OTHERS = LANGS.map(l => l.code).filter(c => c !== 'pt-BR');
@@ -49,6 +49,7 @@ describe('t()', () => {
     await setLang('pt-BR', { persist: false });
     expect(t('head.devicesCount', { count: 1 })).toBe('1 equipamento');
     expect(t('head.devicesCount', { count: 2 })).toBe('2 equipamentos');
+    expect(t('head.devicesCount', { count: 0 })).toBe('0 equipamentos');
     expect(t('dev.receipts', { count: 24880 })).toBe('24.880 recibos');
     expect(t('lang.toast', { name: 'English' })).toBe('Idioma: English');
     expect(tIn('en', 'head.devicesCount', { count: 1 })).toBe('1 device');
@@ -63,6 +64,34 @@ describe('t()', () => {
     expect(decimalSeparator('pt-BR')).toBe(',');
     expect(decimalSeparator('en')).toBe('.');
     expect(decimalSeparator('de')).toBe(',');
+  });
+});
+
+describe('formato de números e datas (Configurações)', () => {
+  const day = new Date(2026, 9, 31);
+  const money = (n: number) => numberFormat({ minimumFractionDigits: 2 }).format(n);
+  it('"Do idioma" segue a região do idioma; br e us trocam separadores e a ordem dia/mês', async () => {
+    await setLang('pt-BR', { persist: false });
+    setRegion('auto', { persist: false });
+    expect(money(1234.56)).toBe('1.234,56');
+    const before = getLocaleKey();
+    setRegion('us', { persist: false });
+    expect(getRegion()).toBe('us');
+    expect(getLocaleKey()).not.toBe(before);
+    expect(money(1234.56)).toBe('1,234.56');
+    expect(decimalSeparator()).toBe('.');
+    expect(dateFormat({ day: '2-digit', month: '2-digit' }).format(day)).toBe('10/31');
+    expect(t('dev.receipts', { count: 24880 })).toBe('24,880 recibos');
+    // Mês por extenso continua no idioma do painel.
+    expect(dateFormat({ day: 'numeric', month: 'short' }).format(day)).toMatch(/out/);
+    await setLang('en', { persist: false });
+    setRegion('br', { persist: false });
+    expect(money(1234.56)).toBe('1.234,56');
+    expect(dateFormat({ day: '2-digit', month: '2-digit' }).format(day)).toBe('31/10');
+    expect(dateFormat({ day: 'numeric', month: 'short' }).format(day)).toMatch(/Oct/);
+    setRegion('auto', { persist: false });
+    expect(money(1234.56)).toBe('1,234.56');
+    await setLang('pt-BR', { persist: false });
   });
 });
 

@@ -7,7 +7,9 @@ import '../styles/site.css';
 import type { Dict } from '../i18n/pt';
 import { url } from '../lib/url';
 
-interface Props { t: Dict; alt: Dict }
+// Metadados da página (a home passa o dicionário inteiro; outras páginas, só estes campos).
+type Meta = Pick<Dict, 'lang' | 'path' | 'title' | 'description'>;
+interface Props { t: Meta; alt: Meta }
 const { t, alt } = Astro.props;
 const abs = (p: string) => (Astro.site ? new URL(url(p), Astro.site).href : null);
 const canonical = abs(t.path);

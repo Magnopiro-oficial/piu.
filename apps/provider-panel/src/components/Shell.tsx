@@ -8,16 +8,24 @@ import type { PageId } from '../types';
 import { HelpButton } from './Guide';
 import { Icon, Segmented } from './ui';
 
+/**
+ * Piu Provider para Mac (Electron, `titleBarStyle: hiddenInset`): a faixa superior é a barra da janela,
+ * com os semáforos do sistema no lugar das três bolinhas do design. O app se identifica no user agent.
+ */
+const IN_MAC_APP = typeof navigator !== 'undefined' && /\bPiuProvider\//.test(navigator.userAgent) && /Macintosh/.test(navigator.userAgent);
+
 /** Faixa superior: qual nó serve o painel e o estado da conexão. */
 export function TopBar() {
   const t = useT();
   const { nodeMode, operatorName, logout, theme, setTheme } = useStore();
   return (
-    <header className="topbar" style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: 'var(--side)', borderBottom: '1px solid var(--line)' }}>
+    <header className={'topbar' + (IN_MAC_APP ? ' win-drag' : '')} style={{ height: 42, flex: 'none', display: 'flex', alignItems: 'center', gap: 16, padding: '0 16px', background: 'var(--side)', borderBottom: '1px solid var(--line)' }}>
+      {/* Espaço dos semáforos (12 px, 7 px entre eles, como as bolinhas do design). */}
+      {IN_MAC_APP && <div aria-hidden="true" style={{ width: 50, flex: 'none' }} />}
       {/* Celular: sem barra lateral, a marca fica aqui em cima. */}
       <div className="only-phone" style={{ fontSize: 24, fontWeight: 750, letterSpacing: '-0.07em', lineHeight: 1 }}>piu<span style={{ color: 'var(--ink3)' }}>.</span></div>
       <div style={{ flex: 1, minWidth: 0, display: 'flex', justifyContent: 'center' }}>
-        <div className="mono topbar-addr" style={{ height: 26, padding: '0 14px', borderRadius: 8, background: 'var(--bg2)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink2)', minWidth: 0, width: 380, maxWidth: '100%', justifyContent: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+        <div className="mono topbar-addr" style={{ height: 26, padding: '0 14px', borderRadius: 8, background: 'var(--bg2)', display: 'flex', alignItems: 'center', gap: 8, fontSize: 12, color: 'var(--ink2)', minWidth: 380, maxWidth: '100%', justifyContent: 'center', overflow: 'hidden', whiteSpace: 'nowrap' }}>
           <Icon name="lock" size={14} style={{ color: 'var(--ink)' }} />
           <span className="ellipsis">{nodeMode === 'node' ? window.location.host : NODE.host}</span>
           <span className="ellipsis hide-tablet" style={{ opacity: 0.5 }}>· {nodeMode === 'node' ? t('top.localPanel') : NODE.label}</span>
@@ -44,7 +52,7 @@ export function TopBar() {
 }
 
 const NAV: [PageId, string][] = [
-  ['overview', 'space_dashboard'], ['devices', 'router'], ['mesh', 'hub'], ['earnings', 'toll'], ['wallet', 'account_balance_wallet'], ['settings', 'tune'],
+  ['overview', 'space_dashboard'], ['devices', 'router'], ['mesh', 'hub'], ['gateway', 'cell_tower'], ['earnings', 'toll'], ['wallet', 'account_balance_wallet'], ['settings', 'tune'],
 ];
 
 export function Sidebar() {
@@ -99,7 +107,7 @@ export function PageHeader() {
   const { page, devices, setWizardOpen, showToast, nodeMode, live } = store;
   const real = nodeMode === 'node';
   const title = t(`nav.${page}`);
-  const crumb = page === 'overview' ? t('head.overview.crumb') : page === 'devices' || page === 'mesh' ? t('head.operation') : page === 'settings' ? t('head.account') : t('head.finance');
+  const crumb = page === 'overview' ? t('head.overview.crumb') : page === 'devices' || page === 'mesh' || page === 'gateway' ? t('head.operation') : page === 'settings' ? t('head.account') : t('head.finance');
   const sub = page === 'overview' ? '' : t(`head.${page}.sub`);
   const nb = relayOn(live)?.neighbors.length ?? 0;
   const vz = t('head.neighborsConnected', { count: nb });
@@ -130,7 +138,8 @@ export function PageHeader() {
 
   return (
     <div className="page-head" style={{ padding: '28px 32px 0', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 20, flexWrap: 'wrap' }}>
-      <div className="col" style={{ gap: 6, minWidth: 0 }}>
+      {/* O subtítulo quebra linha antes de os botões descerem (como no design, ações sempre à direita). */}
+      <div className="col" style={{ gap: 6, minWidth: 0, flex: '1 1 320px' }}>
         <div className="mono" style={{ fontSize: 11.5, fontWeight: 500, letterSpacing: '.06em', color: 'var(--ink2)' }}>{crumb}</div>
         <h1 className="page-title" style={{ margin: 0, fontSize: 34, fontWeight: 700, letterSpacing: '-0.045em', lineHeight: 1 }}>{title}</h1>
         <div style={{ fontSize: 14, color: 'var(--ink2)' }}>{subtitle}</div>
