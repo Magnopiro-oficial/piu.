@@ -49,6 +49,12 @@ export interface RouterOptions {
   isMember?: (fromId: string, groupId: string) => boolean;
   /** Destinos de sessões estabelecidas (SessionManager.acceptsDest). */
   acceptDest?: AcceptDest;
+  /**
+   * Abertura por destino conhecido, antes das identidades (carry.ts: gateway e identidades descartáveis
+   * de retorno). Quem implementa compara o destino do cabeçalho e só abre com a chave certa, para não
+   * custar uma troca de chaves a mais em cada envelope que chega.
+   */
+  openExtra?: (bytes: Uint8Array, h: Header, now: number) => Opened | null;
   relay: boolean;
   limits?: Partial<RouterLimits>;
 }
@@ -80,6 +86,10 @@ export class Router {
   hasSeen(id: string) { return this.seen.has(id); }
   /** Bytes guardados de terceiros (diagnóstico). */
   thirdPartyBytes() { let n = 0; for (const e of this.store.values()) if (!e.own) n += e.bytes.length; return n; }
+  /** Envelopes de terceiros guardados agora (painel do ponto Piu: só contagem e bytes). */
+  thirdPartyStats() { let count = 0, bytes = 0; for (const e of this.store.values()) if (!e.own) { count++; bytes += e.bytes.length; } return { count, bytes }; }
+  /** Apaga todos os envelopes de terceiros guardados (encerrar o ponto Piu). As próprias mensagens ficam. */
+  dropThirdParty() { let n = 0; for (const e of [...this.store.values()]) if (!e.own) { this.drop(e.id); n++; } return n; }
   /** Envelope criado neste aparelho (não é de terceiros)? */
   isOwn(id: string) { return this.store.get(id)?.own ?? false; }
   has(id: string) { return this.store.has(id); }
@@ -111,7 +121,7 @@ export class Router {
 
     const own = from === null;
     // Tenta abrir: o destino valida integridade e autenticidade antes de mostrar o conteúdo.
-    const opened = own ? null : this.tryOpen(bytes, now);
+    const opened = own ? null : this.tryOpen(bytes, h, now);
     if (opened) {
       this.inbox.push(opened);
       // Direta: chegou ao destino, não segue adiante. Grupo: os outros membros ainda precisam receber.
@@ -135,7 +145,9 @@ export class Router {
     return ok;
   }
 
-  private tryOpen(bytes: Uint8Array, now: number): Opened | null {
+  private tryOpen(bytes: Uint8Array, h: Header, now: number): Opened | null {
+    const extra = this.o.openExtra?.(bytes, h, now);
+    if (extra) return extra;
     for (const me of this.identities) { const m = openDirect(bytes, me, now, this.o.acceptDest); if (m) return m; }
     return this.groupKeys.length ? openGroup(bytes, this.groupKeys, now, this.o.isMember) : null;
   }

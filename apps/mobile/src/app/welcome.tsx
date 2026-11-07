@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { Animated, Easing, View } from 'react-native';
 import { useT, type Key } from '../i18n';
 import { useLayout } from '../lib/responsive';
+import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { Icon, type IconName } from '../ui/Icon';
@@ -16,6 +17,8 @@ export default function Welcome() {
   const { c, reduceMotion } = useTheme();
   const t = useT();
   const { width, height, short } = useLayout();
+  // "Ver boas-vindas" com identidade criada: restaurar trocaria a frase atual, então não aparece (A-01).
+  const { onboarded } = useStore();
   // A órbita tem 300 px no design; encolhe para caber em telas estreitas ou baixas.
   const k = Math.max(0.55, Math.min(1, (width - 24) / 300, (height - 400) / 300));
   const spin = useRef(new Animated.Value(0)).current;
@@ -56,7 +59,7 @@ export default function Welcome() {
         </View>
         <View style={{ gap: 10, marginTop: 6 }}>
           <Button label={t('welcome.create')} onPress={() => router.push('/identity')} />
-          <Button label={t('welcome.restore')} variant="ghost" height={46} onPress={() => router.push('/restore')} />
+          {!onboarded && <Button label={t('welcome.restore')} variant="ghost" height={46} onPress={() => router.push('/restore')} />}
         </View>
       </View>
     </Screen>

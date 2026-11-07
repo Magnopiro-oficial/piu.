@@ -17,8 +17,12 @@ import androidx.core.content.ContextCompat
 /**
  * Serviço em primeiro plano do Modo nó (NFR-009): mantém o processo vivo com o app em segundo
  * plano, para o transporte (Nearby + Bluetooth LE, que vivem no módulo) seguir retransmitindo.
- * Aviso fixo "Piu retransmitindo mensagens" enquanto estiver ligado. Tipo `connectedDevice`
- * (Android 14+ exige o tipo e uma permissão de Bluetooth concedida em tempo de execução).
+ * Aviso fixo "Piu retransmitindo mensagens" enquanto estiver ligado. Tipo `connectedDevice`.
+ * Android 14+: o tipo exige UM destes pré-requisitos — permissão de manifesto CHANGE_NETWORK_STATE,
+ * CHANGE_WIFI_STATE, CHANGE_WIFI_MULTICAST_STATE, NFC ou TRANSMIT_IR, OU uma de Bluetooth/UWB concedida
+ * em tempo de execução. O app declara CHANGE_WIFI_STATE (este módulo) e CHANGE_WIFI_MULTICAST_STATE
+ * (piu-lan), concedidas na instalação: quem usa só o Wi-Fi local (Bluetooth negado, ponto Piu) também
+ * pode ligar o serviço. Se o sistema recusar mesmo assim, o `try` abaixo só registra e para o serviço.
  * Não abre conexões sozinho: só existe enquanto o app pede (`setBackground(true, …)`).
  */
 class PiuRelayService : Service() {

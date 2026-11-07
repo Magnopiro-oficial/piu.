@@ -43,3 +43,14 @@ export function msgSummary(m: Pick<Msg, 'text' | 'file' | 'loc'>, t: Tr = tGloba
   if (m.file) return m.file.purged ? t('msg.mediaPurged', { name: m.file.name }) : t('msg.file', { name: m.file.name });
   return '';
 }
+
+/**
+ * Horas até a mensagem mais antiga da fila expirar (o envelope vale `ttlSec`; design: "Expira em
+ * 47 h"). Arredonda para cima, mínimo 1. Sem data em nenhuma mensagem: `null` (não se inventa prazo).
+ */
+export function queueHoursLeft(waiting: Pick<Msg, 'at'>[], now: number, ttlSec: number): number | null {
+  const ats = waiting.map(m => m.at).filter((a): a is number => typeof a === 'number');
+  if (!ats.length) return null;
+  const left = Math.min(...ats) + ttlSec * 1000 - now;
+  return Math.max(1, Math.ceil(left / 3600_000));
+}

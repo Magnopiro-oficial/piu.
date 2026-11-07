@@ -14,8 +14,10 @@
  *   de saltos), então a estimativa é um teto. O teto de 2% do orçamento por nó e por época não entra
  *   aqui: o orçamento da época é da Lunes e não chega ao aparelho. O valor final é o do validador.
  * - Validade: validado (ou em lote) e não liquidado em 180 dias expira (seção 3.4) e fica 30 dias na lista.
- * - Evidências: o recibo e o segredo da prova (`ackSecret`) ficam guardados para exportar no formato
- *   `EvidenceFile` v1 do validador (messaging/evidence.ts).
+ * - Evidências: o recibo, o segredo da prova (`ackSecret`, legado v1) e a prova v2 selada (que é o
+ *   que o validador paga, docs/economia/prova-de-entrega-v2.md) ficam guardados para exportar no
+ *   formato `EvidenceFile` v2 (messaging/evidence.ts). O estado local continua seguindo a prova v1
+ *   (estimativa): só o validador sabe se a prova v2 confere.
  *
  * LOTE SEM PAGAMENTO: o app já lê a Lunes Mainnet (lib/lunesRpc.ts: saldo, blocos), mas não paga
  * lotes. O pagamento é da liquidação (apps/settlement), ainda não ligada ao app; um lote fechado aqui
@@ -64,6 +66,8 @@ export interface Credit {
   expiredAt?: number;
   /** Segredo da prova de entrega (hex), guardado ao validar: vai no arquivo de evidências. */
   proof?: string;
+  /** Provas de entrega v2 seladas para o validador (hex, até 3 diferentes), quando chegam pela malha. */
+  sealed?: string[];
   receipt: { ackHash: string; nodePk: string; sig: string };
 }
 /**
@@ -131,6 +135,19 @@ export class CreditBook {
     if (!equal(hash(ackSecret).slice(0, 16), Uint8Array.from(c.receipt.ackHash.match(/../g)!.map(x => parseInt(x, 16))))) return false;
     c.state = 'validado';
     c.proof = toHex(ackSecret);
+    return true;
+  }
+
+  /**
+   * Prova v2 selada de um envelope que eu repassei: guardada com o crédito (vai nas evidências). Até 3
+   * diferentes: uma falsa que chegue antes não barra a verdadeira (o validador descarta a falsa).
+   */
+  attachSealedProof(envelopeId: string, sealedHex: string): boolean {
+    const c = this.credits.get(envelopeId);
+    if (!c || c.state === 'rejeitado') return false;
+    const list = Array.isArray(c.sealed) ? c.sealed : [];
+    if (list.length >= 3 || list.includes(sealedHex)) return false;
+    c.sealed = [...list, sealedHex];
     return true;
   }
 

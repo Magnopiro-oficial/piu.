@@ -111,7 +111,7 @@ export function pruneRoutes(book: RouteBook, aliveMsgs: Set<string>, chatIds: Se
   return changed ? out : book;
 }
 
-const MEDIUMS: readonly Medium[] = ['nearby', 'ble', 'sim'];
+const MEDIUMS: readonly Medium[] = ['nearby', 'ble', 'lan', 'sim'];
 /** Lê o que foi gravado (descarta o que não tiver a forma esperada). */
 export function cleanBook(v: unknown): RouteBook {
   const out: RouteBook = {};

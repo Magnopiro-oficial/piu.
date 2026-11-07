@@ -64,3 +64,9 @@ Estimativa dividida entre os relays conhecidos até o aparelho; validado e não 
 ## Pedido de pagamento (regra 7.3; `lib/paymentRequest.ts`)
 - O Piu não guarda chave Lunes nem envia LUNES: quem pede manda, cifrado na sessão, o endereço Lunes dele (o salvo na Carteira), o valor em planck (opcional, texto com 8 casas) e uma descrição até 80 caracteres; vale 7 dias. Payload `pq` (`i` id de 16 hex = id da mensagem, `a` endereço, `v` planck, `d` descrição, `u` validade); "já paguei" é `pd` (`h` hash da transação e `b` do bloco, opcionais). Só contato aceito recebe; recibo `a` como no texto; versões antigas ignoram o tipo.
 - Quem pediu confere na Mainnet (saldo que subiu desde o pedido ou transação dentro do bloco finalizado, `checkSettlement`); nada vira "recebido" sem essa prova.
+
+## Carga pela malha até um gateway (`protocol/carry.ts`; docs/carteira/transacoes-pela-malha.md)
+- `Messenger.carry(item, ref)`: transação Lunes assinada sem internet, ou pacote selado para o validador, num envelope direto para "qualquer gateway" (identidade pública e conhecida), assinado por uma identidade descartável nova (nada liga à identidade de mensagens). O envelope fica na fila própria até o TTL (7 dias) e volta ao reabrir o app.
+- O recibo do gateway volta para a descartável e sai em `carryReceipt`. É dica, não prova: a carteira confere na Mainnet.
+- `setGateway({ tx, inbox })`: este aparelho pega as cargas (o app liga só com o ajuste e com a Lunes respondendo) e as entrega por `gatewayCarry` a `lib/carryGateway.ts`; responde com `sendCarryReceipt`. Desligado, as cargas passam como envelopes de terceiros, como nos aparelhos antigos.
+- Teto de cargas para gateway por vizinho: 30/h (rajada 10).

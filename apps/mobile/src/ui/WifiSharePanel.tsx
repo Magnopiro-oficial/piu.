@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { PiuAppShare, type WifiShareInfo } from '../../modules/piu-app-share';
 import { apkShareName, appShareError } from '../lib/appShare';
+import { loadApkIntegrity } from '../lib/sendApp';
 import { downloadPageHtml, SHARE_PORT, SHARE_WINDOW_MS, shareTimeLeft, wifiPageUrl, wifiQr } from '../lib/wifiShare';
 import { useLang, useT } from '../i18n';
 import { useStore } from '../state/store';
@@ -39,8 +40,11 @@ export function WifiSharePanel({ onClose }: { onClose: () => void }) {
     }
     const file = apkShareName(Constants.expoConfig?.version ?? '');
     try {
-      // A página é lida pela outra pessoa: sai no idioma de quem envia.
-      const r = await PiuAppShare.startWifiShare(file, downloadPageHtml(file, PiuAppShare.apkSize(), lang), SHARE_PORT, SHARE_WINDOW_MS);
+      // A página é lida pela outra pessoa: sai no idioma de quem envia. Com o SHA-256 do arquivo e do
+      // certificado para ela comparar com o site (B-03); sem eles, a página de sempre.
+      const integrity = await loadApkIntegrity();
+      if (!alive.current) return;
+      const r = await PiuAppShare.startWifiShare(file, downloadPageHtml(file, PiuAppShare.apkSize(), lang, integrity), SHARE_PORT, SHARE_WINDOW_MS);
       if (!alive.current) { void PiuAppShare.stopWifiShare(); return; }
       setInfo(r); setStartedAt(Date.now()); setNow(Date.now()); setState('open');
     } catch (e) {

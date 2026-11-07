@@ -55,7 +55,8 @@ function ProfileView({ p }: { p: NearProfile }) {
   const st = inviteState(p.id);
   const sent = st.kind !== 'none';
 
-  const round = { width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' } as const;
+  // Design: botões do topo com `box-shadow: 0 2px 8px rgba(0,0,0,.12)`.
+  const round = { width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3 } as const;
 
   return (
     <Screen edges={[]}>
@@ -66,19 +67,23 @@ function ProfileView({ p }: { p: NearProfile }) {
             : <T size={64} w={650} ls={-0.04} color={c.ink2}>{initialsOf(p.name)}</T>}
           <View style={{ position: 'absolute', top: insets.top + 8, left: 16, right: 16, flexDirection: 'row', justifyContent: 'space-between' }}>
             <Pressable onPress={() => router.back()} accessibilityRole="button" accessibilityLabel={t('common.back')} style={round}><Icon name="arrow_back_ios_new" size={20} /></Pressable>
-            <Pressable onPress={() => { hide(p.id); showToast({ icon: 'visibility_off', title: t('nearProfile.hidden'), body: t('nearProfile.hidden.body', { name: p.name || t('nearProfile.thisProfile') }) }); router.back(); }} accessibilityRole="button" accessibilityLabel={t('nearProfile.hide.a11y', { name: p.name })} style={round}><Icon name="flag" size={20} /></Pressable>
+            <Pressable onPress={() => { hide(p.id); showToast({ icon: 'visibility_off', title: t('nearProfile.hidden'), body: t('nearProfile.hidden.body', { name: p.name || t('nearProfile.thisProfile') }) }); router.back(); }} accessibilityRole="button" accessibilityLabel={t('nearProfile.hide.a11y', { name: p.name })} style={round}><Icon name="flag" size={22} /></Pressable>
           </View>
         </Stripes>
 
-        <View style={{ paddingTop: 20, paddingHorizontal: 22, gap: 14 }}>
-          <View style={{ gap: 4 }}>
-            <T size={32} w={700} ls={-0.04} accessibilityRole="header">{p.name || t('nearby.publicProfile')}</T>
-            <T size={13} mono color={c.ink2}>{p.prox} · {p.via}</T>
+        <View style={{ paddingTop: 20, paddingHorizontal: 22, gap: 16 }}>
+          <View style={{ gap: 6 }}>
+            <T size={32} w={700} ls={-0.04} lh={1} accessibilityRole="header">{p.name || t('nearby.publicProfile')}</T>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: c.ink }} />
+              <T size={13.5} color={c.ink2}>{p.prox} · {p.via}</T>
+            </View>
           </View>
-          <View style={{ marginTop: 4, borderRadius: 20, backgroundColor: c.bg2 }}>
-            {([[t('nearProfile.common'), p.common], [t('nearProfile.fee'), t('nearProfile.fee.value', { fee: fmtLunes(p.fee), name: p.name })], [t('profile.identity'), t('nearProfile.identity.value')]] as const).map(([l, v], i) => (
-              <View key={l} style={{ flexDirection: 'row', gap: 12, paddingVertical: 13, paddingHorizontal: 16, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
-                <T size={13} color={c.ink2} style={{ width: 112 }}>{l}</T>
+          {/* Design: grade de 2 colunas em `bg2`, raio 18, padding 14/16, linhas a cada 9 px, sem divisórias. */}
+          <View style={{ paddingVertical: 14, paddingHorizontal: 16, gap: 9, borderRadius: 18, backgroundColor: c.bg2 }}>
+            {([[t('nearProfile.common'), p.common], [t('nearProfile.fee'), t('nearProfile.fee.value', { fee: fmtLunes(p.fee), name: p.name })], [t('profile.identity'), t('nearProfile.identity.value')]] as const).map(([l, v]) => (
+              <View key={l} style={{ flexDirection: 'row', gap: 16 }}>
+                <T size={13} color={c.ink2} style={{ width: 104 }}>{l}</T>
                 <T size={13} w={550} style={{ flex: 1 }}>{v}</T>
               </View>
             ))}

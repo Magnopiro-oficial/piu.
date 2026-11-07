@@ -17,6 +17,7 @@ import { type GroupKey, Priority } from '../protocol/envelope';
 import type { IdentityKind, PublicIdentity } from '../protocol/keys';
 import { random } from '../protocol/suite';
 import { b64url, unb64url } from './card';
+import { stripBidi } from './bidi';
 import { cleanMentions } from './mentions';
 
 export type GroupKind = 'group' | 'channel' | 'community';
@@ -125,13 +126,13 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
     if (typeof j.key !== 'string' || unb64url(j.key).length !== 32) return null;
     if (!Array.isArray(j.members) || j.members.length < 1 || j.members.length > MAX_GROUP_MEMBERS) return null;
     const members: GroupMember[] = j.members.map((m: Record<string, string>) => ({
-      id: String(m.id), name: String(m.name ?? '').slice(0, 40), role: m.role === 'admin' ? 'admin' : m.role === 'mod' ? 'mod' : 'member',
+      id: String(m.id), name: stripBidi(String(m.name ?? '')).slice(0, 40), role: m.role === 'admin' ? 'admin' : m.role === 'mod' ? 'mod' : 'member',
       pub: { signPk: unb64url(m.s), agreePk: unb64url(m.a), binding: unb64url(m.b) },
     }));
     if (!members.some(m => m.role === 'admin')) return null;
-    const children = Array.isArray(j.children) ? j.children.slice(0, 50).filter((c: Record<string, string>) => /^[0-9a-f]{32}$/.test(c.id)).map((c: Record<string, string>) => ({ id: c.id, name: String(c.name).slice(0, 60), kind: c.kind === 'channel' ? 'channel' as const : 'group' as const })) : undefined;
+    const children = Array.isArray(j.children) ? j.children.slice(0, 50).filter((c: Record<string, string>) => /^[0-9a-f]{32}$/.test(c.id)).map((c: Record<string, string>) => ({ id: c.id, name: stripBidi(String(c.name)).slice(0, 60), kind: c.kind === 'channel' ? 'channel' as const : 'group' as const })) : undefined;
     return {
-      id: j.id, kind: j.kind, name: String(j.name ?? '').slice(0, 60), desc: String(j.desc ?? '').slice(0, 200), via,
+      id: j.id, kind: j.kind, name: stripBidi(String(j.name ?? '')).slice(0, 60), desc: stripBidi(String(j.desc ?? '')).slice(0, 200), via,
       rev: j.rev, keyV: j.keyV, key: j.key, members,
       send: j.kind === 'group' && j.send === 'all' ? 'all' : 'admins', inv: j.inv === 'all' ? 'all' : 'admins', approve: !!j.approve, postMods: j.kind === 'channel' && !!j.postMods,
       visibility: ['public', 'private', 'secret'].includes(j.visibility) ? j.visibility : undefined,

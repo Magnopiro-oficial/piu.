@@ -15,7 +15,7 @@ import { Icon, type IconName } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
-const MEDIUM = { ble: 'Bluetooth LE', nearby: 'Wi-Fi Direct' } as const;
+const MEDIUM = { ble: 'Bluetooth LE', nearby: 'Wi-Fi Direct', lan: 'Wi-Fi local' } as const;
 
 /**
  * Nova conversa: grupo, canal, comunidade, escanear código, meu código, convidar; busca nos contatos

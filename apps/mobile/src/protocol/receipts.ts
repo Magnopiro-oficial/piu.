@@ -74,6 +74,8 @@ interface Entry { r: RelayReceipt; state: CreditState; reason?: string }
 export class ContributionLedger {
   private receipts = new Map<string, Entry>();
   private delivered = new Map<string, Uint8Array>(); // envelopeId → ackHash comprovado
+  /** Envelopes com provas que não batem entre si: ninguém ganha (auditoria 2026-11-06, A-01). */
+  private conflicted = new Set<string>();
   private perEnvelope = new Map<string, number>();
   private perNodeDay = new Map<string, number>();
   private blocked = new Set<string>();
@@ -93,6 +95,7 @@ export class ContributionLedger {
     if (!verifyRelayReceipt(r)) return this.reject(key, r, 'assinatura inválida');
     if (this.blocked.has(node)) return this.reject(key, r, 'nó bloqueado por auditoria');
     if (r.at > now + this.policy.clockSkewSec) return this.reject(key, r, 'horário no futuro');
+    if (this.conflicted.has(r.envelopeId)) return this.reject(key, r, 'provas conflitantes');
     const relays = (this.perEnvelope.get(r.envelopeId) ?? 0) + 1;
     if (relays > this.policy.maxRelaysPerEnvelope) return this.reject(key, r, 'recibos demais para o mesmo envelope');
     const dayKey = `${node}:${Math.floor(r.at / 86400)}`;
@@ -106,9 +109,26 @@ export class ContributionLedger {
     return state;
   }
 
-  /** O destino revela o segredo de entrega. Valida os recibos pendentes daquele envelope. */
+  /**
+   * O destino revela o segredo de entrega. Valida os recibos pendentes daquele envelope.
+   * A primeira prova vale; repetir a mesma não muda nada. Uma prova DIFERENTE para o mesmo envelope
+   * não sobrescreve (antes, a última vencia e negava o crédito de todos): o envelope fica em
+   * conflito e nenhum recibo dele é creditado (auditoria 2026-11-06, A-01).
+   * Este livro é o simplificado (v1, estimativa local). O validador que paga usa a prova v2 (proof.ts).
+   */
   confirmDelivery(envelopeId: string, ackSecret: Uint8Array, ackHash: Uint8Array): boolean {
     if (!equal(hash(ackSecret).slice(0, 16), ackHash)) return false;
+    if (this.conflicted.has(envelopeId)) return false;
+    const prev = this.delivered.get(envelopeId);
+    if (prev && equal(prev, ackHash)) return true;
+    if (prev) {
+      this.conflicted.add(envelopeId);
+      this.delivered.delete(envelopeId);
+      for (const v of this.receipts.values()) {
+        if (v.r.envelopeId === envelopeId && v.state !== 'rejeitado') { v.state = 'rejeitado'; v.reason = 'provas conflitantes'; }
+      }
+      return false;
+    }
     this.delivered.set(envelopeId, ackHash);
     for (const v of this.receipts.values()) {
       if (v.r.envelopeId === envelopeId && v.state === 'pendente') v.state = equal(v.r.ackHash, ackHash) ? 'validado' : 'rejeitado';

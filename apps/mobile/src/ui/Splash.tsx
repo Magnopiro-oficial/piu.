@@ -1,6 +1,6 @@
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { Animated, Easing, StyleSheet, View } from 'react-native';
-import { SPLASH, dotDelays, splashPlan } from '../lib/splashCore';
+import { SPLASH, dotDelays, splashHold, splashPlan } from '../lib/splashCore';
 import { curves } from '../theme/tokens';
 import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeProvider';
@@ -10,7 +10,7 @@ import { T } from './T';
  * Tela de abertura animada (design: overlay `splashOpen`):
  * - entra logo depois que o splash nativo some (mesma cor de fundo, então não há salto);
  * - ícone com pop, "piu." subindo, pontinhos piscando com "procurando nós por perto";
- * - depois de 900 ms sai com scale 1,08 + fade (420 ms) e o app entra com scale 0,965→1 (500 ms).
+ * - ~2,6 s depois do boot (no mínimo 900 ms na tela) sai com scale 1,08 + fade (420 ms) e o app entra com scale 0,965→1 (500 ms).
  * Com "reduzir movimento" do sistema, nada anima: a tela fica parada e corta no fim da espera.
  */
 
@@ -20,6 +20,8 @@ const OUT = Easing.bezier(0.4, 0, 0.6, 1);
 const REVEAL = Easing.bezier(0.2, 0.85, 0.3, 1);
 const ICON = require('../../assets/icon.png');
 const DOTS = dotDelays(3);
+/** Boot do JS (este módulo carrega com o layout raiz): a saída acontece ~2,6 s depois, como no design. */
+const BOOT_AT = Date.now();
 
 /** Um pontinho que sobe 4 px e acende, em loop de 1 s, defasado de `delay` ms. */
 function Dot({ delay, animate }: { delay: number; animate: boolean }) {
@@ -56,6 +58,7 @@ export function Splash({ onExit, onDone }: SplashProps) {
   const t = useT();
   const plan = splashPlan(reduceMotion);
   const { animate } = plan;
+  const [hold] = useState(() => (animate ? splashHold(Date.now() - BOOT_AT) : plan.hold));
   // Com movimento reduzido tudo começa já no lugar (1) e a saída não anima.
   const icon = useRef(new Animated.Value(animate ? 0 : 1)).current; // 0→1 progresso do pop
   const iconScale = useRef(new Animated.Value(animate ? 0.4 : 1)).current;
@@ -92,9 +95,9 @@ export function Splash({ onExit, onDone }: SplashProps) {
       if (!animate) { cb.current.onDone(); return; }
       Animated.timing(out, { toValue: 1, duration: plan.exit, easing: OUT, useNativeDriver: true })
         .start(({ finished }) => { if (finished) cb.current.onDone(); });
-    }, plan.hold);
+    }, hold);
     return () => clearTimeout(exitT);
-  }, [animate, plan.exit, plan.hold, icon, iconScale, up, fade, out]);
+  }, [animate, plan.exit, hold, icon, iconScale, up, fade, out]);
 
   return (
     <Animated.View

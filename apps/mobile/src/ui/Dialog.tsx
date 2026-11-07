@@ -5,6 +5,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
 import { Icon, type IconName } from './Icon';
 import { T } from './T';
+import { Pop } from './motion';
 
 /**
  * Diálogo de confirmação: entra em 320 ms (scale .9 → 1), ícone com “pop”.
@@ -29,7 +30,7 @@ export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, sec
           borderWidth: 1, borderColor: c.line2, shadowColor: '#000', shadowOpacity: 0.28, shadowRadius: 30, shadowOffset: { width: 0, height: 24 }, elevation: 20,
           opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
         }}>
-          <View style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={28} w={300} /></View>
+          <Pop delay={100} dur={450} style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={28} w={300} /></Pop>
           <T size={20} w={700} ls={-0.025} lh={1.15} align="center">{title}</T>
           <T size={14} lh={1.45} color={c.ink2} align="center" style={{ paddingHorizontal: 4 }}>{body}</T>
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 8 }}>

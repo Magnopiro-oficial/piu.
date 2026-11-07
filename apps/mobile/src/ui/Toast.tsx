@@ -7,6 +7,7 @@ import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 import { Icon, type IconName } from './Icon';
 import { T } from './T';
+import { Pop } from './motion';
 
 /**
  * Banner in-app: entra em 500 ms, fica 4,5 s com barra de tempo e sai em 300 ms.
@@ -46,7 +47,8 @@ function ToastCard({ icon, av, title, body, action, coin, leaving, onPress }: To
           ) : (
             <Animated.View style={{ width: 40, height: 40, borderRadius: coin ? 20 : 13, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center',
               transform: coin ? [{ perspective: 400 }, { rotateY: spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '720deg'] }) }] : [] }}>
-              <Icon name={(icon ?? 'check') as IconName} size={22} color={c.invink} />
+              {coin ? <Icon name={(icon ?? 'check') as IconName} size={22} color={c.invink} />
+                : <Pop delay={150} dur={400}><Icon name={(icon ?? 'check') as IconName} size={22} color={c.invink} /></Pop>}
             </Animated.View>
           )}
           <View style={{ flex: 1, minWidth: 0, gap: 2 }}>

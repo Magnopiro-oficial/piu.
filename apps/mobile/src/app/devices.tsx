@@ -1,11 +1,13 @@
-import { useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
+import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { fmtDate, t as tr, useT } from '../i18n';
 import { confirmDevice } from '../lib/deviceAuth';
 import { addDevice, platformName, revokeDevice, thisDevice, useDevices } from '../lib/devices';
 import type { DeviceRecord } from '../lib/devicesCore';
-import { MigrationError, respondToOffer } from '../lib/migration';
+import { lockGate } from '../lib/identityGuard';
+import { startLink } from '../lib/desktopLinkSession';
+import { MigrationError, parseOffer, respondToOffer } from '../lib/migration';
 import { b64url } from '../messaging/card';
 import { CodeQr, CodeReader, CodeWords } from '../lib/migrationUi';
 import { useKeys } from '../state/keys';
@@ -41,7 +43,7 @@ export default function Devices() {
   const { c } = useTheme();
   const t = useT();
   const { showToast, profile } = useStore();
-  const { identities, phrase } = useKeys();
+  const { identities, hasKeys, unlockPhrase } = useKeys();
   const list = useDevices();
   const { add } = useLocalSearchParams<{ add?: string }>();
   const [pair, setPair] = useState<Pair | null>(add ? { step: 'scan' } : null);
@@ -52,20 +54,42 @@ export default function Devices() {
 
   /** Aparelho antigo: leu a oferta do novo → confirma o dono → responde com a frase cifrada. */
   const onOffer = (text: string): string | null => {
-    if (!phrase) return t('devices.noKeys');
-    try {
-      const me = thisDevice();
-      const r = respondToOffer(text, { phrase, from: { pk: me.pk, name: profile.name ? t('devices.deviceOf', { plat: platformName(me.platform, t), name: profile.name }) : platformName(me.platform, t), platform: me.platform }, profileName: profile.idType === 'public' ? profile.name : undefined }, Math.floor(Date.now() / 1000));
-      // Quem tem a frase tem tudo: só envia depois de confirmar que é o dono do aparelho.
-      void confirmDevice(t('devices.sendKeysPrompt')).then(async auth => {
-        if (auth === 'denied') { showToast({ icon: 'gpp_bad', title: t('devices.transferCancelled'), body: t('devices.notYou') }); setPair(null); return; }
-        await addDevice({ pk: b64url(r.device.pk), name: r.device.name || t('devices.newDevice'), platform: r.device.platform, via: 'paired' });
-        setPair({ step: 'reply', reply: r.reply, code: r.code, name: r.device.name || t('devices.newDevice').toLowerCase() });
-      });
+    // QR do Piu Desktop lido aqui por engano: segue para "Conectar ao computador" com ele.
+    if (text.trim().startsWith('piu-link:')) {
+      const err = startLink(text);
+      if (err) return err;
+      setPair(null);
+      router.push('/link-desktop' as Href);
       return null;
+    }
+    if (!hasKeys) return t('devices.noKeys');
+    try {
+      // Confere o QR na hora (formato, prazo); a frase só é lida do cofre depois da biometria (B-01).
+      parseOffer(text, Math.floor(Date.now() / 1000));
     } catch (e) {
       return e instanceof MigrationError ? e.message : t('devices.unreadableQr');
     }
+    // Quem tem a frase tem tudo: só envia depois de confirmar que é o dono do aparelho.
+    // Sem bloqueio no aparelho, recusa como a carteira faz ao assinar (M-01).
+    void (async () => {
+      const web = Platform.OS === 'web';
+      const u = await unlockPhrase(t('devices.sendKeysPrompt'), { allowWithoutLock: web });
+      if (u.status === 'recover') { setPair(null); router.push('/vault-recover' as Href); return; }
+      const g = lockGate(u.status, web);
+      if (g !== 'ok' || u.status !== 'ok') { showToast({ icon: 'gpp_bad', title: t('devices.transferCancelled'), body: g === 'needLock' ? t('devices.needLock') : t('devices.notYou') }); setPair(null); return; }
+      let r: ReturnType<typeof respondToOffer>;
+      try {
+        const me = thisDevice();
+        r = respondToOffer(text, { phrase: u.words, from: { pk: me.pk, name: profile.name ? t('devices.deviceOf', { plat: platformName(me.platform, t), name: profile.name }) : platformName(me.platform, t), platform: me.platform }, profileName: profile.idType === 'public' ? profile.name : undefined }, Math.floor(Date.now() / 1000));
+      } catch (e) {
+        showToast({ icon: 'gpp_bad', title: t('devices.transferCancelled'), body: e instanceof MigrationError ? e.message : t('devices.unreadableQr') });
+        setPair(null);
+        return;
+      }
+      await addDevice({ pk: b64url(r.device.pk), name: r.device.name || t('devices.newDevice'), platform: r.device.platform, via: 'paired' });
+      setPair({ step: 'reply', reply: r.reply, code: r.code, name: r.device.name || t('devices.newDevice').toLowerCase() });
+    })();
+    return null;
   };
 
   const confirmAsk = async () => {

@@ -40,7 +40,7 @@ function chain() {
     }
   };
   const factory = fakeSockets({ 'ws://wallet': 'ok' }, handler);
-  const rpc = new LunesRpc({ endpoints: ['ws://wallet'], connect: factory.connect, timeoutMs: 30 });
+  const rpc = new LunesRpc({ endpoints: ['ws://wallet'], connect: factory.connect, timeoutMs: 3000 }); // folga para a suíte em paralelo (nenhum teste aqui depende do tempo limite)
   return { state, calls, submissions, rpc, hash };
 }
 const input = { from: DEV_ADDR_57, dest: ALICE_57, value: '100000000' };

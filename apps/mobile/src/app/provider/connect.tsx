@@ -1,14 +1,19 @@
 import { router, useLocalSearchParams } from 'expo-router';
+import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import { PROV_FAMILIES } from '../../data/network';
 import { useT, type Key } from '../../i18n';
 import { useProvNodes } from '../../lib/approvalNodes';
+import { nodeParamsOf, personalRequirementsOk } from '../../lib/phoneNodeView';
+import { usePhoneNode } from '../../state/phoneNode';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
-import { BackHeader } from '../../ui/Controls';
+import { BackHeader, Segmented } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
+import { EntryScreen } from '../../ui/NodeViews';
+import { usePnFail } from '../../ui/PhoneNode';
 import { Screen } from '../../ui/Screen';
 import { StepHeader } from '../../ui/StepHeader';
 import { T } from '../../ui/T';
@@ -23,18 +28,53 @@ export default function ProvConnect() {
   const t = useT();
   const { nodes } = useProvNodes();
   const { showToast } = useStore();
-  const { fam: famId } = useLocalSearchParams<{ fam?: string }>();
+  const { fam: famId, mode: modeParam } = useLocalSearchParams<{ fam?: string; mode?: string }>();
   const fam = PROV_FAMILIES.find(f => f.id === famId) ?? PROV_FAMILIES[0];
   const title = fam.isAp ? t('provConnect.title.ap') : fam.isRadio ? t('provConnect.title.radio') : t('provConnect.title.install', { what: fam.short ? t(fam.short) : '' });
   const copy = (cmd: string) => { void Clipboard.setStringAsync(cmd).then(() => showToast({ icon: 'content_copy', title: t('provConnect.copied'), body: cmd })).catch(() => {}); };
   // Detalhe do passo: comando/URL fixo, ou chave do dicionário (prefixo `k:`).
   const detail = (d: string) => (d.startsWith('k:') ? t(d.slice(2) as Key) : d);
+  // Segmentado "Do celular | Pelo terminal". "Do celular" = este celular como nó (Piu 11, N1).
+  const [mode, setMode] = useState<'phone' | 'terminal'>(modeParam === 'phone' ? 'phone' : 'terminal');
+  const pn = usePhoneNode();
+  const fail = usePnFail();
+  const [busy, setBusy] = useState(false);
+  const phoneOn = !!pn.status && pn.status.phase !== 'off';
+
+  /**
+   * N1 "Ativar" (um toque: nada é assinado nem movido). Falta requisito pessoal → lista de requisitos;
+   * programa sem endereço de caução → a folha da caução em "em breve" (N3a), sem ligar o modo.
+   */
+  const activate = async () => {
+    if (phoneOn) { router.push('/provider/phone'); return; }
+    if (!personalRequirementsOk(pn.requirements)) { router.push('/provider/phone/activate'); return; }
+    if (!pn.requirementsOk) { router.push('/provider/phone/bond'); return; }
+    setBusy(true);
+    try { await pn.activate(); router.replace('/provider/phone'); }
+    catch (e) { const a = fail(e); if (a.kind === 'requirements') router.push('/provider/phone/activate'); else if (a.kind === 'soon') router.push('/provider/phone/bond'); }
+    finally { setBusy(false); }
+  };
+
+  if (mode === 'phone' && !fam.isAp) {
+    return (
+      <Screen>
+        <EntryScreen params={nodeParamsOf(pn.params)} busy={busy} onMode={setMode} onActivate={() => { void activate(); }}
+          onLater={() => (router.canGoBack() ? router.back() : router.replace('/provider'))} />
+      </Screen>
+    );
+  }
 
   return (
     <Screen>
       <BackHeader />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
         <StepHeader step={t('provConnect.step')} title={title} />
+        {!fam.isAp && (
+          <View style={{ paddingHorizontal: 20, paddingBottom: 12 }}>
+            <Segmented size="lg" label={t('provConnect.mode.a11y')} value={mode} onChange={setMode}
+              options={[['phone', t('provConnect.mode.phone')], ['terminal', t('provConnect.mode.terminal')]]} />
+          </View>
+        )}
         <View style={{ paddingHorizontal: 20, gap: 10 }}>
           <View style={{ paddingVertical: 6, paddingHorizontal: 16, borderRadius: 20, backgroundColor: c.bg2 }}>
             {(fam.steps ?? []).map(([titleKey, raw], i) => {
@@ -60,7 +100,7 @@ export default function ProvConnect() {
           )}
         </View>
 
-        {!fam.isAp && (
+        {!fam.isAp && mode === 'terminal' && (
           <View style={{ marginTop: 18, marginHorizontal: 20, padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: c.ink, gap: 12 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><Icon name="qr_code_scanner" size={23} color={c.invink} /></View>

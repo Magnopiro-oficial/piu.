@@ -3,7 +3,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 import type { Chat } from '../data/types';
 import { useT } from '../i18n';
 import { initialsOf } from '../lib/text';
-import { isAdmin } from '../messaging/groups';
+import { isAdmin, memberCount } from '../messaging/groups';
 import { chatIdForGroup, useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -43,7 +43,7 @@ export function RealCommunity({ chat }: { chat: Chat }) {
           <View style={{ width: 72, height: 72, borderRadius: 22, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={24} w={650} color={c.invink}>{initialsOf(g.name)}</T></View>
           <View style={{ gap: 6 }}>
             <T size={28} w={700} ls={-0.04} accessibilityRole="header">{g.name}</T>
-            <T size={14} color={c.ink2}>{`${t('groupInfo.membersCount', { count: g.members.length })} · ${t('communityInfo.children', { count: kids.length })}`}</T>
+            <T size={14} color={c.ink2}>{`${t('communityInfo.kind')} · ${t('groupInfo.membersCount', { count: memberCount(g) })} · ${t('communityInfo.admins', { count: g.members.filter(m => m.role === 'admin').length })}`}</T>
           </View>
         </View>
         <View style={{ paddingHorizontal: 20, paddingBottom: 18, gap: 6 }}>

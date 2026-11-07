@@ -6,10 +6,14 @@ import type { Medium, MediumCaps } from './types';
  *   payload de bytes de até 32 KB (ConnectionsClient.MAX_BYTES_DATA_SIZE).
  * - Bluetooth LE GATT: MTU negociado de até 517 (512 úteis por escrita), blocos com cabeçalho
  *   de 8 bytes; vazão real de 5–50 KB/s conforme aparelho.
+ * - Rede local (LNNP por TCP no Wi-Fi já conectado): envelope inteiro num quadro, vazão de vários MB/s
+ *   em qualquer roteador; o rádio Wi-Fi já está ligado, então gasta menos que subir um Wi-Fi Direct.
+ *   Envelope grande sai por aqui; o pequeno segue preferindo BLE (mais barato ainda).
  */
 export const MEDIA: Record<Medium, MediumCaps> = {
   nearby: { medium: 'nearby', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 500_000, energyCost: 3 },
   ble: { medium: 'ble', maxEnvelopeBytes: 32 * 1024, mtuBytes: 512, approxBytesPerSec: 10_000, energyCost: 1 },
+  lan: { medium: 'lan', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 2_000_000, energyCost: 2 },
   sim: { medium: 'sim', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 1_000_000, energyCost: 1 },
 };
 

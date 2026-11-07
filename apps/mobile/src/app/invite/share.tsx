@@ -14,6 +14,7 @@ import { BackHeader } from '../../ui/Controls';
 import { Icon } from '../../ui/Icon';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { ApkIntegrityCard } from '../../ui/ApkIntegrityCard';
 import { WifiSharePanel } from '../../ui/WifiSharePanel';
 
 /**
@@ -61,6 +62,8 @@ export default function ShareInvite() {
                 <Button label="Wi-Fi Direct" height={44} fontSize={14} style={{ flex: 1, paddingHorizontal: 4 }} onPress={() => setWifiOpen(true)} left={<Icon name="wifi_tethering" size={18} color={c.invink} />} />
               </View>
             )}
+            {/* B-03: valores para quem recebe conferir com o site (Bluetooth, Quick Share e Wi-Fi Direct). */}
+            <ApkIntegrityCard />
           </View>
         )}
         <View style={{ borderRadius: 22, backgroundColor: c.bg2 }}>

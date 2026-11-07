@@ -6,8 +6,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  additionalSigned, BALANCES_PALLET, buildTransferKeepAlive, compact, decodeCompact, decodeEra, decodeTransferKeepAlive,
-  encodeSignedExtrinsic, mortalEra, signedExtra, signingPayload, TRANSFER_KEEP_ALIVE, transferKeepAliveCall,
+  additionalSigned, BALANCES_PALLET, buildTransferKeepAlive, compact, decodeCompact, decodeEra, decodeSignedTransfer, decodeTransferKeepAlive,
+  encodeSignedExtrinsic, IMMORTAL_PERIOD, mortalEra, signedExtra, signingPayload, TRANSFER_KEEP_ALIVE, transferKeepAliveCall,
 } from '../extrinsic';
 import { extrinsicHash, fromHex, toHex } from '../lunesRpc';
 import { walletKeyFromPhrase, wipe } from '../walletKey';
@@ -111,4 +111,44 @@ test('buildTransferKeepAlive: da chave ao extrinsic, com random fixo reproduz a 
   assert.equal(tx3.hex, EXTRINSIC);
   assert.throws(() => buildTransferKeepAlive(k, { dest: 'xyz', value: VALUE, ctx: CTX }), /caracteres|tamanho/);
   wipe(k.secret);
+});
+
+test('era imortal (transação levada pela malha): 1 byte 0x00, bloco da era = gênese, sem prazo em blocos', () => {
+  const ctx = { ...CTX, period: IMMORTAL_PERIOD, blockHash: CTX.genesisHash };
+  assert.equal(toHex(signedExtra(ctx)), '0x001c00', 'era 0x00 ‖ compact(nonce 7) ‖ compact(tip 0)');
+  assert.equal(toHex(additionalSigned(ctx)), '0x6b00000002000000' + CTX.genesisHash.slice(2) + CTX.genesisHash.slice(2));
+  assert.deepEqual(decodeEra(fromHex('0x00')), { period: 0, phase: 0 });
+  // A mortal nunca começa com o nibble baixo 0 (período ≥ 4): o 0x00 não é ambíguo.
+  assert.notEqual(mortalEra(5, 4)[0]! & 15, 0);
+  const key = walletKeyFromPhrase(WORDS);
+  try {
+    const s = buildTransferKeepAlive(key, { dest: fromHex(DEST), value: VALUE, ctx, random: fromHex(RANDOM) });
+    assert.deepEqual(s.era, { period: 0, phase: 0 });
+    assert.equal(s.validUntil, Number.MAX_SAFE_INTEGER, 'sem fim de era: só o nonce (ou uma troca de runtime) a invalida');
+    assert.equal(s.hash, extrinsicHash(s.extrinsic));
+    // Mesmo formato do extrinsic v4: só o byte da era muda de tamanho.
+    assert.equal(s.length, fromHex(EXTRINSIC).length - 1);
+  } finally { wipe(key.secret); }
+  // Era imortal com outro bloco seria BadProof na Lunes (conferido em leitura ao vivo): recusada antes de assinar.
+  assert.throws(() => additionalSigned({ ...CTX, period: IMMORTAL_PERIOD }), /gênese/);
+});
+
+test('decodeSignedTransfer: lê a transferência assinada (mortal e imortal) e recusa o resto', () => {
+  const key = walletKeyFromPhrase(WORDS);
+  try {
+    for (const ctx of [CTX, { ...CTX, period: IMMORTAL_PERIOD, blockHash: CTX.genesisHash }]) {
+      const s = buildTransferKeepAlive(key, { dest: fromHex(DEST), value: VALUE, ctx, random: fromHex(RANDOM) });
+      const d = decodeSignedTransfer(s.extrinsic);
+      assert.ok(d);
+      assert.equal(toHex(d.signer), DEV_PUB);
+      assert.equal(d.nonce, 7n); assert.equal(d.tip, 0n); assert.equal(d.value, VALUE);
+      assert.equal(toHex(d.dest), DEST);
+      assert.equal(d.era.period, ctx.period === IMMORTAL_PERIOD ? 0 : 64);
+      assert.equal(decodeSignedTransfer(Uint8Array.of(...s.extrinsic, 0)), null, 'tamanho não bate');
+      const unsigned = s.extrinsic.slice(); unsigned[2] = 0x04;
+      assert.equal(decodeSignedTransfer(unsigned), null, 'não assinado');
+    }
+  } finally { wipe(key.secret); }
+  assert.equal(decodeSignedTransfer(new Uint8Array(0)), null);
+  assert.equal(decodeSignedTransfer(fromHex('0x0400')), null);
 });

@@ -59,13 +59,14 @@ test('7 migração: "pago" de lote simulado (versões antigas) volta para "em lo
   assert.equal(new CreditBook(again.export(T0)).totals().em_lote, again.totals().em_lote);
 });
 
-test('7.8 evidências: formato EvidenceFile v1 que o validador aceita (assinatura e prova conferem)', () => {
+test('7.8 evidências: formato EvidenceFile v2 (recibos v1, provas v1 de legado e provas v2 seladas)', () => {
   const { node, book, secrets } = bookWith(4);
   book.applyProof(secrets[0][0], secrets[0][1]);
   book.applyProof(secrets[1][0], secrets[1][1]);
   // Prova que circula na malha (ainda não aplicada a um crédito guardado) também vai.
   const f = buildEvidence(book.list(), [[secrets[2][0], secrets[2][1]], ['ff'.repeat(16), Uint8Array.of(1, 2)]]);
-  assert.equal(f.v, 1);
+  assert.equal(f.v, 2);
+  assert.deepEqual(f.sealedProofs, [], 'sem prova v2 aqui');
   assert.equal(f.receipts.length, 4);
   assert.deepEqual(f.proofs.map(p => p.envelopeId).sort(), [secrets[0][0], secrets[1][0], secrets[2][0]].sort(), 'segredo malformado fica de fora');
   for (const r of f.receipts) {
@@ -73,7 +74,8 @@ test('7.8 evidências: formato EvidenceFile v1 que o validador aceita (assinatur
     assert.equal(r.nodePk, Buffer.from(node.pk).toString('hex'));
     assert.match(r.sig, /^[0-9a-f]{128}$/);
   }
-  // O mesmo caminho do validador (apps/settlement/src/validator.ts, buildLedger): hex → livro.
+  // O livro simplificado (v1) ainda confere as provas v1. O validador que paga (apps/settlement) só
+  // aceita a prova v2 selada (docs/economia/prova-de-entrega-v2.md; teste em provaV2.test.ts).
   const ledger = new ContributionLedger();
   for (const p of f.proofs) { const s = fromHex(p.ackSecret); ledger.confirmDelivery(p.envelopeId, s, hash(s).slice(0, 16)); }
   const states = f.receipts.map(r => ledger.submit({ envelopeId: r.envelopeId, ackHash: fromHex(r.ackHash), nodePk: fromHex(r.nodePk), at: r.at, sig: fromHex(r.sig) }, T0));

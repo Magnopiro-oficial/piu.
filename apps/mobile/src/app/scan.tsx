@@ -4,17 +4,19 @@ import { useRef, useState } from 'react';
 import { Platform, ScrollView, TextInput, View } from 'react-native';
 import { fmtLunes } from '../data/wallet';
 import { useT } from '../i18n';
-import { approvalCode, checkCode, PAIR_PREFIX, type PairedNode, pairCode, parsePair, parseRequest, REQUEST_PREFIX, type TransferRequest } from '../lib/approvals';
+import { approvalCode, checkCode, PAIR_PREFIX, type PairedNode, pairCode, pairingConflict, parsePair, parseRequest, REQUEST_PREFIX, type TransferRequest } from '../lib/approvals';
 import { confirmDevice } from '../lib/deviceAuth';
 import { cardFromText } from '../lib/inviteLink';
 import { loadApprovalNodes, saveApprovalNodes } from '../lib/vault';
 import type { ContactCard } from '../messaging/card';
 import { GROUP_LINK, useMessaging } from '../state/messaging';
+import { usePoint } from '../state/point';
 import { useStore } from '../state/store';
 import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { BackHeader } from '../ui/Controls';
+import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
@@ -29,6 +31,7 @@ export default function Scan() {
   const t = useT();
   const { readCard, addFromCard, testDeviceCard, ready, joinFromLink } = useMessaging();
   const { chats, showToast, setVerified } = useStore();
+  const point = usePoint();
   // `verify`: veio da tela do contato para conferir pessoalmente que o QR é mesmo dele.
   const { verify } = useLocalSearchParams<{ verify?: string }>();
   const target = verify ? chats.find(x => x.id === verify) : undefined;
@@ -42,15 +45,23 @@ export default function Scan() {
   const [paired, setPaired] = useState<{ node: PairedNode; code: string } | null>(null);
   const [approval, setApproval] = useState<{ node: PairedNode; req: TransferRequest; code?: string } | null>(null);
   const [authing, setAuthing] = useState(false);
+  // Re-pareamento do mesmo celular com outro segredo: só salva depois de confirmar (B-05).
+  const [repair, setRepair] = useState<{ node: PairedNode; prev: PairedNode } | null>(null);
+
+  const savePair = async (node: PairedNode) => {
+    const list = (await loadApprovalNodes<PairedNode>()).filter(n => n.phoneId !== node.phoneId);
+    await saveApprovalNodes([...list, node]);
+    setPaired({ node, code: pairCode(node) }); setError(null);
+  };
 
   const fromPanel = async (text: string) => {
     setCamera(false); setCard(null); setPaired(null); setApproval(null);
     try {
       if (text.startsWith(PAIR_PREFIX)) {
         const node = parsePair(text);
-        const list = (await loadApprovalNodes<PairedNode>()).filter(n => n.phoneId !== node.phoneId);
-        await saveApprovalNodes([...list, node]);
-        setPaired({ node, code: pairCode(node) }); setError(null);
+        const prev = pairingConflict(await loadApprovalNodes<PairedNode>(), node);
+        if (prev) { setRepair({ node, prev }); setError(null); return; }
+        await savePair(node);
         return;
       }
       const req = parseRequest(text);
@@ -76,6 +87,8 @@ export default function Scan() {
   const parse = (text: string) => {
     const raw = text.trim();
     if (!target && (raw.startsWith(PAIR_PREFIX) || raw.startsWith(REQUEST_PREFIX))) { void fromPanel(raw); return; }
+    // QR de Wi-Fi (cartaz de ponto Piu): folha "Ponto Piu por perto" (P8) para entrar só para o Piu.
+    if (!target && /^WIFI:/i.test(raw) && point.offerFromQr(raw)) { setCamera(false); router.back(); return; }
     try {
       // Convite de grupo, canal ou comunidade: pede para entrar (o admin aprova, se o grupo exigir).
       if (text.trim().startsWith(GROUP_LINK) && !target) {
@@ -206,6 +219,14 @@ ${t('scan.transfer.node', { node: approval.req.node })}`}
           </View>
         )}
       </ScrollView>
+      {repair && (
+        <Dialog icon="sync_lock" title={t('scan.panel.repair.title')} body={t('scan.panel.repair.body', { node: repair.prev.node })} primary={t('scan.panel.repair.confirm')}
+          onClose={() => setRepair(null)} onPrimary={() => {
+            const { node } = repair;
+            setRepair(null);
+            void savePair(node).catch(e => setError((e as Error).message));
+          }} />
+      )}
     </Screen>
   );
 }

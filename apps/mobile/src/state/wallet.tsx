@@ -1,12 +1,16 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { router, type Href } from 'expo-router';
 import { Platform } from 'react-native';
 import { t } from '../i18n/core';
-import { confirmDevice } from '../lib/deviceAuth';
 import { buildTransferKeepAlive } from '../lib/extrinsic';
 import { parseLunesAmount } from '../lib/paymentRequest';
-import { walletAddressFromPhrase, withWalletKey } from '../lib/walletKey';
+import { withWalletKey } from '../lib/walletKey';
 import { canSignWalletAddress, walletSelection } from '../lib/walletSelection';
 import { isActiveWalletTransfer, isWalletTransferRecord, prepareWalletTransfer, retryWalletTransfer, sendWalletTransfer, trackWalletTransfer, WalletTransferError, type WalletQuote, type WalletTransferRecord } from '../lib/walletTransfer';
+import { advanceOfflineContext, applyCarryReceipt, carryWalletTransfer, isInTransit, isOfflineContext, OFFLINE_CONTEXT_MAX_AGE_MS, prepareCarriedTransfer, readOfflineContext, recarryTransfer as recarryRecord, reconcileCarriedTransfer, type WalletOfflineContext } from '../lib/walletCarry';
+import { carryBridge } from '../lib/carryBridge';
+import { CarryChain, CarryKind } from '../protocol/carry';
+import { fromHex } from '../lib/lunesRpc';
 import { useKeys } from './keys';
 import { pruneLegacyData } from '../lib/legacyData';
 import { fetchLunesHistory, toHistorySnapshot, type HistorySnapshot } from '../lib/lunesHistory';
@@ -49,6 +53,21 @@ interface Wallet {
   transferRecoveryBlocked: boolean;
   refreshTransfer: () => Promise<void>;
   retryTransfer: () => Promise<WalletTransferRecord>;
+  /**
+   * Sem internet (docs/carteira/transacoes-pela-malha.md). `offlineContext`: runtime, nonce, saldo e taxa
+   * da última leitura com rede (só da carteira própria), ou null. `transferInTransit`: a transferência em
+   * andamento foi levada pela malha e este aparelho ainda não leu a confirmação na Mainnet (o recibo do
+   * gateway, em `pendingTransfer.carried.report`, é só dica). `canCarry`: dá para assinar e soltar agora.
+   */
+  offlineContext: WalletOfflineContext | null;
+  transferInTransit: boolean;
+  canCarry: boolean;
+  /** Revisão sem rede (mesma forma de `quoteTransfer`), com a taxa da última leitura e era imortal. */
+  quoteCarriedTransfer: (dest: string, amount: string) => WalletQuote;
+  /** Biometria, assinatura, gravação e só então a carga na malha. Bloqueia novos envios até resolver. */
+  carryTransfer: (quote: WalletQuote) => Promise<WalletTransferRecord>;
+  /** Solta de novo na malha os MESMOS bytes (o envelope venceu ou não entrou). Nunca reassina. */
+  recarryTransfer: () => Promise<WalletTransferRecord>;
   /** Última leitura (guardada para mostrar sem rede) e o estado da consulta. */
   onchainSnap: OnchainSnapshot | null;
   onchainStatus: OnchainStatus;
@@ -96,11 +115,9 @@ const Ctx = createContext<Wallet | null>(null);
 
 export function WalletProvider({ children }: { children: ReactNode }) {
   const { onboarded, showToast } = useStore();
-  const { phrase, vaultIsSecure } = useKeys();
-  const derivedAddress = useMemo(() => {
-    if (Platform.OS === 'web' || !vaultIsSecure || !phrase) return null;
-    try { return walletAddressFromPhrase(phrase); } catch { return null; }
-  }, [phrase, vaultIsSecure]);
+  const { hasKeys, walletAddress, vaultIsSecure, unlockPhrase } = useKeys();
+  // Endereço guardado com as chaves do dia (B-01): a frase só é lida do cofre na hora de assinar.
+  const derivedAddress = Platform.OS === 'web' || !vaultIsSecure || !hasKeys ? null : walletAddress;
   // Campos novos (os antigos, `wallet.*` e `nearby.invited/reqStatus`, só tinham dados de exemplo e
   // são apagados por `pruneLegacyData`).
   const [invites, setInvites] = usePersisted<Record<string, number>>('nearby.invites', {});
@@ -128,12 +145,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   });
   const pendingTransferRef = useRef(pendingTransfer);
   const transferBusy = useRef(false);
-  const walletIdentity = useRef({ phrase, ownAddress, nativeWalletReady });
-  walletIdentity.current = { phrase, ownAddress, nativeWalletReady };
+  const walletIdentity = useRef({ hasKeys, ownAddress, nativeWalletReady });
+  walletIdentity.current = { hasKeys, ownAddress, nativeWalletReady };
+  /** Frase lida do cofre em `authorize` (com a biometria), usada só pelo `sign` seguinte e descartada. */
+  const signWords = useRef<string[] | null>(null);
   const [onchainSnap, setOnchainSnap] = usePersisted<OnchainSnapshot | null>('wallet.onchain', null);
   const [onchainStatus, setOnchainStatus] = useState<OnchainStatus>({ state: 'idle' });
   const [historySnap, setHistorySnap] = usePersisted<HistorySnapshot | null>('wallet.history', null);
   const [historyStatus, setHistoryStatus] = useState<OnchainStatus>({ state: 'idle' });
+  // Contexto para assinar sem internet (só da carteira própria; nada secreto, mas vai cifrado como o resto).
+  const [offlineRaw, setOfflineCtx] = usePersisted<WalletOfflineContext | null>('wallet.offlineCtx', null);
+  const offlineContext = isOfflineContext(offlineRaw) ? offlineRaw : null;
   // Endereço sendo lido agora e o endereço atual: leitura de um endereço trocado no meio é descartada.
   const reading = useRef<string | null>(null);
   const readingHistory = useRef<string | null>(null);
@@ -177,6 +199,10 @@ export function WalletProvider({ children }: { children: ReactNode }) {
       if (latest.current !== address) return;
       setOnchainSnap({ address, exists: b.exists, free: b.free.toString(), reserved: b.reserved.toString(), frozen: b.frozen.toString(), block: b.block, blockHash: b.blockHash, endpoint: b.endpoint, at: Date.now() });
       setOnchainStatus({ state: 'ok' });
+      // Com rede e carteira própria: guarda o contexto para uma assinatura futura sem rede (falha não atrapalha o saldo).
+      if (address === walletIdentity.current.ownAddress && walletIdentity.current.nativeWalletReady) {
+        try { const ctx = await readOfflineContext(address, { rpc }); if (latest.current === address) setOfflineCtx(ctx); } catch { /* fica o anterior */ }
+      }
     } catch (e) {
       if (latest.current === address) setOnchainStatus({ state: 'error', error: e instanceof Error ? e.message : 'Falha na consulta.' });
     } finally {
@@ -225,11 +251,11 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   const requireOwn = useCallback((from?: string) => {
     if (transferRecoveryBlocked || persistedReadFailed('wallet.transfer')) throw new WalletTransferError('persistence', t('ownWallet.recoveryError'));
     const current = walletIdentity.current;
-    if (!current.nativeWalletReady || !current.phrase || !current.ownAddress) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+    if (!current.nativeWalletReady || !current.hasKeys || !current.ownAddress) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
     const address = from ?? latest.current;
     if (!canSignWalletAddress(address, current.ownAddress)) throw new WalletTransferError('signing', t('ownWallet.watchOnly'));
     if (from && !canSignWalletAddress(latest.current, from)) throw new WalletTransferError('signing', t('ownWallet.accountChanged'));
-    return { phrase: current.phrase, address: address! };
+    return { address: address!, ownAddress: current.ownAddress };
   }, [transferRecoveryBlocked]);
 
   const saveTransfer = useCallback(async (record: WalletTransferRecord) => {
@@ -237,7 +263,9 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     await persistNow('wallet.transfer', record);
     pendingTransferRef.current = record;
     setPendingTransfer(record);
-  }, []);
+    // Em bloco (deu certo ou não), o nonce foi gasto: o contexto sem rede anda junto.
+    if (record.block) setOfflineCtx(c => advanceOfflineContext(isOfflineContext(c) ? c : null, record));
+  }, [setOfflineCtx]);
 
   const quoteTransfer = useCallback(async (dest: string, amount: string) => {
     const { address } = requireOwn();
@@ -259,14 +287,24 @@ export function WalletProvider({ children }: { children: ReactNode }) {
         guard,
         authorize: async fresh => {
           requireOwn(fresh.from);
-          const result = await confirmDevice(t('ownWallet.auth', { amount: formatLunes(BigInt(fresh.value)), dest: fresh.dest }));
-          if (result !== 'ok') return false;
+          // B-01: a leitura da frase é o pedido de biometria do sistema (ou o bloqueio, antes da migração).
+          const u = await unlockPhrase(t('ownWallet.auth', { amount: formatLunes(BigInt(fresh.value)), dest: fresh.dest }));
+          if (u.status === 'recover') { router.push('/vault-recover' as Href); return false; }
+          if (u.status !== 'ok') return false;
           requireOwn(fresh.from);
+          signWords.current = u.words;
           return true;
         },
         sign: fresh => {
-          const { phrase: words } = requireOwn(fresh.from);
-          return withWalletKey(words, key => buildTransferKeepAlive(key, { dest: fresh.dest, value: BigInt(fresh.value), ctx: { ...fresh.ctx, tip: BigInt(fresh.ctx.tip) } }));
+          const { ownAddress: own } = requireOwn(fresh.from);
+          const words = signWords.current;
+          signWords.current = null;
+          if (!words) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+          return withWalletKey(words, key => {
+            // A frase lida tem de ser a desta carteira (nunca assina por outra conta).
+            if (key.address !== own) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+            return buildTransferKeepAlive(key, { dest: fresh.dest, value: BigInt(fresh.value), ctx: { ...fresh.ctx, tip: BigInt(fresh.ctx.tip) } });
+          });
         },
         save: async record => {
           const firstSave = pendingTransferRef.current?.hash !== record.hash;
@@ -276,15 +314,17 @@ export function WalletProvider({ children }: { children: ReactNode }) {
           if (firstSave) requireOwn(record.from);
         },
       });
-    } finally { transferBusy.current = false; }
-  }, [requireOwn, saveTransfer]);
+    } finally { transferBusy.current = false; signWords.current = null; }
+  }, [requireOwn, saveTransfer, unlockPhrase]);
 
   const refreshTransfer = useCallback(async () => {
     const record = pendingTransferRef.current;
     if (!record || !isActiveWalletTransfer(record) || transferBusy.current) return;
     transferBusy.current = true;
     try {
-      await trackWalletTransfer(record, { save: saveTransfer });
+      // Levada pela malha: o próprio aparelho resolve na Mainnet (nonce, bloco do recibo, ou envia os mesmos bytes).
+      if (isInTransit(record)) await reconcileCarriedTransfer(record, { save: saveTransfer });
+      else await trackWalletTransfer(record, { save: saveTransfer });
       void refreshOnchain(); void refreshHistory();
     } finally { transferBusy.current = false; }
   }, [saveTransfer, refreshOnchain, refreshHistory]);
@@ -295,14 +335,84 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     requireOwn(record.from);
     if (transferBusy.current) throw new WalletTransferError('busy', t('ownWallet.busy'));
     transferBusy.current = true;
-    try { return await retryWalletTransfer(record, { save: saveTransfer }); }
+    try { return isInTransit(record) ? await reconcileCarriedTransfer(record, { save: saveTransfer }) : await retryWalletTransfer(record, { save: saveTransfer }); }
     finally { transferBusy.current = false; }
   }, [requireOwn, saveTransfer]);
 
+  /** Assinar sem rede usa a mesma biometria e a mesma conferência da frase do envio direto. */
+  const signCallbacks = useCallback(() => ({
+    authorize: async (fresh: WalletQuote) => {
+      requireOwn(fresh.from);
+      const u = await unlockPhrase(t('ownWallet.auth', { amount: formatLunes(BigInt(fresh.value)), dest: fresh.dest }));
+      if (u.status === 'recover') { router.push('/vault-recover' as Href); return false; }
+      if (u.status !== 'ok') return false;
+      requireOwn(fresh.from);
+      signWords.current = u.words;
+      return true;
+    },
+    sign: (fresh: WalletQuote) => {
+      const { ownAddress: own } = requireOwn(fresh.from);
+      const words = signWords.current;
+      signWords.current = null;
+      if (!words) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+      return withWalletKey(words, key => {
+        if (key.address !== own) throw new WalletTransferError('signing', t('ownWallet.unavailable'));
+        return buildTransferKeepAlive(key, { dest: fresh.dest, value: BigInt(fresh.value), ctx: { ...fresh.ctx, tip: BigInt(fresh.ctx.tip) } });
+      });
+    },
+  }), [requireOwn, unlockPhrase]);
+
+  const carrier = useCallback((hex: string, hash: string) => carryBridge.carry({ kind: CarryKind.Tx, chain: CarryChain.LunesMainnet, extrinsic: fromHex(hex) }, hash), []);
+
+  const quoteCarriedTransfer = useCallback((dest: string, amount: string) => {
+    const { address } = requireOwn();
+    if (isActiveWalletTransfer(pendingTransferRef.current) || transferBusy.current) throw new WalletTransferError('busy', t('ownWallet.busy'));
+    const value = parseLunesAmount(amount);
+    if (value === null || value <= 0n) throw new WalletTransferError('invalid', t('ownWallet.amountInvalid'));
+    return prepareCarriedTransfer({ from: address, dest, value: value.toString() }, offlineContext, Date.now());
+  }, [requireOwn, offlineContext]);
+
+  const carryTransfer = useCallback(async (quote: WalletQuote) => {
+    requireOwn(quote.from);
+    if (transferBusy.current || isActiveWalletTransfer(pendingTransferRef.current)) throw new WalletTransferError('busy', t('ownWallet.busy'));
+    transferBusy.current = true;
+    try {
+      return await carryWalletTransfer(quote, {
+        ...signCallbacks(),
+        active: () => pendingTransferRef.current,
+        carry: carrier,
+        save: async record => {
+          const firstSave = pendingTransferRef.current?.hash !== record.hash;
+          if (firstSave) requireOwn(record.from);
+          await saveTransfer(record);
+          if (firstSave) requireOwn(record.from);
+        },
+      });
+    } finally { transferBusy.current = false; signWords.current = null; }
+  }, [requireOwn, saveTransfer, signCallbacks, carrier]);
+
+  const recarryTransfer = useCallback(async () => {
+    const record = pendingTransferRef.current;
+    if (!record || !isInTransit(record)) throw new WalletTransferError('invalid', t('ownWallet.unavailable'));
+    requireOwn(record.from);
+    return recarryRecord(record, { carry: carrier, save: saveTransfer });
+  }, [requireOwn, carrier, saveTransfer]);
+
+  // Recibo do gateway (dica): guarda no registro; se diz "em bloco", tenta conferir na Mainnet já.
+  useEffect(() => carryBridge.onReceipt((_id, rc) => {
+    const next = applyCarryReceipt(pendingTransferRef.current, rc, Date.now());
+    if (!next) return;
+    void saveTransfer(next).then(() => { if (rc.status === 'included' || rc.status === 'finalized') void refreshTransfer(); }).catch(() => {});
+  }), [saveTransfer, refreshTransfer]);
+
   const onchain = onchainSnap && lunesAddress && onchainSnap.address === lunesAddress ? planckToLunes(BigInt(onchainSnap.free)) : 0;
+  const transferInTransit = isInTransit(pendingTransfer);
+  const canCarry = !!offlineContext && nativeWalletReady && !!ownAddress && lunesAddress === ownAddress && offlineContext.from === ownAddress
+    && now - offlineContext.at <= OFFLINE_CONTEXT_MAX_AGE_MS && !isActiveWalletTransfer(pendingTransfer) && !transferRecoveryBlocked && carryBridge.available();
 
   const value = useMemo<Wallet>(() => ({
     onchain, lunesAddress, setLunesAddress, ownAddress, watchedAddress: externalAddress, nativeWalletReady, canSign, canSignAddress, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchainSnap, onchainStatus, refreshOnchain,
+    offlineContext, transferInTransit, canCarry, quoteCarriedTransfer, carryTransfer, recarryTransfer,
     historySnap, historyStatus, refreshHistory,
     reserved, refunded, spent, earned, since,
     visible,
@@ -333,7 +443,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
     },
     recordEarned: (from, fee) => setEarned(e => [{ from, amt: fee, at: Date.now() }, ...e]),
     myFee, setMyFee,
-  }), [onchain, lunesAddress, setLunesAddress, ownAddress, externalAddress, nativeWalletReady, canSign, canSignAddress, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchainSnap, onchainStatus, refreshOnchain, historySnap, historyStatus, refreshHistory, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
+  }), [onchain, lunesAddress, setLunesAddress, ownAddress, externalAddress, nativeWalletReady, canSign, canSignAddress, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchainSnap, onchainStatus, refreshOnchain,
+    offlineContext, transferInTransit, canCarry, quoteCarriedTransfer, carryTransfer, recarryTransfer, historySnap, historyStatus, refreshHistory, reserved, refunded, spent, earned, since, visible, visibleUntil, now, invites, myFee, setVisibleUntil, setInvites, setReserved, setRefunded, setSpent, setMyFee, setEarned]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

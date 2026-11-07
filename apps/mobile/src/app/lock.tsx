@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Enter } from '../ui/Enter';
 import { Icon } from '../ui/Icon';
 import { T } from '../ui/T';
+import { Up } from '../ui/motion';
 
 /**
  * Prévia da tela bloqueada: as notificações reais recentes (mensagens recebidas ainda não lidas e
@@ -44,10 +45,11 @@ export default function Lock() {
         style={{ position: 'absolute', top: insets.top + 8, right: 14, width: 40, height: 40, borderRadius: 20, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center', zIndex: 2 }}>
         <Icon name="close" size={20} />
       </Pressable>
-      <View style={{ paddingTop: 56, alignItems: 'center', gap: 2 }}>
+      {/* Relógio com `piuUp .5s`; cada notificação com `piuUp .5s` defasado em 70 ms a partir de 120 ms. */}
+      <Up style={{ paddingTop: 56, alignItems: 'center', gap: 2 }}>
         <T size={17} w={550} color={c.ink2}>{date}</T>
         <T size={96} w={600} ls={-0.06} tabular style={{ lineHeight: 100 }}>{time}</T>
-      </View>
+      </Up>
       {hidden && (
         <View style={{ alignSelf: 'center', marginTop: 14, flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 99, backgroundColor: c.bg2 }}>
           <Icon name="visibility_off" size={15} color={c.ink2} />
@@ -60,12 +62,13 @@ export default function Lock() {
             <T size={13.5} color={c.ink2} align="center">{t('lockPreview.empty')}</T>
           </View>
         )}
-        {items.map(n => {
+        {items.map((n, i) => {
           const bg = n.critical ? c.ink : c.bg2, fg = n.critical ? c.invink : c.ink;
           const time = lockTime(n, now.getTime());
           const stacked = n.more > 0;
           return (
-            <Pressable key={n.id} onPress={() => router.push(n.href as Href)} accessibilityRole="button" accessibilityLabel={`${n.title}, ${time}. ${n.body}`}
+            <Up key={n.id} delay={120 + i * 70}>
+            <Pressable onPress={() => router.push(n.href as Href)} accessibilityRole="button" accessibilityLabel={`${n.title}, ${time}. ${n.body}`}
               style={({ pressed }) => ({ marginBottom: stacked ? 12 : 0, transform: [{ scale: pressed ? 0.98 : 1 }] })}>
               {stacked && (
                 <>
@@ -87,6 +90,7 @@ export default function Lock() {
                 </View>
               </View>
             </Pressable>
+            </Up>
           );
         })}
       </ScrollView>

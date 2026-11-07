@@ -1,5 +1,6 @@
 import { createContext, useContext, useMemo, useState, type ReactNode } from 'react';
 import type { TxKey } from '../data/network';
+import { PHONE_GATEWAY_DEFAULT } from '../lib/carryConfig';
 import { usePersisted } from '../lib/persist';
 
 interface Network {
@@ -11,6 +12,12 @@ interface Network {
   battery: 20 | 30 | 50; setBattery: (v: 20 | 30 | 50) => void;
   storage: 256 | 512 | 1024; setStorage: (v: 256 | 512 | 1024) => void;
   chargingOnly: boolean; setChargingOnly: (v: boolean) => void;
+  /**
+   * Celular como gateway (docs/carteira/transacoes-pela-malha.md): com internet, envia à Lunes as
+   * transações assinadas que chegam pela malha e devolve o recibo. Desligado de fábrica; só age quando
+   * a Lunes responde (state/messaging.tsx confere a rota de tempos em tempos).
+   */
+  gateway: boolean; setGateway: (v: boolean) => void;
 }
 
 const Ctx = createContext<Network | null>(null);
@@ -22,15 +29,20 @@ const Ctx = createContext<Network | null>(null);
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [relay, setRelay] = usePersisted('net.relay', true);
   const [tx, setTx] = usePersisted<Record<TxKey, boolean>>('net.tx', { ble: true, direct: true, mesh: false, lora: false, eth: false });
+  // Rede local (linha "Wi-Fi Mesh" da aba Rede): chave própria, ligada de fábrica. Só age conectado a um
+  // Wi-Fi (state/transport.tsx, transport/lan/policy.ts). O `mesh` antigo de 'net.tx' nunca teve chave.
+  const [lanPref, setLanPref] = usePersisted('net.lan', true);
   const [battery, setBattery] = usePersisted<20 | 30 | 50>('net.battery', 30);
   const [storage, setStorage] = usePersisted<256 | 512 | 1024>('net.storage', 512);
   const [chargingOnly, setChargingOnly] = usePersisted('net.chargingOnly', false);
   const [relayPaused, setRelayPaused] = useState(false);
+  const [gateway, setGateway] = usePersisted('net.gateway', PHONE_GATEWAY_DEFAULT);
 
   const value = useMemo<Network>(() => ({
-    relay, setRelay, relayPaused, setRelayPaused, tx, toggleTx: k => setTx(t => ({ ...t, [k]: !t[k] })),
-    battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly,
-  }), [relay, setRelay, relayPaused, tx, setTx, battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly]);
+    relay, setRelay, relayPaused, setRelayPaused, tx: { ...tx, mesh: lanPref },
+    toggleTx: k => (k === 'mesh' ? setLanPref(v => !v) : setTx(t => ({ ...t, [k]: !t[k] }))),
+    battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly, gateway, setGateway,
+  }), [relay, setRelay, relayPaused, tx, setTx, lanPref, setLanPref, battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly, gateway, setGateway]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

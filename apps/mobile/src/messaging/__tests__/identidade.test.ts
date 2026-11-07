@@ -66,6 +66,8 @@ test('1.4 troca de aparelho: aviso assinado pela identidade chega ao contato e a
   net.unlink('Ana', 'Beto');
 
   // Beto restaura num aparelho novo (pela frase, com os contatos de um arquivo): sem as sessões antigas.
+  // Algum tempo depois: sessão nova só vale se começar depois da atual (M-02, replay de início antigo).
+  net.clock += 60;
   net.nodes.delete('Beto');
   const b2 = device(net, 'Beto', { seed: b.seed, state: dropSessions(b.m.export()) });
   assert.equal(b2.m['managers'].public.get(a.ids.public.id), undefined, 'sessões descartadas');

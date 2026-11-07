@@ -38,6 +38,8 @@ export interface Chat {
   peer?: string;
   /** Foto do perfil público que o contato mandou (data URI JPEG de 96 px). */
   photo?: string;
+  /** Endereço Lunes que o contato compartilhou (só contato público): destinatário na Carteira. */
+  lunes?: string;
   /** Escreveu primeiro, sem que você tivesse o código dele: confira antes de confiar. */
   request?: boolean;
   /** Grupo, canal ou comunidade real (id do grupo no protocolo). */

@@ -17,6 +17,7 @@
 import { useEffect, useRef, useSyncExternalStore } from 'react';
 import { PiuNodeLink } from '../../modules/piu-node-link';
 import { useStore } from '../state/store';
+import { useWallet } from '../state/wallet';
 import { canDesktopSend, parseDesktopPayment, validPaymentId, type DesktopPaymentRequest, type DesktopPaymentStatus } from './desktopPayment';
 import {
   buildSnapshot, certPin, type Command, DesktopLinkError, diffChats, diffTyping, FrameOpener, FrameSealer, type LinkEvent, type LinkMessage, type LinkOffer,
@@ -310,13 +311,14 @@ export function pushEvents(events: LinkEvent[]) {
  */
 export function DesktopLinkBridge(): null {
   const { chats, verified, typing, send, markChatRead, notifyTyping } = useStore();
-  const latest = useRef({ chats, verified, send, markChatRead, notifyTyping });
-  latest.current = { chats, verified, send, markChatRead, notifyTyping };
+  const { lunesAddress } = useWallet();
+  const latest = useRef({ chats, verified, send, markChatRead, notifyTyping, lunesAddress });
+  latest.current = { chats, verified, send, markChatRead, notifyTyping, lunesAddress };
   const prevChats = useRef(chats);
   const prevTyping = useRef(typing);
   useEffect(() => {
     setLinkBridge({
-      snapshot: () => buildSnapshot(latest.current.chats, latest.current.verified),
+      snapshot: () => buildSnapshot(latest.current.chats, latest.current.verified, undefined, latest.current.lunesAddress),
       send: (chatId, text) => {
         const chat = latest.current.chats.find(c => c.id === chatId);
         if (!chat || !canDesktopSend(chat)) return false;

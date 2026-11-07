@@ -1,12 +1,15 @@
+import type { LanController } from './lan/controller';
+
 /** Transporte P2P: descobre vizinhos e troca envelopes (bytes já cifrados). Sem servidor. */
 export type TransportKind = 'nearby' | 'ble' | 'sim';
 export type TransportState = 'off' | 'starting' | 'running' | 'unavailable';
 
 /**
  * Meio físico de um enlace com um vizinho. `nearby` = Nearby Connections no Android
- * (Bluetooth clássico + Wi-Fi Direct, alta banda); `ble` = Bluetooth LE GATT (Android e iPhone).
+ * (Bluetooth clássico + Wi-Fi Direct, alta banda); `ble` = Bluetooth LE GATT (Android e iPhone);
+ * `lan` = LNNP pela rede Wi-Fi em que o celular está (UDP + TCP, o mesmo do Desktop e do piu-node).
  */
-export type Medium = 'nearby' | 'ble' | 'sim';
+export type Medium = 'nearby' | 'ble' | 'lan' | 'sim';
 
 /**
  * Características declaradas de cada meio (INF-005). Usadas pela seleção de transporte
@@ -58,6 +61,11 @@ export interface Transport {
   setBackgroundRelay?(on: boolean): Promise<void>;
   /** "Procurar vizinhos" (NFR-004): intervalo entre varreduras de descoberta, em segundos. */
   setDiscoveryInterval?(seconds: number): void;
+  /**
+   * Rede local (LNNP pelo Wi-Fi, lan/controller.ts). Só no Android com o módulo nativo; liga e desliga
+   * por conta própria (state/transport.tsx, `useLanTransport`), sem mexer em Bluetooth/Nearby.
+   */
+  lan?: LanController;
 }
 
 /**

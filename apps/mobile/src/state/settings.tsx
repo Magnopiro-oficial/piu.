@@ -10,7 +10,9 @@ import { type HoursWindow, normHoursChoice } from '../messaging/hours';
  * `contacts` = fora de Por perto, pedido de conversa só de quem tem o meu código; `none` = também
  * descarta os pedidos pelo código. Aplicado no mensageiro (`Messenger.setDiscovery`).
  */
-export interface Privacy { find: 'all' | 'contacts' | 'none'; near: 'off' | '1h'; read: boolean; typing: boolean; temp: 'off' | '7d' | '24h'; delay: boolean; pad: boolean; noRoutes: boolean; lock: boolean }
+export interface Privacy { find: 'all' | 'contacts' | 'none'; near: 'off' | '1h'; read: boolean; typing: boolean; temp: 'off' | '7d' | '24h'; delay: boolean; pad: boolean; noRoutes: boolean; lock: boolean;
+  /** Mandar meu endereço Lunes aos contatos públicos (`wa`). Ausente em ajustes antigos = ligado. */
+  shareWallet?: boolean }
 export interface StorageOpts { auto: 'wifi' | 'always' | 'never'; quality: 'eco' | 'normal' | 'orig'; retention: '24' | '48' | '168' }
 /** `hours`: horário do Modo nó. 'custom' usa a faixa `custom` escolhida pela pessoa (messaging/hours.ts). */
 export interface BatteryOpts { bg: boolean; hours: 'always' | 'night' | 'custom'; custom?: HoursWindow; traffic: 50 | 200 | 500; bw: '1' | '5' | 'max'; disc: 'eco' | 'normal' | 'fast' }
@@ -55,7 +57,7 @@ const Ctx = createContext<Settings | null>(null);
 
 /** Ajustes de segurança, privacidade, armazenamento, bateria e notificações (locais, sem servidor). */
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [priv, setPrivS] = usePersisted<Privacy>('set.priv', { find: 'all', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false });
+  const [priv, setPrivS] = usePersisted<Privacy>('set.priv', { find: 'all', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false, shareWallet: true });
   const [sto, setStoS] = usePersisted<StorageOpts>('set.sto', { auto: 'wifi', quality: 'normal', retention: '48' });
   const [bat, setBatS] = usePersisted<BatteryOpts>('set.bat', { bg: true, hours: 'always', traffic: 200, bw: '5', disc: 'normal' });
   const [preview, setPreview] = usePersisted<Preview>('set.preview', 'always');

@@ -4,6 +4,7 @@ import { useT } from '../i18n';
 import { useBattery } from '../lib/battery';
 import { usePersisted } from '../lib/persist';
 import { useNetwork } from '../state/network';
+import { useRelayBattery } from '../state/phoneNodeEffects';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { Dialog } from './Dialog';
@@ -43,7 +44,8 @@ function BatteryGuard() {
   const t = useT();
   const { onboarded } = useStore();
   const { notifs } = useSettings();
-  const { relay, battery, chargingOnly, relayPaused, setRelayPaused } = useNetwork();
+  const { relay, battery: userBattery, chargingOnly, relayPaused, setRelayPaused } = useNetwork();
+  const battery = useRelayBattery(userBattery); // modo nó do celular: pausa em 30% no mínimo
   const { level, charging } = useBattery(); // nível 0–1, ou -1 sem informação
   const [open, setOpen] = useState(false);
   const known = level >= 0 && charging !== null;

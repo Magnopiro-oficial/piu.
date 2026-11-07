@@ -12,18 +12,20 @@ import { useStore, useViewingChat } from '../../state/store';
 import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
+import { Pop } from '../../ui/motion';
 import { Icon, type IconName } from '../../ui/Icon';
 import { AttachSheet, type AttachKind } from '../../ui/AttachSheet';
 import { FileBubble } from '../../ui/FileBubble';
 import { PaidSheet, PayBubble, PayRequestSheet } from '../../ui/PaymentRequest';
+import { EndorseRequestCard } from '../../ui/PhoneNodeWatch';
 import { useWallet } from '../../state/wallet';
 import type { PayRecord } from '../../state/messaging';
 import { pickDocument, pickImage } from '../../lib/pickFile';
-import { MAX_FILE_BYTES } from '../../messaging/messenger';
+import { MAX_FILE_BYTES, MESSAGE_TTL_SEC } from '../../messaging/messenger';
 import { RouteSheet } from '../../ui/RouteSheet';
 import { LocationBubble, LocationSheet } from '../../ui/LocationSheet';
 import { T } from '../../ui/T';
-import { daySeparators, msgSummary } from '../../lib/chatCore';
+import { daySeparators, msgSummary, queueHoursLeft } from '../../lib/chatCore';
 import { locationText } from '../../lib/locationCore';
 import { shareReceivedFile } from '../../lib/openFile';
 import { routeIcon, routeLabel } from '../../lib/routeCore';
@@ -67,6 +69,7 @@ export default function ChatScreen() {
   // Só a fila local confirma que ainda estamos aguardando rota. Não inferimos a
   // presença do contato pela última rota nem atribuímos custódia a outro nó.
   const waiting = msgs.filter(m => m.from === 'me' && (m.status === 'criada' || m.status === 'aguardando') && !routeFor(chat.id, m.id));
+  const queueH = queueHoursLeft(waiting, Date.now(), MESSAGE_TTL_SEC);
   // Grupo, canal ou comunidade: publica quem o estado do grupo permite (`owner` = pode publicar).
   const readOnly = !!chat.group && !chat.owner;
   const canSend = draft.trim().length > 0;
@@ -132,9 +135,9 @@ export default function ChatScreen() {
         <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, minWidth: 0 }}>
             <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, ${t('chat.verified')}` : chat.name}>{chat.name}</T>
-            {verified[chat.id] && <Icon name="verified" size={16} fill />}
+            {verified[chat.id] && <Pop dur={400}><Icon name="verified" size={16} fill /></Pop>}
           </View>
-          <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.sub}</T>
+          <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.kind === 'direct' && waiting.length ? t('chat.queue.sub', { count: waiting.length }) : chat.sub}</T>
         </View>
         <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? t('chat.info.contact') : chat.kind === 'group' ? t('chat.info.group') : chat.kind === 'community' ? t('chat.info.community') : t('chat.info.channel')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="more_horiz" size={22} />
@@ -166,15 +169,16 @@ export default function ChatScreen() {
               </View>
             );
           })}
+          {chat.kind === 'direct' && <EndorseRequestCard chatId={chat.id} />}
           {waiting.length > 0 && (
             <Pressable onPress={() => setRouteMsg(waiting[0].id)} accessibilityRole="button" accessibilityLabel={t('chats.queued', { count: waiting.length })}
               style={{ alignSelf: 'center', width: '100%', maxWidth: 310, marginTop: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, backgroundColor: c.bg, gap: 6 }}>
+              {/* Design `queue`: "{nome} está fora de alcance" e onde a mensagem está guardada, com o prazo real (48 h do envelope). */}
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                 <Icon name="schedule_send" size={18} />
-                <T size={14} w={600} style={{ flex: 1 }}>{t('chats.queued', { count: waiting.length })}</T>
+                <T size={14} w={600} style={{ flex: 1 }}>{chat.kind === 'direct' ? t('chat.queue.away', { name: chat.name.split(' ')[0] }) : t('chats.queued', { count: waiting.length })}</T>
               </View>
-              <T size={13} color={c.ink2} lh={1.4}>{t('chats.queued.desc')}</T>
-              <T size={11.5} color={c.ink2}>{t('route.thisDevice')} · {t('route.waitingRoute')}</T>
+              <T size={13} color={c.ink2} lh={1.4}>{queueH != null ? t('chat.queue.held', { count: waiting.length, h: queueH }) : t('chats.queued.desc')}</T>
             </Pressable>
           )}
           {typing[chat.id] && <Typing />}

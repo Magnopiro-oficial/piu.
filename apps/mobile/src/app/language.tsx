@@ -6,7 +6,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { BackHeader } from '../ui/Controls';
 import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
-import { FootNote, SegRow, SetGroup, ToggleRow } from '../ui/Settings';
+import { FootNote, SegRow, SetGroup } from '../ui/Settings';
 import { T } from '../ui/T';
 
 /** Linha de idioma: nome nativo, nome em português e "Em uso" no atual. */
@@ -56,7 +56,8 @@ export default function Language() {
         <SetGroup title={t('lang.group.region')}>
           <SegRow<Region> name={t('lang.region.title')} desc={sample} value={region} onChange={setRegion}
             options={[['auto', t('lang.region.auto')], ['br', '1.234,56'], ['us', '1,234.56']]} />
-          <ToggleRow name={t('lang.translate')} desc={`${t('lang.translate.desc')} · ${t('common.soon')}`} on={false} disabled onChange={() => {}} />
+          {/* Tradução de mensagens no aparelho saiu daqui (06/11): não há modelo local empacotado; uma chave
+              desligada sem ação era só um "em breve". Volta quando existir tradução que rode offline. */}
         </SetGroup>
         <FootNote icon="translate">{t('lang.note')}</FootNote>
       </ScrollView>

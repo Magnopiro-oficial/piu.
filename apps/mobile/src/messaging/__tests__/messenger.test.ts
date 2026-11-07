@@ -3,7 +3,10 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { deriveIdentity, deriveNodeKey, newSeed, toPublic } from '../../protocol/keys';
 import { decodeCard, encodeCard, unb64url, b64url } from '../card';
-import { type Contact, Messenger } from '../messenger';
+import { type Contact, type EndorseRequestWire, Messenger } from '../messenger';
+import { DEV_ADDR_57 } from '../../lib/__tests__/walletFixture';
+import { toHex } from '../../protocol/bytes';
+import { derivePhoneOperatorKey, type EndorsementJson, makeEndorsement } from '../../protocol/phoneNode';
 
 const T0 = 1_800_000_000;
 
@@ -521,6 +524,78 @@ test('foto do perfil: só para contatos públicos, conferida, e nunca pela ident
   (a.m as unknown as { enqueue: (...x: unknown[]) => void }).enqueue(a.m.getContact(b.ids.public.id), { t: 'pp', p: 'iVBORw0KGgo=' }, null, 1, true);
   net.run();
   assert.deepEqual(photos.at(-1), ['Beto', a.ids.public.id, null]);
+});
+
+test('endereço Lunes: só entre contatos públicos aceitos, conferido, guardado no contato e no estado', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio');
+  const seen: [string, string, string | null][] = [];
+  for (const [n, d] of [['Beto', b], ['Caio', c]] as const) (d.m as unknown as { o: { events: Record<string, unknown> } }).o.events.peerWallet = (id: string, w: string | null) => seen.push([n, id, w]);
+  a.m.addContact(contactOf(b, 'Beto'));            // pública
+  a.m.addContact(contactOf(c, 'Caio', 'anon'));    // anônima: nunca recebe
+  b.m.addContact(contactOf(a, 'Ana'));
+  c.m.addContact(contactOf(a, 'Ana', 'anon'));
+  net.link('Ana', 'Beto'); net.link('Ana', 'Caio');
+  a.m.sendWalletAddress(DEV_ADDR_57);
+  net.run();
+  assert.deepEqual(seen, [['Beto', a.ids.public.id, DEV_ADDR_57]], 'só o contato público recebe');
+  assert.equal(b.m.getContact(a.ids.public.id)?.lunes, DEV_ADDR_57);
+  assert.equal(c.m.getContact(a.ids.public.id)?.lunes, undefined);
+  // Sobrevive ao reinício (vai no estado salvo).
+  const b2 = device(net, 'Beto2', { seed: b.seed, state: b.m.export() });
+  assert.equal(b2.m.getContact(a.ids.public.id)?.lunes, DEV_ADDR_57);
+  // Endereço inválido ou de outra rede é ignorado; vazio remove.
+  (a.m as unknown as { enqueue: (...x: unknown[]) => void }).enqueue(a.m.getContact(b.ids.public.id), { t: 'wa', a: 'nao-e-endereco' }, null, 1, false);
+  net.run();
+  assert.equal(b.m.getContact(a.ids.public.id)?.lunes, DEV_ADDR_57, 'inválido não troca o que já havia');
+  a.m.sendWalletAddress(null);
+  net.run();
+  assert.deepEqual(seen.at(-1), ['Beto', a.ids.public.id, null], 'parar de compartilhar avisa');
+  assert.equal(b.m.getContact(a.ids.public.id)?.lunes, undefined);
+});
+
+test('modo nó: pedido de aval e aval só entre contatos públicos aceitos; tipo desconhecido é ignorado', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio');
+  const asks: [string, string, EndorseRequestWire][] = [], avals: [string, string, EndorsementJson][] = [], status: [string, string, number][] = [];
+  for (const [n, d] of [['Ana', a], ['Beto', b], ['Caio', c]] as const) {
+    const ev = (d.m as unknown as { o: { events: Record<string, unknown> } }).o.events;
+    ev.endorseRequest = (id: string, r: EndorseRequestWire) => asks.push([n, id, r]);
+    ev.nodeStatus = (id: string, since: number) => status.push([n, id, since]);
+    ev.endorsement = (id: string, e: EndorsementJson) => avals.push([n, id, e]);
+  }
+  a.m.addContact(contactOf(b, 'Beto')); b.m.addContact(contactOf(a, 'Ana'));
+  a.m.addContact(contactOf(c, 'Caio', 'anon')); c.m.addContact(contactOf(a, 'Ana', 'anon'));
+  net.link('Ana', 'Beto'); net.link('Ana', 'Caio');
+  const phoneA = derivePhoneOperatorKey(a.seed), phoneB = derivePhoneOperatorKey(b.seed);
+  a.m.requestEndorsement(b.ids.public.id, toHex(phoneA.pk), { createdAt: T0 + 5, bondOk: true });
+  a.m.requestEndorsement(b.ids.public.id, toHex(phoneA.pk), { createdAt: T0 + 5, bondOk: true, cancel: true });
+  a.m.sendNodeStatus(b.ids.public.id, T0 - 86400);
+  assert.throws(() => a.m.sendNodeStatus(c.ids.anon.id, 1), /públicos aceitos/);
+  assert.throws(() => a.m.requestEndorsement(c.ids.anon.id, toHex(phoneA.pk)), /públicos aceitos/, 'identidade anônima não pede aval');
+  assert.throws(() => a.m.requestEndorsement(b.ids.public.id, 'zz'), /inválida/);
+  net.run();
+  assert.deepEqual(asks, [
+    ['Beto', a.ids.public.id, { phonePk: toHex(phoneA.pk), createdAt: T0 + 5, bondOk: true, cancel: false }],
+    ['Beto', a.ids.public.id, { phonePk: toHex(phoneA.pk), createdAt: T0 + 5, bondOk: true, cancel: true }],
+  ]);
+  assert.deepEqual(status, [['Beto', a.ids.public.id, T0 - 86400]]);
+  const e = makeEndorsement(phoneB, phoneA.pk, 20400);
+  b.m.sendEndorsement(a.ids.public.id, e);
+  net.run();
+  assert.deepEqual(avals, [['Ana', b.ids.public.id, e]]);
+  // Contato anônimo mandando à força: descartado.
+  (c.m as unknown as { enqueue: (...x: unknown[]) => void }).enqueue(c.m.getContact(a.ids.anon.id), { t: 'av', e }, null, 0, true);
+  net.run();
+  assert.equal(avals.length, 1);
+  // Como um app antigo vê um tipo que não conhece (o mesmo caminho para `ar`/`av` lá): descarta, sem efeito.
+  const before = a.log.msgs.length;
+  (b.m as unknown as { enqueue: (...x: unknown[]) => void }).enqueue(b.m.getContact(a.ids.public.id), { t: 'zz', p: 'x' }, null, 0, true);
+  net.run();
+  assert.equal(a.log.msgs.length, before);
+  b.m.sendText(a.ids.public.id, 'm-depois', 'ainda conversa');
+  net.run();
+  assert.deepEqual(a.log.msgs.at(-1), [b.ids.public.id, 'ainda conversa']);
 });
 
 test('bloqueio: mensagens de quem está bloqueado são descartadas, sem confirmação de entrega', () => {

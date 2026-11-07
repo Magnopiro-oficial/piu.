@@ -8,6 +8,7 @@ import { useMessaging } from '../../state/messaging';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Icon, type IconName } from '../../ui/Icon';
 import { T } from '../../ui/T';
+import { Pop } from '../../ui/motion';
 
 const TABS: Record<string, [Key, IconName]> = {
   index: ['tabs.chats', 'chat_bubble'], nearby: ['tabs.nearby', 'radar'], network: ['tabs.network', 'hub'],
@@ -62,9 +63,9 @@ function Tab({ label, icon, active, badge, badgeLabel, onPress }: { label: strin
       <Animated.View style={{ transform: [{ scale: bump.interpolate({ inputRange: [0, 0.35, 0.7, 1], outputRange: [1, 0.8, 1.14, 1] }) }] }}><Icon name={icon} size={26} fill={active} color={color} /></Animated.View>
       <T size={11} w={active ? 650 : 500} color={color}>{label}</T>
       {badge > 0 && (
-        <View style={{ position: 'absolute', top: -3, left: '50%', marginLeft: 6, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.ink, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
+        <Pop dur={320} seq={badge} style={{ position: 'absolute', top: -3, left: '50%', marginLeft: 6, minWidth: 18, height: 18, paddingHorizontal: 5, borderRadius: 9, backgroundColor: c.ink, borderWidth: 2, borderColor: c.bg, alignItems: 'center', justifyContent: 'center' }}>
           <T size={10.5} w={600} color={c.invink}>{badge}</T>
-        </View>
+        </Pop>
       )}
     </Pressable>
   );

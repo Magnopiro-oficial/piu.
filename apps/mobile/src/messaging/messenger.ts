@@ -13,16 +13,23 @@
 import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, type Vote } from './communityAlerts';
 import { hoursAllow, type HoursPolicy } from './hours';
 import { isJpegBase64 } from './photo';
+import { isLunesAddress } from '../lib/ss58';
 import { mentionIds } from './mentions';
 import { type AutoDownload, shouldAutoDownload } from '../lib/mediaCore';
 import { type PaidNotice, type PaymentRequest, readPaidNotice, readPayRequest, type WirePaidNotice, type WirePayRequest, wirePaidNotice, wirePayRequest } from '../lib/paymentRequest';
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
-import { DEFAULT_HOPS, envelopeId, HOP_OFFSET, parseHeader, Priority } from '../protocol/envelope';
+import { DEFAULT_HOPS, directDest, envelopeId, type Header, HOP_OFFSET, openDirect, parseHeader, Priority } from '../protocol/envelope';
+import { type CarryItem, CarryKind, CarryLimiter, carryOf, type CarryReceipt, decodeCarryReceipt, GATEWAY_INBOX_IDENTITY, GATEWAY_TX_IDENTITY, gatewayKindOf, type OpenedCarry, RECEIPT_TTL_SEC, returnIdentity, sealCarry, sealCarryReceipt } from '../protocol/carry';
+import { decodeProofV2Frame, encodeProofV2Frame, isProofV2Frame, makeDeliveryProof, MAX_PROOFS_PER_FRAME, sealDeliveryProof, SEALED_PROOF_BYTES, VALIDATOR_PROOF_PK } from '../protocol/proof';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
 import { SessionManager } from '../protocol/sessions';
+import type { EndorsementJson } from '../protocol/phoneNode';
+/** Pedido de aval como chega pelo mensageiro (modo nó). */
+export interface EndorseRequestWire { phonePk: string; createdAt: number; bondOk: boolean; cancel: boolean }
+import { stripBidi } from './bidi';
 import { b64url, unb64url } from './card';
 import { CreditBook, type Lot } from './credits';
 import { buildEvidence, type EvidenceFile } from './evidence';
@@ -43,6 +50,8 @@ export interface Contact {
   request?: boolean;
   /** Código do convite do cartão que EU escaneei: vai nas primeiras mensagens até a sessão firmar. */
   invite?: string;
+  /** Endereço Lunes que o contato compartilhou comigo (`wa`); só contato público aceito. */
+  lunes?: string;
 }
 
 /** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
@@ -117,6 +126,17 @@ export interface MessengerEvents {
   notice(contactId: string, notice: string, pub: PublicIdentity): void;
   /** Um contato público mandou (ou removeu, `null`) a foto do perfil: JPEG pequeno em base64. */
   peerPhoto(contactId: string, jpegBase64: string | null): void;
+  /** Um contato público compartilhou (ou parou de compartilhar, `null`) o endereço Lunes dele. Já conferido. */
+  peerWallet(contactId: string, address: string | null): void;
+  /**
+   * Modo nó (docs/economia/no-celular.md): um contato público aceito pediu meu aval para a chave de
+   * operador do celular dele (hex). Quem chama decide (lib/phoneNodeCore.ts) e responde com `sendEndorsement`.
+   */
+  endorseRequest(contactId: string, req: EndorseRequestWire): void;
+  /** Modo nó: um contato público aceito mandou um aval (forma conferida; a assinatura, quem chama confere). */
+  endorsement(contactId: string, e: EndorsementJson): void;
+  /** Modo nó: um contato público aceito avisou desde quando está no modo nó (s; 0 = saiu). */
+  nodeStatus(contactId: string, since: number): void;
   /** Lote de créditos fechado (só registro local: o pagamento depende da liquidação, ainda não ligada). */
   lotClosed(lot: Lot): void;
   /** Um convite meu foi usado (registrado em `acceptedInvites`): o QR precisa mostrar um código novo. */
@@ -135,6 +155,13 @@ export interface MessengerEvents {
   paymentRequest(contactId: string, r: PaymentRequest, sentAt: number, route?: RouteInfo): void;
   /** O contato avisou que pagou um pedido meu (com os hashes, se informou). Nada é marcado como pago sem conferir na Mainnet. */
   paymentPaid(contactId: string, n: PaidNotice): void;
+  /**
+   * Recibo de uma carga minha (`carry`, docs/carteira/transacoes-pela-malha.md), dito por um gateway.
+   * NÃO é prova: qualquer relay que viu a carga pode forjar. A carteira confere na Mainnet.
+   */
+  carryReceipt(envelopeId: string, r: CarryReceipt): void;
+  /** Este aparelho está como gateway (`setGateway`) e chegou uma carga: quem chama entrega (lib/carryGateway.ts). */
+  gatewayCarry(c: OpenedCarry): void;
   /** Estado mudou: salvar `export()`. */
   changed(): void;
 }
@@ -188,6 +215,11 @@ export interface MessengerOptions {
   /** Ajuste de Privacidade "Igualar tamanho das mensagens". */
   pad?: () => boolean;
   state?: string;
+  /**
+   * Chave pública X25519 do validador para selar as provas de entrega v2. Padrão:
+   * `VALIDATOR_PROOF_PK` (protocol/proof.ts). `null`: só a prova v1 (que não rende no validador v2).
+   */
+  validatorProofPk?: Uint8Array | null;
 }
 
 /** Conteúdo dentro da sessão. Curto de propósito: cada byte conta em LoRa e Bluetooth. */
@@ -223,6 +255,16 @@ type Payload =
   | { t: 'rv'; n: string }
   /** Foto do perfil público (JPEG de 96 px em base64; vazio = removida). Só entre contatos públicos. */
   | { t: 'pp'; p: string }
+  /** Endereço Lunes (SS58) para os contatos públicos pagarem pela Carteira; vazio = parei de compartilhar. */
+  | { t: 'wa'; a: string }
+  /**
+   * Modo nó: pedido de aval (`ar`, chave de operador do celular em hex) e aval (`av`). Prioridade baixa,
+   * só entre contatos públicos aceitos. Apps antigos não conhecem os tipos e descartam (`t !== 'm'`).
+   */
+  | { t: 'ar'; p: string; c?: number; b?: 0 | 1; x?: 1 }
+  | { t: 'av'; e: EndorsementJson }
+  /** Modo nó: desde quando estou no modo nó (s; 0 = saí). Só para contatos públicos aceitos. */
+  | { t: 'ns'; s: number }
   /** Por perto: convite pago (id, texto até 140, taxa) e aceite de quem recebeu. Recusa não manda nada. */
   | { t: 'ni'; i: string; x: string; f: number; n?: string }
   | { t: 'na'; i: string }
@@ -257,6 +299,11 @@ interface FileRx { msgId: string; from: string; name: string; size: number; mime
 /** Bloco de arquivo: 12 KB de dados por envelope (cabe no preenchimento de 16 KB). */
 export const FILE_BLOCK = 12 * 1024;
 export const MAX_FILE_BYTES = 50 * 1024 * 1024;
+/**
+ * Teto de bytes dos recebimentos automáticos ao mesmo tempo (montados na memória). Acima dele a
+ * oferta fica esperando "Baixar", em vez de 8 × 50 MB derrubarem o app (auditoria 2026-11-06, B-06).
+ */
+export const MAX_RX_BYTES = 64 * 1024 * 1024;
 /** Quantos blocos sem confirmação podem estar na malha ao mesmo tempo. */
 const FILE_WINDOW = 8;
 const BLOCK_TAG = 0x01;
@@ -268,6 +315,21 @@ interface Proof { secret: Uint8Array; at: number; sentTo: Set<string> }
 const PROOF_MAGIC = [0x50, 0x52]; // "PR": quadro de provas (envelopes começam com a versão 0)
 /** A prova circula enquanto a mensagem ainda pode estar na malha. */
 const PROOF_TTL_SEC = 48 * 3600;
+/**
+ * Prova de entrega v2 selada para o validador (protocol/proof.ts; docs/economia/prova-de-entrega-v2.md).
+ * Circula pelo quadro "P2" como a v1 (só repassa prova de envelope que passou por aqui) e fica guardada
+ * por 8 dias (vida máxima do envelope + 1 dia) para ir no arquivo de evidências.
+ */
+interface ProofV2 { sealed: Uint8Array; at: number; sentTo: Set<string> }
+const PROOF_V2_KEEP_SEC = 8 * 86400;
+/** Envelopes com prova v2 guardada. */
+const MAX_PROOFS_V2 = 2000;
+/**
+ * Provas v2 DIFERENTES guardadas por envelope. Ninguém consegue barrar a prova verdadeira mandando
+ * uma falsa antes (o aparelho não abre a prova selada para saber qual é a boa); o validador
+ * descarta as que não conferem.
+ */
+const PROOFS_V2_PER_ENVELOPE = 3;
 
 /** Métricas locais do diagnóstico (sem telemetria): por dia, só neste aparelho. */
 export interface DayMetrics { sent: number; delivered: number; expired: number; lat: number[]; queue: number[]; hops: Record<string, number>; relayed: number; altRoutes: number; via: Record<string, { ok: number; fail: number; lat: number[] }> }
@@ -294,6 +356,12 @@ const MAX_DELIVERED_IDS = 5000;
 const INVITE_TTL_SEC = 24 * 3600;
 const MAX_INVITES = 100;
 const randomHex = (n: number) => toHex(random(n));
+/** Cargas minhas esperando recibo ao mesmo tempo (cada uma custa uma comparação de destino por envelope que chega). */
+const MAX_CARRIES = 32;
+/** `bytes`: o envelope, enquanto ainda devo espalhá-lo (volta para a fila ao reabrir o app); `null` depois do recibo final. */
+interface CarryOut { seed: Uint8Array; me: Identity; expiresAt: number; about: CarryKind.Tx | CarryKind.Evidence; ref: string; bytes: Uint8Array | null }
+const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+const refHex = (ref: string) => ref.toLowerCase().replace(/^0x/, '');
 
 export class Messenger {
   readonly router: Router;
@@ -340,18 +408,32 @@ export class Messenger {
     this.accepted = new AcceptedInvites(st?.ia);
     this.alertBook = new AlertBook(st?.ca);
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
+    for (const [id, x] of (st?.p2 ?? []) as [string, { s: string; at: number }][]) {
+      const sealed = unb64url(x.s);
+      if (sealed.length === SEALED_PROOF_BYTES && o.now() - x.at < PROOF_V2_KEEP_SEC) this.keepProofV2(id, sealed, new Set(), x.at);
+    }
     this.nodeDay = Math.floor(o.now() / 86400);
     this.routerOpts = {
       node: o.nodeKeyFor ? o.nodeKeyFor(this.nodeDay) : o.node,
       identities: [o.identities.public, o.identities.anon],
       relay: o.relay,
       acceptDest: (d, e) => this.managers.public.acceptsDest(d, e) || this.managers.anon.acceptsDest(d, e),
+      openExtra: (bytes, h, now) => this.openCarryEnvelope(bytes, h, now),
       // Grupo: só abre mensagem de quem ainda é membro e pode publicar (canal: só admins). Comunidade:
       // qualquer membro, porque alertas e classificações vêm de todos; o texto dos avisos continua só
       // de admins (conferido em `onGroupEnvelope`).
       isMember: (fromId, gid) => { const g = this.groups.get(gid); return !!g && (g.kind === 'community' ? isMemberOf(g, fromId) : canPost(g, fromId)); },
     };
     this.router = new Router(this.routerOpts);
+    // Cargas minhas: a identidade de retorno (para o recibo) e o envelope de volta na fila (antes dos ids vistos).
+    for (const [id, c] of (st?.cy ?? []) as [string, { s: string; x: number; k: number; r: string; b?: string }][]) {
+      if (c.x + RECEIPT_TTL_SEC <= o.now() || (c.k !== CarryKind.Tx && c.k !== CarryKind.Evidence) || typeof c.r !== 'string') continue;
+      const seed = unb64url(c.s);
+      if (seed.length !== 32) continue;
+      let bytes = c.b ? unb64url(c.b) : null;
+      if (bytes && this.router.send(bytes, o.now()).status !== 'stored') bytes = null;
+      this.carries.set(id, { seed, me: returnIdentity(seed), expiresAt: c.x, about: c.k, ref: refHex(c.r), bytes });
+    }
     if (!st) return;
     for (const t of (st.g ?? []) as string[]) {
       const via = (JSON.parse(t) as { via?: IdentityKind }).via === 'anon' ? 'anon' : 'public';
@@ -364,7 +446,7 @@ export class Messenger {
     this.rotatedFor = Array.isArray(st.rk) ? (st.rk as string[]).slice(-200) : [];
     for (const [gid, v] of (st.gv ?? []) as [string, Vouch][]) if (v.at + GROUP_INVITE_TTL_SEC > o.now()) this.vouched.set(gid, v);
     this.refreshGroupKeys();
-    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
+    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, lunes: c.w || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
     for (const i of (st.inv ?? []) as Invite[]) if (i.expiresAt > o.now()) this.invites.set(i.code, i);
     // A fila própria volta antes dos ids vistos (senão os próprios envelopes contariam como repetidos).
     for (const q of (st.q ?? []) as Outgoing[]) {
@@ -436,7 +518,7 @@ export class Messenger {
     const mine = [this.o.identities.public.id, this.o.identities.anon.id];
     if (mine.includes(c.id)) throw new Error('Este é o seu próprio código.');
     const cur = this.contacts.get(c.id);
-    this.contacts.set(c.id, { ...c, name: c.name || cur?.name || '', request: false });
+    this.contacts.set(c.id, { ...c, name: c.name || cur?.name || '', lunes: c.lunes ?? cur?.lunes, request: false });
     this.o.events.changed?.();
   }
 
@@ -667,11 +749,13 @@ export class Messenger {
       const held = [...this.fileRx.values()].filter(r => r.held).length;
       if (this.fileRx.size - held >= 8 || held >= 100) return;
       const e = validExpire(p.e);
-      // "Baixar mídia automaticamente" (Wi-Fi e cabo / Sempre / Nunca) pelo meio dos vizinhos de agora.
-      const hold = !shouldAutoDownload(this.autoDownload, this.peers.values());
-      this.fileRx.set(key, { msgId: p.i, from, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e, held: hold });
+      // "Baixar mídia automaticamente" (Wi-Fi e cabo / Sempre / Nunca) pelo meio dos vizinhos de agora;
+      // e só se couber no teto de memória junto com o que já está chegando.
+      const inFlight = [...this.fileRx.values()].reduce((sum, r) => sum + (r.held ? 0 : r.size), 0);
+      const hold = !shouldAutoDownload(this.autoDownload, this.peers.values()) || inFlight + p.s > MAX_RX_BYTES;
+      this.fileRx.set(key, { msgId: p.i, from, name: stripBidi(String(p.n)).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), total: p.c, hash: p.h, parts: new Map(), bytes: 0, at: this.o.now(), sentAt, e, held: hold });
       this.markDelivered(`${from}|file|${p.i}`);
-      this.o.events.fileOffered?.(from, { msgId: p.i, name: String(p.n).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e, ...(hold ? { held: true } : {}), ...(this.rx ? { route: this.rx } : {}) });
+      this.o.events.fileOffered?.(from, { msgId: p.i, name: stripBidi(String(p.n)).slice(0, 120), size: p.s, mime: String(p.m).slice(0, 80), blocks: p.c, sentAt, expireSec: e, ...(hold ? { held: true } : {}), ...(this.rx ? { route: this.rx } : {}) });
       return;
     }
     if (p.t !== 'fa' && p.t !== 'fd' && p.t !== 'fw') return;
@@ -899,7 +983,7 @@ export class Messenger {
     if ([...this.nearIn.values()].filter(r => r.status === 'pending').length >= MAX_NEAR_PENDING) return;
     const seen = this.presences.get(from);
     const r: NearIn = {
-      id: p.i, from, pub: m.from, name: typeof p.n === 'string' && p.n.trim() ? p.n.trim().slice(0, 40) : seen?.p.name || 'Alguém por perto',
+      id: p.i, from, pub: m.from, name: typeof p.n === 'string' && stripBidi(p.n).trim() ? stripBidi(p.n).trim().slice(0, 40) : seen?.p.name || 'Alguém por perto',
       fee: p.f, msg: x, prox: seen ? proxOf(seen.traveled) : 'mais longe', at: now, sentAt: m.sentAt, status: 'pending',
     };
     this.nearAsked.set(from, now);
@@ -1278,6 +1362,45 @@ export class Messenger {
    * pedidos de conversa ainda não aceitos nem para bloqueados). `to`: só um contato (novo contato).
    * Vai marcada como mídia: nunca passa por LoRa.
    */
+  /**
+   * Endereço Lunes para os contatos públicos (nunca pela identidade anônima, nunca para pedidos de
+   * conversa ainda não aceitos nem para bloqueados), para aparecerem como destinatários na Carteira.
+   * `null` = parei de compartilhar. `to`: só um contato (novo contato).
+   */
+  sendWalletAddress(address: string | null, to?: string) {
+    if (address && !isLunesAddress(address)) throw new Error('Endereço Lunes inválido.');
+    for (const c of this.contacts.values()) {
+      if (c.via !== 'public' || c.request || this.blocked.has(c.id) || (to && c.id !== to)) continue;
+      this.enqueue(c, { t: 'wa', a: address ?? '' }, null, Priority.Low, false);
+    }
+  }
+
+  /** Contato público aceito (não bloqueado) para o modo nó, ou erro. */
+  private nodeContact(contactId: string): Contact {
+    const c = this.contacts.get(contactId);
+    if (!c || c.via !== 'public' || c.request || this.blocked.has(c.id)) throw new Error('Aval só entre contatos públicos aceitos.');
+    return c;
+  }
+
+  /**
+   * Modo nó: pede aval a um contato público aceito para a chave de operador deste celular (hex).
+   * `createdAt` (s): o pedido vence 3 dias depois; `bondOk`: minha caução já finalizou; `cancel`: desisto.
+   */
+  requestEndorsement(contactId: string, phonePk: string, o: { createdAt: number; bondOk: boolean; cancel?: boolean } = { createdAt: this.o.now(), bondOk: false }) {
+    if (!/^[0-9a-f]{64}$/.test(phonePk)) throw new Error('Chave de celular inválida.');
+    this.enqueue(this.nodeContact(contactId), { t: 'ar', p: phonePk, c: o.createdAt, b: o.bondOk ? 1 : 0, ...(o.cancel ? { x: 1 as const } : {}) }, null, Priority.Low, true);
+  }
+
+  /** Modo nó: avisa um contato público aceito desde quando estou no modo nó (0 = saí). */
+  sendNodeStatus(contactId: string, since: number) {
+    this.enqueue(this.nodeContact(contactId), { t: 'ns', s: Math.max(0, Math.floor(since)) }, null, Priority.Low, true);
+  }
+
+  /** Modo nó: manda o aval (já assinado pela chave de operador deste celular) a um contato público aceito. */
+  sendEndorsement(contactId: string, e: EndorsementJson) {
+    this.enqueue(this.nodeContact(contactId), { t: 'av', e }, null, Priority.Low, true);
+  }
+
   sendProfilePhoto(jpegBase64: string | null, to?: string) {
     for (const c of this.contacts.values()) {
       if (c.via !== 'public' || c.request || this.blocked.has(c.id) || (to && c.id !== to)) continue;
@@ -1316,7 +1439,7 @@ export class Messenger {
     const viaInvite = !!inv && inv.code === p.c && inv.expiresAt > this.o.now() && inv.uses < GROUP_INVITE_MAX_USES;
     if (!viaCommunity && !viaInvite) return;
     if (isMemberOf(g, from)) { this.distribute(g); return; }
-    const name = typeof p.n === 'string' && via === 'public' ? p.n.slice(0, 40) : '';
+    const name = typeof p.n === 'string' && via === 'public' ? stripBidi(p.n).slice(0, 40) : '';
     if (viaInvite && inv) this.groups.set(g.id, { ...g, invite: { ...inv, uses: inv.uses + 1 } });
     if (g.approve) {
       const list = (this.pendingJoins.get(g.id) ?? []).filter(x => x.id !== from);
@@ -1555,6 +1678,7 @@ export class Messenger {
   readonly deliveryDays: DeliveryDays;
   private accepted: AcceptedInvites;
   private proofs = new Map<string, Proof>();
+  private proofsV2 = new Map<string, ProofV2[]>();
   private days = new Map<string, DayMetrics>();
 
   private day(): DayMetrics {
@@ -1596,7 +1720,92 @@ export class Messenger {
    * assinou e as provas de entrega que conheço (as guardadas nos créditos e as que circulam agora).
    */
   evidence(): EvidenceFile {
-    return buildEvidence(this.credits.list(), [...this.proofs].map(([id, p]) => [id, p.secret] as [string, Uint8Array]));
+    return buildEvidence(this.credits.list(), [...this.proofs].map(([id, p]) => [id, p.secret] as [string, Uint8Array]),
+      [...this.proofsV2].flatMap(([id, ps]) => ps.map(p => [id, p.sealed] as [string, Uint8Array])));
+  }
+
+  private get validatorPk(): Uint8Array | null {
+    return this.o.validatorProofPk === undefined ? VALIDATOR_PROOF_PK : this.o.validatorProofPk;
+  }
+
+  /**
+   * Qual das minhas identidades é o destino deste envelope direto (pelo destino lógico). `null` se não
+   * der para saber com certeza (as duas aceitam, nenhuma aceita ou erro): aí não sai prova v2, em vez
+   * de assinar com a identidade errada.
+   */
+  private recipientOf(bytes: Uint8Array): Identity | null {
+    const { public: pub, anon } = this.o.identities;
+    try {
+      const h = parseHeader(bytes);
+      const is = (d: Uint8Array) => d.length === h.dest.length && d.every((b, i) => b === h.dest[i]);
+      const p = is(directDest(pub.agreePk, h.expiresAt)) || this.managers.public.acceptsDest(h.dest, h.expiresAt);
+      const a = is(directDest(anon.agreePk, h.expiresAt)) || this.managers.anon.acceptsDest(h.dest, h.expiresAt);
+      return p === a ? null : p ? pub : anon;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Sou o destino e abri o envelope: assino a prova v2 com o pseudônimo da identidade que recebeu e
+   * selo para o validador. Sem a chave do validador, ou sem saber qual identidade recebeu, nada.
+   */
+  private addProofV2(bytes: Uint8Array, id: string, ackSecret: Uint8Array) {
+    const vpk = this.validatorPk;
+    if (!vpk) return;
+    const me = this.recipientOf(bytes);
+    if (!me) return;
+    let sealed: Uint8Array;
+    try { sealed = sealDeliveryProof(makeDeliveryProof(bytes, me, ackSecret, this.o.now(), vpk), vpk); } catch { return; }
+    this.keepProofV2(id, sealed, new Set(), this.o.now(), true);
+    for (const p of this.peers.keys()) this.sendProofsV2(p);
+  }
+
+  /**
+   * Guarda uma prova v2 (até 3 diferentes por envelope). `false` se repetida ou sem vaga. A minha
+   * (`own`, sou o destino) entra na frente e tira a última se não houver vaga.
+   */
+  private keepProofV2(id: string, sealed: Uint8Array, sentTo: Set<string>, at = this.o.now(), own = false): boolean {
+    const list = this.proofsV2.get(id) ?? [];
+    if (list.some(x => x.sealed.length === sealed.length && x.sealed.every((b, i) => b === sealed[i]))) return false;
+    if (own) { list.unshift({ sealed, at, sentTo }); list.length = Math.min(list.length, PROOFS_V2_PER_ENVELOPE); }
+    else if (list.length >= PROOFS_V2_PER_ENVELOPE) return false;
+    else list.push({ sealed, at, sentTo });
+    this.proofsV2.set(id, list);
+    while (this.proofsV2.size > MAX_PROOFS_V2) this.proofsV2.delete(this.proofsV2.keys().next().value!);
+    return true;
+  }
+
+  /** Provas v2 recentes que o vizinho ainda não recebeu de mim (até 8 por quadro). */
+  private sendProofsV2(peerId: string) {
+    const now = this.o.now();
+    const batch: { envelopeId: string; sealed: Uint8Array }[] = [];
+    for (const [id, list] of this.proofsV2) {
+      const live = list.filter(p => now - p.at <= PROOF_V2_KEEP_SEC);
+      if (!live.length) { this.proofsV2.delete(id); continue; }
+      if (live.length !== list.length) this.proofsV2.set(id, live);
+      for (const p of live) {
+        if (batch.length >= MAX_PROOFS_PER_FRAME) break;
+        if (now - p.at > PROOF_TTL_SEC || p.sentTo.has(peerId)) continue;
+        batch.push({ envelopeId: id, sealed: p.sealed });
+        p.sentTo.add(peerId);
+      }
+      if (batch.length >= MAX_PROOFS_PER_FRAME) break;
+    }
+    if (batch.length) this.o.transmit(peerId, encodeProofV2Frame(batch)).catch(() => {});
+  }
+
+  private onProofsV2(from: string, b: Uint8Array) {
+    const items = decodeProofV2Frame(b);
+    if (!items) return;
+    let changed = false;
+    for (const it of items) {
+      // Como na v1: só guarda e repassa prova de envelope que passou por aqui.
+      if (!this.router.hasSeen(it.envelopeId) || !this.keepProofV2(it.envelopeId, it.sealed, new Set([from]))) continue;
+      if (this.credits.attachSealedProof(it.envelopeId, toHex(it.sealed))) changed = true;
+    }
+    if (changed) this.o.events.changed?.();
+    for (const p of this.peers.keys()) if (p !== from) this.sendProofsV2(p);
   }
 
   private addProof(envId: string, secret: Uint8Array) {
@@ -1639,6 +1848,91 @@ export class Messenger {
     for (const p of this.peers.keys()) if (p !== from) this.sendProofs(p);
   }
 
+  // ── carga pela malha até um gateway (protocol/carry.ts) ──
+
+  /** Cargas minhas esperando recibo: id do envelope → identidade descartável de retorno. */
+  private carries = new Map<string, CarryOut>();
+  private gatewayRoles = { tx: false, inbox: false };
+  private carryLimit = new CarryLimiter();
+
+  /**
+   * Põe na malha uma carga para "qualquer gateway" (transação assinada ou pacote selado para o
+   * validador). Sai mesmo com o Modo nó desligado (é minha); o recibo chega por `carryReceipt`.
+   * `ref`: hash da transação ou `bundleRef` do pacote (confere o recibo).
+   */
+  carry(item: CarryItem, ref: string): { envelopeId: string; expiresAt: number } {
+    const now = this.o.now();
+    const s = sealCarry({ item, now, pad: this.o.pad?.() ?? true });
+    const delaySec = this.o.randomDelay?.() ? randomDelaySec() : 0;
+    if (this.router.send(s.bytes, now, { delaySec }).status !== 'stored') throw new Error('A fila do aparelho está cheia; a carga não entrou.');
+    this.carries.set(s.id, { seed: s.returnSeed, me: returnIdentity(s.returnSeed), expiresAt: s.expiresAt, about: item.kind, ref: refHex(ref), bytes: s.bytes });
+    // Cheio: sai o pacote de evidências mais antigo (o arquivo manual cobre); transação nunca sai daqui.
+    while (this.carries.size > MAX_CARRIES) {
+      const old = [...this.carries].find(([, c]) => c.about === CarryKind.Evidence)?.[0];
+      if (!old) { this.carries.delete(s.id); this.router.forget(s.id); throw new Error('Cargas demais esperando recibo.'); }
+      this.carries.delete(old); this.router.forget(old);
+    }
+    this.o.events.changed?.();
+    this.flushAll();
+    return { envelopeId: s.id, expiresAt: s.expiresAt };
+  }
+
+  /** Carga ainda na fila deste aparelho? (some ao vencer, ao ser esquecida ou com o recibo final) */
+  carryQueued(envelopeId: string) { return this.router.has(envelopeId); }
+
+  /** Para de levar e de esperar recibo (a carteira já confirmou na Mainnet, por exemplo). */
+  forgetCarry(envelopeId: string) {
+    if (!this.carries.delete(envelopeId)) return;
+    this.router.forget(envelopeId);
+    this.o.events.changed?.();
+  }
+
+  /**
+   * Papel de gateway (quem chama liga só com o ajuste e com internet): `tx` aceita transações para a
+   * Lunes; `inbox`, pacotes para a caixa do validador (só com a caixa configurada). Desligado, as cargas
+   * passam por aqui como envelopes de terceiros.
+   */
+  setGateway(roles: { tx?: boolean; inbox?: boolean }) { this.gatewayRoles = { tx: !!roles.tx, inbox: !!roles.inbox }; }
+  get gateway() { return { ...this.gatewayRoles }; }
+
+  /** Recibo do gateway para a identidade descartável de quem mandou (a carga já foi tratada). */
+  sendCarryReceipt(to: PublicIdentity, rc: CarryReceipt) {
+    const now = this.o.now();
+    this.router.send(sealCarryReceipt(to, rc, now).bytes, now);
+    this.flushAll();
+  }
+
+  /** `openExtra` do roteador: só abre o que tem o destino do gateway (com o papel ligado) ou de uma carga minha. */
+  private openCarryEnvelope(bytes: Uint8Array, h: Header, now: number): Opened | null {
+    if (h.kind !== EnvelopeKind.Direct) return null;
+    const kind = gatewayKindOf(h);
+    if (kind !== null) {
+      const on = kind === CarryKind.Tx ? this.gatewayRoles.tx : this.gatewayRoles.inbox;
+      return on ? openDirect(bytes, kind === CarryKind.Tx ? GATEWAY_TX_IDENTITY : GATEWAY_INBOX_IDENTITY, now) : null;
+    }
+    for (const c of this.carries.values()) if (sameBytes(h.dest, directDest(c.me.agreePk, h.expiresAt))) return openDirect(bytes, c.me, now);
+    return null;
+  }
+
+  private onCarry(m: Opened, bytes: Uint8Array) {
+    const c = carryOf(m, bytes);
+    if (c) { if (this.o.events.gatewayCarry) this.o.events.gatewayCarry(c); return; }
+    const rc = decodeCarryReceipt(m.body);
+    if (!rc) return;
+    let h: Header;
+    try { h = parseHeader(bytes); } catch { return; }
+    for (const [id, out] of this.carries) {
+      if (!sameBytes(h.dest, directDest(out.me.agreePk, h.expiresAt))) continue;
+      // O recibo tem de falar da MESMA carga (hash da transação ou do pacote).
+      if (rc.about !== out.about || toHex(rc.ref) !== out.ref) return;
+      // Recibo final: paro de espalhar a minha cópia (outros nós já podem ter as deles).
+      if (rc.status === 'finalized' || rc.status === 'accepted') { this.router.forget(id); out.bytes = null; }
+      this.o.events.carryReceipt?.(id, rc);
+      this.o.events.changed?.();
+      return;
+    }
+  }
+
   peerConnected(peerId: string, via: TransportClass) { this.peers.set(peerId, via); this.flush(peerId); this.announce(peerId); }
   peerDisconnected(peerId: string) { this.peers.delete(peerId); this.photoSent.delete(peerId); }
   clearPeers() { this.peers.clear(); }
@@ -1653,6 +1947,7 @@ export class Messenger {
     if (ct.changed) this.o.events.changed?.();
     this.router.purge(this.o.now());
     this.pruneOwn();
+    for (const [id, c] of this.carries) if (c.expiresAt + RECEIPT_TTL_SEC <= this.o.now()) this.carries.delete(id);
     this.tickAlerts();
     // Venceu o TTL sem confirmação: sai da fila e a conversa mostra "expirada" (com Reenviar).
     let changed = false;
@@ -1718,6 +2013,7 @@ export class Messenger {
       if (info) { this.credits.addReceipt(rc, { ...info, relays: left === undefined ? 1 : DEFAULT_HOPS - left - 1 }, via); changed = true; }
     }
     this.sendProofs(peerId);
+    this.sendProofsV2(peerId);
     if (p && this.relayDay.bytes >= p.dailyBytes) this.applyRelay(); // chegou ao limite do dia
     if (changed) this.o.events.changed?.();
   }
@@ -1725,7 +2021,10 @@ export class Messenger {
   /** Bytes que chegaram de um vizinho. */
   receive(peerId: string, bytes: Uint8Array) {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
+    if (isProofV2Frame(bytes)) { this.onProofsV2(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }
+    // Cargas para gateway têm teto próprio por vizinho (cada uma custa a um gateway uma consulta à Mainnet).
+    if (gatewayKindOf(bytes) !== null && !this.carryLimit.take(peerId, this.o.now())) return { status: 'rejected' as const, reason: 'limite de cargas' };
     const r = this.router.ingest(bytes, peerId, this.o.now());
     this.rx = null;
     if (r.status === 'delivered') {
@@ -1739,6 +2038,8 @@ export class Messenger {
     if (r.status === 'stored') { this.o.events.changed?.(); this.flushAll(); return r; } // retransmissão para terceiros
     if (r.status !== 'delivered') return r;
     const m = r.message;
+    // Carga ou recibo (sem sessão, sem prova de entrega): nunca vai para as conversas.
+    if (m.type === MsgType.Carry) { try { this.onCarry(m, bytes); } finally { this.rx = null; } return r; }
     if (m.kind === EnvelopeKind.Group) {
       // Prova de entrega: segredo que só quem decifrou conhece (vira crédito para os relays).
       this.addProof(m.id, m.ackSecret);
@@ -1747,7 +2048,8 @@ export class Messenger {
       return r;
     }
     // Sinal efêmero ("digitando…") não publica prova: não gera crédito para quem repassou.
-    try { if (!this.onDirect(m)) this.addProof(m.id, m.ackSecret); } finally { this.rx = null; }
+    // Prova v1 (legado, para os aparelhos antigos) e v2 (assinada por mim, selada para o validador).
+    try { if (!this.onDirect(m)) { this.addProof(m.id, m.ackSecret); this.addProofV2(bytes, m.id, m.ackSecret); } } finally { this.rx = null; }
     return r;
   }
 
@@ -1806,6 +2108,33 @@ export class Messenger {
       if (known && typeof p.n === 'string' && p.n.length < 4096) this.o.events.notice?.(m.fromId, p.n, m.from);
       return false;
     }
+    if (p?.t === 'wa') {
+      const c = this.contacts.get(m.fromId);
+      if (!c || c.via !== 'public' || c.request || used !== 'public' || typeof p.a !== 'string') return false;
+      const a = p.a.trim();
+      if (a && (a.length > 64 || !isLunesAddress(a))) return false;
+      c.lunes = a || undefined;
+      this.o.events.peerWallet?.(m.fromId, a || null);
+      this.o.events.changed?.();
+      return false;
+    }
+    if (p?.t === 'ar' || p?.t === 'av' || p?.t === 'ns') {
+      const c = this.contacts.get(m.fromId);
+      if (!c || c.via !== 'public' || c.request || used !== 'public') return false;
+      if (p.t === 'ns') { if (Number.isInteger(p.s) && p.s >= 0) this.o.events.nodeStatus?.(c.id, p.s); return false; }
+      if (p.t === 'ar') {
+        if (typeof p.p !== 'string' || !/^[0-9a-f]{64}$/.test(p.p)) return false;
+        // Sem `c` (pedido antigo): conta de quando chegou.
+        const createdAt = Number.isInteger(p.c) ? p.c! : m.sentAt;
+        this.o.events.endorseRequest?.(c.id, { phonePk: p.p, createdAt, bondOk: p.b === 1, cancel: p.x === 1 });
+        return false;
+      }
+      const e = p.e as Partial<EndorsementJson> | undefined;
+      if (e && typeof e.endorserPk === 'string' && typeof e.phonePk === 'string' && Number.isInteger(e.day) && typeof e.inPerson === 'boolean' && typeof e.sig === 'string' && e.sig.length === 128) {
+        this.o.events.endorsement?.(c.id, { endorserPk: e.endorserPk, phonePk: e.phonePk, day: e.day!, inPerson: e.inPerson, sig: e.sig });
+      }
+      return false;
+    }
     if (p?.t === 'pp') {
       const c = this.contacts.get(m.fromId);
       if (c && c.via === 'public' && !c.request && used === 'public' && typeof p.p === 'string') this.o.events.peerPhoto?.(m.fromId, p.p === '' ? null : isJpegBase64(p.p) ? p.p : null);
@@ -1838,7 +2167,7 @@ export class Messenger {
       const strangers = [...this.contacts.values()].filter(x => x.request).length;
       if (strangers >= MAX_CONTACTS_FROM_STRANGERS) return false; // contra enxurrada de pedidos
       this.invites.delete(inv.code); // uso único
-      const name = typeof p.n === 'string' && used === 'public' ? p.n.slice(0, 40) : '';
+      const name = typeof p.n === 'string' && used === 'public' ? stripBidi(p.n).slice(0, 40) : '';
       const info: AcceptedInvite = { contactId: m.fromId, name, via: used, at: this.o.now() * 1000 };
       this.accepted.add(info);
       this.o.events.inviteUsed?.(info);
@@ -1869,6 +2198,7 @@ export class Messenger {
       s: { public: this.managers.public.export(), anon: this.managers.anon.export() },
       inv: [...this.invites.values()],
       cr: this.credits.export(this.o.now()),
+      p2: [...this.proofsV2].flatMap(([id, ps]) => ps.filter(p => this.o.now() - p.at < PROOF_V2_KEEP_SEC).map(p => [id, { s: b64url(p.sealed), at: p.at }])),
       mx: [...this.days],
       ud: this.deliveryDays.export(),
       ia: this.accepted.export(),
@@ -1878,8 +2208,9 @@ export class Messenger {
       rk: this.rotatedFor,
       ca: this.alertBook.export(),
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
-      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
+      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', ...(c.lunes ? { w: c.lunes } : {}), s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],
+      cy: [...this.carries].map(([id, c]) => [id, { s: b64url(c.seed), x: c.expiresAt, k: c.about, r: c.ref, ...(c.bytes && this.router.has(id) ? { b: b64url(c.bytes) } : {}) }]),
       seen: this.router.exportSeen(),
       d: this.delivered,
       nb: {

@@ -10,6 +10,7 @@ import { hmac } from '@noble/hashes/hmac.js';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { unb64url } from '../messaging/card';
 import { normalizePin } from './nodeApi';
+import { isLunesAddress } from './ss58';
 
 export const PAIR_PREFIX = 'piup:';
 export const REQUEST_PREFIX = 'piut:';
@@ -41,6 +42,13 @@ export function parsePair(text: string, now = Date.now()): PairedNode {
   return { phoneId: j.i, secret, node: String(j.n ?? 'piu-node').slice(0, 40), operator: String(j.o ?? '').slice(0, 40), at: now, ...(pin ? { pin } : {}), ...(url ? { url } : {}) };
 }
 
+/**
+ * Pareamento já salvo para o mesmo celular com outro segredo: trocar desfaz o pareamento com o nó
+ * atual, então a tela pede confirmação antes de salvar (um QR colado não troca nada sozinho).
+ */
+export const pairingConflict = (list: readonly PairedNode[], node: PairedNode): PairedNode | null =>
+  list.find(n => n.phoneId === node.phoneId && n.secret !== node.secret) ?? null;
+
 /** Código de 6 dígitos que este celular mostra ao parear (o operador digita no painel). */
 export const pairCode = (p: PairedNode) => six(u32(hmac(sha256, unb64url(p.secret), te.encode('piu/v0/phone-pair'))));
 
@@ -50,7 +58,8 @@ export function parseRequest(text: string): TransferRequest {
   let j: Record<string, unknown>;
   try { j = json(t.slice(REQUEST_PREFIX.length)); } catch { throw new Error('Pedido incompleto ou corrompido.'); }
   if (j.v !== 1 || typeof j.i !== 'string' || typeof j.a !== 'number' || !(j.a > 0) || typeof j.t !== 'string' || typeof j.p !== 'string' || typeof j.x !== 'number') throw new Error('Pedido inválido.');
-  if (j.t !== 'personal' && !/^lunes:[1-9A-HJ-NP-Za-km-z]{26,44}$/.test(j.t)) throw new Error('Destino inválido.');
+  // Endereço com checksum SS58 conferido (como o piu-node faz): checksum errado não aparece como válido.
+  if (j.t !== 'personal' && !(j.t.startsWith('lunes:') && isLunesAddress(j.t.slice('lunes:'.length)))) throw new Error('Destino inválido.');
   return { raw: t, txId: j.i, amount: j.a, to: j.t, phoneId: j.p, expiresAt: j.x * 1000, node: String(j.n ?? 'piu-node').slice(0, 40) };
 }
 

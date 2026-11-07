@@ -9,18 +9,21 @@ import { Icon } from './Icon';
 import { T } from './T';
 
 /** Controle segmentado (raio 12, botões de 32 px). */
-export function Segmented<V extends string>({ options, value, onChange, label }: { options: [V, string][]; value: V; onChange: (v: V) => void; label: string }) {
+export function Segmented<V extends string>({ options, value, onChange, label, size = 'md' }: { options: [V, string][]; value: V; onChange: (v: V) => void; label: string;
+  /** `lg`: o segmentado da Carteira no design (altura 36, raio 11, trilho `bg2` raio 14, 14 px). */
+  size?: 'md' | 'lg' }) {
   const { c } = useTheme();
   const { compact } = useLayout();
+  const lg = size === 'lg';
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: 12, backgroundColor: c.bg3 }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: lg ? 14 : 12, backgroundColor: lg ? c.bg2 : c.bg3 }}>
       {options.map(([k, l]) => {
         const on = k === value;
         return (
           <Pressable key={k} onPress={() => onChange(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on}
-            style={{ flex: 1, minHeight: 32, paddingVertical: 4, borderRadius: 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: on ? c.bg : 'transparent',
+            style={{ flex: 1, minHeight: lg ? 36 : 32, paddingVertical: 4, borderRadius: lg ? 11 : 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: on ? c.bg : 'transparent',
               shadowColor: '#000', shadowOpacity: on ? 0.12 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
-            <T size={compact ? 12 : 13} w={on ? 600 : 450} numberOfLines={2} align="center">{l}</T>
+            <T size={lg ? 14 : compact ? 12 : 13} w={on ? 600 : 450} numberOfLines={2} align="center">{l}</T>
           </Pressable>
         );
       })}

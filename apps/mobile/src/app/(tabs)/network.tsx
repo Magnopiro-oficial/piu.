@@ -11,7 +11,9 @@ import { useTransport } from '../../state/transport';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { Peer } from '../../transport';
 import { SectionLabel, Segmented, Toggle } from '../../ui/Controls';
+import { GatewaySection } from '../../ui/NodeViews';
 import { Icon } from '../../ui/Icon';
+import { LanRow, PointsSection } from '../../ui/point/NetworkRows';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
@@ -94,6 +96,8 @@ export default function Network() {
         <View style={{ marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
           {TRANSPORTS.map(([k, icon, nameKey, descKey], i) => {
             const name = t(nameKey), desc = t(descKey);
+            // Wi-Fi local (rede local, P1): estado real do transporte LAN e os motivos de estar parado.
+            if (k === 'mesh') return <LanRow key={k} name={name} first={!i} />;
             return (
             <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
               <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={20} w={300} /></View>
@@ -109,6 +113,11 @@ export default function Network() {
             );
           })}
         </View>
+
+        <PointsSection />
+
+        {/* Piu 11 N10: celular como gateway (desligado de fábrica; gasta dados e bateria). */}
+        <GatewaySection on={n.gateway} onToggle={() => n.setGateway(!n.gateway)} label={<SectionLabel>{t('n11.n10.label')}</SectionLabel>} />
 
         <SectionLabel>{t('network.limits')}</SectionLabel>
         <View style={{ marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 16 }}>
@@ -226,7 +235,7 @@ function Radar({ peers, live, count }: { peers: Peer[]; live: (p: Peer) => boole
       <View style={{ position: 'absolute', left: '50%', top: '50%', width: 52, height: 52, marginLeft: -26, marginTop: -26, borderRadius: 26, backgroundColor: c.line, alignItems: 'center', justifyContent: 'center' }}>
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={11} w={600} color={c.invink}>{t('network.radar.you')}</T></View>
       </View>
-      <T size={11} w={500} mono color={c.ink2} style={{ position: 'absolute', left: 14, top: 12 }}>{t('network.radar.caption', { label })}</T>
+      <T size={11} w={500} mono color={c.ink2} style={{ position: 'absolute', left: 14, bottom: 12 }}>{t('network.radar.caption', { label })}</T>
     </View>
   );
 }

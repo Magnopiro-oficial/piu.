@@ -12,8 +12,10 @@ import { fontFamily } from '../../theme/fonts';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Avatar } from '../../ui/Avatar';
 import { Icon, type IconName } from '../../ui/Icon';
+import { Pop } from '../../ui/motion';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
+import { PointHereBanner } from '../../ui/point/PointWatch';
 import { msgSummary } from '../../lib/chatCore';
 
 type Filter = 'all' | Kind;
@@ -64,6 +66,7 @@ export default function Chats() {
           <T size={12} w={500} color={c.ink2}>{t('chats.nodes.pill', { count: nodes })}</T>
         </Pressable>
       </View>
+      <PointHereBanner />
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, height: 40, paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.bg2 }}>
         <Icon name="search" size={20} color={c.ink2} />
         <TextInput value={q} onChangeText={setQ} placeholder={t('chats.search')} placeholderTextColor={c.ink3} accessibilityLabel={t('chats.search')}
@@ -138,14 +141,13 @@ function ChatRow({ chat, onPress }: { chat: Chat; onPress: () => void }) {
   );
 }
 
+/** Badge de não lidas: `piuPop .32s cubic-bezier(.2,.9,.3,1.4)` a cada número novo. */
 function Badge({ n }: { n: number }) {
-  const { c, reduceMotion } = useTheme();
-  const s = useRef(new Animated.Value(reduceMotion ? 1 : 0.4)).current;
-  useEffect(() => { if (!reduceMotion) Animated.spring(s, { toValue: 1, friction: 5, tension: 180, useNativeDriver: true }).start(); }, [n, reduceMotion, s]);
+  const { c } = useTheme();
   return (
-    <Animated.View style={{ minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: 11, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center', transform: [{ scale: s }] }}>
+    <Pop dur={320} seq={n} style={{ minWidth: 22, height: 22, paddingHorizontal: 7, borderRadius: 11, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
       <T size={12} w={600} color={c.invink}>{n}</T>
-    </Animated.View>
+    </Pop>
   );
 }
 

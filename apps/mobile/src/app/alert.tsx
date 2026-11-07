@@ -11,6 +11,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { Icon, type IconName } from '../ui/Icon';
 import { T } from '../ui/T';
+import { Pop, Up } from '../ui/motion';
 
 const when = (sec: number) => fmtDate(sec * 1000, { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
 
@@ -95,16 +96,20 @@ export default function Alert() {
         <View style={{ width: 88, height: 88 }}>
           {rings.map((r, i) => (
             <Animated.View key={i} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 44, borderWidth: 1.5, borderColor: fg,
-              opacity: r.interpolate({ inputRange: [0, 1], outputRange: [reduceMotion || !loud ? 0 : 0.6, 0] }), transform: [{ scale: r.interpolate({ inputRange: [0, 1], outputRange: [1, 1.8] }) }] }} />
+              opacity: r.interpolate({ inputRange: [0, 1], outputRange: [reduceMotion || !loud ? 0 : 0.6, 0] }), transform: [{ scale: r.interpolate({ inputRange: [0, 1], outputRange: [1, 2.2] }) }] }} />
           ))}
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 44, backgroundColor: loud ? fg : c.bg2, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Design: ícone com `piuPop .5s`, título `piuUp .5s .15s` e cartões `piuUp .5s .3s`. */}
+          <Pop dur={500} style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, borderRadius: 44, backgroundColor: loud ? fg : c.bg2, alignItems: 'center', justifyContent: 'center' }}>
             <Icon name={cat.icon as IconName} size={44} fill color={loud ? bg : c.ink} />
-          </View>
+          </Pop>
         </View>
+        <Up delay={150} style={{ gap: 12 }}>
         <View style={{ gap: 12 }} accessibilityRole={loud ? 'alert' : undefined}>
           <T size={loud ? 36 : 32} w={700} ls={loud ? -0.045 : -0.04} lh={loud ? 1.02 : 1.05} color={fg} style={{ opacity: a.status === 'contested' ? 0.7 : 1 }}>{a.title}</T>
           {!!a.text && <T size={16} lh={1.45} color={fg} style={{ opacity: 0.85 }} selectable>{a.text}</T>}
         </View>
+        </Up>
+        <Up delay={300} style={{ gap: 22 }}>
         <View style={{ flexDirection: 'row', gap: 10, alignItems: 'flex-start', padding: 12, borderRadius: 16, borderWidth: 1, borderColor: line }}>
           <Icon name="info" size={17} color={fg} />
           <T size={13} w={600} lh={1.4} color={fg} style={{ flex: 1 }}>{officialNote(t)}{a.status === 'contested' ? ` ${t('alert.contestedNote')}` : ''}</T>
@@ -117,6 +122,7 @@ export default function Alert() {
             </View>
           ))}
         </View>
+        </Up>
       </ScrollView>
       <View style={{ gap: 10 }}>
         {a.canVote && (

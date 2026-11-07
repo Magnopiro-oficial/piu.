@@ -25,6 +25,19 @@ export interface WalletTransferRecord {
   status: 'signed' | 'submitted' | 'included' | 'finalized' | 'failed';
   createdAt: number; updatedAt: number; block?: { number: number; hash: string; index: number };
   error?: string; scanned?: number; proofSource?: 'indexer';
+  /**
+   * Levada pela malha até um gateway (lib/walletCarry.ts): assinada sem internet, com era imortal
+   * (`ctx.period` 0). Enquanto `status` for `signed`, está "em trânsito pela malha". `report`: o que um
+   * gateway disse no recibo (dica, não prova; a confirmação é a da Mainnet, lida pelo aparelho).
+   */
+  carried?: WalletCarryInfo;
+}
+export interface WalletCarryInfo {
+  /** Envelope na malha (muda se a carga for solta de novo). */
+  envelopeId: string;
+  /** Quando saiu deste aparelho (ms) e até quando o envelope vive na malha (s). */
+  at: number; expiresAt: number;
+  report?: { status: 'pool' | 'included' | 'finalized' | 'invalid' | 'error'; at: number; block?: { number: number; hash: string; index: number }; reason?: string };
 }
 export type WalletExecutionOutcome = { ok: true } | { ok: false; error: string } | { ok: null; error: string };
 export interface WalletTransferDeps {
@@ -40,7 +53,7 @@ export interface WalletTransferSend extends WalletTransferSave {
   guard?: () => boolean;
 }
 export class WalletTransferError extends Error {
-  constructor(readonly code: 'cancelled' | 'review_required' | 'busy' | 'invalid' | 'runtime' | 'funds' | 'signing' | 'persistence' | 'session_lost', message: string, readonly quote?: WalletQuote) { super(message); }
+  constructor(readonly code: 'cancelled' | 'review_required' | 'busy' | 'invalid' | 'runtime' | 'funds' | 'signing' | 'persistence' | 'session_lost' | 'offline_context', message: string, readonly quote?: WalletQuote) { super(message); }
 }
 const U128 = (1n << 128n) - 1n;
 const integer = (v: unknown): v is number => typeof v === 'number' && Number.isSafeInteger(v) && v >= 0;
@@ -48,12 +61,12 @@ const amount = (v: unknown): v is string => typeof v === 'string' && /^(0|[1-9][
 const sameBytes = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
 const ctxOf = (ctx: WalletSigningContext): SigningContext => ({ ...ctx, tip: BigInt(ctx.tip) });
 const nowOf = (deps: WalletTransferDeps) => (deps.now ?? Date.now)();
-const normalized = (address: string) => {
+export const normalized = (address: string) => {
   const d = decodeSs58(address);
   if (!d.ok) throw new WalletTransferError('invalid', d.error);
   return { ...d, address: encodeSs58(d.publicKey, 57) };
 };
-function checkedRuntime(rv: { specVersion: number; transactionVersion: number }, genesisHash: string) {
+export function checkedRuntime(rv: { specVersion: number; transactionVersion: number }, genesisHash: string) {
   if (rv?.specVersion !== WALLET_RUNTIME.specVersion || rv?.transactionVersion !== WALLET_RUNTIME.transactionVersion || genesisHash?.toLowerCase() !== LUNES_GENESIS_HASH) {
     throw new WalletTransferError('runtime', 'Rede ou runtime da Lunes diferente do conferido. Atualize o Piu antes de transferir.');
   }
@@ -62,14 +75,14 @@ async function withRpc<T>(deps: WalletTransferDeps, fn: (rpc: LunesRpc) => Promi
   const rpc = deps.rpc ?? new LunesRpc();
   try { return await fn(rpc); } finally { if (!deps.rpc) rpc.close(); }
 }
-async function saveRecord(record: WalletTransferRecord, callbacks: WalletTransferSave): Promise<WalletTransferRecord> {
+export async function saveRecord(record: WalletTransferRecord, callbacks: WalletTransferSave): Promise<WalletTransferRecord> {
   try { await callbacks.save(record); } catch { throw new WalletTransferError('persistence', 'Não foi possível guardar o pagamento no aparelho. Não crie outro pagamento; confira o histórico.'); }
   return record;
 }
 export const isActiveWalletTransfer = (record: WalletTransferRecord | null | undefined): boolean => !!record && record.status !== 'finalized' && record.status !== 'failed';
 
 /** O callback não pode trocar destino/valor/contexto nem devolver assinatura de outra conta. */
-function checkedSigned(quote: Pick<WalletQuote, 'from' | 'dest' | 'value' | 'ctx'>, signed: { hex: string; hash: string }): string {
+export function checkedSigned(quote: Pick<WalletQuote, 'from' | 'dest' | 'value' | 'ctx'>, signed: { hex: string; hash: string }): string {
   try {
     if (!/^0x(?:[0-9a-fA-F]{2})+$/.test(signed.hex)) throw new Error('extrinsic não é hex');
     const bytes = fromHex(signed.hex), prefix = decodeCompact(bytes);
@@ -85,13 +98,28 @@ function checkedSigned(quote: Pick<WalletQuote, 'from' | 'dest' | 'value' | 'ctx
   } catch (e) { throw new WalletTransferError('signing', `Não foi possível conferir a assinatura: ${e instanceof Error ? e.message : String(e)}`); }
 }
 
+const CARRY_REPORT = ['pool', 'included', 'finalized', 'invalid', 'error'];
+function isCarryInfo(c: unknown): c is WalletCarryInfo {
+  if (!c || typeof c !== 'object') return false;
+  const x = c as WalletCarryInfo;
+  if (typeof x.envelopeId !== 'string' || !/^[0-9a-f]{32}$/.test(x.envelopeId) || !integer(x.at) || !integer(x.expiresAt)) return false;
+  const r = x.report;
+  if (r === undefined) return true;
+  if (!r || !CARRY_REPORT.includes(r.status) || !integer(r.at) || (r.reason !== undefined && (typeof r.reason !== 'string' || r.reason.length > 200))) return false;
+  return r.block === undefined || (integer(r.block.number) && integer(r.block.index) && isHash(r.block.hash));
+}
+
 /** Validação do registro restaurado: nenhum BigInt/segredo em disco, bytes/hash/call/assinatura conferem. */
 export function isWalletTransferRecord(value: unknown): value is WalletTransferRecord {
   try {
     if (!value || typeof value !== 'object') return false;
     const r = value as WalletTransferRecord;
     if (!['signed', 'submitted', 'included', 'finalized', 'failed'].includes(r.status) || !amount(r.value) || BigInt(r.value) === 0n || !amount(r.fee) || !integer(r.createdAt) || !integer(r.updatedAt)) return false;
-    if (!r.ctx || !integer(r.ctx.blockNumber) || !integer(r.ctx.nonce) || r.ctx.nonce > 0xffffffff || r.ctx.period !== 64 || r.ctx.tip !== '0' || !isHash(r.ctx.blockHash) || r.validUntil !== r.ctx.blockNumber + 64) return false;
+    if (!r.ctx || !integer(r.ctx.blockNumber) || !integer(r.ctx.nonce) || r.ctx.nonce > 0xffffffff || r.ctx.tip !== '0' || !isHash(r.ctx.blockHash)) return false;
+    // Era mortal de 64 blocos (envio direto) ou imortal (levada pela malha, sempre com `carried`).
+    const mortal = r.ctx.period === 64 && r.validUntil === r.ctx.blockNumber + 64 && r.carried === undefined;
+    const immortal = r.ctx.period === 0 && r.validUntil === Number.MAX_SAFE_INTEGER && r.ctx.blockHash.toLowerCase() === LUNES_GENESIS_HASH && isCarryInfo(r.carried);
+    if (!mortal && !immortal) return false;
     checkedRuntime(r.ctx, r.ctx.genesisHash);
     if (!isHash(r.hash) || r.id !== r.hash || checkedSigned(r, { hex: r.hex, hash: r.hash }) !== r.hash) return false;
     if (r.scanned !== undefined && (!integer(r.scanned) || r.scanned < r.ctx.blockNumber || r.scanned > r.validUntil)) return false;
@@ -100,6 +128,14 @@ export function isWalletTransferRecord(value: unknown): value is WalletTransferR
     if (r.status === 'finalized' && (!r.block || r.proofSource !== 'indexer')) return false;
     return true;
   } catch { return false; }
+}
+
+/** Quanto pode sair sem tocar no que está preso (frozen) nem no mínimo da conta (depósito existencial). */
+export function spendable(balance: { free: bigint; reserved: bigint; frozen: bigint }): bigint {
+  // reserved já está fora de free. O depósito existencial é sobre free+reserved; frozen limita free.
+  const ed = balance.reserved >= LUNES_EXISTENTIAL_DEPOSIT ? 0n : LUNES_EXISTENTIAL_DEPOSIT - balance.reserved;
+  const floor = balance.frozen > ed ? balance.frozen : ed;
+  return balance.free > floor ? balance.free - floor : 0n;
 }
 
 export async function prepareWalletTransfer(input: { from: string; dest: string; value: string }, deps: WalletTransferDeps = {}): Promise<WalletQuote> {
@@ -118,10 +154,7 @@ export async function prepareWalletTransfer(input: { from: string; dest: string;
     const dummy = encodeSignedExtrinsic(from.publicKey, new Uint8Array(64), signedExtra(ctxOf(ctx)), transferKeepAliveCall(dest.publicKey, BigInt(input.value)));
     const fee = (await paymentQueryInfo(rpc, dummy, balance.blockHash)).partialFee;
     if (fee < 0n || fee > U128) throw new WalletTransferError('invalid', 'Taxa devolvida pela Lunes é inválida.');
-    // reserved já está fora de free. O depósito existencial é sobre free+reserved; frozen limita free.
-    const ed = balance.reserved >= LUNES_EXISTENTIAL_DEPOSIT ? 0n : LUNES_EXISTENTIAL_DEPOSIT - balance.reserved;
-    const floor = balance.frozen > ed ? balance.frozen : ed;
-    const available = balance.free > floor ? balance.free - floor : 0n;
+    const available = spendable(balance);
     const total = BigInt(input.value) + fee;
     if (total > available) throw new WalletTransferError('funds', 'Saldo disponível insuficiente para o valor e a taxa, preservando bloqueios e o mínimo da conta.');
     return { from: from.address, dest: dest.address, value: input.value, fee: fee.toString(), total: total.toString(), available: available.toString(), ctx, preparedAt: nowOf(deps) };

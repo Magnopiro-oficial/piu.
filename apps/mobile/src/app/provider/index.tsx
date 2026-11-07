@@ -2,7 +2,10 @@ import { router } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { useT } from '../../i18n';
 import { type ProvNode, useProvNodes } from '../../lib/approvalNodes';
+import { CERT_STREAK_DAYS } from '../../lib/phoneNodeCore';
+import { certDayOf } from '../../lib/phoneNodeView';
 import { dayLabel } from '../../lib/walletCore';
+import { usePhoneNode } from '../../state/phoneNode';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Button } from '../../ui/Button';
 import { BackHeader, SectionLabel } from '../../ui/Controls';
@@ -49,6 +52,8 @@ export default function Provider() {
           <Icon name="chevron_right" size={20} w={300} color={c.ink2} />
         </Pressable>
 
+        <PhoneNodeRow />
+
         <SectionLabel>{t('prov.devicesLabel', { count: list.length })}</SectionLabel>
         <View style={{ marginHorizontal: 20, gap: 8 }}>
           {nodes && list.length === 0 && (
@@ -79,6 +84,34 @@ function NodeRow({ d }: { d: ProvNode }) {
       <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <T size={15} w={600} numberOfLines={2}>{d.node}</T>
         <T size={11.5} mono color={c.ink2} numberOfLines={1}>{d.operator ? `${t('prov.operator', { name: d.operator })} · ` : ''}{pairedWhen}</T>
+      </View>
+      <Icon name="chevron_right" size={20} w={300} color={c.ink2} />
+    </Pressable>
+  );
+}
+
+/**
+ * "Do celular" (modo nó, TELAS-NOVAS.md M3): o painel deste aparelho na lista do Provider, no lugar do
+ * "em breve". Desligado, leva a M1; ligado, mostra o dia dos 7 e os avais e abre o painel.
+ */
+function PhoneNodeRow() {
+  const { c } = useTheme();
+  const t = useT();
+  const pn = usePhoneNode();
+  const st = pn.status;
+  const on = !!st && st.phase !== 'off';
+  const line = !st || st.phase === 'off' ? t('pn.row.off')
+    : st.phase === 'left' ? (pn.refund.phase === 'returned' ? t('pn.row.returned') : t('pn.row.left', { count: pn.refund.daysLeft }))
+    : st.phase === 'needsBond' ? t('pn.row.needsBond')
+    : st.phase === 'bondPending' ? t('pn.row.bondPending')
+    : t('pn.row.on', { n: certDayOf(pn.certBar), total: CERT_STREAK_DAYS, e: st.endorsements, needed: st.needed });
+  return (
+    <Pressable onPress={() => router.push(on ? '/provider/phone' : '/provider/connect?mode=phone')} accessibilityRole="button" accessibilityLabel={`${t('pn.title')}, ${line}`}
+      style={({ pressed }) => ({ marginTop: 10, marginHorizontal: 20, padding: 14, borderRadius: 20, borderWidth: on ? 1.5 : 1, borderColor: on ? c.ink : c.line2, flexDirection: 'row', alignItems: 'center', gap: 12, transform: [{ scale: pressed ? 0.99 : 1 }] })}>
+      <View style={{ width: 44, height: 44, borderRadius: 13, backgroundColor: on ? c.ink : c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name="smartphone" size={23} w={300} color={on ? c.invink : c.ink} /></View>
+      <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
+        <T size={15} w={600}>{t('pn.title')}</T>
+        <T size={12.5} color={c.ink2} numberOfLines={2}>{line}</T>
       </View>
       <Icon name="chevron_right" size={20} w={300} color={c.ink2} />
     </Pressable>

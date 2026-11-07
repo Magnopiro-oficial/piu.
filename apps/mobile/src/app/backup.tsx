@@ -1,12 +1,13 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { usePreventCapture } from '../lib/screenCapture';
-import { useState } from 'react';
-import { Pressable, ScrollView, TextInput, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import Svg, { FeGaussianBlur, Filter, G, Rect } from 'react-native-svg';
+import { Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SAVE_OPTS, type SaveOpt } from '../data/settings';
 import { backupFileName, MIN_PASSWORD, passwordIssue, sealBackup } from '../lib/backupFile';
 import { useT } from '../i18n';
-import { confirmDevice } from '../lib/deviceAuth';
 import { platformName, thisPlatform } from '../lib/devices';
+import { lockGate } from '../lib/identityGuard';
 import { saveBackupFile } from '../lib/migrationIO';
 import { collectBackupData } from '../lib/migrationState';
 import { fontFamily } from '../theme/fonts';
@@ -45,20 +46,29 @@ export default function Backup() {
   const t = useT();
   const { showToast } = useStore();
   const { setBackupDone, setBackupAt } = useSettings();
-  const { phrase: words } = useKeys();
+  const { unlockPhrase } = useKeys();
+  // A frase só existe aqui depois de "Mostrar" (B-01: lida do cofre com a biometria, não fica no estado do app).
+  const [words, setWords] = useState<string[] | null>(null);
   const PHRASE = words ?? [];
-  const [QUIZ] = useState(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')));
+  const QUIZ = useMemo(() => makeQuiz(PHRASE.length ? PHRASE : Array(12).fill('')), [words]); // eslint-disable-line react-hooks/exhaustive-deps
   const [step, setStep] = useState<Step>('phrase');
   // Bloqueia prints e gravação de tela enquanto a frase pode aparecer (Android: FLAG_SECURE).
   usePreventCapture('backup');
-  const [noLock, setNoLock] = useState(false);
+  const [needLock, setNeedLock] = useState(false);
   const [denied, setDenied] = useState(false);
-  /** Quem tem a frase tem tudo: só mostra depois de confirmar que é o dono do aparelho. */
+  /**
+   * Quem tem a frase tem tudo: só mostra depois de confirmar que é o dono do aparelho.
+   * Sem bloqueio no aparelho, recusa como a carteira faz ao assinar (M-01); a web é só demonstração.
+   */
   const reveal = async () => {
-    setDenied(false);
-    const r = await confirmDevice(t('backup.revealPrompt'));
-    if (r === 'denied') { setDenied(true); return; }
-    setNoLock(r === 'unavailable');
+    setDenied(false); setNeedLock(false);
+    const web = Platform.OS === 'web';
+    const u = await unlockPhrase(t('backup.revealPrompt'), { allowWithoutLock: web });
+    // Biometria trocada: a cópia com biometria ficou ilegível; confirmar a frase de novo.
+    if (u.status === 'recover') { router.push('/vault-recover' as Href); return; }
+    const g = lockGate(u.status, web);
+    if (g === 'denied' || u.status !== 'ok') { if (g === 'needLock') setNeedLock(true); else setDenied(true); return; }
+    setWords(u.words);
     setShown(true);
   };
   const [shown, setShown] = useState(false);
@@ -110,13 +120,12 @@ export default function Backup() {
             <Pressable onPress={() => { if (!shown) void reveal(); }} accessibilityRole={shown ? undefined : 'button'}
               accessibilityLabel={shown ? t('backup.phrase.a11y', { words: PHRASE.map((w, i) => `${i + 1} ${w}`).join(', ') }) : t('backup.phrase.hidden')}
               style={{ marginTop: 4, marginHorizontal: 20, padding: 14, borderRadius: 22, backgroundColor: c.bg2, flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-              {PHRASE.map((w, i) => (
+              {shown ? PHRASE.map((w, i) => (
                 <View key={i} style={{ width: '31%', flexGrow: 1, height: 42, borderRadius: 12, backgroundColor: c.bg, flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 10 }}>
                   <T size={10.5} w={500} mono color={c.ink2}>{i + 1}</T>
-                  {/* Oculta: o RN não tem desfoque de texto portátil; mostramos pontos no lugar da palavra. */}
-                  <T size={15} w={600} color={shown ? c.ink : c.ink3}>{shown ? w : '•••••'}</T>
+                  <T size={15} w={600}>{w}</T>
                 </View>
-              ))}
+              )) : <PhraseVeil />}
             </Pressable>
             <View style={{ paddingTop: 16, paddingHorizontal: 24, gap: 10 }}>
               {([['no_photography', t('backup.tip.noPhoto')], ['cloud_off', t('backup.tip.neverSent')]] as const).map(([ic, text]) => (
@@ -125,11 +134,16 @@ export default function Backup() {
             </View>
             <View style={{ paddingTop: 22, paddingHorizontal: 20 }}>
               {denied && <T size={13} style={{ paddingBottom: 10 }} accessibilityLiveRegion="polite">{t('backup.denied')}</T>}
-              {shown && (noLock || !vaultIsSecure) && (
+              {needLock && (
+                <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2 }}>
+                  <Icon name="lock" size={18} />
+                  <T size={12.5} lh={1.4} style={{ flex: 1 }}>{t('backup.needLock')}</T>
+                </View>
+              )}
+              {shown && !vaultIsSecure && (
                 <View style={{ flexDirection: 'row', gap: 10, padding: 12, marginBottom: 12, borderRadius: 14, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2 }}>
                   <Icon name="warning" size={18} />
-                  <T size={12.5} lh={1.4} style={{ flex: 1 }}>{vaultIsSecure
-                    ? t('backup.noLock') : t('backup.webDemo')}</T>
+                  <T size={12.5} lh={1.4} style={{ flex: 1 }}>{t('backup.webDemo')}</T>
                 </View>
               )}
               <Button label={shown ? t('backup.noted') : t('backup.show')} onPress={() => (shown ? setStep('confirm') : void reveal())} />
@@ -197,5 +211,38 @@ export default function Backup() {
         )}
       </ScrollView>
     </Screen>
+  );
+}
+
+/**
+ * Frase oculta (design: grade com `filter: blur`): 12 células desfocadas desenhadas em SVG, sem as
+ * palavras. Nada da frase entra na tela antes de "Mostrar a frase"; os traços têm larguras fixas
+ * (não revelam o tamanho das palavras).
+ */
+function PhraseVeil() {
+  const { c } = useTheme();
+  const [w, setW] = useState(0);
+  const gap = 8, h = 42, cw = (w - gap * 2) / 3;
+  const bars = [44, 30, 38, 26, 42, 34, 40, 28, 36, 46, 32, 38];
+  return (
+    <View onLayout={e => setW(e.nativeEvent.layout.width)} style={{ width: '100%', height: h * 4 + gap * 3 }} accessible={false}>
+      {w > 0 && (
+        <Svg width={w} height={h * 4 + gap * 3}>
+          <Filter id="veil" x="-10%" y="-10%" width="120%" height="120%"><FeGaussianBlur stdDeviation={5} /></Filter>
+          <G filter="url(#veil)">
+            {bars.map((bw, i) => {
+              const x = (i % 3) * (cw + gap), y = Math.floor(i / 3) * (h + gap);
+              return (
+                <G key={i}>
+                  <Rect x={x} y={y} width={cw} height={h} rx={12} fill={c.bg} />
+                  <Rect x={x + 10} y={y + 16} width={10} height={10} rx={3} fill={c.ink3} />
+                  <Rect x={x + 26} y={y + 14} width={Math.min(bw, cw - 36)} height={14} rx={4} fill={c.ink2} />
+                </G>
+              );
+            })}
+          </G>
+        </Svg>
+      )}
+    </View>
   );
 }

@@ -1,8 +1,15 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { forgetPersisted, persistNow, readPersisted, usePersisted } from '../lib/persist';
-import { accountBalance, checkSettlement, LunesOffline, LunesRpc } from '../lib/lunesRpc';
+import { accountBalance, checkSettlement, finalizedHead, LunesOffline, LunesRpc } from '../lib/lunesRpc';
+import { carryBridge } from '../lib/carryBridge';
+import { bundlePoster, GATEWAY_PROBE_MS, GATEWAY_TICK_MS, VALIDATOR_INBOX_URL } from '../lib/carryConfig';
+import { CarryGateway } from '../lib/carryGateway';
+import { sealEvidence, sealRegistry } from '../lib/evidenceCarry';
+import type { PhoneRegistryFile } from '../lib/phoneNodeCore';
+import { bundleRefHex, CarryKind } from '../protocol/carry';
+import { VALIDATOR_PROOF_PK } from '../protocol/proof';
 import { judgementText, judgePayment, newPayRequest, type PaidNotice, type PaymentJudgement, type PaymentRequest, payRequestSummary } from '../lib/paymentRequest';
 import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
 import { placeFromText } from '../lib/locationCore';
@@ -17,10 +24,17 @@ import { canPost, type GroupState, memberCount } from '../messaging/groups';
 import { policyHours } from '../messaging/hours';
 import { type AlertCategory, type AlertNotice, type AlertSeverity, type AlertView, type Vote } from '../messaging/communityAlerts';
 import { t } from '../i18n/core';
+import { pointBridge, usePointRuntime } from '../lib/pointBridge';
+import { mergePolicy } from '../lib/pointCore';
 import { alertCategoryName, alertSeverityName, alertStatusName, officialNote } from '../i18n/alerts';
 import { GroupRate, groupShouldNotify } from '../messaging/mentions';
 import type { CreditBook, Credit, Lot } from '../messaging/credits';
 import type { EvidenceFile } from '../messaging/evidence';
+import type { EndorsementJson } from '../protocol/phoneNode';
+import { nodeModeLimits, notePeer, receiveEndorsement, receiveRequest } from '../lib/phoneNodeCore';
+import { getPhoneNode, subscribePhoneNode, updatePhoneNode } from '../lib/phoneNodeStore';
+import { fromHistorySnapshot } from '../lib/lunesHistory';
+import { usePhoneNodeEffects } from './phoneNodeEffects';
 import type { AcceptedInvite } from '../messaging/usage';
 import { b64url, unb64url } from '../messaging/card';
 import { createTestDevice, TEST_DEVICE_PEER, TEST_DEVICE_NAME, type TestDevice } from '../messaging/testDevice';
@@ -78,6 +92,8 @@ interface Messaging {
   testDeviceCard: (() => string) | null;
   /** Contatos aceitos de uma identidade (para escolher membros). */
   contactsFor: (via: IdentityKind) => { id: string; name: string }[];
+  /** Contatos públicos que compartilharam o endereço Lunes (destinatários da Carteira). */
+  walletContacts: () => { chatId: string; id: string; name: string; address: string }[];
   /** Estado real de um grupo/canal/comunidade da conversa (ou null). */
   groupOf: (chatId: string) => GroupState | null;
   /** Meu id na identidade usada pelo grupo (para saber se sou admin). */
@@ -118,6 +134,21 @@ interface Messaging {
   stats: () => Stats | null;
   /** Arquivo de evidências deste aparelho (formato do validador), ou null antes das chaves. */
   evidence: () => EvidenceFile | null;
+  /**
+   * Leva pela malha, até um gateway com a caixa do validador, o arquivo de evidências e (se houver) o de
+   * registro do modo nó, em partes seladas para a chave do validador. O arquivo manual continua valendo.
+   * `bundles`: partes soltas; `0` com `reason` quando não dá (sem chave do validador publicada ou malha
+   * ainda subindo). Docs: docs/carteira/transacoes-pela-malha.md.
+   */
+  carryEvidence: (registry?: PhoneRegistryFile | null) => { bundles: number; reason?: 'no-validator-key' | 'not-ready' };
+  /** Modo nó: pedir aval e mandar aval (só contato público aceito; `chatId` da conversa ou id do contato). */
+  phoneNodeMsg: {
+    request: (contactId: string, phonePk: string, o: { createdAt: number; bondOk: boolean; cancel?: boolean }) => void;
+    endorse: (contactId: string, e: EndorsementJson) => void;
+    credits: () => Credit[];
+    /** Estado da retransmissão (pausa por horário ou limite diário). */
+    relay: () => ReturnType<Messenger['relayStatus']> | null;
+  };
   /** Troca (ou remove) a foto do perfil público e manda a versão pequena aos contatos públicos. */
   setProfilePhoto: (p: ProfilePhoto | null) => void;
   /** Rota real de uma mensagem (meio, envelope, blocos, prioridade), se houver registro. */
@@ -160,6 +191,8 @@ interface Messaging {
     markPaid: (id: string, proof: { txHash?: string; blockHash?: string }) => void;
     /** Quem pediu confere na Mainnet (só leitura). Lança erro sem rede. Nunca marca "recebido" sem prova. */
     check: (id: string) => Promise<PayCheck>;
+    /** Todos os registros deste aparelho (ex.: endereços Lunes conhecidos dos contatos, na folha Enviar). */
+    all: () => PayRecord[];
     /** Muda quando um registro muda. */
     epoch: number;
   };
@@ -199,10 +232,16 @@ const Ctx = createContext<Messaging | null>(null);
  * mensagem nunca é reutilizada.
  */
 export function MessagingProvider({ children }: { children: ReactNode }) {
-  const { identities, node, nodeKeyFor } = useKeys();
+  const { identities, node, nodeKeyFor, phoneOperator } = useKeys();
+  const phonePkRef = useRef<string | null>(null);
+  phonePkRef.current = phoneOperator ? toHex(phoneOperator.pk) : null;
   const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping, removeChat } = useStore();
-  const { relay: relayOn, relayPaused, storage } = useNetwork();
-  const relay = relayOn && !relayPaused;
+  const { relay: relayOn, relayPaused, storage, gateway: gatewaySetting } = useNetwork();
+  // Ponto Piu ativo (state/point.tsx): guardião guarda e repassa com os limites do ponto; nível gateway liga o gateway.
+  const pointRt = usePointRuntime();
+  const gatewayOn = gatewaySetting || pointRt.gateway;
+  const gatewayRef = useRef<CarryGateway | null>(null);
+  const relay = (relayOn && !relayPaused) || pointRt.relay;
   const { priv, sto, bat, preview } = useSettings();
   // Pré-visualização "Nunca" também nos banners dentro do app (store.tsx, showToast).
   useEffect(() => { setPreviewMode(preview); }, [preview, setPreviewMode]);
@@ -215,9 +254,17 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [nearEpoch, setNearEpoch] = useState(0);
   const [alertEpoch, setAlertEpoch] = useState(0);
   const wallet = useWallet();
+  const { verified } = useStore();
+  // Modo nó do celular: limites, certificado do dia, registro, devolução e aviso aos contatos verificados.
+  const phoneNode = useSyncExternalStore(subscribePhoneNode, getPhoneNode, getPhoneNode);
+  const phoneNodeActive = phoneNode.activeSince !== null && !phoneNode.exit;
+  const historyMoves = useMemo(() => (wallet.historySnap ? fromHistorySnapshot(wallet.historySnap).moves : null), [wallet.historySnap]);
   const walletRef = useRef(wallet); walletRef.current = wallet;
   // Pedidos de pagamento (os mais antigos saem quando passam de MAX_PAYS).
   const [pays, setPays] = usePersisted<Record<string, PayRecord>>(PAYS_KEY, {});
+  // Endereço Lunes que os contatos públicos recebem (`wa`); `null` com o ajuste desligado.
+  const sharedWallet = priv.shareWallet !== false ? wallet.lunesAddress : null;
+  const [lastShared, setLastShared] = usePersisted<string | null>('wallet.shared', null);
   const paysRef = useRef(pays); paysRef.current = pays;
   const [payEpoch, setPayEpoch] = useState(0);
   const putPay = useCallback((rec: PayRecord) => {
@@ -330,6 +377,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
       events: {
         changed: saveSoon,
+        // Carga pela malha (docs/carteira/transacoes-pela-malha.md): recibos vão para a carteira; como gateway, entrega.
+        carryReceipt: (id, rc) => carryBridge.receipt(id, rc),
+        gatewayCarry: c => { void gatewayRef.current?.handle(c); },
         inviteUsed: () => setInviteEpoch(e => e + 1),
         notice: (contactId, text, pub) => {
           try {
@@ -361,6 +411,18 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           } catch { /* aviso inválido: ignora */ }
         },
         // Foto do perfil público de um contato (já conferida: JPEG pequeno, só de contato público).
+        // Endereço Lunes que um contato público compartilhou (já conferido no Messenger).
+        peerWallet: (contactId, address) => {
+          const cid = chatIdFor(contactId);
+          if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { lunes: address ?? undefined });
+        },
+        // Modo nó (docs/economia/no-celular.md): já conferido que é contato público aceito.
+        endorseRequest: (contactId, r) => { void updatePhoneNode(s => receiveRequest(s, contactId, r, now())).catch(() => {}); },
+        nodeStatus: (contactId, since) => { void updatePhoneNode(s => notePeer(s, contactId, since, now())).catch(() => {}); },
+        endorsement: (contactId, e) => {
+          const mine = phonePkRef.current;
+          if (mine) void updatePhoneNode(s => receiveEndorsement(s, contactId, e, mine, now())).catch(() => {});
+        },
         peerPhoto: (contactId, b64) => {
           const cid = chatIdFor(contactId);
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.patchChat(cid, { photo: b64 ? `data:image/jpeg;base64,${b64}` : undefined });
@@ -499,7 +561,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
     mRef.current = m;
     setMessenger(m);
-    return () => { clearTimeout(saveTimer.current); void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
+    carryBridge.setCarrier((item, ref) => m.carry(item, ref));
+    return () => { carryBridge.setCarrier(null); clearTimeout(saveTimer.current); void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
   }, [identities, node, onboarded, rotationEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Avisos de aparelho revogado: envia os pendentes aos contatos (pública e anônima, cada um pela sua).
@@ -539,6 +602,31 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   }, [messenger, identities]);
 
   useEffect(() => { if (messenger) { messenger.relay = relay; } }, [messenger, relay]);
+  const verifiedContacts = useMemo(() => chats.filter(c => verified[c.id] && c.peer && !c.group).map(c => c.peer!), [chats, verified]);
+  usePhoneNodeEffects({
+    phoneOperator, nodeKeyFor, pendingTransfer: wallet.pendingTransfer, historyMoves, verifiedContacts,
+    sendNodeStatus: messenger ? (id, since) => messenger.sendNodeStatus(id, since) : null,
+  });
+  // Celular como gateway (ajuste `net.gateway`, desligado de fábrica): só pega cargas enquanto a Lunes
+  // responde; sem rota, elas seguem pela malha como envelopes de terceiros. Pacotes para o validador só
+  // com a caixa configurada (VALIDATOR_INBOX_URL).
+  useEffect(() => {
+    if (!messenger || !gatewayOn) { messenger?.setGateway({}); gatewayRef.current = null; return; }
+    const post = bundlePoster(VALIDATOR_INBOX_URL);
+    const gw = new CarryGateway({ rpc: () => new LunesRpc(), now, reply: (to, rc) => messenger.sendCarryReceipt(to, rc), postBundle: post });
+    gatewayRef.current = gw;
+    let alive = true;
+    const probe = async () => {
+      const rpc = new LunesRpc();
+      try { await finalizedHead(rpc); if (alive) messenger.setGateway({ tx: true, inbox: !!post }); }
+      catch { if (alive) messenger.setGateway({}); }
+      finally { rpc.close(); }
+    };
+    void probe();
+    const p = setInterval(() => { void probe(); }, GATEWAY_PROBE_MS);
+    const tk = setInterval(() => { void gw.tick(); }, GATEWAY_TICK_MS);
+    return () => { alive = false; clearInterval(p); clearInterval(tk); messenger.setGateway({}); if (gatewayRef.current === gw) gatewayRef.current = null; };
+  }, [messenger, gatewayOn]);
   // Privacidade → "Quem pode me encontrar" (identidade pública): Por perto e pedidos pelo código.
   useEffect(() => { messenger?.setDiscovery(priv.find); setNearEpoch(e => e + 1); }, [messenger, priv.find]);
   // Bloqueados (só contatos reais `piu:…`): o mensageiro descarta o que eles mandam.
@@ -546,17 +634,31 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Limites do nó (Rede e Ajustes → Armazenamento / Bateria e limites) aplicados no roteador.
   useEffect(() => {
     if (!messenger) return;
+    const lim = mergePolicy({ maxBytes: storage * 1024 * 1024, retentionSec: Number(sto.retention) * 3600 }, pointRt);
     messenger.setPolicy({
-      maxBytes: storage * 1024 * 1024,
-      retentionSec: Number(sto.retention) * 3600,
-      dailyBytes: bat.traffic * 1024 * 1024,
+      maxBytes: lim.maxBytes,
+      retentionSec: lim.retentionSec,
+      // Modo nó do celular: no máximo 200 MB/dia de terceiros (docs/economia/no-celular.md).
+      dailyBytes: nodeModeLimits({ dailyBytes: bat.traffic * 1024 * 1024, batteryPct: 0 }, phoneNodeActive).dailyBytes,
       bytesPerSec: bat.bw === 'max' ? Infinity : (Number(bat.bw) * 1_000_000) / 8,
       // Sempre, 22h–7h ou a faixa Personalizada (reavaliada a cada `tick`, como as outras).
       hours: policyHours(bat.hours, bat.custom),
     });
-  }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours, bat.custom]);
+  }, [messenger, storage, sto.retention, bat.traffic, bat.bw, bat.hours, bat.custom, phoneNodeActive, pointRt]);
+  // Ponto Piu: contagem do que é de terceiros e "encerrar apaga o que o ponto guarda" (lib/pointBridge.ts).
+  useEffect(() => {
+    if (!messenger) return;
+    pointBridge.setHandlers({ stored: () => messenger.router.thirdPartyStats(), dropThirdParty: () => messenger.router.dropThirdParty() });
+    return () => pointBridge.setHandlers(null);
+  }, [messenger]);
   // Armazenamento → "Baixar mídia automaticamente".
   useEffect(() => { messenger?.setAutoDownload(sto.auto); }, [messenger, sto.auto]);
+  // Endereço Lunes para os contatos públicos: manda quando muda (ou quando o ajuste muda), uma vez.
+  // Contato novo recebe na hora em que entra (addFromCard / Por perto).
+  useEffect(() => {
+    if (!messenger || sharedWallet === lastShared) return;
+    try { messenger.sendWalletAddress(sharedWallet); setLastShared(sharedWallet); } catch { /* endereço inválido: não compartilha */ }
+  }, [messenger, sharedWallet, lastShared, setLastShared]);
   useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
   // Por perto: anúncio de presença só enquanto visível (até o fim da 1 h), com o perfil PÚBLICO
   // (nome e foto pequena) e a minha taxa. Invisível = retirada do anúncio.
@@ -574,7 +676,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       if (e.type === 'connected') {
         const md = e.via ?? transport.kind;
         peerMedium.current.set(e.id, md);
-        messenger.peerConnected(e.id, md === 'nearby' ? 'direct' : 'ble');
+        messenger.peerConnected(e.id, md === 'nearby' ? 'direct' : md === 'lan' ? 'eth' : 'ble'); // rede local = classe Ethernet/LAN do roteador
       } else if (e.type === 'disconnected' || e.type === 'peerLost') { messenger.peerDisconnected(e.id); peerMedium.current.delete(e.id); }
       else if (e.type === 'envelope') {
         // Meio por onde este envelope chegou (pode ser outro enlace do mesmo vizinho).
@@ -666,6 +768,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       addChat(chatFor(contact, false, priv.temp));
       // Contato público novo: recebe a foto do perfil público (o anônimo nunca recebe foto).
       if (via === 'public' && profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, card.id);
+      if (via === 'public' && sharedWallet) messenger.sendWalletAddress(sharedWallet, card.id);
       return cid;
     },
     setProfilePhoto: p => {
@@ -677,6 +780,9 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return (peer && messenger?.getContact(peer)?.pub) || null;
     },
     testDeviceCard: testDevice ? testDevice.card : null,
+    walletContacts: () => (messenger ? messenger.listContacts()
+      .filter(c => c.via === 'public' && !c.request && !!c.lunes)
+      .map(c => ({ chatId: chatIdFor(c.id), id: c.id, name: c.name || c.id.slice(4, 8).toUpperCase(), address: c.lunes! })) : []),
     contactsFor: via => (messenger ? messenger.listContacts().filter(c => c.via === via && !c.request).map(c => ({ id: c.id, name: c.name || c.id.slice(4, 8).toUpperCase() })) : []),
     groupOf: chatId => {
       const gid = chats.find(c => c.id === chatId)?.group;
@@ -750,6 +856,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         setIdentity('public');
         wallet.recordEarned(r.request.name, r.request.fee);
         if (profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, r.contact.id);
+        if (sharedWallet) messenger.sendWalletAddress(sharedWallet, r.contact.id);
         return cid;
       },
       hide: id => messenger.hideNear(id),
@@ -774,6 +881,19 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       usage: { activeDays: messenger.deliveryDays.activeDays(), accepted: messenger.acceptedInvites() },
     } : null),
     evidence: () => (messenger ? messenger.evidence() : null),
+    carryEvidence: registry => {
+      if (!VALIDATOR_PROOF_PK) return { bundles: 0, reason: 'no-validator-key' };
+      if (!messenger) return { bundles: 0, reason: 'not-ready' };
+      const sealed = [...sealEvidence(messenger.evidence(), VALIDATOR_PROOF_PK), ...sealRegistry(registry ?? null, VALIDATOR_PROOF_PK)];
+      for (const b of sealed) messenger.carry({ kind: CarryKind.Evidence, sealed: b }, bundleRefHex(b));
+      return { bundles: sealed.length };
+    },
+    phoneNodeMsg: {
+      request: (contactId, phonePk, o) => { if (!messenger) throw new Error('Mensageiro não iniciou.'); messenger.requestEndorsement(contactId, phonePk, o); },
+      endorse: (contactId, e) => { if (!messenger) throw new Error('Mensageiro não iniciou.'); messenger.sendEndorsement(contactId, e); },
+      credits: () => (messenger ? messenger.credits.list() : []),
+      relay: () => (messenger ? messenger.relayStatus() : null),
+    },
     payments: {
       get: msgId => pays[msgId.replace(/^in-/, '')],
       send: (chatId, input) => {
@@ -825,9 +945,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           throw e instanceof Error ? e : new Error('Falha na consulta.');
         } finally { rpc.close(); }
       },
+      all: () => Object.values(pays),
       epoch: payEpoch,
     },
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
   return <Ctx.Provider value={value}>{children}<DesktopLinkBridge /><DesktopPayment /></Ctx.Provider>;

@@ -16,6 +16,7 @@
 import { concat, fromUtf8, ProtocolError, Reader, toHex, utf8, Writer } from '../protocol/bytes';
 import { identityId, type Identity, type IdentityKind, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { sign } from '../protocol/suite';
+import { stripBidi } from './bidi';
 
 export const CARD_PREFIX = 'piu1:';
 export const CARD_TTL_SEC = 24 * 3600;
@@ -49,10 +50,11 @@ export function unb64url(s: string): Uint8Array {
   return Uint8Array.from(r, c => c.charCodeAt(0));
 }
 
-/** Corta o nome em até 48 bytes sem quebrar um caractere no meio. */
+/** Corta o nome em até 48 bytes sem quebrar um caractere no meio (e sem controles bidi). */
 function clampName(name: string): Uint8Array {
-  let out = utf8(name.trim());
-  let chars = [...name.trim()];
+  const clean = stripBidi(name).trim();
+  let out = utf8(clean);
+  let chars = [...clean];
   while (out.length > MAX_NAME_BYTES) { chars = chars.slice(0, -1); out = utf8(chars.join('')); }
   return out;
 }
@@ -90,7 +92,8 @@ export function decodeCard(text: string, now: number): ContactCard {
     const pub = { signPk, agreePk, binding };
     if (!verifyBinding(pub) || !sign.verify(sig, concat(DOMAIN, raw.slice(0, bodyLen)), signPk)) throw new ProtocolError('BAD_SIG', 'Assinatura do código não confere.');
     if (expiresAt <= now) throw new ProtocolError('EXPIRED', 'Este código venceu. Peça um novo.');
-    return { kind: k === 1 ? 'anon' : 'public', pub, invite, name: k === 1 ? '' : name, expiresAt, id: identityId(signPk, agreePk) };
+    // Nome exibido sem controles bidi (a assinatura acima já foi conferida sobre os bytes originais).
+    return { kind: k === 1 ? 'anon' : 'public', pub, invite, name: k === 1 ? '' : stripBidi(name).trim(), expiresAt, id: identityId(signPk, agreePk) };
   } catch (e) {
     if (e instanceof ProtocolError && e.code !== 'TRUNCATED') throw e;
     throw new ProtocolError('BAD_CARD', 'Código incompleto ou corrompido.');

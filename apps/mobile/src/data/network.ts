@@ -19,9 +19,11 @@ export const TRANSPORTS: [TxKey, IconName, Key, Key][] = [
 
 /**
  * Meios que aparecem na lista mas que nenhum transporte deste app usa ainda: sem chave de ligar, com
- * o motivo. O Wi-Fi Mesh (pela rede local, até um roteador com Piu Node) não existe nesta versão.
+ * o motivo. O Wi-Fi Mesh agora é a rede local (LNNP pelo Wi-Fi conectado, até Desktops, piu-node e
+ * outros celulares; transport/lan): tem chave, ligada de fábrica, e só age conectado a um Wi-Fi.
+ * No iPhone/web não há o módulo nativo: a chave fica, mas o transporte informa "indisponível".
  */
-export const UNAVAILABLE_TX: Partial<Record<TxKey, Key>> = { mesh: 'tx.mesh.unavailable' };
+export const UNAVAILABLE_TX: Partial<Record<TxKey, Key>> = {};
 
 /**
  * Vizinhos do transporte SIMULADO (Expo Go e navegador, ferramenta de teste em `transport/simulated.ts`):

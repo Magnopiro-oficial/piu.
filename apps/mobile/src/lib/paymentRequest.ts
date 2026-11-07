@@ -8,6 +8,7 @@
  */
 import { random } from '../protocol/suite';
 import { toHex } from '../protocol/bytes';
+import { stripBidi } from '../messaging/bidi';
 import { formatLunes, isHash, LUNES_DECIMALS, type SettlementCheck } from './lunesRpc';
 import { decodeSs58 } from './ss58';
 import { t as tGlobal, type Key, type Vars } from '../i18n/core';
@@ -45,8 +46,8 @@ export interface PaidNotice { id: string; txHash?: string; blockHash?: string }
 const ID_RE = /^[0-9a-f]{16}$/;
 const PLANCK_RE = /^[1-9][0-9]{0,26}$/;
 
-/** Espaços e caracteres de controle viram um espaço só; corta nas pontas. */
-const cleanDesc = (s: string) => s.replace(/[\s\p{Cc}]+/gu, ' ').trim();
+/** Espaços e caracteres de controle viram um espaço só; controles bidi saem (B-07); corta nas pontas. */
+const cleanDesc = (s: string) => stripBidi(s).replace(/[\s\p{Cc}]+/gu, ' ').trim();
 
 /**
  * "1,5", "1.5", "1.234,5" ou "0,00000001" → planck. `null` quando vazio, zero, negativo, com mais de 8

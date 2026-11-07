@@ -6,10 +6,12 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NotificationBridge } from '../lib/notifications';
+import { onboardingRedirect } from '../lib/identityGuard';
 import { cardFromText } from '../lib/inviteLink';
 import { forgetPersisted, loadPersisted, persistNow, readPersisted } from '../lib/persist';
 import { KeysProvider, preloadKeys } from '../state/keys';
 import { MessagingProvider } from '../state/messaging';
+import { PointProvider } from '../state/point';
 import { NetworkProvider } from '../state/network';
 import { StoreProvider, useStore } from '../state/store';
 import { ResetProvider } from '../state/reset';
@@ -22,6 +24,8 @@ import { AppLock } from '../ui/AppLock';
 import { SplashGate } from '../ui/Splash';
 import { SystemPrompts } from '../ui/SystemPrompts';
 import { Toast } from '../ui/Toast';
+import { PhoneNodeWatch } from '../ui/PhoneNodeWatch';
+import { PointWatch } from '../ui/point/PointWatch';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -47,7 +51,9 @@ export default function RootLayout() {
                     <SettingsProvider>
                       <TransportProvider>
                         <MessagingProvider>
-                          <Navigator />
+                          <PointProvider>
+                            <Navigator />
+                          </PointProvider>
                         </MessagingProvider>
                       </TransportProvider>
                     </SettingsProvider>
@@ -62,9 +68,6 @@ export default function RootLayout() {
   );
 }
 
-/** Telas acessíveis antes do onboarding. Todo o resto exige identidade criada (inclusive por link piu://). */
-const PRE_ONBOARDING = new Set(['welcome', 'identity', 'keys', 'restore', 'migrate']);
-
 /** Convite (`piu://invite/accept?c=…`) aberto antes de criar a identidade: volta para ele depois. */
 const PENDING_INVITE = 'invite.pending';
 
@@ -74,9 +77,11 @@ function OnboardingGuard() {
   const { onboarded } = useStore();
   const first = segments[0] as string | undefined;
   useEffect(() => {
-    if (onboarded || !first || PRE_ONBOARDING.has(first)) return;
-    if (first === 'invite' && typeof inviteParam === 'string' && cardFromText(inviteParam)) void persistNow(PENDING_INVITE, inviteParam).catch(() => {});
-    router.replace('/welcome');
+    // Antes do onboarding, só as telas de entrada; depois, restaurar/migrar não abrem mais (nem por link).
+    const to = onboardingRedirect(onboarded, first);
+    if (!to) return;
+    if (to === '/welcome' && first === 'invite' && typeof inviteParam === 'string' && cardFromText(inviteParam)) void persistNow(PENDING_INVITE, inviteParam).catch(() => {});
+    router.replace(to);
   }, [onboarded, first]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     if (!onboarded) return;
@@ -98,6 +103,8 @@ function Navigator() {
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade', animationDuration: 260 }} />
       <OnboardingGuard />
       <Toast />
+      <PhoneNodeWatch />
+      <PointWatch />
       <NotificationBridge />
       <SystemPrompts />
       <AppLock />

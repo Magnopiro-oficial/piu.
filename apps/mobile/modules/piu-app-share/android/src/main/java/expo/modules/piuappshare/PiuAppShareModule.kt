@@ -5,6 +5,8 @@ import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
+import android.content.pm.Signature
 import android.net.wifi.WifiManager
 import android.net.wifi.p2p.WifiP2pConfig
 import android.net.wifi.p2p.WifiP2pGroup
@@ -17,13 +19,14 @@ import expo.modules.kotlin.Promise
 import expo.modules.kotlin.exception.CodedException
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.io.BufferedReader
 import java.io.File
-import java.io.InputStreamReader
+import java.io.InputStream
+import java.net.Inet4Address
 import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.SecureRandom
+import java.util.concurrent.Semaphore
 import kotlin.concurrent.thread
 
 /** Provider próprio, para não colidir com o FileProvider de outras bibliotecas no manifesto. */
@@ -32,6 +35,16 @@ class PiuShareFileProvider : FileProvider()
 private const val APK_TYPE = "application/vnd.android.package-archive"
 /** Endereço do dono do grupo Wi-Fi Direct no Android quando o sistema não informa outro. */
 private const val GO_IP = "192.168.49.1"
+/** Conexões atendidas ao mesmo tempo (as duas páginas juntas). A rede do ponto é aberta a qualquer um: sem teto, uma thread por conexão esgotava o app. */
+private const val MAX_CONN = 12
+/** Maior linha de pedido aceita (`GET /Piu-0.1.1.apk HTTP/1.1` tem ~30 bytes); o resto do pedido nem é lido. */
+private const val MAX_REQUEST_LINE = 1024
+/** Nome do instalador: o que `apkShareName` gera (sem barra, aspas, CR/LF — vai no cabeçalho). */
+private val SAFE_NAME = Regex("^[A-Za-z0-9][A-Za-z0-9._-]{0,63}\\.apk$")
+/** IPv4 escrito por extenso (sem nome: `getByName` resolveria DNS). */
+private val IPV4 = Regex("^(0|[1-9]\\d{0,2})(\\.(0|[1-9]\\d{0,2})){3}$")
+private const val SEC_HEADERS = "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; form-action 'none'; base-uri 'none'\r\n" +
+  "X-Content-Type-Options: nosniff\r\nReferrer-Policy: no-referrer\r\nX-Frame-Options: DENY\r\nCache-Control: no-store\r\n"
 
 /**
  * "Enviar o Piu" de celular para celular, sem loja e sem internet (regra 6.1):
@@ -46,6 +59,8 @@ class PiuAppShareModule : Module() {
   private var server: ServerSocket? = null
   private val main = Handler(Looper.getMainLooper())
   private val autoStop = Runnable { stopWifi() }
+  private val apkHash = FileHashCache()
+  private val slots = Semaphore(MAX_CONN)
 
   private fun ctx(): Context = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "Sem contexto do app.", null)
 
@@ -54,10 +69,14 @@ class PiuAppShareModule : Module() {
     val info = ctx.applicationInfo
     if (!info.splitSourceDirs.isNullOrEmpty()) throw CodedException("ERR_SPLIT_APK", "Instalado em partes.", null)
     val dir = File(ctx.cacheDir, "piu-share").apply { mkdirs() }
-    val out = File(dir, File(fileName).name)
-    if (out.length() != File(info.sourceDir).length()) {
+    if (!SAFE_NAME.matches(fileName)) throw CodedException("ERR_SHARE", "Nome de arquivo inválido.", null)
+    val out = File(dir, fileName)
+    val src = File(info.sourceDir)
+    // Também refaz a cópia se o app foi atualizado depois dela (mesmo tamanho, conteúdo novo): o arquivo
+    // enviado tem de ser o instalado, que é o que `integrity` confere.
+    if (out.length() != src.length() || out.lastModified() < src.lastModified()) {
       dir.listFiles()?.forEach { it.delete() } // só a cópia mais recente fica
-      File(info.sourceDir).copyTo(out, overwrite = true)
+      src.copyTo(out, overwrite = true)
     }
     return out
   }
@@ -65,10 +84,22 @@ class PiuAppShareModule : Module() {
   override fun definition() = ModuleDefinition {
     Name("PiuAppShare")
 
-    OnDestroy { stopWifi() }
+    OnDestroy { stopWifi(); stopLan() }
 
     /** Tamanho do instalador, para a página dizer quanto vai baixar. */
     Function("apkSize") { File(ctx().applicationInfo.sourceDir).length().toDouble() }
+
+    /**
+     * B-03: SHA-256 do instalador (o mesmo arquivo que `shareApk`/`startWifiShare` entregam) e de cada
+     * certificado que assina o app instalado. AsyncFunction roda fora da thread principal; o hash do APK
+     * fica em cache por caminho + data + tamanho.
+     */
+    AsyncFunction("integrity") {
+      val ctx = ctx()
+      val info = ctx.applicationInfo
+      if (!info.splitSourceDirs.isNullOrEmpty()) throw CodedException("ERR_SPLIT_APK", "Instalado em partes.", null)
+      mapOf("apkSha256" to apkHash.get(File(info.sourceDir)), "certSha256" to signingCerts(ctx).map { ApkIntegrity.sha256(it.toByteArray()) })
+    }
 
     AsyncFunction("shareApk") { fileName: String, chooserTitle: String, promise: Promise ->
       try {
@@ -126,6 +157,54 @@ class PiuAppShareModule : Module() {
     }
 
     AsyncFunction("stopWifiShare") { stopWifi() }
+
+    /**
+     * Página do ponto Piu (guardião + distribuição do app, P9): a MESMA página/instalador, mas na rede Wi-Fi
+     * do ponto (ou no hotspot deste celular), só no IPv4 `ip` dessa rede, sem abrir Wi-Fi Direct e sem prazo
+     * (fica enquanto o ponto estiver ativo). Independente do `startWifiShare`: as duas podem rodar juntas.
+     * Erros: `ERR_SPLIT_APK`, `ERR_PORT`.
+     */
+    AsyncFunction("startLanShare") { fileName: String, pageHtml: String, ip: String, port: Int, promise: Promise ->
+      try {
+        // Só um IPv4 privado da rede do ponto (nunca 0.0.0.0/todas as interfaces, loopback ou público).
+        val addr = if (IPV4.matches(ip)) InetAddress.getByName(ip) else null
+        if (addr !is Inet4Address || !addr.isSiteLocalAddress) throw CodedException("ERR_BIND", "Endereço fora da rede local.", null)
+        if (port !in 1024..65535) throw CodedException("ERR_PORT", "Porta inválida.", null)
+        val apk = apkCopy(ctx(), fileName)
+        stopLan()
+        val s = ServerSocket(port, 8, addr)
+        lanServer = s
+        thread(name = "piu-point-page", isDaemon = true) { acceptLoop(s, apk, pageHtml) }
+        promise.resolve(mapOf("ip" to ip, "port" to s.localPort))
+      } catch (e: CodedException) {
+        promise.reject(e)
+      } catch (e: Exception) {
+        stopLan()
+        promise.reject(CodedException("ERR_PORT", e.message ?: "Porta ocupada.", e))
+      }
+    }
+
+    AsyncFunction("stopLanShare") { stopLan() }
+  }
+
+  /** Servidor da página do ponto (independente do Wi-Fi Direct). */
+  private var lanServer: ServerSocket? = null
+
+  private fun stopLan() {
+    try { lanServer?.close() } catch (_: Exception) {}
+    lanServer = null
+  }
+
+  /** Certificados de assinatura do app instalado (os atuais, sem o histórico de rotação). */
+  @Suppress("DEPRECATION")
+  private fun signingCerts(ctx: Context): List<Signature> {
+    val pm = ctx.packageManager
+    val sigs: Array<Signature>? = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+      pm.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNING_CERTIFICATES).signingInfo?.apkContentsSigners
+    } else {
+      pm.getPackageInfo(ctx.packageName, PackageManager.GET_SIGNATURES).signatures
+    }
+    return sigs?.toList() ?: emptyList()
   }
 
   private fun reasonCode(reason: Int) = when (reason) {
@@ -176,18 +255,38 @@ class PiuAppShareModule : Module() {
   private fun startServer(ip: String, port: Int, apk: File, pageHtml: String) {
     val s = ServerSocket(port, 8, InetAddress.getByName(ip))
     server = s
-    thread(name = "piu-apk-server", isDaemon = true) {
-      while (!s.isClosed) {
-        val c = try { s.accept() } catch (e: Exception) { break }
-        thread(isDaemon = true) { serve(c, apk, pageHtml) }
+    thread(name = "piu-apk-server", isDaemon = true) { acceptLoop(s, apk, pageHtml) }
+  }
+
+  /** Uma thread por conexão, no máximo `MAX_CONN` juntas; acima disso a conexão é fechada na hora. */
+  private fun acceptLoop(s: ServerSocket, apk: File, pageHtml: String) {
+    while (!s.isClosed) {
+      val c = try { s.accept() } catch (e: Exception) { break }
+      if (!slots.tryAcquire()) { try { c.close() } catch (_: Exception) {}; continue }
+      thread(isDaemon = true) {
+        try { serve(c, apk, pageHtml) } catch (_: Exception) {} finally { slots.release() }
       }
     }
   }
 
+  /** Primeira linha do pedido, até `MAX_REQUEST_LINE` bytes; mais longa (ou sem fim) = `null`. */
+  private fun requestLine(input: InputStream): String? {
+    val buf = ByteArray(MAX_REQUEST_LINE)
+    var n = 0
+    while (n < MAX_REQUEST_LINE) {
+      val b = input.read()
+      if (b < 0) return null
+      if (b == '\n'.code) return String(buf, 0, n, Charsets.US_ASCII).trimEnd('\r')
+      buf[n++] = b.toByte()
+    }
+    return null
+  }
+
+  /** Só `GET /` (a página) e `GET /<arquivo>` (o instalador); caminho comparado por igualdade, sem arquivo do disco. */
   private fun serve(c: Socket, apk: File, pageHtml: String) {
     c.use { sock ->
       sock.soTimeout = 15_000
-      val line = BufferedReader(InputStreamReader(sock.getInputStream())).readLine() ?: return
+      val line = requestLine(sock.getInputStream()) ?: return
       val parts = line.split(" ")
       val path = if (parts.size >= 2 && parts[0] == "GET") parts[1].substringBefore('?') else ""
       val out = sock.getOutputStream()
@@ -195,15 +294,15 @@ class PiuAppShareModule : Module() {
         "/" -> {
           val body = pageHtml.toByteArray(Charsets.UTF_8)
           out.write(("HTTP/1.1 200 OK\r\nContent-Type: text/html; charset=utf-8\r\nContent-Length: ${body.size}\r\n" +
-            "Content-Security-Policy: default-src 'none'; style-src 'unsafe-inline'\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+            SEC_HEADERS + "Connection: close\r\n\r\n").toByteArray())
           out.write(body)
         }
         "/${apk.name}" -> {
           out.write(("HTTP/1.1 200 OK\r\nContent-Type: $APK_TYPE\r\nContent-Length: ${apk.length()}\r\n" +
-            "Content-Disposition: attachment; filename=\"${apk.name}\"\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").toByteArray())
+            "Content-Disposition: attachment; filename=\"${apk.name}\"\r\n" + SEC_HEADERS + "Connection: close\r\n\r\n").toByteArray())
           apk.inputStream().use { it.copyTo(out, 64 * 1024) }
         }
-        else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nConnection: close\r\n\r\n".toByteArray())
+        else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n".toByteArray())
       }
       out.flush()
     }

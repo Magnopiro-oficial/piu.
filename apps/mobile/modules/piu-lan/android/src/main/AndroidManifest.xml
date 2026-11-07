@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Rede local (LNNP por UDP + TCP no Wi-Fi conectado). Todas "normais": concedidas na instalação, sem pedido em tempo de execução.
+       Soquetes crus não passam pela configuração de segurança de rede (ela vale para HTTP): nada de usesCleartextTraffic. -->
+  <uses-permission android:name="android.permission.INTERNET" />
+  <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+  <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+  <!-- MulticastLock: receber o anúncio UDP (broadcast) e o mDNS; segurado só enquanto o LAN está ligado. -->
+  <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
+</manifest>

@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { ScrollView, TextInput, View } from 'react-native';
 import { RESTORE_OPTS } from '../data/settings';
 import { BackupError, openBackup, parseBackupHeader } from '../lib/backupFile';
+import { PhraseExistsError } from '../lib/identityGuard';
 import { useT } from '../i18n';
 import { pickBackupFile } from '../lib/migrationIO';
 import { requestDeviceChangeNotice, requestSessionRotation, stashRestoredData } from '../lib/migrationState';
@@ -13,6 +14,7 @@ import { fontFamily } from '../theme/fonts';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { BackHeader } from '../ui/Controls';
+import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/Icon';
 import { PhraseInput } from '../ui/PhraseInput';
 import { Screen } from '../ui/Screen';
@@ -44,6 +46,8 @@ export default function Restore() {
   const [pw, setPw] = useState('');
   const [busy, setBusy] = useState(false);
   const [progress, setProgress] = useState(0);
+  // Já existe outra frase no aparelho (ex.: gerada e não usada): trocar só segurando o botão.
+  const [askReplace, setAskReplace] = useState(false);
   const filled = words.every(Boolean);
   const unknown = words.filter(w => w && !WORDLIST.includes(w)).length;
   const valid = isValidPhrase(words);
@@ -65,13 +69,14 @@ export default function Restore() {
     }
   };
 
-  const go = async () => {
+  const go = async (replace = false) => {
     setErr(null);
     if (restoreMode === 'device') { router.push('/migrate'); return; }
     setBusy(true);
     try {
       if (restoreMode === 'phrase') {
-        await restore(words);
+        // Digitou a frase: tem a cópia fora do aparelho (a frase pode ir para o item com biometria, B-01).
+        await restore(words, { replace, known: true });
         // O pedido do aviso vem antes: a rotação remonta o mensageiro, que assina e distribui.
         await requestDeviceChangeNotice('phrase');
         await requestSessionRotation('restaurado pela frase');
@@ -81,7 +86,7 @@ export default function Restore() {
       if (!file) return;
       setProgress(0);
       const content = await openBackup(file.text, pw, { onProgress: setProgress });
-      await restore(content.phrase);
+      await restore(content.phrase, { replace, known: true });
       if (content.data && Object.keys(content.data).length) await stashRestoredData(content.data);
       // O pedido do aviso vem antes: a rotação remonta o mensageiro, que assina e distribui.
       await requestDeviceChangeNotice('file');
@@ -89,6 +94,7 @@ export default function Restore() {
       setPw('');
       router.push({ pathname: '/migrate', params: { file: file.name, hist: content.data ? String(Object.keys(content.data).length) : '0' } });
     } catch (e) {
+      if (e instanceof PhraseExistsError) { setAskReplace(true); return; }
       setErr(e instanceof BackupError ? backupErr(e, t) : restoreMode === 'file' ? t('restore.err.open') : t('restore.err.vault'));
     } finally { setBusy(false); }
   };
@@ -133,6 +139,10 @@ export default function Restore() {
           <Button label={busy ? t('restore.wait') : t('common.continue')} disabled={!canGo} onPress={() => { void go(); }} />
         </View>
       </ScrollView>
+      {askReplace && (
+        <Dialog icon="warning" title={t('restore.replace.title')} body={t('restore.replace.body')} hold primary={t('restore.replace.hold')} primaryIcon="touch_app"
+          onClose={() => setAskReplace(false)} onPrimary={() => { setAskReplace(false); void go(true); }} />
+      )}
     </Screen>
   );
 }

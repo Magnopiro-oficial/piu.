@@ -1,7 +1,7 @@
 /// <reference types="node" />
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { SPLASH, dotDelays, splashPlan } from '../splashCore';
+import { SPLASH, dotDelays, splashHold, splashPlan } from '../splashCore';
 
 test('abertura: com movimento, segura 900 ms e sai em 420 ms com o app entrando em 500 ms', () => {
   const p = splashPlan(false);
@@ -30,4 +30,12 @@ test('abertura: os pontinhos piscam em sequência com 150 ms entre eles', () => 
 test('abertura: a entrada dos elementos termina antes da saída começar', () => {
   const ends = [SPLASH.pop, SPLASH.up, SPLASH.fade].map((s) => s.delay + s.dur);
   for (const end of ends) assert.ok(end <= SPLASH.hold, `${end} > ${SPLASH.hold}`);
+});
+
+test('abertura: a splash sai ~2,6 s depois do boot (design), mas nunca antes de 900 ms na tela', () => {
+  assert.equal(splashHold(0), 2600);
+  assert.equal(splashHold(1000), 1600);
+  assert.equal(splashHold(1700), 900);
+  assert.equal(splashHold(5000), 900);
+  assert.equal(splashHold(-50), 2600);
 });

@@ -179,6 +179,18 @@ test('snapshot: contatos, conversas e últimas N mensagens, sem prévias nem cam
   assert.deepEqual(s.messages.g1, [{ id: 's1', from: 'sys', text: 'Grupo cifrado', time: '09:00' }]);
 });
 
+test('snapshot: endereço Lunes do contato e o meu vão para o computador (destinatários e Receber)', () => {
+  const addr = '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse';
+  const chats: Chat[] = [chat('p1', [], { lunes: addr }), chat('p2', [], { peer: 'piu:def', name: 'Bia' })];
+  const s = buildSnapshot(chats, {}, undefined, addr);
+  assert.deepEqual(s.contacts, [{ id: 'piu:abc', chatId: 'p1', name: 'Ana', verified: false, lunes: addr }, { id: 'piu:def', chatId: 'p2', name: 'Bia', verified: false }]);
+  assert.equal(s.chats[0]!.lunes, addr);
+  assert.equal(s.wallet, addr);
+  assert.equal(buildSnapshot(chats, {}).wallet, undefined, 'sem carteira no celular, nada vai');
+  // Contato que passa a compartilhar o endereço gera evento de conversa alterada.
+  assert.deepEqual(diffChats([chats[1]!], [{ ...chats[1]!, lunes: addr }]).map(e => e.k), ['chat']);
+});
+
 test('eventos: mensagem nova, estado de envio, conversa alterada/removida, mensagem removida, digitando', () => {
   const a: Chat[] = [chat('p1', [{ id: 'n1', from: 'me', text: 'oi', time: '10:00', status: 'aguardando' }, { id: 'in-1', from: 'them', text: 'olá', time: '10:00' }]), chat('p2', [], { name: 'Bia' })];
   assert.deepEqual(diffChats(a, a), []);

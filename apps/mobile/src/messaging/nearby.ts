@@ -17,6 +17,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { concat, fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { identityId, type Identity, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { sign } from '../protocol/suite';
+import { stripBidi } from './bidi';
 import { b64url, unb64url } from './card';
 import { isJpegBase64 } from './photo';
 
@@ -93,6 +94,7 @@ export function decodePresence(b: Uint8Array, now: number): (Presence & { body: 
     if (!sign.verify(unb64url(sig), signedPart(body), pub.signPk)) return null;
     let photo: string | undefined;
     if (p !== undefined) { if (!isJpegBase64(p) || photoHash(p) !== ph) return null; photo = p; }
-    return { id: identityId(pub.signPk, pub.agreePk), pub, name: n, fee: f, photoHash: ph, photo, at: t, until: x, hops: h, body: { ...body, sig, photo } };
+    // `body` segue intacto (é o que se repassa, com a assinatura); só o nome exibido perde os controles bidi.
+    return { id: identityId(pub.signPk, pub.agreePk), pub, name: stripBidi(n), fee: f, photoHash: ph, photo, at: t, until: x, hops: h, body: { ...body, sig, photo } };
   } catch { return null; }
 }

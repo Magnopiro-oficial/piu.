@@ -63,6 +63,7 @@ function Privacy() {
         <ToggleRow name={t('privacy.delay')} desc={t('privacy.delay.desc')} on={priv.delay} onChange={flip('delay')} />
         <ToggleRow name={t('privacy.pad')} desc={t('privacy.pad.desc')} on={priv.pad} onChange={flip('pad')} />
         <ToggleRow name={t('privacy.noRoutes')} desc={t('privacy.noRoutes.desc')} on={priv.noRoutes} onChange={flip('noRoutes')} />
+        <ToggleRow name={t('privacy.shareWallet')} desc={t('privacy.shareWallet.desc')} on={priv.shareWallet !== false} onChange={() => setPriv({ shareWallet: priv.shareWallet === false })} />
       </SetGroup>
       <SetGroup title={t('privacy.lock')}>
         <ToggleRow name={t('privacy.biometric')} disabled={Platform.OS === 'web'}

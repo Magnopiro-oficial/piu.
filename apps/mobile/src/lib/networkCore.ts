@@ -11,14 +11,14 @@ import { fmtNumber, t as tGlobal, type Key, type Vars } from '../i18n/core';
 type Tr = (key: Key, vars?: Vars) => string;
 
 export type TxKey = 'ble' | 'direct' | 'mesh' | 'lora' | 'eth';
-export type PeerVia = 'ble' | 'nearby' | 'sim';
+export type PeerVia = 'ble' | 'nearby' | 'lan' | 'sim';
 
-export const VIA_LABEL: Record<PeerVia, string> = { ble: 'Bluetooth LE', nearby: 'Wi-Fi Direct', sim: 'Simulado' };
+export const VIA_LABEL: Record<PeerVia, string> = { ble: 'Bluetooth LE', nearby: 'Wi-Fi Direct', lan: 'Wi-Fi local', sim: 'Simulado' };
 /** Meio do vizinho no idioma em uso (só "Simulado" se traduz). */
 export const viaLabel = (v: PeerVia, t: Tr = tGlobal) => (v === 'sim' ? t('via.sim') : VIA_LABEL[v]);
-export const VIA_ICON: Record<PeerVia, IconName> = { ble: 'bluetooth', nearby: 'wifi_tethering', sim: 'smartphone' };
+export const VIA_ICON: Record<PeerVia, IconName> = { ble: 'bluetooth', nearby: 'wifi_tethering', lan: 'wifi', sim: 'smartphone' };
 /** Transporte da aba Rede que corresponde ao meio do vizinho (o simulado não tem chave). */
-export const VIA_TX: Record<PeerVia, TxKey | null> = { ble: 'ble', nearby: 'direct', sim: null };
+export const VIA_TX: Record<PeerVia, TxKey | null> = { ble: 'ble', nearby: 'direct', lan: 'mesh', sim: null };
 
 /** Posição estável no radar (% da largura e da altura), entre os anéis, longe do centro e das bordas. */
 export function radarPos(id: string): { x: number; y: number } {

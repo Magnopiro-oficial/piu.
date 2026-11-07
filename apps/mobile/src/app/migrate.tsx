@@ -4,6 +4,7 @@ import { Animated, Easing, ScrollView, View } from 'react-native';
 import { MIG_META } from '../data/settings';
 import { useT } from '../i18n';
 import { addDevice, platformName, thisDevice, thisDeviceKey, thisPlatform } from '../lib/devices';
+import { PhraseExistsError } from '../lib/identityGuard';
 import { createOffer, MigrationError, type MigrationPayload, readReply, wipeOffer } from '../lib/migration';
 import { requestSessionRotation } from '../lib/migrationState';
 import { CodeQr, CodeReader, CodeWords } from '../lib/migrationUi';
@@ -13,6 +14,7 @@ import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from '../ui/Button';
 import { BackHeader } from '../ui/Controls';
+import { Dialog } from '../ui/Dialog';
 import { Icon } from '../ui/Icon';
 import { Screen } from '../ui/Screen';
 import { StepHeader } from '../ui/StepHeader';
@@ -43,6 +45,8 @@ export default function Migrate() {
   const [n, setN] = useState(0);
   const [got, setGot] = useState<{ code: string[]; payload: MigrationPayload } | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // Já existe outra frase no aparelho (ex.: gerada e não usada): trocar só segurando o botão.
+  const [askReplace, setAskReplace] = useState(false);
 
   // Oferta deste aparelho (chave efêmera só em memória; some ao sair da tela).
   const [offer, setOffer] = useState(() => (device ? createOffer({ pk: thisDeviceKey().pk, name: t('migrate.newDeviceName', { plat: platformName(thisPlatform, t) }), platform: thisPlatform }, now()) : null));
@@ -95,17 +99,18 @@ export default function Migrate() {
   };
 
   /** Só depois de as 4 palavras conferirem: aplica a frase, registra o aparelho de origem e pede a rotação. */
-  const apply = async () => {
+  const apply = async (replace = false) => {
     if (!got) return;
     setErr(null);
     try {
-      await restore(got.payload.phrase);
+      await restore(got.payload.phrase, { replace });
       await addDevice({ pk: got.payload.from.pk, name: got.payload.from.name || t('migrate.oldDevice'), platform: got.payload.from.platform, via: 'origin' });
       if (got.payload.profileName && !onboarded) setProfile({ name: got.payload.profileName });
       await requestSessionRotation('migrado de outro aparelho');
       if (offer) wipeOffer(offer);
       setPhase('progress');
-    } catch {
+    } catch (e) {
+      if (e instanceof PhraseExistsError) { setAskReplace(true); return; }
       setErr(t('restore.err.vault'));
     }
   };
@@ -202,6 +207,10 @@ export default function Migrate() {
           </View>
         )}
       </ScrollView>
+      {askReplace && (
+        <Dialog icon="warning" title={t('restore.replace.title')} body={t('restore.replace.body')} hold primary={t('restore.replace.hold')} primaryIcon="touch_app"
+          onClose={() => setAskReplace(false)} onPrimary={() => { setAskReplace(false); void apply(true); }} />
+      )}
     </Screen>
   );
 }

@@ -32,11 +32,22 @@ function SystemPermission() {
     return () => sub.remove();
   }, [refresh]);
   if (!perm) return null;
-  const text = perm === 'granted' ? t('notif.perm.granted') : perm === 'denied' ? (Platform.OS === 'web' ? t('notif.perm.deniedWeb') : t('notif.perm.denied')) : t('notif.perm.undetermined');
+  // Permitido: só o botão do design ("Testar com o app fechado", 50 px, `ink`, ícone de celular).
+  if (perm === 'granted') {
+    return (
+      <View style={{ marginTop: 12, marginHorizontal: 20, gap: 8 }}>
+        <Button label={sent ? t('notif.test.sent') : t('notif.test')} height={50} fontSize={15} disabled={sent}
+          left={<Icon name="phone_iphone" size={19} color={c.invink} />}
+          onPress={() => { void sendTestNotification().then(ok => { setSent(ok); if (ok) setTimeout(() => setSent(false), 6000); }); }} />
+        <T size={12} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 4 }}>{t('notif.test.hint')}</T>
+      </View>
+    );
+  }
+  const text = perm === 'denied' ? (Platform.OS === 'web' ? t('notif.perm.deniedWeb') : t('notif.perm.denied')) : t('notif.perm.undetermined');
   return (
     <View style={{ marginTop: 10, marginHorizontal: 20, padding: 14, borderRadius: 18, backgroundColor: c.bg2, gap: 10 }}>
       <View style={{ flexDirection: 'row', gap: 12 }}>
-        <Icon name={perm === 'granted' ? 'notifications' : 'notifications_off'} size={22} w={300} />
+        <Icon name="notifications_off" size={22} w={300} />
         <View style={{ flex: 1, gap: 3 }}>
           <T size={14} w={600}>{t('notif.system')}</T>
           <T size={12.5} lh={1.4} color={c.ink2} accessibilityLiveRegion="polite">{text}</T>
@@ -44,13 +55,6 @@ function SystemPermission() {
       </View>
       {perm === 'undetermined' && <Button label={t('notif.allow')} height={42} fontSize={14} onPress={() => { void requestNotificationPermission().finally(refresh); }} />}
       {perm === 'denied' && Platform.OS !== 'web' && <Button label={t('notif.openSettings')} variant="outline" height={42} fontSize={14} onPress={() => { void Linking.openSettings(); }} />}
-      {perm === 'granted' && (
-        <>
-          <Button label={sent ? t('notif.test.sent') : t('notif.test')} variant="outline" height={42} fontSize={14} disabled={sent}
-            onPress={() => { void sendTestNotification().then(ok => { setSent(ok); if (ok) setTimeout(() => setSent(false), 6000); }); }} />
-          <T size={12} lh={1.4} color={c.ink2} style={{ paddingHorizontal: 2 }}>{t('notif.test.hint')}</T>
-        </>
-      )}
     </View>
   );
 }

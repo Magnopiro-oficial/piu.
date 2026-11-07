@@ -231,9 +231,15 @@ export interface LinkMsg {
 export interface LinkChat {
   id: string; ident: Chat['ident']; kind: Chat['kind']; name: string; initials: string; time: string; unread: number;
   sub?: string; peer?: string; group?: string; muted?: boolean; request?: boolean; photo?: string; owner?: boolean; temp?: Chat['temp'];
+  /** Endereço Lunes que o contato compartilhou (destinatário na Carteira do computador). */
+  lunes?: string;
 }
-export interface LinkContact { id: string; chatId: string; name: string; verified: boolean }
-export interface Snapshot { t: 'snapshot'; contacts: LinkContact[]; chats: LinkChat[]; messages: Record<string, LinkMsg[]> }
+export interface LinkContact { id: string; chatId: string; name: string; verified: boolean; lunes?: string }
+export interface Snapshot {
+  t: 'snapshot'; contacts: LinkContact[]; chats: LinkChat[]; messages: Record<string, LinkMsg[]>;
+  /** Endereço Lunes deste celular: o computador mostra no Receber e usa como origem do Enviar. */
+  wallet?: string;
+}
 export type LinkEvent = { t: 'event' } & (
   | { k: 'message'; chatId: string; msg: LinkMsg }
   | { k: 'status'; chatId: string; msgId: string; status: Msg['status'] }
@@ -281,19 +287,20 @@ export function linkChat(c: Chat): LinkChat {
   const opt = <K extends keyof LinkChat>(k: K, v: LinkChat[K]) => (v !== undefined ? { [k]: v } : {});
   return {
     id: c.id, ident: c.ident, kind: c.kind, name: c.name, initials: c.initials, time: c.time, unread: c.unread,
-    ...opt('sub', c.sub), ...opt('peer', c.peer), ...opt('group', c.group), ...opt('muted', c.muted), ...opt('request', c.request), ...opt('photo', c.photo), ...opt('owner', c.owner), ...opt('temp', c.temp),
+    ...opt('sub', c.sub), ...opt('peer', c.peer), ...opt('group', c.group), ...opt('muted', c.muted), ...opt('request', c.request), ...opt('photo', c.photo), ...opt('owner', c.owner), ...opt('temp', c.temp), ...opt('lunes', c.lunes),
   };
 }
 
 /** Estado inicial para o desktop: contatos (das conversas diretas), conversas e as últimas `limit` mensagens de cada. */
-export function buildSnapshot(chats: Chat[], verified: Record<string, boolean>, limit = SNAPSHOT_MSGS): Snapshot {
+export function buildSnapshot(chats: Chat[], verified: Record<string, boolean>, limit = SNAPSHOT_MSGS, wallet?: string | null): Snapshot {
   const messages: Record<string, LinkMsg[]> = {};
   for (const c of chats) messages[c.id] = (c.msgs ?? []).slice(-limit).map(linkMsg);
   return {
     t: 'snapshot',
-    contacts: chats.filter(c => c.peer).map(c => ({ id: c.peer!, chatId: c.id, name: c.name, verified: !!verified[c.id] })),
+    contacts: chats.filter(c => c.peer).map(c => ({ id: c.peer!, chatId: c.id, name: c.name, verified: !!verified[c.id], ...(c.lunes ? { lunes: c.lunes } : {}) })),
     chats: chats.map(linkChat),
     messages,
+    ...(wallet ? { wallet } : {}),
   };
 }
 

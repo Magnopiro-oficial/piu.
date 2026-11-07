@@ -18,3 +18,6 @@ export function useBattery(): { level: number; charging: boolean | null } {
   }, []);
   return v;
 }
+
+/** Navegador: não há como saber da economia de bateria. */
+export function useLowPower(): boolean | null { return null; }
