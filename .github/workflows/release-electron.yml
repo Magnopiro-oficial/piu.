@@ -10,15 +10,18 @@
 #   Linux x64                   ubuntu-latest    (.AppImage + .deb)
 #   Windows x64                 windows-latest   (.exe NSIS)
 #
-# Assinatura de código / notarização: DESLIGADAS (não há certificados).
+# Assinatura de código / notarização: LIGAM SOZINHAS quando os secrets existem (hoje não existem).
+#   Quem decide é o electron-builder.signing.cjs de cada app (scripts/electron-signing/index.cjs):
+#   sem certificado, macOS sai com assinatura ad-hoc e Windows sem assinatura, como antes.
 #   - CSC_IDENTITY_AUTO_DISCOVERY=false impede o electron-builder de procurar um certificado no
-#     keychain do runner e falhar.
-#   - As variáveis abaixo são lidas de secrets OPCIONAIS; sem eles ficam vazias e nada muda.
-#       CSC_LINK / CSC_KEY_PASSWORD          certificado .p12 (base64) e senha — macOS e Windows
-#       APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarização (macOS)
-#   - Para ligar de verdade: criar os secrets no repositório E remover `identity: null` do
-#     electron-builder.yml do app (ou trocar por `mac.notarize: true`). O passo "Assinatura" só
-#     avisa qual é o estado; não assina nada enquanto o yml do app desligar a identidade.
+#     keychain do runner; com CSC_LINK ele usa um keychain temporário com o .p12, sem procurar.
+#   - Secrets OPCIONAIS (vazios = desligado). Cada job só recebe os da sua plataforma:
+#       macOS   CSC_LINK / CSC_KEY_PASSWORD                    Developer ID Application (.p12 em base64) e senha
+#               APPLE_API_KEY_P8 / APPLE_API_KEY_ID / APPLE_API_ISSUER   notarização por chave da API (preferido)
+#               APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID   notarização por Apple ID (alternativa)
+#       Windows WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD            certificado Authenticode (.pfx em base64) e senha
+#               AZURE_* (Trusted Signing)                      só funciona em runner Windows: ver docs/distribuicao/assinatura.md
+#   Passo a passo, compra e conferência: docs/distribuicao/assinatura.md.
 #
 # Publicação pelo electron-builder: desligada (`--publish never`). Quem cria o release é `gh`.
 
@@ -70,6 +73,30 @@ on:
         required: false
       APPLE_TEAM_ID:
         required: false
+      APPLE_API_KEY_P8:
+        required: false
+      APPLE_API_KEY_ID:
+        required: false
+      APPLE_API_ISSUER:
+        required: false
+      WIN_CSC_LINK:
+        required: false
+      WIN_CSC_KEY_PASSWORD:
+        required: false
+      AZURE_TENANT_ID:
+        required: false
+      AZURE_CLIENT_ID:
+        required: false
+      AZURE_CLIENT_SECRET:
+        required: false
+      AZURE_TRUSTED_SIGNING_ENDPOINT:
+        required: false
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME:
+        required: false
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE:
+        required: false
+      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME:
+        required: false
 
 # Menor privilégio por padrão; só o job `release` escreve (releases).
 permissions:
@@ -115,12 +142,25 @@ jobs:
       APP_DIR: ${{ inputs.app_dir }}
       # Sem certificado: não procurar identidade no keychain (senão o build do macOS falha).
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # Secrets opcionais de assinatura/notarização (vazios = desligado).
-      CSC_LINK: ${{ secrets.CSC_LINK }}
-      CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      # Secrets opcionais de assinatura/notarização (vazios = desligado), só na plataforma certa:
+      # o CSC_LINK (Apple) não pode chegar ao job do Windows, senão o electron-builder tentaria
+      # assinar o .exe com ele. APPLE_API_KEY (caminho do .p8) é criado no passo "Assinatura".
+      CSC_LINK: ${{ matrix.platform == 'mac' && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_ID || '' }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'mac' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+      APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
+      APPLE_API_KEY_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_ID || '' }}
+      APPLE_API_ISSUER: ${{ matrix.platform == 'mac' && secrets.APPLE_API_ISSUER || '' }}
+      WIN_CSC_LINK: ${{ matrix.platform == 'win' && secrets.WIN_CSC_LINK || '' }}
+      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+      AZURE_TENANT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_TENANT_ID || '' }}
+      AZURE_CLIENT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_ID || '' }}
+      AZURE_CLIENT_SECRET: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_SECRET || '' }}
+      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ENDPOINT || '' }}
+      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME || '' }}
+      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE || '' }}
+      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME || '' }}
       # Sem telemetria/avisos de update do electron-builder; cache do Electron por runner.
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
@@ -159,15 +199,35 @@ jobs:
           npm ci
 
       - name: Assinatura / notarização (estado)
+        env:
+          PLATFORM: ${{ matrix.platform }}
+          APPLE_API_KEY_P8: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_P8 || '' }}
         run: |
-          if [[ -n "${CSC_LINK}" ]]; then
-            echo "::notice::CSC_LINK presente. A assinatura só acontece se o electron-builder.yml do app não tiver 'identity: null'."
-          else
-            echo "::notice::Sem certificado (CSC_LINK vazio): instaladores NÃO assinados. macOS: botão direito → Abrir. Windows: aviso do SmartScreen."
+          set -euo pipefail
+          # O electron-builder quer APPLE_API_KEY como CAMINHO do .p8; o secret guarda o conteúdo.
+          if [[ -n "${APPLE_API_KEY_P8}" ]]; then
+            key="${RUNNER_TEMP}/AuthKey_${APPLE_API_KEY_ID:-piu}.p8"
+            (umask 077; printf '%s\n' "${APPLE_API_KEY_P8}" > "$key")
+            echo "APPLE_API_KEY=$key" >> "$GITHUB_ENV"
           fi
-          if [[ -n "${APPLE_ID}" && -n "${APPLE_TEAM_ID}" ]]; then
-            echo "::notice::Credenciais Apple presentes; notarização depende de 'mac.notarize: true' no electron-builder.yml."
-          fi
+          case "$PLATFORM" in
+            mac)
+              if [[ -n "${CSC_LINK}" ]]; then
+                echo "::notice::macOS: Developer ID presente → assinatura + hardened runtime."
+                [[ -n "${APPLE_API_KEY_P8}${APPLE_ID}" ]] || echo "::warning::macOS assinado SEM notarização (faltam APPLE_API_KEY_P8/… ou APPLE_ID/…): o Gatekeeper ainda bloqueia o download."
+              else
+                echo "::notice::macOS: sem Developer ID (CSC_LINK vazio) → assinatura ad-hoc. Na 1ª abertura: botão direito → Abrir."
+              fi ;;
+            win)
+              if [[ -n "${WIN_CSC_LINK}" ]]; then
+                echo "::notice::Windows: certificado .pfx presente → instalador assinado."
+              elif [[ -n "${AZURE_TRUSTED_SIGNING_ENDPOINT}" ]]; then
+                echo "::warning::Windows: Azure Trusted Signing configurado, mas este job roda no Linux/Wine e o Trusted Signing exige Windows → instalador SEM assinatura. Ver docs/distribuicao/assinatura.md."
+              else
+                echo "::notice::Windows: sem certificado → instalador sem assinatura (aviso do SmartScreen)."
+              fi ;;
+            *) echo "::notice::Linux: AppImage/deb não levam assinatura de código." ;;
+          esac
 
       - name: Build + instaladores (${{ matrix.platform }} ${{ matrix.arch }})
         working-directory: ${{ inputs.app_dir }}
@@ -264,13 +324,26 @@ jobs:
           TAG: ${{ inputs.tag }}
           TITLE: ${{ inputs.app_name }} ${{ inputs.version }}
           APP_DIR: ${{ inputs.app_dir }}
+          MAC_SIGNED: ${{ secrets.CSC_LINK != '' }}
+          MAC_NOTARIZED: ${{ secrets.APPLE_API_KEY_P8 != '' || secrets.APPLE_ID != '' }}
+          WIN_SIGNED: ${{ secrets.WIN_CSC_LINK != '' }}
         run: |
           set -euo pipefail
+          # Texto conforme os secrets: sem eles, as instruções de "abrir mesmo assim" continuam.
+          if [[ "$MAC_SIGNED" == true && "$MAC_NOTARIZED" == true ]]; then
+            mac="- macOS: assinado com Developer ID e notarizado pela Apple."
+          else
+            mac="- macOS: sem notarização. Na primeira abertura, botão direito no app → Abrir."
+          fi
+          if [[ "$WIN_SIGNED" == true ]]; then
+            win="- Windows: instalador assinado (o SmartScreen pode avisar até o certificado ganhar reputação)."
+          else
+            win="- Windows: sem assinatura. O SmartScreen avisa; \"Mais informações\" → \"Executar assim mesmo\"."
+          fi
           notes="Instaladores de ${APP_DIR} (${TAG}).
 
-          **Sem assinatura de código nem notarização.**
-          - macOS: na primeira abertura, botão direito no app → Abrir.
-          - Windows: o SmartScreen avisa; \"Mais informações\" → \"Executar assim mesmo\".
+          ${mac}
+          ${win}
           - Linux: \`chmod +x\` no AppImage, ou \`sudo apt install ./*.deb\`.
 
           Confira o SHA-256 em \`SHA256SUMS.txt\`."

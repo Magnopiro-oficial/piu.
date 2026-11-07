@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements do Piu Desktop e do Piu Provider (macOS, hardened runtime + Developer ID).
+  Usado só quando há Developer ID (ver index.cjs); o build ad-hoc não aplica entitlements.
+  Vale para o app e para os helpers do Electron (entitlementsInherit).
+
+  Só o que o Electron 45 precisa; nada de câmera, microfone, localização, Bluetooth ou USB:
+  - allow-jit: o V8 compila JavaScript em tempo de execução (MAP_JIT). Sem isto o hardened runtime
+    derruba o processo principal e os renderers.
+  - allow-unsigned-executable-memory: NÃO. Era necessário no Electron antigo (antes do V8 usar MAP_JIT);
+    no Electron 12+ o allow-jit basta.
+  - disable-library-validation: NÃO. Ele só serve para carregar .dylib/.node assinados por outro time.
+    Os dois apps não têm módulo nativo (o processo principal é um bundle esbuild, sem .node) e o
+    Electron Framework é reassinado com o mesmo Developer ID.
+  - Câmera: NÃO. O Piu Desktop só MOSTRA QR (lib qrcode); quem escaneia é o celular.
+  - Rede (TCP/UDP na rede local, servidor HTTPS do vínculo): app fora do App Sandbox não precisa de
+    entitlement. O aviso de "rede local" do macOS 15 vem do Info.plist (NSLocalNetworkUsageDescription),
+    não daqui.
+  - Notificações, Touch ID (systemPreferences.promptTouchID) e keychain (safeStorage): sem entitlement
+    fora do sandbox.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+  </dict>
+</plist>
