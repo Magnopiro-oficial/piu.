@@ -4,6 +4,7 @@ import { useNode } from './state/node';
 import { PageHeader, Sidebar, TopBar } from './components/Shell';
 import { Devices } from './pages/Devices';
 import { Earnings } from './pages/Earnings';
+import { Gateway } from './pages/Gateway';
 import { Mesh } from './pages/Mesh';
 import { Overview } from './pages/Overview';
 import { Settings } from './pages/Settings';
@@ -11,7 +12,7 @@ import { Wallet } from './pages/Wallet';
 import { useStore } from './state/store';
 import { AddDeviceWizard } from './wizard/AddDeviceWizard';
 
-const PAGES = { overview: Overview, devices: Devices, mesh: Mesh, earnings: Earnings, wallet: Wallet, settings: Settings };
+const PAGES = { overview: Overview, devices: Devices, mesh: Mesh, gateway: Gateway, earnings: Earnings, wallet: Wallet, settings: Settings };
 
 export function App() {
   const { mode } = useNode();

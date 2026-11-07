@@ -1,0 +1,31 @@
+{
+  "$comment": "Gerado por scripts/sync-release.mjs a partir de gh release view. Não edite à mão.",
+  "android": {
+    "tag": "android-v0.1.0",
+    "version": "0.1.0",
+    "published": true,
+    "publishedAt": "2026-11-05T00:08:15Z",
+    "assets": {
+      "apk": {
+        "name": "Piu-0.1.0.apk",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/android-v0.1.0/Piu-0.1.0.apk",
+        "size": 34698454,
+        "sha256": "6e21b8e977821f15effc4d449ce7e13186b8591c8fff1d0c183a22a302340c25"
+      }
+    }
+  },
+  "desktop": {
+    "tag": "desktop-v0.1.0",
+    "version": "0.1.0",
+    "published": false,
+    "publishedAt": null,
+    "assets": {}
+  },
+  "provider": {
+    "tag": "provider-v0.1.0",
+    "version": "0.1.0",
+    "published": false,
+    "publishedAt": null,
+    "assets": {}
+  }
+}

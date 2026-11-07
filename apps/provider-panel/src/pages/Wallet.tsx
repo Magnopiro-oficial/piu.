@@ -4,6 +4,8 @@ import { Dialog } from '../components/Overlays';
 import { StepUpDialog } from '../components/Pair';
 import { ApproveOnPhone } from '../components/Phone';
 import { QrCode } from '../components/QrCode';
+import { dateFormat, t } from '../i18n';
+import { useT } from '../i18n/react';
 import { ApiError, NeedsReauth, type ApiLunesWallet, type ApiPending } from '../lib/api';
 import { Icon, Segmented } from '../components/ui';
 import { PERIOD, SIGN_CODE, WALLETS } from '../data/seed';
@@ -17,7 +19,7 @@ type Dest = 'personal' | 'other';
 const bareAddress = (a: string) => a.trim().replace(/^lunes:/, '');
 
 const hostOf = (url: string) => url.replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
-const hhmm = (ms: number) => new Date(ms).toLocaleString('pt-BR', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+const hhmm = (ms: number) => dateFormat({ day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }).format(ms);
 const shortAddr = (a: string) => `${a.slice(0, 8)}…${a.slice(-6)}`;
 
 /** Carteira de provider na Lunes Mainnet, pelo piu-node: endereço configurado e saldo lido (a cada 30 s). */
@@ -41,15 +43,16 @@ function useLunesWallet(enabled: boolean) {
 
 /** Linha do saldo on-chain: valor real com bloco e endereço que respondeu, ou o motivo de não ter. */
 function onchainLine(lw: ApiLunesWallet | null, loading: boolean): string {
-  if (!lw) return loading ? 'Consultando a carteira de provider…' : 'Carteira de provider indisponível neste nó.';
-  if (!lw.address) return 'Configure o endereço Lunes da carteira de provider para ver o saldo on-chain.';
+  if (!lw) return loading ? t('wa.querying') : t('wa.unavailable');
+  if (!lw.address) return t('wa.configure');
   const r = lw.onchain;
-  if (!r) return lw.error ? `Sem conexão com a Lunes Mainnet: o saldo ainda não foi lido. ${lw.error}` : 'Consultando a Lunes Mainnet…';
-  const where = `bloco #${fmtInt(r.block)} · ${hostOf(r.endpoint)} · atualizado ${hhmm(r.at)}`;
-  return lw.error ? `Sem conexão agora · última leitura: ${fmtPlanck(r.free)} LUNES · ${where}` : `Na Lunes Mainnet: ${fmtPlanck(r.free)} LUNES · ${where}`;
+  if (!r) return lw.error ? t('wa.noConn', { err: lw.error }) : t('wa.queryingMainnet');
+  const where = t('wa.where', { block: fmtInt(r.block), host: hostOf(r.endpoint), at: hhmm(r.at) });
+  return lw.error ? t('wa.lastRead', { amt: fmtPlanck(r.free), where }) : t('wa.onMainnet', { amt: fmtPlanck(r.free), where });
 }
 
 export function Wallet() {
+  useT();
   const { balance, txs, walletLoading, totals, recordTransfer, approveTransfer, stepUp, showToast, nodeMode, phones } = useStore();
   const { lw, loading: lwLoading, load: loadLw } = useLunesWallet(nodeMode === 'node');
   const [lunesOpen, setLunesOpen] = useState<'receive' | 'edit' | null>(null);
@@ -70,13 +73,13 @@ export function Wallet() {
   const valid = amt > 0 && amt <= balance && (to === 'personal' || !real || addrOk);
   const destShort = to === 'personal' ? WALLETS.personal.short : real ? `${bare.slice(0, 8)}…${bare.slice(-4)}` : WALLETS.other.short;
 
-  const txRow = () => ({ id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? 'Para carteira pessoal' : `Para ${destShort}`, date: 'agora', status: 'assinada · na fila da malha', value: '−' + fmt(amt), fresh: true });
+  const txRow = () => ({ id: 'tx' + Date.now(), icon: 'call_made', title: to === 'personal' ? t('live.toPersonal') : t('live.toAddr', { addr: destShort }), date: t('common.now'), status: t('wa.txStatus'), value: '−' + fmt(amt), fresh: true });
   const approve = async () => {
     setSigning(false);
     const r = await recordTransfer(amt, txRow(), to === 'personal' || !real ? 'personal' : `lunes:${bare}`);
     if (r === 'reauth') { setStepUpOpen(true); return; }
     if (typeof r === 'object') { setPending(r.pending); return; } // aprovar no celular pareado
-    if (r === 'ok') showToast({ icon: 'check_circle', title: real ? 'Transferência registrada' : 'Transferência assinada', body: real ? 'Registrada neste nó. Pareie um celular em Configurações para aprovar as próximas nele.' : 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+    if (r === 'ok') showToast({ icon: 'check_circle', title: real ? t('wa.toast.registered') : t('wa.toast.signed'), body: real ? t('wa.toast.registeredBody') : t('wa.toast.signedBody') });
   };
   /** Código de aprovação digitado: o nó confere e executa. */
   const finishOnPhone = async (approval: string) => {
@@ -84,7 +87,7 @@ export function Wallet() {
     const problem = await approveTransfer(pending, approval, amt, txRow());
     if (problem) return problem;
     setPending(null);
-    showToast({ icon: 'check_circle', title: 'Transferência aprovada no celular', body: real ? 'Registrada neste nó; sai para a Mainnet quando um gateway tiver rota.' : 'Liquida na próxima conexão de um gateway com a Mainnet.' });
+    showToast({ icon: 'check_circle', title: t('wa.toast.approved'), body: real ? t('wa.toast.approvedBody') : t('wa.toast.signedBody') });
     return null;
   };
   /** Step-up: código novo do equipamento e, se confirmar, refaz a transferência. */
@@ -102,80 +105,80 @@ export function Wallet() {
         <div className="row mono" style={{ gap: 10, fontSize: 12.5, opacity: 0.8 }}>
           {/* Com piu-node: o endereço Lunes que o operador configurou no nó (nada de endereço de exemplo). */}
           <Icon name="account_balance_wallet" size={18} />
-          {!real ? <>carteira de provider · {WALLETS.provider.long}<Icon name="content_copy" size={15} /></>
+          {!real ? <>{t('wa.providerWallet')} · {WALLETS.provider.long}<Icon name="content_copy" size={15} /></>
             : lw?.address ? (
-              <button type="button" className="btn mono" title="Copiar endereço" aria-label={`Copiar endereço ${lw.address}`}
-                onClick={() => { void copyText(lw.address!); showToast({ icon: 'content_copy', title: 'Endereço copiado', body: lw.address! }); }}
+              <button type="button" className="btn mono" title={t('wa.copyAddr')} aria-label={t('wa.copyAddrAria', { addr: lw.address })}
+                onClick={() => { void copyText(lw.address!); showToast({ icon: 'content_copy', title: t('wa.toast.copied'), body: lw.address! }); }}
                 style={{ background: 'none', color: 'inherit', padding: 0, gap: 6, fontSize: 12.5, minWidth: 0 }}>
-                carteira de provider · {shortAddr(lw.address)}<Icon name="content_copy" size={15} />
+                {t('wa.providerWallet')} · {shortAddr(lw.address)}<Icon name="content_copy" size={15} />
               </button>
-            ) : 'carteira de provider · sem endereço Lunes'}
+            ) : t('wa.noAddr')}
         </div>
         <div className="col" style={{ gap: 6 }}>
-          <div style={{ fontSize: 13, opacity: 0.7 }}>Saldo disponível</div>
+          <div style={{ fontSize: 13, opacity: 0.7 }}>{t('wa.balance')}</div>
           <div style={{ display: 'flex', alignItems: 'baseline', gap: 10 }}>
             <span className="tnum hero-num" style={{ fontSize: 60, fontWeight: 650, letterSpacing: '-0.055em', lineHeight: 1 }}>{walletLoading ? '—' : fmt(balance)}</span>
             <span style={{ fontSize: 16, fontWeight: 600, opacity: 0.75 }}>LUNES</span>
           </div>
-          <div style={{ fontSize: 13.5, opacity: 0.75 }}>{real ? 'Registrado neste nó. Ganhos entram aqui quando um lote for pago (liquidação ainda não ligada).' : `+ ${fmt(totals.month)} em formação no lote ${PERIOD.lot}`}</div>
+          <div style={{ fontSize: 13.5, opacity: 0.75 }}>{real ? t('wa.realSub') : t('wa.demoSub', { amt: fmt(totals.month), lot: PERIOD.lot })}</div>
           {real && (
             <div className="row" style={{ gap: 8, fontSize: 12.5, opacity: lw?.error ? 0.95 : 0.8, alignItems: 'flex-start' }} aria-live="polite">
               <Icon name={lw?.onchain && !lw.error ? 'cloud_done' : 'cloud_off'} size={16} />
               <span style={{ flex: 1, minWidth: 0, lineHeight: 1.4 }}>{onchainLine(lw, lwLoading)}</span>
-              {lw?.address && <button type="button" className="btn" onClick={loadLw} disabled={lwLoading} aria-label="Ler o saldo de novo" title="Ler o saldo de novo" style={{ background: 'none', color: 'inherit', padding: 0, opacity: lwLoading ? 0.4 : 1 }}><Icon name="refresh" size={16} /></button>}
+              {lw?.address && <button type="button" className="btn" onClick={loadLw} disabled={lwLoading} aria-label={t('wa.reread')} title={t('wa.reread')} style={{ background: 'none', color: 'inherit', padding: 0, opacity: lwLoading ? 0.4 : 1 }}><Icon name="refresh" size={16} /></button>}
             </div>
           )}
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <button type="button" className="btn" onClick={() => { amtRef.current?.focus(); amtRef.current?.select(); showToast({ icon: 'arrow_upward', title: 'Preencha a transferência ao lado', body: 'A assinatura acontece no seu celular.' }); }}
+          <button type="button" className="btn" onClick={() => { amtRef.current?.focus(); amtRef.current?.select(); showToast({ icon: 'arrow_upward', title: t('wa.toast.fill'), body: t('wa.toast.fillBody') }); }}
             style={{ height: 42, padding: '0 18px', borderRadius: 21, background: 'var(--invink)', color: 'var(--ink)', fontSize: 14, fontWeight: 600 }}>
-            <Icon name="arrow_upward" size={18} />Transferir
+            <Icon name="arrow_upward" size={18} />{t('wa.transfer')}
           </button>
           <button type="button" className="btn" disabled={real && !lw}
             onClick={() => {
               if (real) { setLunesOpen(lw?.address ? 'receive' : 'edit'); return; }
-              void copyText(WALLETS.provider.long); showToast({ icon: 'content_copy', title: 'Endereço copiado', body: WALLETS.provider.long });
+              void copyText(WALLETS.provider.long); showToast({ icon: 'content_copy', title: t('wa.toast.copied'), body: WALLETS.provider.long });
             }}
             style={{ height: 42, padding: '0 18px', borderRadius: 21, border: '1px solid rgba(127,127,127,.5)', color: 'var(--invink)', fontSize: 14, fontWeight: 600, opacity: real && !lw ? 0.45 : 1 }}>
-            <Icon name="arrow_downward" size={18} />Receber
+            <Icon name="arrow_downward" size={18} />{t('wa.receive')}
           </button>
         </div>
       </section>
 
       <section className="span5 card-soft col" style={{ padding: 20, borderRadius: 24, gap: 14 }}>
-        <h2 className="h-card" style={{ margin: 0 }}>Transferir</h2>
-        <Segmented<Dest> label="Destino" value={to} onChange={setTo} options={[{ value: 'personal', label: 'Carteira pessoal' }, { value: 'other', label: 'Outro endereço' }]} />
+        <h2 className="h-card" style={{ margin: 0 }}>{t('wa.transfer')}</h2>
+        <Segmented<Dest> label={t('wa.dest')} value={to} onChange={setTo} options={[{ value: 'personal', label: t('wa.personal') }, { value: 'other', label: t('wa.other') }]} />
         {to === 'other' && real ? (
           <label className="col" style={{ gap: 6 }}>
-            <span className="sr-only">Endereço LUNES de destino</span>
-            <input value={addr} onChange={e => setAddr(e.target.value.replace(/\s/g, ''))} placeholder="5… (endereço Lunes, SS58)" spellCheck={false} autoComplete="off" maxLength={60}
+            <span className="sr-only">{t('wa.destAria')}</span>
+            <input value={addr} onChange={e => setAddr(e.target.value.replace(/\s/g, ''))} placeholder={t('wa.destPh')} spellCheck={false} autoComplete="off" maxLength={60}
               aria-invalid={addr.length > 0 && !addrOk}
               className="mono" style={{ height: 40, padding: '0 14px', borderRadius: 12, border: 'none', background: 'var(--bg)', boxShadow: `0 0 0 1px ${addr && !addrOk ? 'var(--ink)' : 'var(--line2)'} inset`, fontSize: 13, color: 'var(--ink)', outline: 'none' }} />
             {addr && addrProblem && <span style={{ fontSize: 12, color: 'var(--ink2)' }}>{addrProblem}</span>}
           </label>
         ) : (
-          <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink2)' }}>{to === 'personal' ? (real ? 'para a sua carteira pessoal' : `para ${WALLETS.personal.short} · pessoal`) : `para ${WALLETS.other.short} · colado`}</div>
+          <div className="mono" style={{ fontSize: 12.5, fontWeight: 500, color: 'var(--ink2)' }}>{to === 'personal' ? (real ? t('wa.toPersonal') : t('wa.toPersonalDemo', { addr: WALLETS.personal.short })) : t('wa.toOtherDemo', { addr: WALLETS.other.short })}</div>
         )}
         <label className="row" style={{ gap: 10, height: 56, padding: '0 16px', borderRadius: 16, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset' }}>
-          <span className="sr-only">Valor em LUNES</span>
+          <span className="sr-only">{t('wa.amountAria')}</span>
           <input ref={amtRef} inputMode="decimal" value={amtStr} onChange={e => setAmtStr(e.target.value.replace(/[^0-9,.]/g, ''))}
             className="tnum" style={{ flex: 1, minWidth: 0, border: 'none', background: 'transparent', outline: 'none', fontSize: 26, fontWeight: 650, letterSpacing: '-0.03em', color: 'var(--ink)' }} />
           <span style={{ fontSize: 13, fontWeight: 600, color: 'var(--ink2)' }}>LUNES</span>
         </label>
         <div style={{ display: 'flex', gap: 6 }}>
-          {([['25%', 0.25], ['50%', 0.5], ['Tudo', 1]] as const).map(([l, f]) => (
+          {([['25%', 0.25], ['50%', 0.5], [t('wa.all'), 1]] as const).map(([l, f]) => (
             <button key={l} type="button" className="btn" onClick={() => setAmtStr(fmt(Math.floor(balance * f * 100) / 100))} style={{ height: 30, padding: '0 12px', borderRadius: 15, background: 'var(--bg3)', fontSize: 12.5, fontWeight: 550 }}>{l}</button>
           ))}
         </div>
         <button type="button" className="btn btn-primary" disabled={!valid} onClick={() => { if (!valid) return; if (real) void approve(); else setSigning(true); }} style={{ height: 46, borderRadius: 23, fontSize: 14.5, opacity: valid ? 1 : 0.35 }}>
-          <Icon name="smartphone" size={19} />Assinar no celular
+          <Icon name="smartphone" size={19} />{t('wa.signOnPhone')}
         </button>
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{real && phones && !phones.some(p => p.confirmed) ? 'Nenhum celular pareado: a transferência pede um código novo do equipamento. Pareie um celular em Configurações.' : 'A chave de assinatura fica no seu celular. Este painel só prepara a transação.'}</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.4 }}>{real && phones && !phones.some(p => p.confirmed) ? t('wa.noPhone') : t('wa.keyOnPhone')}</div>
       </section>
 
       <section className="span12 card-line" style={{ borderRadius: 22, overflow: 'hidden' }}>
-        <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>Movimentações</h2>
-        {!txs.length && <div style={{ padding: '18px', borderTop: '1px solid var(--line)', fontSize: 13.5, color: 'var(--ink2)' }}>Nenhuma movimentação ainda. Liquidações recebidas e transferências aparecem aqui.</div>}
+        <h2 className="h-card" style={{ margin: 0, padding: '16px 18px' }}>{t('wa.movements')}</h2>
+        {!txs.length && <div style={{ padding: '18px', borderTop: '1px solid var(--line)', fontSize: 13.5, color: 'var(--ink2)' }}>{t('wa.noTx')}</div>}
         {txs.map(t => (
           <div key={t.id} className="tx-row" style={{ display: 'grid', gridTemplateColumns: '40px minmax(0,2fr) minmax(0,1fr) minmax(0,1.2fr) 120px', gap: 14, alignItems: 'center', padding: '12px 18px', borderTop: '1px solid var(--line)', animation: t.fresh ? 'piuUp .4s both' : 'none' }}>
             <div style={{ width: 36, height: 36, borderRadius: '50%', background: 'var(--bg2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={t.icon} size={18} wght={300} /></div>
@@ -189,14 +192,14 @@ export function Wallet() {
 
       {pending && (
         <ApproveOnPhone request={pending.request} code={pending.code} phone={pending.phone}
-          body={`${fmt(amt)} LUNES para a ${to === 'personal' ? 'carteira pessoal' : 'conta indicada'}.`}
+          body={t('wa.approveBody', { amt: fmt(amt), dest: to === 'personal' ? t('wa.destPersonal') : t('wa.destOther') })}
           onApprove={finishOnPhone} onClose={() => setPending(null)} />
       )}
       {signing && (
-        <Dialog icon="smartphone" title="Confirme no seu celular" waiting code={SIGN_CODE}
-          body={`Abra o Piu no celular pareado e confira o código para assinar ${fmt(amt)} LUNES para a ${to === 'personal' ? 'carteira pessoal' : 'conta indicada'}.`}
+        <Dialog icon="smartphone" title={t('phone.approveTitle')} waiting code={SIGN_CODE}
+          body={t('wa.signBody', { amt: fmt(amt), dest: to === 'personal' ? t('wa.destPersonal') : t('wa.destOther') })}
           // Sem o app pareado de verdade, a aprovação é simulada (como no protótipo).
-          primaryLabel="Simular aprovação no celular" onPrimary={approve} onClose={() => setSigning(false)} />
+          primaryLabel={t('wa.simulate')} onPrimary={approve} onClose={() => setSigning(false)} />
       )}
       {stepUpOpen && <StepUpDialog onConfirm={confirmStepUp} onClose={() => setStepUpOpen(false)} />}
       {lunesOpen && lw && (
@@ -215,6 +218,7 @@ const field = { height: 44, borderRadius: 14, border: '1px solid var(--line2)', 
 function LunesWalletDialog({ lw, mode, onMode, onSaved, onClose }: {
   lw: ApiLunesWallet; mode: 'receive' | 'edit'; onMode: (m: 'receive' | 'edit') => void; onSaved: () => void; onClose: () => void;
 }) {
+  useT();
   const { api, stepUp, showToast } = useStore();
   const [draft, setDraft] = useState(lw.address ?? '');
   const [err, setErr] = useState<string | null>(null);
@@ -234,12 +238,12 @@ function LunesWalletDialog({ lw, mode, onMode, onSaved, onClose }: {
       else await api.clearLunesAddress();
       onSaved();
       showToast(what === 'save'
-        ? { icon: 'check_circle', title: 'Carteira de provider configurada', body: 'O saldo on-chain é lido na Lunes Mainnet por este nó.' }
-        : { icon: 'delete', title: 'Endereço removido', body: 'O nó não consulta mais a Mainnet para esta carteira.' });
+        ? { icon: 'check_circle', title: t('wd.toast.set'), body: t('wd.toast.setBody') }
+        : { icon: 'delete', title: t('wd.toast.removed'), body: t('wd.toast.removedBody') });
       onClose();
     } catch (e) {
       if (e instanceof NeedsReauth) setReauth(what);
-      else setErr(e instanceof ApiError ? e.message : 'Não foi possível salvar.');
+      else setErr(e instanceof ApiError ? e.message : t('wd.cantSave'));
     } finally { setBusy(false); }
   };
   const submit = (e: FormEvent) => { e.preventDefault(); if (draft.trim() && !busy) void run('save'); };
@@ -250,39 +254,39 @@ function LunesWalletDialog({ lw, mode, onMode, onSaved, onClose }: {
       <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'var(--scrim)', zIndex: 45 }} />
       <div role="dialog" aria-modal="true" aria-labelledby="lunes-title" className="col dlg"
         style={{ position: 'fixed', left: '50%', top: '50%', width: 440, marginLeft: -220, transform: 'translateY(-50%)', zIndex: 46, borderRadius: 28, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset,0 30px 80px rgba(0,0,0,.3)', padding: '26px 24px 20px', gap: 14 }}>
-        <div className="row" style={{ gap: 10 }}><Icon name={mode === 'receive' ? 'qr_code_2' : 'account_balance_wallet'} size={26} wght={300} /><h2 id="lunes-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{mode === 'receive' ? 'Receber na carteira de provider' : 'Endereço da carteira de provider'}</h2></div>
+        <div className="row" style={{ gap: 10 }}><Icon name={mode === 'receive' ? 'qr_code_2' : 'account_balance_wallet'} size={26} wght={300} /><h2 id="lunes-title" style={{ margin: 0, fontSize: 19, fontWeight: 700 }}>{mode === 'receive' ? t('wd.receiveTitle') : t('wd.editTitle')}</h2></div>
         {mode === 'receive' && lw.address ? (
           <>
             <div className="col" style={{ alignItems: 'center', gap: 10 }}>
-              <QrCode value={lw.address} size={200} label="QR do endereço Lunes da carteira de provider" />
+              <QrCode value={lw.address} size={200} label={t('wd.qrAria')} />
               <div className="mono" style={{ fontSize: 12.5, wordBreak: 'break-all', textAlign: 'center', userSelect: 'all' }}>{lw.address}</div>
-              {r && <div style={{ fontSize: 12.5, color: 'var(--ink2)', textAlign: 'center' }}>{`${fmtPlanck(r.free)} LUNES · bloco #${fmtInt(r.block)} · ${hostOf(r.endpoint)}`}</div>}
+              {r && <div style={{ fontSize: 12.5, color: 'var(--ink2)', textAlign: 'center' }}>{t('wd.onchain', { amt: fmtPlanck(r.free), block: fmtInt(r.block), host: hostOf(r.endpoint) })}</div>}
             </div>
             <div className="row" style={{ gap: 8 }}>
-              <button type="button" className="btn btn-primary" onClick={() => { void copyText(lw.address!); showToast({ icon: 'content_copy', title: 'Endereço copiado', body: lw.address! }); }} style={{ flex: 1, height: 42, borderRadius: 21 }}><Icon name="content_copy" size={17} />Copiar</button>
-              <a className="btn btn-outline" href={lw.explorer} target="_blank" rel="noopener noreferrer" style={{ flex: 1, height: 42, borderRadius: 21, textDecoration: 'none' }}><Icon name="open_in_new" size={17} />Explorador</a>
+              <button type="button" className="btn btn-primary" onClick={() => { void copyText(lw.address!); showToast({ icon: 'content_copy', title: t('wa.toast.copied'), body: lw.address! }); }} style={{ flex: 1, height: 42, borderRadius: 21 }}><Icon name="content_copy" size={17} />{t('common.copy')}</button>
+              <a className="btn btn-outline" href={lw.explorer} target="_blank" rel="noopener noreferrer" style={{ flex: 1, height: 42, borderRadius: 21, textDecoration: 'none' }}><Icon name="open_in_new" size={17} />{t('wd.explorer')}</a>
             </div>
             <div className="row" style={{ gap: 8, justifyContent: 'space-between' }}>
-              <button type="button" className="btn btn-soft" onClick={() => { setDraft(lw.address ?? ''); onMode('edit'); }} style={{ height: 38, padding: '0 14px', borderRadius: 19, fontSize: 13 }}>Trocar endereço</button>
-              <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 38, padding: '0 14px', borderRadius: 19, fontSize: 13 }}>Fechar</button>
+              <button type="button" className="btn btn-soft" onClick={() => { setDraft(lw.address ?? ''); onMode('edit'); }} style={{ height: 38, padding: '0 14px', borderRadius: 19, fontSize: 13 }}>{t('wd.change')}</button>
+              <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 38, padding: '0 14px', borderRadius: 19, fontSize: 13 }}>{t('common.close')}</button>
             </div>
           </>
         ) : (
           <form onSubmit={submit} className="col" style={{ gap: 12 }}>
-            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>Cole o endereço Lunes (SS58) da carteira que recebe os ganhos deste nó. O nó só lê o saldo na Lunes Mainnet: ele não tem a chave dessa carteira e não assina nada.</p>
-            <input value={draft} onChange={e => { setDraft(e.target.value.replace(/\s/g, '')); setErr(null); }} placeholder="Endereço Lunes" spellCheck={false} autoComplete="off" maxLength={80} autoFocus
-              aria-label="Endereço Lunes da carteira de provider" aria-invalid={!!err} className="mono" style={field} />
+            <p style={{ margin: 0, fontSize: 13.5, lineHeight: 1.45, color: 'var(--ink2)' }}>{t('wd.body')}</p>
+            <input value={draft} onChange={e => { setDraft(e.target.value.replace(/\s/g, '')); setErr(null); }} placeholder={t('wd.ph')} spellCheck={false} autoComplete="off" maxLength={80} autoFocus
+              aria-label={t('wd.aria')} aria-invalid={!!err} className="mono" style={field} />
             {err && <div role="alert" style={{ fontSize: 13, padding: '8px 12px', borderRadius: 12, border: '1px dashed var(--line2)' }}>{err}</div>}
             <div className="row" style={{ gap: 8, justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-              {lw.address && <button type="button" className="btn btn-soft" disabled={busy} onClick={() => void run('clear')} style={{ height: 40, padding: '0 16px', borderRadius: 20, marginRight: 'auto' }}>Remover</button>}
-              <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 40, padding: '0 16px', borderRadius: 20 }}>Cancelar</button>
-              <button type="submit" className="btn btn-primary" disabled={!draft.trim() || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: draft.trim() ? 1 : 0.4 }}>{busy ? 'Salvando…' : 'Salvar'}</button>
+              {lw.address && <button type="button" className="btn btn-soft" disabled={busy} onClick={() => void run('clear')} style={{ height: 40, padding: '0 16px', borderRadius: 20, marginRight: 'auto' }}>{t('common.remove')}</button>}
+              <button type="button" className="btn btn-soft" onClick={onClose} style={{ height: 40, padding: '0 16px', borderRadius: 20 }}>{t('common.cancel')}</button>
+              <button type="submit" className="btn btn-primary" disabled={!draft.trim() || busy} style={{ height: 40, padding: '0 18px', borderRadius: 20, opacity: draft.trim() ? 1 : 0.4 }}>{busy ? t('common.saving') : t('common.save')}</button>
             </div>
           </form>
         )}
       </div>
       {reauth && (
-        <StepUpDialog reason="Trocar a carteira de provider exige uma confirmação recente." confirmLabel="Confirmar e salvar" onClose={() => setReauth(null)}
+        <StepUpDialog reason={t('wd.stepup')} confirmLabel={t('wd.stepupBtn')} onClose={() => setReauth(null)}
           onConfirm={async code => { const p = await stepUp(code); if (p) return p; const what = reauth; setReauth(null); await run(what); return null; }} />
       )}
     </>,

@@ -20,14 +20,14 @@ npm run preview
 ## Domínio
 Defina `SITE_URL` (ex.: `SITE_URL=https://exemplo.org npm run build`) para gerar a URL canônica e os `hreflang` absolutos.
 
-## Ainda provisório
-- Os botões de download só mostram orientações; ainda não há APK nem pacotes publicados.
-- "Especificação LNNP" ainda aponta para as Dúvidas.
-- A assinatura e o SHA-256 exibidos são de exemplo.
+## Downloads (fonte única)
+Todos os links, tamanhos e SHA-256 vêm de `src/lib/releases.json`, gerado por `node scripts/sync-release.mjs` a partir dos releases publicados no GitHub (`--dry-run` só mostra). Release inexistente ou rascunho = "em breve", sem link. Hoje: APK `android-v0.1.0` publicado; `desktop-v0.1.0` não existe; `provider-v0.1.0` é rascunho. O certificado do APK fica em `src/lib/androidRelease.ts`.
+
+## Publicação
+`.github/workflows/pages-site.yml` publica no **GitHub Pages** a cada mudança na `main`.
 
 ## Segurança
 - **CSP com hashes** gerada pelo Astro (`security.csp` em `astro.config.mjs`) numa `<meta>` em cada página: scripts e folhas de estilo só do próprio site, mais os hashes do que o Astro injeta para hidratar a ilha React. Sem `'unsafe-inline'` para scripts. O tema é aplicado por `public/theme-init.js`, e não por script inline.
 - **Nada embutido como `data:`** (`inlineStylesheets: 'never'`, `assetsInlineLimit: 0`), para valer `font-src 'self'`.
-- **Headers** em `public/_headers` (Cloudflare Pages): `frame-ancestors 'none'`/`X-Frame-Options: DENY` no site; o painel em `/painel/` só pode ser exibido pelo próprio site (`frame-ancestors 'self'`, `SAMEORIGIN`); `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS.
-- **Publicação recomendada:** atrás da Cloudflare (WAF gerenciado, proteção contra DDoS, TLS 1.3, HTTPS obrigatório). Em outra hospedagem, aplique os mesmos headers.
-- O painel embutido usa a CSP estrita do PR de segurança do painel (fontes como arquivos). Junte aquele PR antes deste.
+- **Headers** em `public/_headers` (formato Cloudflare Pages/Netlify): `frame-ancestors 'none'`/`X-Frame-Options: DENY` no site; o painel em `/painel/` só pode ser exibido pelo próprio site (`frame-ancestors 'self'`, `SAMEORIGIN`); `nosniff`, `Referrer-Policy`, `Permissions-Policy`, COOP/CORP, HSTS.
+- **Atenção: o GitHub Pages ignora `_headers`** e não deixa configurar headers. Lá valem só a CSP em `<meta>`, o `referrer` em `<meta>`, o HSTS do próprio github.io e o anti-iframe de `public/theme-init.js` (esconde a página se ela estiver dentro de um iframe). Ficam faltando `nosniff`, `Permissions-Policy`, COOP/CORP e `frame-ancestors` de verdade. Para tê-los, publique atrás da Cloudflare (domínio próprio com Transform Rules, ou Cloudflare Pages com este `_headers`).

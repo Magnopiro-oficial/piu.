@@ -1,6 +1,7 @@
 import { Icon } from '../components/ui';
-import { PEERS } from '../data/seed';
+import { peers } from '../data/seed';
 import { LEGEND, LINE_STYLE, LINKS, MAP_H, MAP_W, NODES, POS } from '../data/topology';
+import { useT } from '../i18n/react';
 import { useStore } from '../state/store';
 import { MeshLive } from './MeshLive';
 
@@ -10,6 +11,7 @@ export function Mesh() {
 }
 
 function MeshDemo() {
+  const t = useT();
   const { devices } = useStore();
   const byId = new Map(devices.map(d => [d.id, d]));
   // Nós próprios/AP só aparecem se o equipamento ainda existe.
@@ -21,7 +23,7 @@ function MeshDemo() {
 
   return (
     <div className="page-body mesh-grid" style={{ display: 'grid', gridTemplateColumns: 'minmax(0,1fr) 340px', gap: 16 }}>
-      <div role="img" aria-label="Topologia ao vivo da malha" className="mesh-map" style={{ position: 'relative', height: MAP_H, borderRadius: 24, backgroundColor: 'var(--bg2)', backgroundImage: 'radial-gradient(var(--line2) 1px, transparent 1.2px)', backgroundSize: '22px 22px', overflow: 'hidden' }}>
+      <div role="img" aria-label={t('mesh.topoAria')} className="mesh-map" style={{ position: 'relative', height: MAP_H, borderRadius: 24, backgroundColor: 'var(--bg2)', backgroundImage: 'radial-gradient(var(--line2) 1px, transparent 1.2px)', backgroundSize: '22px 22px', overflow: 'hidden' }}>
         <div className="mesh-canvas" style={{ position: 'absolute', left: '50%', top: 0, width: MAP_W, height: MAP_H, marginLeft: -MAP_W / 2 }}>
           {LINKS.map(([a, b, t, own], i) => {
             if (!visible(a) || !visible(b)) return null;
@@ -43,7 +45,7 @@ function MeshDemo() {
               <div key={key} style={{ position: 'absolute', left: x, top: y, transform: 'translate(-50%,-50%)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
                 {kind === 'own' && (
                   <div style={{ position: 'relative', width: 46, height: 46 }}>
-                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 3.2s ease-out infinite' }} />
+                    <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: 'piuRingS 2.6s ease-out infinite' }} />
                     <div style={{ position: 'absolute', inset: 0, borderRadius: '50%', background: 'var(--ink)', color: 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Icon name={icon!} size={22} wght={400} /></div>
                   </div>
                 )}
@@ -59,21 +61,21 @@ function MeshDemo() {
           })}
         </div>
         <div className="mesh-legend" style={{ position: 'absolute', left: 16, bottom: 16, display: 'flex', flexWrap: 'wrap', gap: 14, padding: '10px 14px', borderRadius: 14, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, color: 'var(--ink2)' }}>
-          {LEGEND.map(([k, l]) => (
-            <div key={k} className="row" style={{ gap: 7 }}><div style={{ width: 22, height: 0, borderTop: `${LINE_STYLE[k][0]} ${LINE_STYLE[k][1]} var(--ink)` }} />{l}</div>
+          {LEGEND.map(k => (
+            <div key={k} className="row" style={{ gap: 7 }}><div style={{ width: 22, height: 0, borderTop: `${LINE_STYLE[k][0]} ${LINE_STYLE[k][1]} var(--ink)` }} />{t(`legend.${k}`)}</div>
           ))}
         </div>
         <div className="row" style={{ position: 'absolute', right: 16, top: 16, gap: 7, padding: '7px 11px', borderRadius: 99, background: 'var(--bg)', boxShadow: '0 0 0 1px var(--line2) inset', fontSize: 12, fontWeight: 550 }}>
-          <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ink)', animation: 'piuBreath 1.6s ease-in-out infinite' }} />ao vivo · seus {ownCount} nós
+          <div style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--ink)', animation: 'piuBreath 1.6s ease-in-out infinite' }} />{t('mesh.liveOwn', { n: ownCount })}
         </div>
       </div>
 
       <section className="card-line col" style={{ borderRadius: 24, padding: '16px 18px', gap: 2 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', paddingBottom: 8 }}>
-          <h2 className="h-card" style={{ margin: 0 }}>Vizinhos</h2>
-          <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>qualidade do enlace</div>
+          <h2 className="h-card" style={{ margin: 0 }}>{t('mesh.neighbors')}</h2>
+          <div className="mono" style={{ fontSize: 11.5, color: 'var(--ink2)' }}>{t('mesh.linkQuality')}</div>
         </div>
-        {PEERS.map(p => (
+        {peers().map(p => (
           <div key={p.name} className="row" style={{ gap: 12, padding: '10px 0', borderTop: '1px solid var(--line)' }}>
             <Icon name={p.icon} size={20} wght={300} />
             <div className="col grow" style={{ gap: 2 }}>
@@ -86,7 +88,7 @@ function MeshDemo() {
             </div>
           </div>
         ))}
-        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 10 }}>Rotas são escolhidas por alcance, capacidade e energia. Mídia nunca é enviada por LoRa.</div>
+        <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45, paddingTop: 10 }}>{t('mesh.routesNote')}</div>
       </section>
     </div>
   );

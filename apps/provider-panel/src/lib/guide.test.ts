@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import { beforeAll, describe, expect, it } from 'vitest';
+import { LANGS, setLang } from '../i18n';
 import { nextStep, setupProgress, setupSteps, type SetupSignals } from './guide';
 
 const fresh: SetupSignals = { keyBackedUp: false, payoutAddress: false, phoneConfirmed: false, neighbors: 0, otherDevices: 0 };
@@ -44,6 +45,11 @@ describe('primeiros passos', () => {
     expect(go.neighbor).toEqual({ page: 'mesh' });
     expect(go.device).toEqual({ wizard: true });
   });
+});
+
+// Os textos do guia valem em todos os idiomas: simples, sem jargão.
+describe.each(LANGS.map(l => l.code))('textos dos primeiros passos (%s)', lang => {
+  beforeAll(() => setLang(lang, { persist: false }));
 
   it('todo passo explica em palavras simples por que importa', () => {
     for (const s of setupSteps(fresh)) {
@@ -51,5 +57,9 @@ describe('primeiros passos', () => {
       expect(s.why.length).toBeGreaterThan(20);
       expect(s.why).not.toMatch(/LNNP|SS58|step-up|hash/i);
     }
+  });
+
+  it('os passos que pedem ação têm botão', () => {
+    for (const s of setupSteps(fresh)) if (s.id !== 'pair') expect(s.cta.length, s.id).toBeGreaterThan(0);
   });
 });

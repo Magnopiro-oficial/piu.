@@ -25,7 +25,7 @@ const here = dirname(fileURLToPath(import.meta.url));
 const dist = resolve(here, '../dist');
 const shots = resolve(args.shots ?? 'responsive-shots');
 const WIDTHS = [360, 390, 768, 1024, 1280];
-const ROUTES = ['overview', 'devices', 'mesh', 'earnings', 'wallet', 'settings'];
+const ROUTES = ['overview', 'devices', 'mesh', 'gateway', 'earnings', 'wallet', 'settings'];
 const THEMES = ['light', 'dark'];
 
 /** Servidor estático mínimo do dist/ (modo demonstração), com uma página que embute o painel num iframe, como o site. */
@@ -54,7 +54,8 @@ async function main() {
   let base = args.url;
   if (!base) { server = await serveDist(); base = `http://127.0.0.1:${server.address().port}`; }
   const browser = await chromium.launch();
-  const ctx = await browser.newContext({ ignoreHTTPSErrors: true });
+  // Os seletores usam os rótulos em pt-BR: o navegador de teste precisa abrir o painel nesse idioma.
+  const ctx = await browser.newContext({ ignoreHTTPSErrors: true, locale: 'pt-BR' });
   const problems = [];
   const errors = [];
 

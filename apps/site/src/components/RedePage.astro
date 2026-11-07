@@ -1,0 +1,562 @@
+---
+// Página "A rede" (/rede/ e /en/rede/): fluxograma animado da rede Piu para leigos.
+// Fonte visual: design/handoff/design/Piu Site Rede.dc.html (estilos inline copiados do protótipo).
+// Fonte técnica: docs/rede/fluxograma-rede-piu.md. Interatividade no <script> do fim (módulo do Astro,
+// sem script inline: a CSP fica com script-src 'self' + hashes gerados pelo Astro).
+import Base from '../layouts/Base.astro';
+import type { Dict } from '../i18n/pt';
+import type { Status } from '../i18n/rede.pt';
+import { url } from '../lib/url';
+
+interface Props { t: Dict; alt: Dict }
+const { t, alt } = Astro.props;
+const r = t.rede;
+const isPt = t.lang.startsWith('pt');
+const home = url(t.path);
+const flowDoc = 'https://github.com/Magnopiro-oficial/piu./blob/main/docs/rede/fluxograma-rede-piu.md';
+
+// Cores de ligado/desligado dos nós (protótipo: ON = tinta, OFF = fundo).
+const ON = ['var(--ink)', 'var(--invink)'];
+const OFF = ['var(--bg)', 'var(--ink)'];
+const POS = ['0%', '33.333%', '66.666%', '100%'];
+const dot = (k: Status, w = 8) => {
+  const base = `width:${w}px;height:${w}px;border-radius:50%;flex:none;`;
+  if (k === 'on') return base + 'background:var(--ink);';
+  if (k === 'test') return base + 'background:linear-gradient(90deg,var(--ink) 50%,transparent 50%);box-shadow:0 0 0 1.2px var(--ink) inset;';
+  return base + 'box-shadow:0 0 0 1.5px var(--ink) inset;';
+};
+const badge = 'display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 10px;border-radius:12px;background:var(--bg2);font:500 11px var(--mono);';
+const reveal = 'display:flex;flex-direction:column;gap:14px;max-width:720px;';
+const kick = 'font:500 12px var(--mono);letter-spacing:.06em;color:var(--ink2);';
+const h2 = 'margin:0;font-size:clamp(34px,4.6vw,60px);font-weight:700;letter-spacing:-0.05em;line-height:1;text-wrap:balance;';
+const lead = 'margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;';
+const section = 'max-width:1200px;margin:0 auto;padding:110px 24px 40px;';
+const fill = (s: string, n: number) => s.replace('{n}', String(n));
+
+// Estado inicial (passo 0) renderizado no servidor; o script assume daí.
+const msgNoteAt0 = [r.msg.notes.writing, '', '', ''];
+// Dados que o script precisa para montar as legendas de cada passo.
+const client = { msg: r.msg.notes, env: { envelope: r.msg.envelope, oi: r.msg.oi }, play: r.msg.play, pause: r.msg.pause, tok: r.tx.tok };
+---
+<Base t={{ ...r, lang: t.lang }} alt={{ ...alt.rede, lang: alt.lang }}>
+  <header class="nav">
+    <div class="wrap nav-in">
+      <a href={home} class="logo" style="font-size:30px" aria-label="Piu">piu<span>.</span></a>
+      <nav class="nav-links" aria-label={r.navLabel}>
+        {r.nav.map(([id, l]) => <a href={`#${id}`}>{l}</a>)}
+      </nav>
+      <div class="lang" role="group" aria-label={t.nav.langLabel}>
+        {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href={url(alt.rede.path)} lang="pt-BR" hreflang="pt-BR">PT</a>}
+        {isPt ? <a href={url(alt.rede.path)} lang="en" hreflang="en">EN</a> : <span aria-current="true" lang="en">EN</span>}
+      </div>
+      <button type="button" class="icon-btn" data-theme-toggle>
+        <span class="ic only-light" style="font-size:19px" aria-hidden="true">dark_mode</span>
+        <span class="ic only-dark" style="font-size:19px" aria-hidden="true">light_mode</span>
+        <span class="sr-only only-light">{t.nav.themeDark}</span>
+        <span class="sr-only only-dark">{t.nav.themeLight}</span>
+      </button>
+      <a href={`${home}#baixar`} class="pill pill-ink" style="height:40px;padding:0 18px;font-size:14px;flex:none">{t.nav.download}</a>
+    </div>
+  </header>
+
+  <main class="rede">
+    <!-- Abertura: pacotes percorrem a malha, um trecho a cada 1,3 s (siteSeg 3.9s defasado em 1,3 s). -->
+    <section id="topo" style="max-width:1200px;margin:0 auto;padding:72px 24px 64px;display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:56px;align-items:center;">
+      <div style="display:flex;flex-direction:column;gap:26px;">
+        <div style="display:flex;align-items:center;gap:8px;font:500 12px var(--mono);letter-spacing:.06em;color:var(--ink2);animation:siteUp .6s cubic-bezier(.2,.85,.3,1) .05s both;"><div class="dot8" aria-hidden="true"></div>{r.hero.kicker}</div>
+        <h1 style="margin:0;font-size:clamp(44px,6.4vw,80px);font-weight:700;letter-spacing:-0.055em;line-height:.96;text-wrap:balance;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) .12s both;">{r.hero.t1}</span> <span style="display:inline-block;color:var(--ink3);animation:siteWord .95s cubic-bezier(.2,.85,.2,1) .28s both;">{r.hero.t2}</span></h1>
+        <p style="margin:0;font-size:19px;line-height:1.5;color:var(--ink2);max-width:520px;text-wrap:pretty;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .5s both;">{r.hero.lead}</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .62s both;">
+          <a href="#mensagem" class="pill pill-ink" style="height:54px;padding:0 24px;font-size:16px;white-space:normal;text-align:left;"><span class="ic" style="font-size:21px" aria-hidden="true">play_arrow</span>{r.hero.cta}</a>
+        </div>
+        <ul aria-label={r.hero.legendLabel} style="list-style:none;margin:0;padding:6px 0 0;display:flex;gap:8px;flex-wrap:wrap;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .74s both;">
+          {(['on', 'test', 'soon'] as Status[]).map(k => (
+            <li style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:14px;background:var(--bg2);font:500 11.5px var(--mono);letter-spacing:.03em;"><span style={dot(k)} aria-hidden="true"></span>{r.status[k]}</li>
+          ))}
+        </ul>
+      </div>
+
+      <div role="img" aria-label={r.hero.artLabel} style="position:relative;width:100%;max-width:560px;justify-self:center;aspect-ratio:520/440;animation:siteUp 1s cubic-bezier(.2,.85,.3,1) .3s both;">
+        <div style="position:absolute;inset:-6%;border-radius:40px;background-image:radial-gradient(var(--dot) 1.2px, transparent 1.4px);background-size:20px 20px;"></div>
+        <svg viewBox="0 0 520 440" aria-hidden="true" style="position:absolute;inset:0;width:100%;height:100%;overflow:visible;">
+          <g stroke="currentColor" stroke-width="1.5" fill="none" style="color:var(--line2);">
+            <line x1="70" y1="340" x2="180" y2="240"></line><line x1="180" y1="240" x2="140" y2="100"></line><line x1="180" y1="240" x2="290" y2="170"></line><line x1="180" y1="240" x2="300" y2="330"></line><line x1="140" y1="100" x2="290" y2="170"></line><line x1="290" y1="170" x2="430" y2="100"></line><line x1="290" y1="170" x2="450" y2="290"></line><line x1="300" y1="330" x2="450" y2="290"></line><line x1="430" y1="100" x2="450" y2="290"></line>
+          </g>
+          <g stroke="currentColor" stroke-width="2" fill="none" stroke-dasharray="4 8" style="color:var(--ink);">
+            <line x1="70" y1="340" x2="180" y2="240" style="animation:siteDash 1.2s linear infinite;"></line><line x1="180" y1="240" x2="300" y2="330" style="animation:siteDash 1.2s linear infinite;"></line><line x1="300" y1="330" x2="450" y2="290" style="animation:siteDash 1.2s linear infinite;"></line>
+          </g>
+          <g stroke="currentColor" stroke-width="12" stroke-linecap="round" fill="none" stroke-dasharray="0.01 300" style="color:var(--ink);">
+            <line pathLength="100" x1="70" y1="340" x2="180" y2="240" style="animation:siteSeg 3.9s linear 0s infinite;"></line>
+            <line pathLength="100" x1="180" y1="240" x2="300" y2="330" style="animation:siteSeg 3.9s linear 1.3s infinite;opacity:0;"></line>
+            <line pathLength="100" x1="300" y1="330" x2="450" y2="290" style="animation:siteSeg 3.9s linear 2.6s infinite;opacity:0;"></line>
+          </g>
+          <g stroke="currentColor" stroke-width="8" stroke-linecap="round" fill="none" stroke-dasharray="0.01 300" style="color:var(--ink3);">
+            <line pathLength="100" x1="140" y1="100" x2="290" y2="170" style="animation:siteSeg 5.2s linear .6s infinite;opacity:0;"></line>
+            <line pathLength="100" x1="290" y1="170" x2="430" y2="100" style="animation:siteSeg 5.2s linear 2.2s infinite;opacity:0;"></line>
+          </g>
+        </svg>
+        <div aria-hidden="true">
+          <div style="position:absolute;left:13.46%;top:77.27%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="position:relative;width:64px;height:64px;"><div style="position:absolute;inset:0;border-radius:20px;border:1.5px solid var(--ink);animation:sitePing 3.9s ease-out infinite;"></div><div style="position:absolute;inset:0;border-radius:20px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;"><span class="ic" style="font-size:30px;">smartphone</span></div></div><span style="font-size:13px;font-weight:650;">{r.hero.ana}</span></div>
+          <div style="position:absolute;left:34.6%;top:54.5%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:23px;">smartphone</span></div>
+          <div style="position:absolute;left:26.9%;top:22.7%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1.5px var(--line2) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:23px;">computer</span></div>
+          <div style="position:absolute;left:55.8%;top:38.6%;transform:translate(-50%,-50%);width:52px;height:52px;border-radius:17px;background:var(--bg);box-shadow:0 0 0 1.5px var(--line2) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:24px;">router</span></div>
+          <div style="position:absolute;left:57.7%;top:75%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:23px;">directions_walk</span></div>
+          <div style="position:absolute;left:82.7%;top:22.7%;transform:translate(-50%,-50%);width:48px;height:48px;border-radius:16px;background:var(--bg);box-shadow:0 0 0 1.5px var(--line2) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:23px;">settings_input_antenna</span></div>
+          <div style="position:absolute;left:86.5%;top:65.9%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="width:64px;height:64px;border-radius:20px;background:var(--bg);box-shadow:0 0 0 2px var(--ink) inset;display:flex;align-items:center;justify-content:center;"><span class="ic" style="font-size:30px;">smartphone</span></div><span style="font-size:13px;font-weight:650;">{r.hero.bruno}</span></div>
+          <div style="position:absolute;left:4%;top:4%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;background:var(--bg);box-shadow:0 0 0 1px var(--line2),0 12px 30px -16px rgba(0,0,0,.3);font-size:12.5px;font-weight:600;animation:siteFloat8 5s ease-in-out infinite;"><span class="ic" style="font-size:16px;">wifi_off</span>{r.hero.offline}</div>
+          <div style="position:absolute;right:0;bottom:-2%;display:flex;align-items:center;gap:8px;padding:8px 12px;border-radius:14px;background:var(--bg);box-shadow:0 0 0 1px var(--line2),0 12px 30px -16px rgba(0,0,0,.3);font-size:12.5px;font-weight:600;animation:siteFloat8 6s ease-in-out 1s infinite;"><span class="ic" style="font-size:16px;">lock</span>{r.hero.locked}</div>
+        </div>
+      </div>
+    </section>
+
+    <div style="border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
+      <div class="rede-pillars" style="max-width:1200px;margin:0 auto;padding:0 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));">
+        {r.pillars.map((p, i) => (
+          <div style={`padding:${i === 0 ? '32px 28px 32px 0' : i === 2 ? '32px 0 32px 28px' : '32px 28px'};display:flex;gap:16px;${i > 0 ? 'border-left:1px solid var(--line);' : ''}`}><span class="ic w250" style="font-size:28px;" aria-hidden="true">{p.icon}</span><div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:17px;font-weight:650;">{p.title}</div><div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;">{p.desc}</div></div></div>
+        ))}
+      </div>
+    </div>
+
+    <!-- 01 · Camadas: escolha de camada (botões em pirâmide) e painel com o salto animado (siteHop 2.6s). -->
+    <section id="camadas" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style={reveal}>
+        <div style={kick}>{r.layers.kicker}</div>
+        <h2 style={h2}>{r.layers.title}</h2>
+        <p style={lead}>{r.layers.lead}</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:32px;align-items:stretch;" data-layers>
+        <div style="display:flex;flex-direction:column-reverse;gap:8px;">
+          {r.layers.items.map((l, i) => (
+            <button type="button" data-layer-btn={i} aria-pressed={i === 0 ? 'true' : 'false'} aria-controls="layer-panel" style={`margin:0 ${(4 - i) * 3}%;min-height:72px;padding:14px 20px;border:none;border-radius:20px;background:${i === 0 ? ON[0] : OFF[0]};color:${i === 0 ? ON[1] : OFF[1]};box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;gap:16px;text-align:left;cursor:pointer;transition:background .3s,color .3s,margin .3s;`}>
+              <span style="font:500 12px var(--mono);opacity:.7;flex:none;">{i}</span>
+              <span class="ic w300" style="font-size:24px;" aria-hidden="true">{l.icon}</span>
+              <span style="flex:1;display:flex;flex-direction:column;gap:2px;min-width:0;"><span style="font-size:17px;font-weight:650;">{l.t}</span><span style="font-size:13px;opacity:.72;">{l.sub}</span></span>
+            </button>
+          ))}
+        </div>
+        <div id="layer-panel" aria-live="polite" style="padding:32px;border-radius:28px;background:var(--bg2);display:flex;flex-direction:column;min-height:400px;" class="rede-layer-box">
+          {r.layers.items.map((l, i) => (
+            <div data-layer-panel={i} hidden={i !== 0} style="display:flex;flex-direction:column;gap:22px;flex:1;">
+              <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+                <span style={kick}>{r.layers.label} {i}</span>
+                <span style="display:inline-flex;align-items:center;gap:7px;height:28px;padding:0 12px;border-radius:14px;background:var(--bg);font:500 11.5px var(--mono);letter-spacing:.03em;"><span style={dot(l.k)} aria-hidden="true"></span>{r.status[l.k]}</span>
+              </div>
+              <h3 style="margin:0;font-size:clamp(28px,3.2vw,40px);font-weight:700;letter-spacing:-0.045em;line-height:1.02;">{l.t}</h3>
+              <div style="font-size:16px;line-height:1.55;color:var(--ink2);text-wrap:pretty;max-width:520px;">{l.d}</div>
+              <div style="flex:1;"></div>
+              <div style="position:relative;padding:8px 0 4px;">
+                <div style="position:absolute;left:36px;right:36px;top:44px;border-top:2px dashed var(--line2);" aria-hidden="true"></div>
+                <div style="position:absolute;left:36px;right:36px;top:39px;height:12px;" aria-hidden="true"><div style="position:absolute;top:0;width:12px;height:12px;margin-left:-6px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px var(--bg2);animation:siteHop 2.6s ease-in-out infinite;"></div></div>
+                <div style="position:relative;display:flex;justify-content:space-between;gap:8px;">
+                  {l.nodes.map(([ic, n]) => (
+                    <div style="display:flex;flex-direction:column;align-items:center;gap:8px;width:72px;text-align:center;"><div style="width:72px;height:72px;border-radius:22px;background:var(--bg);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:30px;" aria-hidden="true">{ic}</span></div><span style="font-size:12.5px;font-weight:600;line-height:1.25;">{n}</span></div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- 02 · A viagem do "oi": 6 passos de 2,6 s, com pausar, avançar e pular para um passo. -->
+    <section id="mensagem" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style={reveal}>
+        <div style={kick}>{r.msg.kicker}</div>
+        <h2 style={h2}>{r.msg.title}</h2>
+        <p style={lead}>{r.msg.lead}</p>
+      </div>
+      <div data-msg data-i18n={JSON.stringify(client)} style="border-radius:32px;box-shadow:0 0 0 1px var(--line2) inset;padding:clamp(20px,4vw,48px);display:flex;flex-direction:column;gap:36px;background-image:radial-gradient(var(--dot) 1.2px, transparent 1.4px);background-size:20px 20px;">
+        <div aria-hidden="true" style="position:relative;height:210px;margin:0 clamp(36px,6vw,64px);">
+          <div style="position:absolute;left:0;right:0;top:108px;border-top:2px dashed var(--line2);"></div>
+          {r.msg.nodes.map((name, i) => (
+            <div data-mn={i} style={`position:absolute;left:${POS[i]};top:64px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;width:clamp(72px,14vw,130px);text-align:center;`}>
+              <div style="position:relative;width:clamp(56px,8vw,88px);height:clamp(56px,8vw,88px);">
+                <div data-mn-ping style={`position:absolute;inset:0;border-radius:28%;border:1.5px solid var(--ink);opacity:0;${i === 0 ? 'animation:sitePing 2.2s ease-out infinite;' : ''}`}></div>
+                <div data-mn-face style={`position:absolute;inset:0;border-radius:28%;background:${i === 0 ? ON[0] : OFF[0]};color:${i === 0 ? ON[1] : OFF[1]};box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;transition:background .45s,color .45s;`}><span class="ic w300" style="font-size:clamp(26px,3.4vw,38px);">{['smartphone', 'smartphone', 'directions_walk', 'smartphone'][i]}</span></div>
+              </div>
+              <div style="font-size:clamp(13px,1.4vw,15px);font-weight:650;">{name}</div>
+              <div data-mn-note style="font:500 11.5px var(--mono);color:var(--ink2);min-height:14px;">{msgNoteAt0[i]}</div>
+            </div>
+          ))}
+          <div data-env style="position:absolute;top:52px;left:0%;transform:translate(-50%,-100%);transition:opacity .3s;opacity:1;z-index:3;">
+            <div style="height:40px;padding:0 14px;border-radius:20px;background:var(--ink);color:var(--invink);display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;white-space:nowrap;box-shadow:0 14px 30px -12px rgba(0,0,0,.45);"><span class="ic" style="font-size:19px;" data-env-ic>chat_bubble</span><span data-env-label>{r.msg.oi}</span></div>
+          </div>
+          <div data-rcpt style="position:absolute;top:52px;left:100%;transform:translate(-50%,-100%);transition:opacity .2s;opacity:0;z-index:3;">
+            <div style="height:40px;padding:0 14px;border-radius:20px;background:var(--bg);color:var(--ink);box-shadow:0 0 0 1.5px var(--ink) inset,0 14px 30px -12px rgba(0,0,0,.3);display:flex;align-items:center;gap:8px;font-weight:600;font-size:14px;white-space:nowrap;"><span class="ic" style="font-size:19px;">done_all</span>{r.msg.delivered}</div>
+          </div>
+        </div>
+
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:28px;align-items:start;">
+          <div aria-live="polite" style="min-height:180px;">
+            {r.msg.steps.map((s, i) => (
+              <div data-msg-step={i} hidden={i !== 0} style="display:flex;flex-direction:column;gap:12px;">
+                <div style={kick}>{fill(r.msg.stepOf, i + 1)}</div>
+                <h3 style="margin:0;font-size:clamp(26px,3vw,36px);font-weight:700;letter-spacing:-0.04em;line-height:1.05;">{s.t}</h3>
+                <div style="font-size:16px;line-height:1.55;color:var(--ink2);text-wrap:pretty;max-width:520px;">{s.d}</div>
+                <div style="font:500 12px var(--mono);color:var(--ink3);">{s.tech}</div>
+              </div>
+            ))}
+          </div>
+          <div style="display:flex;flex-direction:column;gap:18px;">
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="font-size:13px;color:var(--ink2);">{r.msg.anaSees}</div>
+              <div style="display:flex;gap:6px;flex-wrap:wrap;">
+                {r.msg.anaStates.map((a, i) => (
+                  <span data-ana={i} style={`height:34px;padding:0 14px;border-radius:17px;background:${i === 0 ? ON[0] : OFF[0]};color:${i === 0 ? ON[1] : OFF[1]};box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;gap:6px;font-size:13.5px;font-weight:600;opacity:${i === 0 ? 1 : 0.4};transition:background .3s,color .3s,opacity .3s;`}><span class="ic" style="font-size:16px;" aria-hidden="true">{['edit', 'schedule', 'north_east', 'done_all'][i]}</span>{a}</span>
+                ))}
+              </div>
+            </div>
+            <div role="group" aria-label={r.msg.controls} style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+              <button type="button" data-prev aria-label={r.msg.prev} title={r.msg.prev} style="width:44px;height:44px;border:none;border-radius:22px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;"><span class="ic" style="font-size:22px;" aria-hidden="true">chevron_left</span></button>
+              <button type="button" data-play style="height:44px;padding:0 18px;border:none;border-radius:22px;background:var(--ink);color:var(--invink);cursor:pointer;display:flex;align-items:center;gap:8px;font:600 14px var(--sans);"><span class="ic" style="font-size:21px;" aria-hidden="true" data-play-ic>pause</span><span data-play-label>{r.msg.pause}</span></button>
+              <button type="button" data-next aria-label={r.msg.next} title={r.msg.next} style="width:44px;height:44px;border:none;border-radius:22px;background:var(--bg2);color:var(--ink);cursor:pointer;display:flex;align-items:center;justify-content:center;"><span class="ic" style="font-size:22px;" aria-hidden="true">chevron_right</span></button>
+              <div style="display:flex;gap:6px;margin-left:6px;">
+                {r.msg.steps.map((_, i) => (
+                  <button type="button" data-dot={i} aria-label={fill(r.msg.goTo, i + 1)} aria-current={i === 0 ? 'step' : undefined} style={`width:${i === 0 ? 28 : 10}px;height:10px;border:none;border-radius:5px;background:${i === 0 ? 'var(--ink)' : 'var(--bg3)'};cursor:pointer;padding:0;transition:width .3s,background .3s;`}></button>
+                ))}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 03 · No caminho: cada pergunta acende por 1,3 s. -->
+    <section id="relay" style={`${section}display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,400px),1fr));gap:56px;align-items:start;`}>
+      <div class="rv rede-sticky" style="display:flex;flex-direction:column;gap:14px;">
+        <div style={kick}>{r.relay.kicker}</div>
+        <h2 style={h2}>{r.relay.title}</h2>
+        <p style={lead}>{r.relay.lead}</p>
+        <ul style="list-style:none;display:flex;flex-direction:column;gap:10px;margin:10px 0 0;padding:20px;border-radius:22px;background:var(--bg2);">
+          {r.relay.rules.map(([ic, txt]) => (
+            <li style="display:flex;gap:12px;font-size:14.5px;line-height:1.45;"><span class="ic w300" style="font-size:20px;" aria-hidden="true">{ic}</span><span>{txt}</span></li>
+          ))}
+        </ul>
+      </div>
+      <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;">
+        {r.relay.steps.map((s, i) => (
+          <li data-relay={i} style="display:flex;gap:18px;">
+            <div style="display:flex;flex-direction:column;align-items:center;width:52px;flex:none;">
+              <div data-relay-face style={`width:52px;height:52px;border-radius:16px;background:${i === 0 ? ON[0] : OFF[0]};color:${i === 0 ? ON[1] : OFF[1]};box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;transition:background .35s,color .35s;`}><span class="ic w300" style="font-size:24px;" aria-hidden="true">{s.icon}</span></div>
+              <div style={`flex:1;width:2px;min-height:28px;background:var(--line2);opacity:${i === r.relay.steps.length - 1 ? 0 : 1};`}></div>
+            </div>
+            <div data-relay-txt class="rede-relay-txt" style={`flex:1;display:flex;flex-direction:column;gap:10px;padding:12px 0 28px;opacity:${i === 0 ? 1 : 0.5};transition:opacity .35s;`}>
+              <div style="font-size:19px;font-weight:650;letter-spacing:-0.02em;">{s.q}</div>
+              <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;">{s.d}</div>
+              {s.bk && (
+                <div style="display:inline-flex;align-self:flex-start;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:16px;box-shadow:0 0 0 1px var(--line2) inset;font-size:13px;"><span style="font:600 11px var(--mono);">{s.bk}</span><span class="ic" style="font-size:16px;" aria-hidden="true">arrow_forward</span><span style="font-weight:550;">{s.bt}</span></div>
+              )}
+            </div>
+          </li>
+        ))}
+      </ol>
+    </section>
+
+    <!-- 04 · O meio certo: barras de velocidade desenhadas na rolagem (siteBar). -->
+    <section id="caminho" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style={reveal}>
+        <div style={kick}>{r.medium.kicker}</div>
+        <h2 style={h2}>{r.medium.title}</h2>
+        <p style={lead}>{r.medium.lead}</p>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:12px;">
+        {r.medium.cards.map((c, i) => (
+          <div class="rv" style={`--rva:entry ${i * 5}% cover ${25 + i * 5}%;padding:32px;background:var(--bg);border-radius:24px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:16px;`}>
+            <div style="display:flex;justify-content:space-between;align-items:center;"><span class="ic w250" style="font-size:32px;" aria-hidden="true">{c.icon}</span><span style="display:inline-flex;align-items:center;gap:6px;font:500 11px var(--mono);"><span style={dot(c.k, 7)} aria-hidden="true"></span>{r.status[c.k]}</span></div>
+            <div style="font-size:13px;color:var(--ink2);">{c.when}</div>
+            <h3 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.02em;">{c.name}</h3>
+            <div style="height:8px;border-radius:4px;background:var(--bg3);overflow:hidden;" aria-hidden="true"><div class="rv-bar" style={`--rva:entry 20% cover ${40 + i * 5}%;width:${['6%', '62%', '100%'][i]};height:100%;border-radius:4px;background:${i === 2 ? 'repeating-linear-gradient(90deg,var(--ink) 0 10px,transparent 10px 16px)' : 'var(--ink)'};transform-origin:left;`}></div></div>
+            <div style="display:flex;justify-content:space-between;gap:8px;font:500 12px var(--mono);color:var(--ink2);"><span>{c.a}</span><span>{c.b}</span></div>
+          </div>
+        ))}
+      </div>
+      <div style="display:flex;align-items:center;gap:14px;padding:20px 24px;border-radius:22px;background:var(--bg2);"><span class="ic w300" style="font-size:24px;" aria-hidden="true">alt_route</span><div style="flex:1;font-size:15px;line-height:1.5;text-wrap:pretty;"><b>{r.medium.bridgeB}</b> {r.medium.bridge}</div></div>
+    </section>
+
+    <!-- 05 · Transferência LUNES pela malha: 6 passos de 2,6 s (o que é hoje x o que vem). -->
+    <section id="dinheiro" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style="display:flex;flex-direction:column;gap:14px;max-width:760px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style={kick}>{r.tx.kicker}</span><span style={badge}><span style={dot(r.tx.k, 7)} aria-hidden="true"></span>{r.status[r.tx.k]}</span></div>
+        <h2 style={h2}>{r.tx.title}</h2>
+        <p style={lead}>{r.tx.lead}</p>
+      </div>
+      <div data-tx style="border-radius:32px;background:var(--ink);color:var(--invink);padding:clamp(20px,4vw,48px);display:flex;flex-direction:column;gap:36px;">
+        <div aria-hidden="true" style="position:relative;height:200px;margin:0 clamp(36px,6vw,64px);">
+          <div style="position:absolute;left:0;right:0;top:108px;border-top:2px dashed rgba(127,127,127,.5);"></div>
+          {r.tx.nodes.map((name, i) => (
+            <div data-tn={i} style={`position:absolute;left:${POS[i]};top:64px;transform:translateX(-50%);display:flex;flex-direction:column;align-items:center;gap:10px;width:clamp(72px,14vw,130px);text-align:center;`}>
+              <div data-tn-face style={`width:clamp(56px,8vw,88px);height:clamp(56px,8vw,88px);border-radius:28%;background:${i === 0 ? 'var(--invink)' : 'transparent'};color:${i === 0 ? 'var(--ink)' : 'var(--invink)'};box-shadow:0 0 0 1.5px var(--invink) inset;display:flex;align-items:center;justify-content:center;transition:background .45s,color .45s;`}><span class="ic w300" style="font-size:clamp(26px,3.4vw,38px);">{['account_balance_wallet', 'hub', 'cell_tower', 'public'][i]}</span></div>
+              <div style="font-size:clamp(13px,1.4vw,15px);font-weight:650;">{name}</div>
+            </div>
+          ))}
+          <div data-tok style="position:absolute;top:52px;left:0%;transform:translate(-50%,-100%);transition:none;opacity:1;z-index:3;">
+            <div style="height:40px;padding:0 14px;border-radius:20px;background:var(--invink);color:var(--ink);display:flex;align-items:center;gap:8px;font-weight:650;font-size:14px;white-space:nowrap;"><span class="ic" style="font-size:19px;" data-tok-ic>draw</span><span data-tok-label>{r.tx.tok.amount}</span></div>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:28px;align-items:start;">
+          <div style="min-height:170px;">
+            <div class="rede-tx-live" aria-hidden="true">
+              {r.tx.steps.map((s, i) => (
+                <div data-tx-step={i} hidden={i !== 0} style="display:flex;flex-direction:column;gap:12px;">
+                  <div style="font:500 12px var(--mono);letter-spacing:.06em;opacity:.6;">{fill(r.tx.stepOf, i + 1)}</div>
+                  <div style="font-size:clamp(26px,3vw,36px);font-weight:700;letter-spacing:-0.04em;line-height:1.05;">{s.t}</div>
+                  <div style="font-size:16px;line-height:1.55;opacity:.75;text-wrap:pretty;max-width:520px;">{s.d}</div>
+                </div>
+              ))}
+            </div>
+            <!-- Lista completa: para leitores de tela sempre; visível com "reduzir movimento" (aí a animação para). -->
+            <ol class="rede-tx-all" aria-label={r.tx.allSteps}>
+              {r.tx.steps.map(s => <li><b>{s.t}.</b> {s.d}</li>)}
+            </ol>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            {r.tx.notes.map(([ic, txt], i) => (
+              <div style={`display:flex;gap:12px;padding:16px 18px;border-radius:18px;box-shadow:0 0 0 1px ${i === 0 ? 'var(--invink)' : 'rgba(127,127,127,.4)'} inset;`}><span class="ic" style="font-size:22px;" aria-hidden="true">{ic}</span><div style="font-size:14.5px;line-height:1.5;text-wrap:pretty;">{txt}</div></div>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 06 · Pontos Piu (a caminho). -->
+    <section id="pontos" style={`${section}display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:56px;align-items:center;`}>
+      <div aria-hidden="true" style="position:relative;width:100%;max-width:520px;aspect-ratio:1;justify-self:center;">
+        <div style="position:absolute;inset:0;border-radius:50%;background-image:radial-gradient(var(--dot) 1.2px, transparent 1.4px);background-size:20px 20px;"></div>
+        <div style="position:absolute;width:30%;height:30%;left:35%;top:35%;border-radius:50%;border:1.5px solid var(--ink);animation:siteRing 3.6s ease-out infinite;"></div>
+        <div style="position:absolute;width:30%;height:30%;left:35%;top:35%;border-radius:50%;border:1.5px solid var(--ink);animation:siteRing 3.6s ease-out 1.2s infinite;"></div>
+        <div style="position:absolute;width:30%;height:30%;left:35%;top:35%;border-radius:50%;border:1.5px solid var(--ink);animation:siteRing 3.6s ease-out 2.4s infinite;"></div>
+        <div style="position:absolute;inset:12%;border-radius:50%;border:1px dashed var(--line2);"></div>
+        <div style="position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:8px;">
+          <div style="width:96px;height:96px;border-radius:30px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:44px;">storefront</span></div>
+          <div style="padding:4px 10px;border-radius:10px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);font-size:13px;font-weight:650;white-space:nowrap;">{r.pontos.place}</div>
+        </div>
+        {[['14%', '20%', '5s', '0s'], ['82%', '14%', '6s', '.8s'], ['90%', '58%', '5.5s', '1.6s'], ['66%', '88%', '6.5s', '.4s']].map(([l, tp, d, dl]) => (
+          <div style={`position:absolute;left:${l};top:${tp};transform:translate(-50%,-50%);width:52px;height:52px;border-radius:17px;background:var(--bg);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;animation:siteFloat8 ${d} ease-in-out ${dl} infinite;`}><span class="ic w300" style="font-size:24px;">smartphone</span></div>
+        ))}
+        <div style="position:absolute;left:18%;top:78%;transform:translate(-50%,-50%);display:flex;flex-direction:column;align-items:center;gap:6px;"><div style="width:58px;height:58px;border-radius:18px;background:var(--bg2);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;"><span class="ic w300" style="font-size:26px;">inventory_2</span></div><span style="font-size:12px;font-weight:650;">{r.pontos.guardian}</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:18px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style={kick}>{r.pontos.kicker}</span><span style={badge}><span style={dot('soon', 7)} aria-hidden="true"></span>{r.status.soon}</span></div>
+        <h2 style={h2}>{r.pontos.title}</h2>
+        <p style={lead}>{r.pontos.lead}</p>
+        <ol style="list-style:none;margin:0;padding:0;display:flex;flex-direction:column;border-top:1px solid var(--line);">
+          {r.pontos.steps.map(([st, sd], i) => (
+            <li style="display:flex;gap:16px;padding:16px 0;border-bottom:1px solid var(--line);"><span style="font:600 12px var(--mono);width:22px;flex:none;padding-top:3px;">{i + 1}</span><div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:16px;font-weight:650;">{st}</div><div style="font-size:14.5px;color:var(--ink2);line-height:1.5;">{sd}</div></div></li>
+          ))}
+        </ol>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          {r.pontos.chips.map(([ic, txt]) => (
+            <span style="min-height:34px;padding:0 14px;border-radius:17px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:550;"><span class="ic" style="font-size:17px;" aria-hidden="true">{ic}</span>{txt}</span>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- 07 · Celular + computador. -->
+    <section id="computador" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style={reveal}>
+        <div style={kick}>{r.pc.kicker}</div>
+        <h2 style={h2}>{r.pc.title}</h2>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,250px),1fr));gap:16px;">
+        {r.pc.cards.map((c, i) => {
+          const last = i === 3;
+          return (
+            <div class="rv" style={`--rva:entry ${i * 5}% cover ${25 + i * 5}%;padding:28px;border-radius:24px;background:${last ? 'var(--ink)' : 'var(--bg2)'};${last ? 'color:var(--invink);' : ''}display:flex;flex-direction:column;gap:14px;`}>
+              {!last && <span style="font:500 12px var(--mono);color:var(--ink2);">{i + 1}</span>}
+              {i === 1 ? (
+                <div style="display:flex;gap:6px;flex-wrap:wrap;" aria-hidden="true">
+                  {r.pc.words.map((w, j) => <span style={`height:32px;padding:0 12px;border-radius:16px;background:${j === 2 ? 'var(--ink)' : 'var(--bg)'};${j === 2 ? 'color:var(--invink);' : ''}display:flex;align-items:center;font-size:14px;font-weight:600;`}>{w}</span>)}
+                </div>
+              ) : (
+                <span class="ic w250" style="font-size:34px;" aria-hidden="true">{['qr_code_scanner', '', 'devices', 'front_hand'][i]}</span>
+              )}
+              <h3 style="margin:0;font-size:19px;font-weight:650;">{c.t}</h3>
+              <div style={`font-size:14.5px;line-height:1.5;${last ? 'opacity:.75;' : 'color:var(--ink2);'}text-wrap:pretty;`}>{c.d}</div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+
+    <!-- 08 · Recompensas (programa ainda não lançado). -->
+    <section id="recompensas" style={`${section}display:flex;flex-direction:column;gap:44px;`}>
+      <div class="rv" style="display:flex;flex-direction:column;gap:14px;max-width:760px;">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style={kick}>{r.rewards.kicker}</span><span style={badge}><span style={dot('soon', 7)} aria-hidden="true"></span>{r.rewards.badge}</span></div>
+        <h2 style={h2}>{r.rewards.title}</h2>
+        <p style={lead}>{r.rewards.lead}</p>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;align-items:stretch;gap:10px;">
+        {r.rewards.cards.map((c, i) => (
+          <div class="rv" style={`--rva:entry ${i * 4}% cover ${25 + i * 4}%;flex:1 1 180px;padding:22px;border-radius:22px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:10px;`}><span class="ic w250" style="font-size:28px;" aria-hidden="true">{c.icon}</span><h3 style="margin:0;font-size:16px;font-weight:650;">{c.title}</h3><div style="font-size:13.5px;line-height:1.45;color:var(--ink2);">{c.desc}</div></div>
+        ))}
+        <div class="rv" style="--rva:entry 12% cover 37%;flex:1 1 180px;padding:22px;border-radius:22px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;gap:10px;color:var(--ink2);"><span class="ic w250" style="font-size:28px;" aria-hidden="true">{r.rewards.pay.icon}</span><h3 style="margin:0;font-size:16px;font-weight:650;color:var(--ink);">{r.rewards.pay.title}</h3><div style="font-size:13.5px;line-height:1.45;">{r.rewards.pay.desc}</div></div>
+      </div>
+    </section>
+
+    <!-- Para leitores técnicos: o fluxograma com o estado de cada parte no código. -->
+    <div style="max-width:1200px;margin:0 auto;padding:70px 24px 0;">
+      <a href={flowDoc} target="_blank" rel="noopener" class="gh-card rv">
+        <span class="gh-ic"><span class="ic" style="font-size:26px" aria-hidden="true">account_tree</span></span>
+        <span class="col" style="flex:1;gap:4px;min-width:0"><span style="font-size:18px;font-weight:650;letter-spacing:-0.02em">{r.doc.title}</span><span style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{r.doc.desc}</span></span>
+        <span class="pill pill-ink" style="height:44px;padding:0 18px;font-size:14px;gap:8px">{r.doc.cta}<span class="ic" style="font-size:18px" aria-hidden="true">arrow_outward</span></span>
+      </a>
+    </div>
+
+    <section style="max-width:1200px;margin:0 auto;padding:110px 24px 120px;">
+      <div style="border-radius:36px;background:var(--ink);color:var(--invink);padding:clamp(32px,6vw,72px);display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,320px),1fr));gap:32px;align-items:end;">
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <h2 style="margin:0;font-size:clamp(36px,5vw,64px);font-weight:700;letter-spacing:-0.05em;line-height:.98;text-wrap:balance;">{r.end.title}</h2>
+          <p style="margin:0;font-size:17px;line-height:1.55;opacity:.75;max-width:520px;text-wrap:pretty;">{r.end.lead}</p>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;">
+          <a href={`${home}#baixar`} class="pill" style="height:54px;padding:0 24px;border-radius:27px;background:var(--invink);color:var(--ink);font-size:16px;"><span class="ic" style="font-size:21px;" aria-hidden="true">download</span>{r.end.download}</a>
+          <a href={home} class="pill" style="height:54px;padding:0 24px;border-radius:27px;box-shadow:0 0 0 1px rgba(127,127,127,.5) inset;font-size:16px;color:inherit;">{r.end.back}</a>
+        </div>
+      </div>
+    </section>
+  </main>
+</Base>
+
+<script>
+  // Tema: alterna e salva (mesma chave da home).
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.dataset.piuTheme === 'dark' ? 'light' : 'dark';
+    root.dataset.piuTheme = next;
+    try { localStorage.setItem('piu-theme', next); } catch { /* modo privado */ }
+  });
+  const nav = document.querySelector<HTMLElement>('.nav');
+  if (nav) {
+    const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
+    addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  // Coreografia do protótipo (Piu Site Rede.dc.html): um tique a cada 1,3 s; "No caminho" anda a cada tique;
+  // a viagem do "oi" (se tocando) e a transferência LUNES andam a cada 2 tiques (2,6 s).
+  // Com "reduzir movimento" nada anda sozinho: a viagem do "oi" começa pausada e só anda se a pessoa tocar em Reproduzir.
+  type Notes = { writing: string; sent: string; delivered: string; guarding: string; relayed: string; read: string };
+  type I18n = { msg: Notes; env: { envelope: string; oi: string }; play: string; pause: string; tok: { amount: string; block: string; notice: string; confirmed: string } };
+  const msgRoot = document.querySelector<HTMLElement>('[data-msg]');
+  const txRoot = document.querySelector<HTMLElement>('[data-tx]');
+  const T = JSON.parse(msgRoot?.dataset.i18n ?? '{}') as I18n;
+  const ON = ['var(--ink)', 'var(--invink)'], OFF = ['var(--bg)', 'var(--ink)'];
+  const POS = ['0%', '33.333%', '66.666%', '100%'];
+  const $$ = <E extends HTMLElement = HTMLElement>(root: ParentNode, sel: string) => [...root.querySelectorAll<E>(sel)];
+  const paint = (el: HTMLElement | null, on: boolean, c = [ON, OFF]) => { if (!el) return; const [bg, fg] = on ? c[0] : c[1]; el.style.background = bg; el.style.color = fg; };
+  const motion = matchMedia('(prefers-reduced-motion: reduce)');
+  let reduced = motion.matches;
+
+  const state = { tick: 0, step: 0, playing: !reduced, relay: reduced ? -1 : 0, tx: 0 };
+
+  // 01 · Camadas
+  const layerBtns = $$<HTMLButtonElement>(document, '[data-layer-btn]');
+  const layerPanels = $$(document, '[data-layer-panel]');
+  const pickLayer = (i: number) => {
+    layerBtns.forEach((b, j) => { paint(b, i === j); b.setAttribute('aria-pressed', String(i === j)); });
+    layerPanels.forEach((p, j) => { p.hidden = i !== j; });
+  };
+  layerBtns.forEach((b, i) => b.addEventListener('click', () => pickLayer(i)));
+
+  // 02 · Viagem do "oi"
+  const renderMsg = () => {
+    if (!msgRoot) return;
+    const st = state.step;
+    const at = [0, 0, 1, 2, 3, 0][st];
+    $$(msgRoot, '[data-mn]').forEach((n, i) => {
+      const act = i === at;
+      let note = '';
+      if (i === 1) note = st === 2 ? T.msg.guarding : st > 2 && st < 5 ? T.msg.relayed : '';
+      if (i === 2) note = st === 3 ? T.msg.guarding : st === 4 ? T.msg.relayed : '';
+      if (i === 3) note = st >= 4 ? T.msg.read : '';
+      if (i === 0) note = st === 5 ? T.msg.delivered : st >= 1 ? T.msg.sent : T.msg.writing;
+      paint(n.querySelector('[data-mn-face]'), act);
+      const ping = n.querySelector<HTMLElement>('[data-mn-ping]');
+      if (ping) ping.style.animation = act ? 'sitePing 2.2s ease-out infinite' : 'none';
+      const nt = n.querySelector<HTMLElement>('[data-mn-note]');
+      if (nt) nt.textContent = note;
+    });
+    const env = msgRoot.querySelector<HTMLElement>('[data-env]');
+    if (env) {
+      env.style.transition = st === 0 ? 'opacity .3s' : 'left 1.1s cubic-bezier(.5,0,.2,1), opacity .3s';
+      env.style.left = ['0%', '0%', POS[1], POS[2], POS[3], POS[3]][st];
+      env.style.opacity = st === 5 ? '0' : '1';
+      const ic = env.querySelector('[data-env-ic]'), lb = env.querySelector('[data-env-label]');
+      if (ic) ic.textContent = st === 0 ? 'chat_bubble' : st === 4 ? 'lock_open' : 'lock';
+      if (lb) lb.textContent = st === 0 || st === 4 ? T.env.oi : T.env.envelope;
+    }
+    const rc = msgRoot.querySelector<HTMLElement>('[data-rcpt]');
+    if (rc) {
+      rc.style.transition = st === 5 ? 'left 2s cubic-bezier(.5,0,.2,1), opacity .3s' : 'opacity .2s';
+      rc.style.left = st === 5 ? '0%' : '100%';
+      rc.style.opacity = st === 5 ? '1' : '0';
+    }
+    $$(msgRoot, '[data-msg-step]').forEach((s, i) => { s.hidden = i !== st; });
+    const anaSt = [0, 1, 2, 2, 2, 3][st];
+    $$(msgRoot, '[data-ana]').forEach((a, i) => { paint(a, i === anaSt); a.style.opacity = i <= anaSt ? '1' : '0.4'; });
+    $$(msgRoot, '[data-dot]').forEach((d, i) => {
+      d.style.width = i === st ? '28px' : '10px';
+      d.style.background = i === st ? 'var(--ink)' : 'var(--bg3)';
+      if (i === st) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
+    });
+    const pi = msgRoot.querySelector('[data-play-ic]'), pl = msgRoot.querySelector('[data-play-label]');
+    if (pi) pi.textContent = state.playing ? 'pause' : 'play_arrow';
+    if (pl) pl.textContent = state.playing ? T.pause : T.play;
+  };
+  const goStep = (i: number) => { state.step = (i + 6) % 6; state.playing = false; renderMsg(); syncTimer(); };
+  msgRoot?.querySelector('[data-prev]')?.addEventListener('click', () => goStep(state.step - 1));
+  msgRoot?.querySelector('[data-next]')?.addEventListener('click', () => goStep(state.step + 1));
+  msgRoot?.querySelector('[data-play]')?.addEventListener('click', () => { state.playing = !state.playing; renderMsg(); syncTimer(); });
+  if (msgRoot) $$(msgRoot, '[data-dot]').forEach((d, i) => d.addEventListener('click', () => goStep(i)));
+
+  // 03 · No caminho
+  const renderRelay = () => {
+    $$(document, '[data-relay]').forEach((row, i) => {
+      paint(row.querySelector('[data-relay-face]'), i === state.relay);
+      const txt = row.querySelector<HTMLElement>('[data-relay-txt]');
+      if (txt) txt.style.opacity = state.relay < 0 || i === state.relay ? '1' : '0.5';
+    });
+  };
+
+  // 05 · Transferência LUNES
+  const TXC = [['var(--invink)', 'var(--ink)'], ['transparent', 'var(--invink)']];
+  const renderTx = () => {
+    if (!txRoot) return;
+    const tx = state.tx, tAt = [0, 1, 2, 3, 0, 0][tx];
+    $$(txRoot, '[data-tn]').forEach((n, i) => paint(n.querySelector('[data-tn-face]'), i === tAt, TXC));
+    const tok = txRoot.querySelector<HTMLElement>('[data-tok]');
+    if (tok) {
+      tok.style.transition = tx === 0 ? 'none' : tx === 4 ? 'left 2s cubic-bezier(.5,0,.2,1)' : 'left 1.1s cubic-bezier(.5,0,.2,1)';
+      tok.style.left = ['0%', POS[1], POS[2], POS[3], '0%', '0%'][tx];
+      const ic = tok.querySelector('[data-tok-ic]'), lb = tok.querySelector('[data-tok-label]');
+      if (ic) ic.textContent = tx === 0 ? 'draw' : tx === 3 ? 'deployed_code' : tx === 4 ? 'mark_email_unread' : tx === 5 ? 'verified' : 'lock';
+      if (lb) lb.textContent = tx === 3 ? T.tok.block : tx === 4 ? T.tok.notice : tx === 5 ? T.tok.confirmed : T.tok.amount;
+    }
+    $$(txRoot, '[data-tx-step]').forEach((s, i) => { s.hidden = i !== tx; });
+  };
+
+  // Relógio único. Sem "reduzir movimento": tudo anda. Com ele: só a viagem do "oi", e só se a pessoa der play.
+  let timer = 0;
+  const tick = () => {
+    state.tick++;
+    if (!reduced) { state.relay = (state.relay + 1) % 6; renderRelay(); }
+    if (state.tick % 2 === 0) {
+      if (state.playing) { state.step = (state.step + 1) % 6; renderMsg(); }
+      if (!reduced) { state.tx = (state.tx + 1) % 6; renderTx(); }
+    }
+  };
+  function syncTimer() {
+    const want = !reduced || state.playing;
+    if (want && !timer) timer = window.setInterval(tick, 1300);
+    if (!want && timer) { clearInterval(timer); timer = 0; }
+  }
+  motion.addEventListener('change', () => {
+    reduced = motion.matches;
+    if (reduced) { state.playing = false; state.relay = -1; state.tx = 0; }
+    else { state.relay = 0; state.playing = true; }
+    renderMsg(); renderRelay(); renderTx(); syncTimer();
+  });
+  renderMsg(); renderRelay(); renderTx(); syncTimer();
+</script>

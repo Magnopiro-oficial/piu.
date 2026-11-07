@@ -29,15 +29,42 @@ a { color: inherit; text-decoration: none; }
 a:hover { opacity: .7; }
 button, input { font-family: inherit; letter-spacing: inherit; color: inherit; }
 :focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* Campos que tiram o próprio contorno (busca do celular de demonstração): o foco aparece no rótulo em volta. */
+label:has(> input:focus-visible) { outline: 2px solid var(--ink); outline-offset: 2px; }
+/* `hidden` vence qualquer display de classe (.col, .toast-wrap…). */
+[hidden] { display: none !important; }
 section[id], div[id] { scroll-margin-top: 68px; }
 
+/* Keyframes exatos de design/handoff/docs/animations/site.css */
 @keyframes siteHop { 0% { left: 0%; opacity: 0 } 8% { opacity: 1 } 92% { opacity: 1 } 100% { left: 100%; opacity: 0 } }
 @keyframes siteRing { from { transform: scale(1); opacity: .5 } to { transform: scale(2.4); opacity: 0 } }
 @keyframes siteUp { from { transform: translateY(18px); opacity: 0 } to { transform: none; opacity: 1 } }
 @keyframes siteSpin { to { transform: rotate(360deg) } }
+@keyframes siteSpinR { to { transform: rotate(-360deg) } }
+@keyframes siteReveal { from { opacity: 0; transform: translateY(56px) scale(.97); filter: blur(6px) } to { opacity: 1; transform: none; filter: none } }
+@keyframes siteWord { from { transform: translateY(110%) rotate(5deg); opacity: 0 } to { transform: none; opacity: 1 } }
+@keyframes sitePhone { from { opacity: 0; transform: translateY(80px) rotate(-5deg) scale(.92) } to { opacity: 1; transform: none } }
+@keyframes siteChip { from { opacity: 0; transform: translateY(16px) scale(.85) } to { opacity: 1; transform: none } }
+@keyframes siteFloat { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-10px) } }
+@keyframes siteMarquee { to { transform: translateX(-50%) } }
+@keyframes sitePing { 0% { transform: scale(1); opacity: .6 } 35% { transform: scale(1.85); opacity: 0 } 100% { transform: scale(1.85); opacity: 0 } }
+@keyframes siteDrawX { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+@keyframes siteDeskIn { from { opacity: 0; transform: perspective(1800px) rotateX(22deg) translateY(80px) scale(.92) } to { opacity: 1; transform: none } }
+@keyframes siteToast { from { opacity: 0; transform: translateY(24px) scale(.94) } to { opacity: 1; transform: none } }
 @media (prefers-reduced-motion: reduce) {
   html { scroll-behavior: auto; }
   *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
+
+/* ── revelação na rolagem (design: animation-timeline: view()) ──
+   Só anima em navegadores com suporte e sem "reduzir movimento"; os demais mostram o conteúdo direto.
+   O intervalo de cada elemento vem de --rva (inline), ex.: "entry 8% cover 36%". */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .rv { animation: siteReveal linear both; animation-timeline: view(); animation-range: var(--rva, entry 0% cover 30%); }
+    .rv-desk { animation: siteDeskIn linear both; animation-timeline: view(); animation-range: entry 0% cover 40%; }
+    .hops-line { transform-origin: left; animation: siteDrawX linear both; animation-timeline: view(); animation-range: entry 10% cover 40%; }
+  }
 }
 
 /* ── primitivas ── */
@@ -75,25 +102,45 @@ section[id], div[id] { scroll-margin-top: 68px; }
 [data-piu-theme='light'] .only-dark, [data-piu-theme='dark'] .only-light { display: none; }
 @media (max-width: 860px) { .nav-links { display: none; } .nav-in { gap: 12px; justify-content: space-between; } }
 
-/* ── hero ── */
+/* ── hero ── (entrada escalonada: siteUp .05/.55/.68/.78/.9s; título palavra por palavra em siteWord) */
 .hero { padding-top: 72px; padding-bottom: 56px; display: grid; grid-template-columns: repeat(auto-fit, minmax(340px, 1fr)); gap: 56px; align-items: center; }
-.hero-copy { display: flex; flex-direction: column; gap: 26px; animation: siteUp .6s both; }
+.hero-copy { display: flex; flex-direction: column; gap: 26px; }
+.hero-copy > .up { animation: siteUp .8s cubic-bezier(.2, .85, .3, 1) var(--d, .55s) both; }
+.hero-copy > .kicker { animation: siteUp .6s cubic-bezier(.2, .85, .3, 1) .05s both; }
 .hero h1 { margin: 0; font-size: clamp(48px, 7vw, 88px); font-weight: 700; letter-spacing: -0.055em; line-height: .95; text-wrap: balance; }
+.word-mask { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .1em; margin-bottom: -.1em; }
+.word { display: inline-block; animation: siteWord .95s cubic-bezier(.2, .85, .2, 1) var(--d, .12s) both; }
 .hero-lead { margin: 0; font-size: 19px; line-height: 1.5; color: var(--ink2); max-width: 520px; text-wrap: pretty; }
-.dot8 { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.hero-desktop { display: flex; align-items: center; gap: 8px; font-size: 14.5px; font-weight: 550; color: var(--ink2); margin-top: -8px; }
+.dot8 { position: relative; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); }
+.dot8::after { content: ''; position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--ink); animation: sitePing 2.4s ease-out 1s infinite; }
 .phone-stage { display: flex; justify-content: center; position: relative; }
 .orbit { position: absolute; top: 50%; left: 50%; border-radius: 50%; border: 1px solid var(--line2); }
+.ring { position: absolute; width: 240px; height: 240px; top: 50%; left: 50%; margin: -120px 0 0 -120px; border-radius: 50%; border: 1.5px solid var(--ink); opacity: 0; animation: siteRing 3.6s ease-out var(--d, 1.2s) infinite; }
+.spin { position: absolute; width: 520px; height: 520px; top: 50%; left: 50%; margin: -260px 0 0 -260px; animation: siteSpin 70s linear infinite; }
+.spin-r { position: absolute; width: 380px; height: 380px; top: 50%; left: 50%; margin: -190px 0 0 -190px; animation: siteSpinR 46s linear infinite; }
+.chip { position: absolute; z-index: 3; animation: siteChip .7s cubic-bezier(.2, .9, .3, 1.3) var(--d, 1.1s) both; }
+.chip > span {
+  display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-radius: 16px; background: var(--bg); border: 1px solid var(--line2);
+  box-shadow: 0 22px 44px -22px rgba(0, 0, 0, .35); font-size: 13.5px; font-weight: 600; white-space: nowrap;
+  animation: siteFloat var(--fd, 5.2s) ease-in-out var(--fdl, 1.8s) infinite;
+}
 .phone {
   position: relative; width: 336px; height: 722px; padding: 10px; border-radius: 54px; background: #0b0b0b;
   box-shadow: 0 50px 90px -40px rgba(0, 0, 0, .45), 0 0 0 1px var(--line2);
+  animation: sitePhone 1.2s cubic-bezier(.2, .85, .3, 1) .2s both;
 }
 .phone-screen { width: 316px; height: 702px; border-radius: 44px; overflow: hidden; position: relative; }
 .phone-scale { width: 390px; height: 844px; transform: scale(.8103); transform-origin: top left; }
 @media (max-width: 420px) { .phone-stage { transform: scale(.85); transform-origin: top center; margin-bottom: -108px; } }
 
-/* ── faixa de transportes ── */
-.band { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
-.band-in { padding-top: 18px; padding-bottom: 18px; display: flex; gap: 12px 36px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+/* ── faixa de transportes (rolagem infinita, pausa no hover, máscara nas bordas) ── */
+.band { border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); display: flex; align-items: center; overflow: hidden; }
+.band > .kicker { flex: none; padding: 18px 20px 18px max(24px, calc((100vw - 1200px) / 2 + 24px)); white-space: nowrap; }
+.marquee { flex: 1; min-width: 0; overflow: hidden; -webkit-mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); mask-image: linear-gradient(90deg, transparent, #000 10%, #000 90%, transparent); }
+.marquee-track { display: flex; width: max-content; animation: siteMarquee 34s linear infinite; }
+.marquee-track:hover { animation-play-state: paused; }
+.marquee-track > span { display: flex; align-items: center; gap: 8px; padding: 18px 28px; font-size: 15px; font-weight: 550; white-space: nowrap; }
 
 /* ── como funciona ── */
 .hops { position: relative; padding: 28px 8px 0; }
@@ -103,6 +150,8 @@ section[id], div[id] { scroll-margin-top: 68px; }
 .hops-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; position: relative; }
 .hop-ic { position: relative; width: 60px; height: 60px; }
 .hop-ic > div { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--ink); }
+/* Cada nó pulsa no instante em que o pacote (siteHop 4.2s) passa por ele. */
+.hop-ping { opacity: 0; animation: sitePing 2.1s ease-out var(--d, 0s) infinite; }
 .hop-face { background: var(--bg); color: var(--ink); display: flex; align-items: center; justify-content: center; }
 .hop-face.inv { background: var(--ink); color: var(--invink); }
 .cards3 { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
@@ -121,12 +170,52 @@ section[id], div[id] { scroll-margin-top: 68px; }
 .cls { padding: 22px; border-radius: 22px; border: 1px solid var(--line2); display: flex; flex-direction: column; gap: 10px; }
 .tag { font: 500 11px var(--mono); padding: 3px 8px; border-radius: 6px; border: 1px solid var(--line2); color: var(--ink2); }
 .desk-card { border-radius: 28px; background: var(--bg2); padding: 28px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
-.desk-box { margin: 0 auto; position: relative; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px var(--line2); background: var(--bg); }
-.desk-box iframe { width: 1280px; height: 820px; border: 0; transform-origin: top left; display: block; }
+/* Prévias de 1280×820 (painel do provider em iframe e Piu Desktop em ilha React) escaladas à largura do cartão. */
+.desk-box { width: 100%; max-width: 1280px; aspect-ratio: 1280 / 820; margin: 0 auto; position: relative; overflow: hidden; border-radius: 14px; box-shadow: 0 0 0 1px var(--line2); background: var(--bg); }
+.desk-fit { width: 1280px; height: 820px; border: 0; transform-origin: top left; display: block; }
 
 /* ── downloads ── */
 .dl { padding: 26px; border-radius: 24px; background: var(--bg); display: flex; flex-direction: column; gap: 12px; box-shadow: 0 0 0 1px var(--line) inset; }
 .dl button, .dl a.pill { height: 46px; border-radius: 23px; font-size: 14.5px; font-weight: 600; cursor: pointer; }
+
+/* ── Piu Desktop (#desktop) ── */
+.desktop { scroll-margin-top: 84px; border-radius: 32px; background: var(--bg); box-shadow: 0 0 0 1px var(--line) inset; padding: clamp(20px, 3vw, 36px); display: flex; flex-direction: column; gap: 28px; overflow: hidden; }
+.desktop-head { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 340px), 1fr)); gap: 28px 48px; align-items: end; }
+.desktop h3 { margin: 0; font-size: clamp(30px, 3.6vw, 46px); font-weight: 700; letter-spacing: -0.045em; line-height: 1.02; text-wrap: balance; }
+.os-tabs { display: flex; gap: 4px; padding: 4px; border-radius: 16px; background: var(--bg2); }
+.os-tabs button {
+  flex: 1; height: 40px; border: none; border-radius: 12px; background: transparent; color: var(--ink); font-size: 14px; font-weight: 500; cursor: pointer;
+  display: flex; align-items: center; justify-content: center; gap: 8px; transition: background .2s, box-shadow .2s;
+}
+.os-tabs button[aria-selected='true'] { background: var(--bg); font-weight: 650; box-shadow: 0 1px 3px rgba(0, 0, 0, .14); }
+.dl-main {
+  height: 64px; padding: 0 22px 0 24px; border: none; border-radius: 32px; background: var(--ink); color: var(--invink); cursor: pointer;
+  display: flex; align-items: center; gap: 14px; text-align: left; transition: transform .2s cubic-bezier(.2, .9, .3, 1.3);
+}
+.dl-main:hover { opacity: 1; transform: translateY(-2px); }
+.dl-main:active { transform: scale(.98); }
+.dl-main > span:nth-child(2) { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.dl-main b { font-size: 16.5px; font-weight: 650; letter-spacing: -0.01em; }
+.dl-main small { font: 400 12px var(--mono); opacity: .7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.dl-files { display: flex; flex-direction: column; }
+.dl-file { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 6px 16px; align-items: center; padding: 16px 4px; border-top: 1px solid var(--line); animation: siteUp .45s cubic-bezier(.2, .85, .3, 1) var(--d, 0s) both; }
+.dl-file .mono { font-size: 12.5px; color: var(--ink2); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dl-file .pill { height: 38px; padding: 0 16px; font-size: 13.5px; gap: 6px; transition: background .2s, color .2s, border-color .2s; }
+.dl-file .pill:hover { background: var(--ink); color: var(--invink); border-color: var(--ink); opacity: 1; }
+.dl-open { padding: 16px 18px; border-radius: 18px; background: var(--bg2); display: flex; gap: 12px; align-items: flex-start; font-size: 14px; line-height: 1.5; color: var(--ink2); text-wrap: pretty; }
+.dl-open b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+.sig-line { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font: 400 12.5px var(--mono); color: var(--ink2); }
+.sig-line a { text-decoration: underline; text-underline-offset: 3px; }
+@media (max-width: 560px) { .dl-file { grid-template-columns: 1fr; } .dl-file .pill { justify-self: start; } }
+
+/* ── toast de download (fixo no rodapé; some em 6,5 s) ── */
+.toast-wrap { position: fixed; left: 0; right: 0; bottom: 28px; z-index: 50; display: flex; justify-content: center; padding: 0 16px; pointer-events: none; }
+.toast {
+  pointer-events: auto; max-width: 560px; padding: 14px 12px 14px 18px; border-radius: 18px; background: var(--ink); color: var(--invink);
+  font-size: 14.5px; line-height: 1.5; display: flex; gap: 12px; align-items: center; box-shadow: 0 24px 60px -20px rgba(0, 0, 0, .5);
+  animation: siteToast .5s cubic-bezier(.2, .9, .3, 1.2) both;
+}
+.toast button { width: 32px; height: 32px; border: none; border-radius: 16px; background: transparent; color: var(--invink); cursor: pointer; display: flex; align-items: center; justify-content: center; flex: none; }
 
 /* ── FAQ ── */
 .faq details { border-top: 1px solid var(--line2); }
@@ -145,23 +234,18 @@ section[id], div[id] { scroll-margin-top: 68px; }
 @keyframes piuTick { 0% { transform: scale(.3); opacity: 0 } 60% { transform: scale(1.3); opacity: 1 } 100% { transform: scale(1) } }
 .phone-row:hover { background: var(--bg2) !important; opacity: 1; }
 
-/* ── micro-animações ── (desligadas por "reduzir movimento" na regra global acima e no script) */
+/* ── micro-interações (hover/active) ── (desligadas por "reduzir movimento" na regra global acima)
+   Os cartões usam `translate` (e não `transform`) no hover para não brigar com a revelação na rolagem. */
 :root { --ease-out: cubic-bezier(.2, .7, .2, 1); --ease-pop: cubic-bezier(.3, 1.5, .5, 1); }
-.rv { opacity: 0; transform: translateY(18px); }
-.rv.in { opacity: 1; transform: none; transition: opacity .65s var(--ease-out), transform .65s var(--ease-out); transition-delay: calc(var(--i, 0) * 80ms); }
-.hops-grid > li.rv .hop-face { transform: scale(.55); }
-.hops-grid > li.rv.in .hop-face { transform: none; transition: transform .6s var(--ease-pop) calc(var(--i, 0) * 120ms + 120ms); }
-.band-in > .rv { transform: translateX(-10px); }
 .nav { transition: box-shadow .3s; }
 .nav.scrolled { box-shadow: 0 10px 30px -18px rgba(0, 0, 0, .35); }
-.hero .dot8 { animation: piuBreath 2.6s ease-in-out infinite; }
 .pill { transition: transform .18s var(--ease-out), opacity .2s, background .2s, border-color .2s; }
 .pill:active, .dl button:active, .dl a.pill:active { transform: scale(.96); }
 .lang a, .icon-btn { transition: transform .18s var(--ease-out), opacity .2s; }
 .icon-btn:active { transform: scale(.92) rotate(-12deg); }
 @media (hover: hover) {
-  .step, .cls, .dl, #lunes > div { transition: transform .3s var(--ease-out), border-color .3s, box-shadow .3s; }
-  .step:hover, .cls:hover, .dl:hover, #lunes > div:hover { transform: translateY(-4px); }
+  .step, .cls, .dl, #lunes > div { transition: translate .3s var(--ease-out), border-color .3s, box-shadow .3s; }
+  .step:hover, .cls:hover, .dl:hover, #lunes > div:hover { translate: 0 -4px; }
   .cls:hover, #lunes > div:hover { border-color: var(--ink) !important; }
   .dl:hover { box-shadow: 0 0 0 1px var(--ink) inset; }
   .feature { transition: background .3s; }
@@ -176,8 +260,8 @@ section[id], div[id] { scroll-margin-top: 68px; }
   .pill:hover { opacity: 1; transform: translateY(-1px); }
   .pill:hover > .ic:last-child { transform: translateX(3px); }
   .pill > .ic { transition: transform .25s var(--ease-out); }
-  .band-in > span .ic { transition: transform .35s var(--ease-pop); }
-  .band-in > span:hover .ic { transform: translateY(-2px) scale(1.15); }
+  .marquee-track > span .ic { transition: transform .35s var(--ease-pop); }
+  .marquee-track > span:hover .ic { transform: translateY(-2px) scale(1.15); }
   .faq summary { transition: padding-left .25s var(--ease-out); }
   .faq summary:hover { padding-left: 6px; }
   .nav-links a { position: relative; }
@@ -191,10 +275,48 @@ a.icon-btn { color: var(--ink); }
 .gh-card:hover { opacity: 1; }
 .gh-ic { width: 52px; height: 52px; border-radius: 16px; background: var(--ink); color: var(--invink); display: flex; align-items: center; justify-content: center; flex: none; }
 @media (hover: hover) {
-  .gh-card { transition: transform .3s var(--ease-out), box-shadow .3s; }
-  .gh-card:hover { transform: translateY(-3px); box-shadow: 0 0 0 1px var(--ink) inset; }
+  .gh-card { transition: translate .3s var(--ease-out), box-shadow .3s; }
+  .gh-card:hover { translate: 0 -3px; box-shadow: 0 0 0 1px var(--ink) inset; }
   .gh-card .gh-ic { transition: transform .4s var(--ease-pop); }
   .gh-card:hover .gh-ic { transform: rotate(-8deg) scale(1.06); }
   .gh-card:hover .pill > .ic:last-child { transform: translate(2px, -2px); }
 }
 @media (max-width: 560px) { .gh-card .pill { width: 100%; } }
+
+/* ── em breve, verificação e Piu Provider para computador ── */
+.dl-main.is-soon { cursor: default; background: var(--bg2); color: var(--ink); box-shadow: 0 0 0 1px var(--line2) inset; }
+.dl-main.is-soon:hover, .dl-main.is-soon:active { transform: none; }
+.verify-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 12px; }
+.cmd { display: block; margin-top: 8px; padding: 8px 10px; border-radius: 10px; background: var(--bg); color: var(--ink); font-size: 12.5px; line-height: 1.5; overflow-wrap: anywhere; user-select: all; }
+.prov-app { border-radius: 28px; border: 1px solid var(--line2); padding: 24px 28px; display: flex; flex-direction: column; gap: 16px; }
+@media (max-width: 560px) { .prov-app { padding: 20px; } }
+.features.sec { grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); }
+@media (max-width: 400px) { .nav-in { gap: 8px; } }
+
+/* ── página "A rede" (design/Piu Site Rede.dc.html) ── */
+@keyframes siteSeg { 0% { stroke-dashoffset: 0; opacity: 1 } 30% { stroke-dashoffset: -100; opacity: 1 } 31%, 100% { stroke-dashoffset: -100; opacity: 0 } }
+@keyframes siteDash { to { stroke-dashoffset: -24 } }
+@keyframes siteBar { from { transform: scaleX(0) } to { transform: scaleX(1) } }
+/* A página da rede flutua 8 px (a home usa 10 px em siteFloat). */
+@keyframes siteFloat8 { 0%, 100% { transform: translateY(0) } 50% { transform: translateY(-8px) } }
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    .rv-bar { animation: siteBar linear both; animation-timeline: view(); animation-range: var(--rva, entry 20% cover 40%); }
+  }
+}
+.rede-sticky { position: sticky; top: 110px; }
+.rede-tx-all { margin: 0; padding: 0 0 0 20px; display: flex; flex-direction: column; gap: 10px; font-size: 15px; line-height: 1.5; }
+.rede-tx-all b { font-weight: 650; }
+/* Sem "reduzir movimento": a lista da transferência fica só para leitores de tela (o passo animado aparece). */
+@media (prefers-reduced-motion: no-preference) {
+  .rede-tx-all { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+}
+/* Com "reduzir movimento": a animação para e a lista completa toma o lugar do passo único. */
+@media (prefers-reduced-motion: reduce) {
+  .rede-tx-live { display: none; }
+}
+/* Faixa de três garantias: no celular vira coluna, sem os recuos laterais e com divisória por cima. */
+@media (max-width: 860px) {
+  .rede-pillars > div { padding: 24px 0 !important; border-left: none !important; }
+  .rede-pillars > div + div { border-top: 1px solid var(--line); }
+}
