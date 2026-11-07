@@ -22,6 +22,18 @@
 @keyframes siteRing{from{transform:scale(1);opacity:.5}to{transform:scale(2.4);opacity:0}}
 @keyframes siteUp{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
 @keyframes siteSpin{to{transform:rotate(360deg)}}
+@keyframes siteSpinR{to{transform:rotate(-360deg)}}
+@keyframes siteUp2{from{transform:translateY(18px);opacity:0}to{transform:none;opacity:1}}
+@keyframes siteReveal{from{opacity:0;transform:translateY(56px) scale(.97);filter:blur(6px)}to{opacity:1;transform:none;filter:none}}
+@keyframes siteWord{from{transform:translateY(110%) rotate(5deg);opacity:0}to{transform:none;opacity:1}}
+@keyframes sitePhone{from{opacity:0;transform:translateY(80px) rotate(-5deg) scale(.92)}to{opacity:1;transform:none}}
+@keyframes siteChip{from{opacity:0;transform:translateY(16px) scale(.85)}to{opacity:1;transform:none}}
+@keyframes siteFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-10px)}}
+@keyframes siteMarquee{to{transform:translateX(-50%)}}
+@keyframes sitePing{0%{transform:scale(1);opacity:.6}35%{transform:scale(1.85);opacity:0}100%{transform:scale(1.85);opacity:0}}
+@keyframes siteDrawX{from{transform:scaleX(0)}to{transform:scaleX(1)}}
+@keyframes siteDeskIn{from{opacity:0;transform:perspective(1800px) rotateX(22deg) translateY(80px) scale(.92)}to{opacity:1;transform:none}}
+@keyframes siteToast{from{opacity:0;transform:translateY(24px) scale(.94)}to{opacity:1;transform:none}}
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
 </style>
 </helmet>
@@ -31,7 +43,7 @@
     <div style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;gap:28px;">
       <a href="#topo" style="font-size:30px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></a>
       <div style="flex:1;display:flex;gap:22px;flex-wrap:wrap;font-size:14px;font-weight:500;color:var(--ink2);">
-        <a href="#como">How it works</a><a href="#privacidade">Privacy</a><a href="#provider">Become a provider</a><a href="#lunes">LUNES</a><a href="#faq">FAQ</a>
+        <a href="#como">How it works</a><a href="#privacidade">Privacy</a><a href="#provider">Become a provider</a><a href="#lunes">LUNES</a><a href="#desktop">Desktop</a><a href="#faq">FAQ</a>
       </div>
       <div style="display:flex;gap:2px;padding:3px;border-radius:19px;border:1px solid var(--line2);flex:none;font:600 12.5px Geist;">
         <a href="Piu%20Site.dc.html" style="height:30px;padding:0 10px;border-radius:15px;display:flex;align-items:center;color:var(--ink2);">PT</a>
@@ -43,21 +55,29 @@
   </div>
 
   <div id="topo" style="max-width:1200px;margin:0 auto;padding:72px 24px 56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:56px;align-items:center;">
-    <div style="display:flex;flex-direction:column;gap:26px;animation:siteUp .6s both;">
-      <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);"><div style="width:8px;height:8px;border-radius:50%;background:var(--ink);"></div>LUNES NETWORK · DECENTRALIZED MESSENGER</div>
-      <h1 style="margin:0;font-size:clamp(48px,7vw,88px);font-weight:700;letter-spacing:-0.055em;line-height:.95;text-wrap:balance;">Messages that fly without internet.</h1>
-      <p style="margin:0;font-size:19px;line-height:1.5;color:var(--ink2);max-width:520px;text-wrap:pretty;">Piu carries your conversations from device to device over Bluetooth, Wi-Fi and radio. No servers, no carrier, end-to-end encrypted. When the network goes down, the neighborhood keeps talking.</p>
-      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+    <div style="display:flex;flex-direction:column;gap:26px;">
+      <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);animation:siteUp .6s cubic-bezier(.2,.85,.3,1) .05s both;"><div style="position:relative;width:8px;height:8px;border-radius:50%;background:var(--ink);"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:sitePing 2.4s ease-out 1s infinite;"></div></div>LUNES NETWORK · DECENTRALIZED MESSENGER</div>
+      <h1 style="margin:0;font-size:clamp(48px,7vw,88px);font-weight:700;letter-spacing:-0.055em;line-height:.95;text-wrap:balance;"><span style="display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) 0.12s both;">Messages</span></span> <span style="display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) 0.20s both;">that</span></span> <span style="display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) 0.28s both;">fly</span></span> <span style="display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) 0.36s both;">without</span></span> <span style="display:inline-block;overflow:hidden;vertical-align:top;padding-bottom:.1em;margin-bottom:-.1em;"><span style="display:inline-block;animation:siteWord .95s cubic-bezier(.2,.85,.2,1) 0.44s both;">internet.</span></span></h1>
+      <p style="margin:0;font-size:19px;line-height:1.5;color:var(--ink2);max-width:520px;text-wrap:pretty;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .55s both;">Piu carries your conversations from device to device over Bluetooth, Wi-Fi and radio. No servers, no carrier, end-to-end encrypted. When the network goes down, the neighborhood keeps talking.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .68s both;">
         <a href="#baixar" style="height:54px;padding:0 24px;border-radius:27px;background:var(--ink);color:var(--invink);font-size:16px;font-weight:600;display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;">android</span>Download for Android</a>
         <a href="#como" style="height:54px;padding:0 24px;border-radius:27px;border:1px solid var(--line2);font-size:16px;font-weight:600;display:flex;align-items:center;">How it works</a>
       </div>
-      <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px;">
+      <a href="#desktop" style="display:flex;align-items:center;gap:8px;font-size:14.5px;font-weight:550;color:var(--ink2);margin-top:-8px;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .78s both;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">laptop_mac</span>Also for Mac and Linux<span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">arrow_forward</span></a>
+      <div style="display:flex;gap:22px;flex-wrap:wrap;padding-top:8px;animation:siteUp .8s cubic-bezier(.2,.85,.3,1) .9s both;">
         <sc-for list="{{ heroFacts }}" as="f" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">{{ f.v }}</div><div style="font-size:13px;color:var(--ink2);">{{ f.l }}</div></div>
         </sc-for>
       </div>
     </div>
     <div style="display:flex;justify-content:center;position:relative;">
+      <div style="position:absolute;width:240px;height:240px;top:50%;left:50%;margin:-120px 0 0 -120px;border-radius:50%;border:1.5px solid var(--ink);opacity:0;animation:siteRing 3.6s ease-out 1.2s infinite;"></div>
+      <div style="position:absolute;width:240px;height:240px;top:50%;left:50%;margin:-120px 0 0 -120px;border-radius:50%;border:1.5px solid var(--ink);opacity:0;animation:siteRing 3.6s ease-out 2.4s infinite;"></div>
+      <div style="position:absolute;width:240px;height:240px;top:50%;left:50%;margin:-120px 0 0 -120px;border-radius:50%;border:1.5px solid var(--ink);opacity:0;animation:siteRing 3.6s ease-out 3.6s infinite;"></div>
+      <div style="position:absolute;width:380px;height:380px;top:50%;left:50%;margin:-190px 0 0 -190px;animation:siteSpinR 46s linear infinite;"><div style="position:absolute;top:-4px;left:186px;width:8px;height:8px;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;bottom:44px;right:44px;width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg);"></div></div>
+      <div style="position:absolute;z-index:3;left:max(0px,calc(50% - 290px));top:110px;animation:siteChip .7s cubic-bezier(.2,.9,.3,1.3) 1.10s both;"><div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:16px;background:var(--bg);border:1px solid var(--line2);box-shadow:0 22px 44px -22px rgba(0,0,0,.35);font-size:13.5px;font-weight:600;white-space:nowrap;animation:siteFloat 5.2s ease-in-out 1.8s infinite;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">done_all</span>Delivered · 3 hops</div></div>
+      <div style="position:absolute;z-index:3;right:max(0px,calc(50% - 300px));top:44%;animation:siteChip .7s cubic-bezier(.2,.9,.3,1.3) 1.32s both;"><div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:16px;background:var(--bg);border:1px solid var(--line2);box-shadow:0 22px 44px -22px rgba(0,0,0,.35);font-size:13.5px;font-weight:600;white-space:nowrap;animation:siteFloat 5.9s ease-in-out 2.2s infinite;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span>Bluetooth · 12 m</div></div>
+      <div style="position:absolute;z-index:3;left:max(0px,calc(50% - 270px));bottom:110px;animation:siteChip .7s cubic-bezier(.2,.9,.3,1.3) 1.54s both;"><div style="display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:16px;background:var(--bg);border:1px solid var(--line2);box-shadow:0 22px 44px -22px rgba(0,0,0,.35);font-size:13.5px;font-weight:600;white-space:nowrap;animation:siteFloat 6.6s ease-in-out 2.6s infinite;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">lock</span>End-to-end encrypted</div></div>
       <div style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;border-radius:50%;border:1px solid var(--line2);"></div>
       <div style="position:absolute;width:380px;height:380px;top:50%;left:50%;margin:-190px 0 0 -190px;border-radius:50%;border:1px solid var(--line2);"></div>
       <div style="position:absolute;width:520px;height:520px;top:50%;left:50%;margin:-260px 0 0 -260px;animation:siteSpin 70s linear infinite;">
@@ -65,7 +85,7 @@
         <div style="position:absolute;bottom:60px;left:40px;width:10px;height:10px;border-radius:50%;border:1.5px solid var(--ink);background:var(--bg);"></div>
         <div style="position:absolute;top:120px;right:6px;width:9px;height:9px;border-radius:50%;background:var(--ink);"></div>
       </div>
-      <div style="position:relative;width:336px;height:722px;padding:10px;border-radius:54px;background:#0b0b0b;box-shadow:0 50px 90px -40px rgba(0,0,0,.45),0 0 0 1px var(--line2);">
+      <div style="position:relative;width:336px;height:722px;padding:10px;border-radius:54px;background:#0b0b0b;box-shadow:0 50px 90px -40px rgba(0,0,0,.45),0 0 0 1px var(--line2);animation:sitePhone 1.2s cubic-bezier(.2,.85,.3,1) .2s both;">
         <div style="width:316px;height:702px;border-radius:44px;overflow:hidden;position:relative;">
           <div style="width:390px;height:844px;transform:scale(.8103);transform-origin:top left;">
             <dc-import name="PiuApp" start="chats" hint-size="390px,844px"></dc-import>
@@ -75,32 +95,34 @@
     </div>
   </div>
 
-  <div style="border-top:1px solid var(--line);border-bottom:1px solid var(--line);">
-    <div style="max-width:1200px;margin:0 auto;padding:18px 24px;display:flex;gap:12px 36px;flex-wrap:wrap;align-items:center;justify-content:space-between;">
-      <span style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">TRAVELS OVER</span>
-      <sc-for list="{{ transports }}" as="t" hint-placeholder-count="5">
-        <span style="display:flex;align-items:center;gap:8px;font-size:15px;font-weight:550;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ t.icon }}</span>{{ t.n }}</span>
-      </sc-for>
+  <div style="border-top:1px solid var(--line);border-bottom:1px solid var(--line);display:flex;align-items:center;overflow:hidden;">
+    <span style="flex:none;padding:18px 20px 18px max(24px,calc((100vw - 1200px) / 2 + 24px));font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);white-space:nowrap;">TRAVELS OVER</span>
+    <div style="flex:1;min-width:0;overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);mask-image:linear-gradient(90deg,transparent,#000 10%,#000 90%,transparent);">
+      <div style="display:flex;width:max-content;animation:siteMarquee 34s linear infinite;" style-hover="animation-play-state:paused;">
+        <sc-for list="{{ transportsLoop }}" as="t" hint-placeholder-count="10">
+          <span style="display:flex;align-items:center;gap:8px;padding:18px 28px;font-size:15px;font-weight:550;white-space:nowrap;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">{{ t.icon }}</span>{{ t.n }}</span>
+        </sc-for>
+      </div>
     </div>
   </div>
 
   <div id="como" style="max-width:1200px;margin:0 auto;padding:96px 24px 40px;display:flex;flex-direction:column;gap:48px;">
-    <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;">
+    <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%;">
       <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">HOW IT WORKS</div>
       <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Every device is a piece of the network.</h2>
       <p style="margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">If the recipient is far away, your message hops between phones, routers and antennas in the neighborhood until it arrives. If no one is nearby, it waits, stored and encrypted, until a route appears.</p>
     </div>
     <div style="position:relative;padding:28px 8px 0;">
-      <div style="position:absolute;left:7%;right:7%;top:58px;height:0;border-top:1.5px dashed var(--ink);opacity:.35;"></div>
+      <div style="position:absolute;left:7%;right:7%;top:58px;height:0;border-top:1.5px dashed var(--ink);opacity:.35;transform-origin:left;animation:siteDrawX linear both;animation-timeline:view();animation-range:entry 10% cover 40%;"></div>
       <div style="position:absolute;left:7%;right:7%;top:54px;height:8px;">
         <div style="position:absolute;top:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ink);animation:siteHop 4.2s linear infinite;"></div>
         <div style="position:absolute;top:0;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:var(--ink);animation:siteHop 4.2s linear 2.1s infinite;"></div>
       </div>
       <div style="display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:8px;position:relative;">
         <sc-for list="{{ hops }}" as="h" hint-placeholder-count="5">
-          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ h.range }};">
             <div style="position:relative;width:60px;height:60px;">
-              <sc-if value="{{ h.end }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:siteRing 2.4s ease-out infinite;"></div></sc-if>
+              <div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);opacity:0;animation:sitePing 2.1s ease-out {{ h.ping }} infinite;"></div>
               <div style="position:absolute;inset:0;border-radius:50%;background:{{ h.bg }};color:{{ h.fg }};border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:26px;line-height:1;font-variation-settings:'wght' 300;">{{ h.icon }}</span></div>
             </div>
             <div style="font-size:15px;font-weight:600;">{{ h.n }}</div>
@@ -111,7 +133,7 @@
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px;">
       <sc-for list="{{ steps }}" as="s" hint-placeholder-count="3">
-        <div style="padding:26px;border-radius:26px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;">
+        <div style="padding:26px;border-radius:26px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ s.range }};">
           <div style="font:500 13px 'Geist Mono',monospace;color:var(--ink2);">{{ s.n }}</div>
           <div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;">{{ s.t }}</div>
           <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ s.d }}</div>
@@ -123,7 +145,7 @@
   <div style="max-width:1200px;margin:0 auto;padding:56px 24px 96px;">
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:1px;background:var(--line2);border:1px solid var(--line2);border-radius:28px;overflow:hidden;">
       <sc-for list="{{ features }}" as="f" hint-placeholder-count="6">
-        <div style="padding:30px;background:var(--bg);display:flex;flex-direction:column;gap:14px;min-height:220px;">
+        <div style="padding:30px;background:var(--bg);display:flex;flex-direction:column;gap:14px;min-height:220px;transition:background .25s;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ f.range }};" style-hover="background:var(--bg2);">
           <span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'wght' 250;">{{ f.icon }}</span>
           <div style="font-size:20px;font-weight:650;letter-spacing:-0.02em;">{{ f.t }}</div>
           <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">{{ f.d }}</div>
@@ -134,7 +156,7 @@
 
   <div id="privacidade" style="background:var(--ink);color:var(--invink);">
     <div style="max-width:1200px;margin:0 auto;padding:96px 24px;display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:56px;">
-      <div style="display:flex;flex-direction:column;gap:18px;">
+      <div style="display:flex;flex-direction:column;gap:18px;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%;">
         <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">PRIVACY</div>
         <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Whoever carries it can’t read it.</h2>
         <p style="margin:0;font-size:17px;line-height:1.55;opacity:.78;text-wrap:pretty;">Every message leaves your device encrypted. Phones and routers along the way only carry a sealed envelope and keep as little as possible on record.</p>
@@ -145,7 +167,7 @@
       </div>
       <div style="display:flex;flex-direction:column;">
         <sc-for list="{{ privacy }}" as="p" hint-placeholder-count="5">
-          <div style="display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35);">
+          <div style="display:flex;gap:16px;padding:20px 0;border-top:1px solid rgba(127,127,127,.35);animation:siteReveal linear both;animation-timeline:view();animation-range:{{ p.range }};">
             <span style="font-family:'Material Symbols Rounded';font-size:24px;line-height:1;font-variation-settings:'wght' 300;">{{ p.icon }}</span>
             <div style="flex:1;display:flex;flex-direction:column;gap:5px;"><div style="font-size:17px;font-weight:600;">{{ p.t }}</div><div style="font-size:14.5px;line-height:1.5;opacity:.75;text-wrap:pretty;">{{ p.d }}</div></div>
           </div>
@@ -155,7 +177,7 @@
   </div>
 
   <div id="provider" style="max-width:1200px;margin:0 auto;padding:104px 24px 64px;display:flex;flex-direction:column;gap:44px;">
-    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end;">
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:40px;align-items:end;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%;">
       <div style="display:flex;flex-direction:column;gap:14px;">
         <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">BECOME A PROVIDER</div>
         <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Your router earns LUNES.</h2>
@@ -164,7 +186,7 @@
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;">
       <sc-for list="{{ classes }}" as="c" hint-placeholder-count="4">
-        <div style="padding:22px;border-radius:22px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:10px;">
+        <div style="padding:22px;border-radius:22px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:10px;transition:border-color .25s,background .25s;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ c.range }};" style-hover="border-color:var(--ink);background:var(--bg2);">
           <div style="display:flex;align-items:center;justify-content:space-between;"><span style="font-family:'Material Symbols Rounded';font-size:28px;line-height:1;font-variation-settings:'wght' 250;">{{ c.icon }}</span><span style="font:500 11px 'Geist Mono',monospace;padding:3px 8px;border-radius:6px;border:1px solid var(--line2);color:var(--ink2);">{{ c.tag }}</span></div>
           <div style="font-size:18px;font-weight:650;">{{ c.t }}</div>
           <div style="font-size:14px;line-height:1.5;color:var(--ink2);text-wrap:pretty;">{{ c.d }}</div>
@@ -174,11 +196,11 @@
     </div>
     <div style="border-radius:28px;background:var(--bg2);padding:28px;display:flex;flex-direction:column;gap:20px;overflow:hidden;">
       <div style="display:flex;justify-content:space-between;align-items:flex-end;gap:16px;flex-wrap:wrap;">
-        <div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;">Provider dashboard, served by your own device</div><div style="font-size:14.5px;color:var(--ink2);">Opens on your local network at piu-node.local. Works without internet.</div></div>
+        <div style="display:flex;align-items:center;gap:14px;min-width:0;"><img src="brand/provider/piu-provider-256.png" alt="Piu Provider" style="width:68px;height:68px;flex:none;margin:-7px;"><div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:22px;font-weight:650;letter-spacing:-0.025em;">Provider dashboard, served by your own device</div><div style="font-size:14.5px;color:var(--ink2);">Opens on your local network at piu-node.local. Works without internet.</div></div></div>
         <a href="Piu 7 Provider computador.dc.html" style="height:44px;padding:0 18px;border-radius:22px;background:var(--ink);color:var(--invink);font-size:14px;font-weight:600;display:flex;align-items:center;gap:8px;">See the dashboard<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">arrow_forward</span></a>
       </div>
       <div ref="{{ deskRef }}" style="width:100%;">
-        <div style="width:{{ deskW }};height:{{ deskH }};margin:0 auto;position:relative;overflow:hidden;border-radius:14px;">
+        <div style="width:{{ deskW }};height:{{ deskH }};margin:0 auto;position:relative;overflow:hidden;border-radius:14px;animation:siteDeskIn linear both;animation-timeline:view();animation-range:entry 0% cover 40%;">
           <div style="width:1280px;height:820px;transform:scale({{ deskScale }});transform-origin:top left;">
             <dc-import name="PiuProviderDesktop" theme="{{ theme }}" hint-size="1280px,820px"></dc-import>
           </div>
@@ -188,13 +210,13 @@
   </div>
 
   <div id="lunes" style="max-width:1200px;margin:0 auto;padding:40px 24px 104px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px;">
-    <div style="padding:32px;border-radius:28px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:14px;">
+    <div style="padding:32px;border-radius:28px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:14px;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%;">
       <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;">LUNES WALLET</div>
       <div style="font-size:34px;font-weight:700;letter-spacing:-0.04em;line-height:1.05;text-wrap:balance;">A wallet inside the app, kept apart from your conversations.</div>
       <div style="font-size:15px;line-height:1.55;opacity:.78;text-wrap:pretty;">Send and receive LUNES even offline: the transaction is signed on your device, travels through the mesh and settles when a gateway reaches the Mainnet. Messages never go on the blockchain.</div>
     </div>
     <sc-for list="{{ rewards }}" as="r" hint-placeholder-count="2">
-      <div style="padding:32px;border-radius:28px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:12px;">
+      <div style="padding:32px;border-radius:28px;border:1px solid var(--line2);display:flex;flex-direction:column;gap:12px;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ r.range }};">
         <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ r.k }}</div>
         <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:56px;font-weight:650;letter-spacing:-0.05em;line-height:1;">{{ r.v }}</span><span style="font-size:15px;font-weight:600;color:var(--ink2);">LUNES</span></div>
         <div style="font-size:17px;font-weight:600;">{{ r.t }}</div>
@@ -206,27 +228,67 @@
 
   <div id="baixar" style="background:var(--bg2);">
     <div style="max-width:1200px;margin:0 auto;padding:96px 24px;display:flex;flex-direction:column;gap:40px;">
-      <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;">
+      <div style="display:flex;flex-direction:column;gap:14px;max-width:720px;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 30%;">
         <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">DOWNLOAD</div>
         <h2 style="margin:0;font-size:clamp(36px,5vw,56px);font-weight:700;letter-spacing:-0.045em;line-height:1;text-wrap:balance;">Get it from a friend. Or here.</h2>
         <p style="margin:0;font-size:17px;line-height:1.55;color:var(--ink2);text-wrap:pretty;">Anyone who has Piu can pass the app to your phone, no internet needed. The copy checks its own signature the first time it opens.</p>
       </div>
       <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px;">
         <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
-          <div style="padding:26px;border-radius:24px;background:var(--bg);display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 1px var(--line) inset;">
+          <div style="padding:26px;border-radius:24px;background:var(--bg);display:flex;flex-direction:column;gap:12px;box-shadow:0 0 0 1px var(--line) inset;animation:siteReveal linear both;animation-timeline:view();animation-range:{{ d.range }};">
             <span style="font-family:'Material Symbols Rounded';font-size:30px;line-height:1;font-variation-settings:'wght' 250;">{{ d.icon }}</span>
             <div style="font-size:20px;font-weight:650;letter-spacing:-0.02em;">{{ d.t }}</div>
             <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;flex:1;">{{ d.d }}</div>
-            <button onClick="{{ d.act }}" style="height:46px;border-radius:23px;border:{{ d.border }};background:{{ d.bg }};color:{{ d.fg }};font:600 14.5px Geist;cursor:pointer;">{{ d.cta }}</button>
+            <button onClick="{{ d.act }}" style="height:46px;border-radius:23px;border:{{ d.border }};background:{{ d.bg }};color:{{ d.fg }};font:600 14.5px Geist;cursor:pointer;transition:transform .2s cubic-bezier(.2,.9,.3,1.3);" style-hover="transform:translateY(-2px);" style-active="transform:scale(.97);">{{ d.cta }}</button>
           </div>
         </sc-for>
+      </div>
+      <div id="desktop" style="scroll-margin-top:84px;border-radius:32px;background:var(--bg);box-shadow:0 0 0 1px var(--line) inset;padding:clamp(20px,3vw,36px);display:flex;flex-direction:column;gap:28px;overflow:hidden;animation:siteReveal linear both;animation-timeline:view();animation-range:entry 0% cover 22%;">
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:28px 48px;align-items:end;">
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <img src="brand/desktop/piu-desktop-256.png" alt="Piu Desktop" style="width:76px;height:76px;margin:-8px 0 0 -8px;">
+            <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink);">laptop_mac</span>PIU DESKTOP · MAC AND LINUX</div>
+            <h3 style="margin:0;font-size:clamp(30px,3.6vw,46px);font-weight:700;letter-spacing:-0.045em;line-height:1.02;text-wrap:balance;">Your conversations, on your computer too.</h3>
+            <p style="margin:0;font-size:16px;line-height:1.55;color:var(--ink2);max-width:540px;text-wrap:pretty;">Pair with your phone by QR in seconds, restore with your 12 words, or create an identity just for this computer. Wallet, system notifications and keyboard shortcuts.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;gap:4px;padding:4px;border-radius:16px;background:var(--bg2);">
+              <sc-for list="{{ deskOsTabs }}" as="o" hint-placeholder-count="2">
+                <button onClick="{{ o.pick }}" style="flex:1;height:40px;border:none;border-radius:12px;background:{{ o.bg }};color:var(--ink);font:{{ o.weight }} 14px Geist;cursor:pointer;box-shadow:{{ o.shadow }};display:flex;align-items:center;justify-content:center;gap:8px;transition:background .2s,box-shadow .2s;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">{{ o.icon }}</span>{{ o.label }}</button>
+              </sc-for>
+            </div>
+            <button onClick="{{ deskMain.act }}" style="height:64px;padding:0 22px 0 24px;border:none;border-radius:32px;background:var(--ink);color:var(--invink);cursor:pointer;display:flex;align-items:center;gap:14px;text-align:left;transition:transform .2s cubic-bezier(.2,.9,.3,1.3);" style-hover="transform:translateY(-2px);" style-active="transform:scale(.98);">
+              <span style="font-family:'Material Symbols Rounded';font-size:26px;line-height:1;">download</span>
+              <span style="flex:1;display:flex;flex-direction:column;gap:3px;"><span style="font:650 16.5px Geist;letter-spacing:-0.01em;">{{ deskMain.label }}</span><span style="font:400 12px 'Geist Mono',monospace;opacity:.7;">{{ deskMain.sub }}</span></span>
+              <span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">arrow_forward</span>
+            </button>
+            <div style="font-size:12.5px;color:var(--ink2);text-align:center;">{{ deskMain.req }}</div>
+          </div>
+        </div>
+        <div ref="{{ deskRef2 }}" style="width:100%;">
+          <div style="width:{{ desk2W }};height:{{ desk2H }};margin:0 auto;position:relative;overflow:hidden;border-radius:14px;box-shadow:0 40px 90px -40px rgba(0,0,0,.5),0 0 0 1px var(--line2);animation:siteDeskIn linear both;animation-timeline:view();animation-range:entry 0% cover 40%;">
+            <div style="width:1280px;height:820px;transform:scale({{ desk2Scale }});transform-origin:top left;">
+              <sc-if value="{{ deskIsMac }}" hint-placeholder-val="{{ true }}"><dc-import name="Piu Desktop" os="mac" theme="{{ theme }}" start="app" hint-size="1280px,820px"></dc-import></sc-if>
+              <sc-if value="{{ deskIsLinux }}" hint-placeholder-val="{{ false }}"><dc-import name="Piu Desktop" os="linux" theme="{{ theme }}" start="app" hint-size="1280px,820px"></dc-import></sc-if>
+            </div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;">
+          <sc-for list="{{ deskFiles }}" as="f" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:6px 16px;align-items:center;padding:16px 4px;border-top:1px solid var(--line);animation:{{ f.anim }};">
+              <div style="display:flex;flex-direction:column;gap:3px;min-width:0;"><div style="font-size:15.5px;font-weight:600;">{{ f.t }}</div><div style="font:400 12.5px 'Geist Mono',monospace;color:var(--ink2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">{{ f.file }}</div></div>
+              <button onClick="{{ f.act }}" style="height:38px;padding:0 16px;border-radius:19px;border:1px solid var(--line2);background:transparent;color:var(--ink);font:600 13.5px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;white-space:nowrap;transition:background .2s,color .2s,border-color .2s;" style-hover="background:var(--ink);color:var(--invink);border-color:var(--ink);"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">{{ f.icon }}</span>{{ f.cta }}</button>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;font:400 12.5px 'Geist Mono',monospace;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;color:var(--ink);">verified</span>{{ deskMain.sig }}</div>
       </div>
       <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;border:1px dashed var(--line2);font:400 13px 'Geist Mono',monospace;color:var(--ink2);">
         <span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink);">verified</span>
         <span>Lunes Network signature · 4C9A 7B21 … 09D3 E1F0</span><span style="opacity:.6;">·</span><span>Piu 0.1.4 · SHA-256 a91f 0c3e … 52d8 7b2d</span>
       </div>
       <sc-if value="{{ dlNote }}" hint-placeholder-val="{{ false }}">
-        <div style="padding:16px 20px;border-radius:18px;background:var(--ink);color:var(--invink);font-size:14.5px;line-height:1.5;animation:siteUp .35s both;">{{ dlNoteText }}</div>
+        <div style="position:fixed;left:0;right:0;bottom:28px;z-index:50;display:flex;justify-content:center;padding:0 16px;pointer-events:none;"><div style="pointer-events:auto;max-width:560px;padding:14px 12px 14px 18px;border-radius:18px;background:var(--ink);color:var(--invink);font-size:14.5px;line-height:1.5;display:flex;gap:12px;align-items:center;box-shadow:0 24px 60px -20px rgba(0,0,0,.5);animation:siteToast .5s cubic-bezier(.2,.9,.3,1.2) both;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">download_done</span><span style="flex:1;">{{ dlNoteText }}</span><button onClick="{{ closeNote }}" style="width:32px;height:32px;border:none;border-radius:16px;background:transparent;color:var(--invink);cursor:pointer;display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">close</span></button></div></div>
       </sc-if>
     </div>
   </div>
@@ -267,7 +329,30 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 class Component extends DCLogic {
-  state = { theme: null, open: 0, dl: null, deskScale: 0.6 };
+  state = { theme: null, open: 0, dlText: null, deskScale: 0.6, desk2Scale: 0.6, deskOs: null };
+  setDesk2El(el) {
+    if (el === this.desk2El) return;
+    if (this.ro2) this.ro2.disconnect();
+    this.desk2El = el;
+    if (!el) return;
+    const upd = () => { const w = el.clientWidth; if (w) { const sc = Math.min(1, w / 1280); if (Math.abs(sc - this.state.desk2Scale) > 0.002) this.setState({ desk2Scale: sc }); } };
+    this.ro2 = new ResizeObserver(upd); this.ro2.observe(el); upd();
+  }
+  note(t) { clearTimeout(this.noteT); clearTimeout(this.noteT2); this.setState({ dlText: null }); this.noteT2 = setTimeout(() => this.setState({ dlText: t }), 40); this.noteT = setTimeout(() => this.setState({ dlText: null }), 6500); }
+  deskVals(s) {
+    const T = {"started":"Download started: ","copied":"Command copied: ","tip":"On first launch, the app verifies its own signature.","dl":"Download","copy":"Copy","mac":{"label":"Download for macOS","sub":"Apple Silicon · .dmg · 94 MB","req":"macOS 12 Monterey or later","sig":"Signed and notarized · Lunes Network · 4C9A 7B21 … 09D3 E1F0","files":[{"t":"Apple Silicon (M1 or newer)","file":"Piu-0.1.4-arm64.dmg · 94 MB","tip":"Open the file and drag Piu to Applications."},{"t":"Intel","file":"Piu-0.1.4-x64.dmg · 98 MB","tip":"Open the file and drag Piu to Applications."},{"t":"Homebrew","file":"brew install --cask piu","copy":true}]},"linux":{"label":"Download for Linux","sub":"AppImage · x86_64 · 102 MB","req":"Ubuntu 20.04+, Debian 11+, Fedora 36+ and similar","sig":"GPG-signed packages · Lunes Network · 4C9A 7B21 … 09D3 E1F0","files":[{"t":"AppImage · any distribution","file":"Piu-0.1.4-x86_64.AppImage · 102 MB","tip":"Make it executable and open it."},{"t":"Ubuntu, Debian and Mint","file":"piu_0.1.4_amd64.deb · 88 MB"},{"t":"Fedora and openSUSE","file":"piu-0.1.4.x86_64.rpm · 89 MB"},{"t":"Flatpak","file":"flatpak install flathub network.lunes.Piu","copy":true},{"t":"ARM64 · Raspberry Pi 4 and 5","file":"piu_0.1.4_arm64.deb · 84 MB"}]}};
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const os = s.deskOs || (/Linux|X11|CrOS/.test(ua) && !/Android/.test(ua) ? 'linux' : 'mac');
+    const d = T[os];
+    const act = f => () => { if (f.copy) { try { navigator.clipboard.writeText(f.file); } catch (e) {} this.note(T.copied + f.file); } else { const [name, size] = f.file.split(' · '); this.note(T.started + name + ' (' + size + '). ' + (f.tip || T.tip)); } };
+    return {
+      deskRef2: this._deskRef2, desk2Scale: s.desk2Scale.toFixed(4), desk2W: Math.floor(1280 * s.desk2Scale) + 'px', desk2H: Math.floor(820 * s.desk2Scale) + 'px',
+      deskIsMac: os === 'mac', deskIsLinux: os === 'linux',
+      deskOsTabs: [['mac', 'laptop_mac', 'macOS'], ['linux', 'terminal', 'Linux']].map(([k, icon, label]) => ({ icon, label, bg: os === k ? 'var(--bg)' : 'transparent', weight: os === k ? 650 : 500, shadow: os === k ? '0 1px 3px rgba(0,0,0,.14)' : 'none', pick: () => this.setState({ deskOs: k }) })),
+      deskMain: { label: d.label, sub: d.sub, req: d.req, sig: d.sig, act: act(d.files[0]) },
+      deskFiles: d.files.map((f, i) => ({ t: f.t, file: f.file, icon: f.copy ? 'content_copy' : 'download', cta: f.copy ? T.copy : T.dl, act: act(f), anim: (os === 'mac' ? 'siteUp' : 'siteUp2') + ' .45s cubic-bezier(.2,.85,.3,1) ' + (i * 0.06).toFixed(2) + 's both' })),
+    };
+  }
   setDeskEl(el) {
     if (el === this.deskEl) return;
     if (this.ro) this.ro.disconnect();
@@ -276,22 +361,25 @@ class Component extends DCLogic {
     const upd = () => { const w = el.clientWidth; if (w) { const sc = Math.min(1, w / 1280); if (Math.abs(sc - this.state.deskScale) > 0.002) this.setState({ deskScale: sc }); } };
     this.ro = new ResizeObserver(upd); this.ro.observe(el); upd();
   }
-  componentWillUnmount() { if (this.ro) this.ro.disconnect(); }
+  componentWillUnmount() { if (this.ro) this.ro.disconnect(); if (this.ro2) this.ro2.disconnect(); clearTimeout(this.noteT); clearTimeout(this.noteT2); }
   renderVals() {
     const s = this.state, theme = s.theme || this.props.theme || 'light';
     if (!this._deskRef) this._deskRef = el => this.setDeskEl(el);
+    if (!this._deskRef2) this._deskRef2 = el => this.setDesk2El(el);
     const dlNotes = {
       apk: 'Download started: Piu-0.1.4.apk (38.2 MB). On first launch, the app verifies its own signature.',
       friend: 'Ask someone who has Piu to open Profile → Invite → “Doesn’t have it yet”. The app arrives over Wi-Fi Direct, no internet.',
       node: 'Pick your device’s package: .ipk for OpenWrt, .deb for Linux and Raspberry Pi. All signed.',
     };
-    return {
+    const out = {
+      ...this.deskVals(s),
+      transportsLoop: [],
       deskRef: this._deskRef, deskScale: s.deskScale.toFixed(4), deskW: Math.floor(1280 * s.deskScale) + 'px', deskH: Math.floor(820 * s.deskScale) + 'px',
       theme, themeIcon: theme === 'dark' ? 'light_mode' : 'dark_mode', toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
       heroFacts: [{ v: '0', l: 'central servers' }, { v: '5', l: 'connection types' }, { v: '100%', l: 'end-to-end encrypted' }],
       transports: [['bluetooth', 'Bluetooth'], ['wifi_tethering', 'Wi-Fi Direct'], ['hub', 'Wi-Fi Mesh'], ['settings_input_antenna', 'LoRa radio'], ['cable', 'Cable and USB']].map(([icon, n]) => ({ icon, n })),
       hops: [['edit', 'You', 'encrypts here', 1], ['smartphone', 'Phone', 'Bluetooth', 0], ['router', 'Router', 'Wi-Fi Mesh', 0], ['settings_input_antenna', 'Antenna', 'LoRa', 0], ['person', 'Recipient', 'confirms', 2]]
-        .map(([icon, n, via, k]) => ({ icon, n, via, end: k === 2, bg: k ? 'var(--ink)' : 'var(--bg)', fg: k ? 'var(--invink)' : 'var(--ink)' })),
+        .map(([icon, n, via, k], i) => ({ icon, n, via, end: k === 2, range: 'entry ' + (5 + i * 7) + '% cover ' + (30 + i * 7) + '%', ping: [0.15, 1.12, 0, 0.98, 1.95][i] + 's', bg: k ? 'var(--ink)' : 'var(--bg)', fg: k ? 'var(--invink)' : 'var(--ink)' })),
       steps: [
         { n: '01', t: 'Encrypted before it leaves', d: 'The message is locked on your device. Only the recipient holds the key to open it.' },
         { n: '02', t: 'Hops from node to node', d: 'Phones, routers and antennas pass the envelope along the best path. With no path, they hold it for up to 48 h.' },
@@ -327,23 +415,27 @@ class Component extends DCLogic {
         ['phonelink_ring', 'From a friend', 'No internet, no store: anyone with Piu sends the app straight to your phone.', 'How to receive', 'friend', false],
         ['router', 'Piu Node', 'For OpenWrt routers, Linux, Raspberry Pi and mini-PCs. Become a provider.', 'See packages', 'node', false],
       ].map(([icon, t, d, cta, k, primary]) => ({ icon, t, d, cta, bg: primary ? 'var(--ink)' : 'transparent', fg: primary ? 'var(--invink)' : 'var(--ink)', border: primary ? 'none' : '1px solid var(--line2)',
-        act: () => this.setState({ dl: k }) })),
-      dlNote: !!s.dl, dlNoteText: dlNotes[s.dl] || '',
+        act: () => this.note(dlNotes[k]) })),
+      dlNote: !!s.dlText, dlNoteText: s.dlText || '', closeNote: () => this.setState({ dlText: null }),
       faq: [
         ['Do I need internet?', 'No. Piu works over Bluetooth, local Wi-Fi and radio. The internet is never a required route; it only helps settle LUNES on the Mainnet when available.'],
         ['How far can a message go?', 'As far as there are devices chained together. Within a neighborhood, phones and routers are enough. Between cities, real antennas and intermediate nodes are needed.'],
         ['Can someone along the way read my messages?', 'No. They are end-to-end encrypted. Relays only see a sealed envelope and the minimum metadata needed to forward it.'],
+        ['Is there a desktop version?', 'Yes. Piu Desktop runs on Mac and Linux. Pair with your phone by QR, restore with your 12 words, or create an identity just for this computer.'],
         ['Does it work on iPhone?', 'iPhone only installs apps from the App Store, where the version is on its way. Note: on iPhone, relaying only happens while the app is open.'],
         ['How do I earn LUNES?', 'By relaying other people’s messages with proven delivery, running equipment as a provider, or bringing in new users who stay active. Duplicates and artificial traffic are rejected.'],
         ['Is Piu anonymous?', 'You can use an anonymous identity, with no name or phone number. But no radio-based system guarantees absolute anonymity: timing and signal patterns can allow correlation.'],
         ['Do I need to buy any equipment?', 'No. Ordinary phones already form the network. Off-the-shelf routers, computers and radios can join, with no official Lunes hardware.'],
       ].map(([q, a], i) => ({ q, a, open: s.open === i, rot: s.open === i ? '45deg' : '0deg', toggle: () => this.setState({ open: s.open === i ? -1 : i }) })),
       footer: [
-        { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar']] },
+        { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar'], ['Piu Desktop', '#desktop']] },
         { t: 'PROVIDER', links: [['Become a provider', '#provider'], ['Provider dashboard', 'Piu 7 Provider computador.dc.html'], ['Piu Node', '#baixar']] },
         { t: 'PROJECT', links: [['App screens', 'Piu.dc.html'], ['LNNP specification', '#faq'], ['Requirements document v1.1', '#faq']] },
       ].map(c => ({ t: c.t, links: c.links.map(([l, href]) => ({ l, href: href.indexOf('.dc.html') > 0 ? encodeURI(href) : href })) })),
     };
+    out.transportsLoop = Array.from({ length: 6 }, () => out.transports).flat();
+    ['steps', 'features', 'privacy', 'classes', 'rewards', 'downloads'].forEach(k => { if (Array.isArray(out[k])) out[k] = out[k].map((x, i) => ({ ...x, range: 'entry ' + ((i % 3) * 8) + '% cover ' + (28 + (i % 3) * 8) + '%' })); });
+    return out;
   }
 }
 </script>

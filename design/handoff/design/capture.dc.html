@@ -8,7 +8,8 @@
 <body>
 <x-dc>
 <div id="cap" style="display:inline-flex;margin:0;background:#fff;">
-<sc-if value="{{ isApp }}" hint-placeholder-val="{{ true }}"><div style="width:390px;height:844px;position:relative;overflow:hidden;{{ appVars }}"><dc-import name="PiuApp" start="chats" jump="{{ j }}" notify="{{ nt }}" hint-size="390px,844px"></dc-import></div></sc-if>
+<sc-if value="{{ isAppLight }}" hint-placeholder-val="{{ true }}"><div style="width:390px;height:844px;position:relative;overflow:hidden;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);"><dc-import name="PiuApp" start="chats" jump="{{ j }}" notify="{{ nt }}" hint-size="390px,844px"></dc-import></div></sc-if>
+<sc-if value="{{ isAppDark }}" hint-placeholder-val="{{ false }}"><div style="width:390px;height:844px;position:relative;overflow:hidden;--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);"><dc-import name="PiuApp" start="chats" jump="{{ j }}" notify="{{ nt }}" hint-size="390px,844px"></dc-import></div></sc-if>
 <sc-if value="{{ isProv }}" hint-placeholder-val="{{ false }}"><div style="width:1280px;height:820px;position:relative;overflow:hidden;"><dc-import name="PiuProviderDesktop" theme="{{ theme }}" start="overview" jump="{{ j }}" hint-size="1280px,820px"></dc-import></div></sc-if>
 <sc-if value="{{ isDesk }}" hint-placeholder-val="{{ false }}"><div style="width:1280px;height:820px;position:relative;overflow:hidden;"><dc-import name="Piu Desktop" os="{{ os }}" theme="{{ theme }}" start="{{ start }}" jump="{{ dj }}" hint-size="1280px,820px"></dc-import></div></sc-if>
 </div>
@@ -28,11 +29,7 @@ class Component extends DCLogic {
   }
   renderVals() {
     const s = this.state;
-    // Tokens do app: o PiuApp os herda da moldura do celular (como em Piu.dc.html, linhas 62 e 70).
-    const appVars = s.theme === 'dark'
-      ? '--bg:#0a0a0a;--bg2:#171717;--bg3:#262626;--bub:#1a1a1a;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--dot:rgba(255,255,255,.06);--knob:#8c8c88;--scrim:rgba(0,0,0,.6);background:#0a0a0a;'
-      : '--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--bub:#f3f3f1;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--dot:rgba(0,0,0,.055);--knob:#ffffff;--scrim:rgba(0,0,0,.32);background:#ffffff;';
-    return { isApp: s.mode === 'app', isProv: s.mode === 'prov', isDesk: s.mode === 'desk', j: s.j, dj: s.dj, nt: s.nt, theme: s.theme, os: s.os, start: s.start, appVars };
+    return { isApp: s.mode === 'app', isAppLight: s.mode === 'app' && s.theme !== 'dark', isAppDark: s.mode === 'app' && s.theme === 'dark', isProv: s.mode === 'prov', isDesk: s.mode === 'desk', j: s.j, dj: s.dj, nt: s.nt, theme: s.theme, os: s.os, start: s.start };
   }
 }
 </script>

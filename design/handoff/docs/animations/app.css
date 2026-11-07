@@ -1,7 +1,25 @@
 /* Extraído de design/PiuApp.dc.html — keyframes exatos + usos encontrados no arquivo. */
 
-/* ---- estilos globais do <helmet> (variáveis, resets, reduced-motion) ---- */
+/* ---- estilos globais do <helmet> ---- */
 *{box-sizing:border-box}input{font-family:inherit}input::placeholder{color:var(--ink3)}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
@@ -39,7 +57,7 @@
 
 /* ---- keyframes ---- */
 @keyframes piuFade{from{opacity:0}to{opacity:1}}
-/* usos: piuFade .3s ease-out both | piuFade .22s ease-out both | piuFade .2s ease-out both | piuFade .25s ease-out both | piuFade .4s .35s both */
+/* usos: piuFade .3s ease-out both | piuFade .22s ease-out both | piuFade 1s ease-out .3s both | piuFade .5s ease-out .35s both | piuFade .4s ease-out 2.1s both | piuFade .4s 2.3s both */
 
 @keyframes piuTab{from{opacity:0;transform:translateY(16px) scale(.985)}to{opacity:1;transform:none}}
 /* usos: piuTab .34s cubic-bezier(.2,.8,.3,1) both */
@@ -89,25 +107,25 @@
 @keyframes piuTickB{0%{transform:scale(.3);opacity:0}60%{transform:scale(1.3);opacity:1}100%{transform:scale(1)}}
 
 @keyframes piuPop{0%{transform:scale(.4);opacity:0}70%{transform:scale(1.14);opacity:1}100%{transform:scale(1)}}
-/* usos: piuPop .32s cubic-bezier(.2,.9,.3,1.4) both | piuPop .4s cubic-bezier(.2,.9,.3,1.4) both | piuPop .45s .6s cubic-bezier(.2,.9,.3,1.4) both | piuPop .45s .1s cubic-bezier(.2,.9,.3,1.4) both | piuPop .5s cubic-bezier(.2,.9,.3,1.4) both | piuPop .6s .05s cubic-bezier(.2,.9,.3,1.4) both */
+/* usos: piuPop .32s cubic-bezier(.2,.9,.3,1.4) both | piuPop .4s cubic-bezier(.2,.9,.3,1.4) both | piuPop .45s .6s cubic-bezier(.2,.9,.3,1.4) both | piuPop .6s cubic-bezier(.2,.9,.3,1.3) .25s both | piuPop .5s cubic-bezier(.2,.9,.3,1.5) 1.18s both | piuPop .45s cubic-bezier(.2,.9,.3,1.4) 2.05s both */
 
 @keyframes piuBump{0%{transform:scale(1)}35%{transform:scale(.8)}70%{transform:scale(1.14)}100%{transform:scale(1)}}
-/* usos: piuBump .4s cubic-bezier(.2,.9,.3,1.4) */
+/* usos: piuBump .55s cubic-bezier(.3,.7,.3,1.4) 3.8s both | piuBump .4s cubic-bezier(.2,.9,.3,1.4) */
 
 @keyframes piuDot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-4px);opacity:1}}
 /* usos: piuDot 1.1s ease-in-out infinite | piuDot 1.1s ease-in-out .15s infinite | piuDot 1.1s ease-in-out .3s infinite | piuDot 1s ease-in-out infinite | piuDot 1s .15s ease-in-out infinite | piuDot 1s .3s ease-in-out infinite */
 
 @keyframes piuRing{from{transform:scale(1);opacity:.5}to{transform:scale(6);opacity:0}}
-/* usos: piuRing 3.2s ease-out infinite | piuRing 3.2s ease-out 1.6s infinite */
+/* usos: piuRing 3.2s ease-out infinite | piuRing 3.2s ease-out 1.6s infinite | piuRing .9s ease-out 2.69s forwards | piuRing .9s ease-out 3.13s forwards | piuRing .9s ease-out 3.52s forwards */
 
 @keyframes piuRingS{from{transform:scale(1);opacity:.6}to{transform:scale(2.2);opacity:0}}
-/* usos: piuRingS 1.8s ease-out infinite | piuRingS 2.4s ease-out infinite | piuRingS 2.4s ease-out 1.2s infinite */
+/* usos: piuRingS 1.8s ease-out infinite | piuRingS 1s ease-out 1.15s forwards | piuRingS 1s ease-out 2.4s forwards | piuRingS 1.2s ease-out 4.95s forwards | piuRingS 2.4s ease-out infinite | piuRingS 2.4s ease-out 1.2s infinite */
 
 @keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
-/* usos: piuBreath 2.4s ease-in-out infinite | piuBreath 1.4s ease-in-out infinite | piuBreath 1s ease-in-out infinite | piuBreath 1.2s ease-in-out infinite | piuBreath 1.6s ease-in-out infinite */
+/* usos: piuBreath 2.4s ease-in-out infinite | piuBreath 1.4s ease-in-out infinite | piuBreath 1.1s ease-in-out infinite | piuBreath 1s ease-in-out infinite | piuBreath 1.2s ease-in-out infinite | piuBreath 1.6s ease-in-out infinite */
 
 @keyframes piuSpin{to{transform:rotate(360deg)}}
-/* usos: piuSpin 90s linear infinite */
+/* usos: piuSpin 90s linear infinite | piuSpin 22s linear infinite */
 
 @keyframes piuInL{from{transform:translateX(-70px) rotate(-8deg);opacity:0}to{transform:none;opacity:1}}
 /* usos: piuInL .7s cubic-bezier(.2,.9,.3,1.15) both */
@@ -116,10 +134,10 @@
 /* usos: piuInR .7s cubic-bezier(.2,.9,.3,1.15) both */
 
 @keyframes piuUp{from{transform:translateY(16px);opacity:0}to{transform:none;opacity:1}}
-/* usos: piuUp .5s .35s both | piuUp .35s both | piuUp .4s both | piuUp .5s both | piuUp .45s both | piuUp .5s .15s both */
+/* usos: piuUp .5s .35s both | piuUp .35s both | piuUp .4s both | piuUp .5s both | piuUp .45s both | piuUp .4s cubic-bezier(.2,.9,.3,1.2) 1.2s both */
 
 @keyframes piuShrinkInv{from{transform:scaleX(0)}to{transform:scaleX(1)}}
-/* usos: piuShrinkInv .7s cubic-bezier(.2,.9,.3,1) both | piuShrinkInv .8s cubic-bezier(.2,.9,.3,1) both */
+/* usos: piuShrinkInv .7s cubic-bezier(.2,.9,.3,1) both | piuShrinkInv .8s cubic-bezier(.2,.9,.3,1) both | piuShrinkInv 3.6s cubic-bezier(.45,0,.25,1) .3s both */
 
 @keyframes piuTravel{from{left:0%}to{left:100%}}
 /* usos: piuTravel 1.3s linear infinite */
@@ -128,4 +146,55 @@
 /* usos: piuGrow .6s cubic-bezier(.2,.9,.3,1) both | piuGrow .6s */
 
 @keyframes piuCoin{from{transform:rotateY(0)}to{transform:rotateY(720deg)}}
-/* usos: piuCoin 1.1s .25s cubic-bezier(.2,.9,.3,1) both */
+/* usos: piuCoin 1.4s linear 2.4s both | piuCoin 1.1s .25s cubic-bezier(.2,.9,.3,1) both */
+
+@keyframes piuQr{from{transform:scale(0);opacity:0}to{transform:none;opacity:1}}
+
+@keyframes piuQrB{from{transform:scale(0);opacity:0}to{transform:none;opacity:1}}
+
+@keyframes piuScan{0%{top:0%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
+/* usos: piuScan 2.6s ease-in-out 1.1s infinite */
+
+@keyframes piuIrisIn{from{clip-path:circle(0px at 50% 93%)}to{clip-path:circle(150% at 50% 93%)}}
+/* usos: piuIrisIn .75s cubic-bezier(.7,0,.2,1) both */
+
+@keyframes piuIrisOut{from{clip-path:circle(150% at 50% 24%)}to{clip-path:circle(0px at 50% 24%)}}
+/* usos: piuIrisOut .52s cubic-bezier(.6,0,.4,1) both */
+
+@keyframes piuDraw{to{stroke-dashoffset:0}}
+/* usos: piuDraw .85s cubic-bezier(.6,0,.3,1) .3s forwards | piuDraw 1.4s linear 2.4s forwards | piuDraw .6s cubic-bezier(.6,0,.3,1) 4.32s forwards | piuDraw .38s cubic-bezier(.5,0,.2,1) 4.8s forwards */
+
+@keyframes piuScanY{from{transform:translateY(-4px)}to{transform:translateY(94px)}}
+/* usos: piuScanY .55s ease-in-out .3s infinite alternate */
+
+@keyframes piuOutUp{to{opacity:0;transform:translateY(-40px) scale(.9);filter:blur(6px)}}
+/* usos: piuOutUp .45s cubic-bezier(.5,0,.7,.4) 1.6s forwards */
+
+@keyframes piuOutSoft{to{opacity:0;transform:scale(1.05);filter:blur(8px)}}
+/* usos: piuOutSoft .45s cubic-bezier(.5,0,.7,.4) 4.15s forwards */
+
+@keyframes piuFadeOut{to{opacity:0}}
+/* usos: piuFadeOut .2s ease-in 1.12s forwards | piuFadeOut .2s 1.1s forwards */
+
+@keyframes piuType{from{width:0}to{width:27ch}}
+/* usos: piuType .7s steps(27) .4s forwards */
+
+@keyframes piuCoinFly{0%{transform:translate(195px,700px)}20.9%{transform:translate(88px,575px)}51.8%{transform:translate(300px,455px)}80.3%{transform:translate(110px,335px)}100%{transform:translate(195px,205px)}}
+/* usos: piuCoinFly 1.4s linear {{ t.delay }} both */
+
+@keyframes piuLit{to{background:var(--invink);box-shadow:0 0 0 6px color-mix(in oklab,var(--invink) 20%,transparent)}}
+
+@keyframes piuSpark{from{transform:rotate(var(--a)) translateY(0) scale(1);opacity:1}to{transform:rotate(var(--a)) translateY(var(--d)) scale(.2);opacity:0}}
+/* usos: piuSpark .8s cubic-bezier(.1,.7,.3,1) 3.8s forwards */
+
+@keyframes piuToCoin{to{transform:translateY(208px) scale(.1);opacity:0}}
+
+@keyframes piuCardIn{from{opacity:0;transform:perspective(900px) translateY(26px) rotateX(16deg) scale(.96)}to{opacity:1;transform:none}}
+/* usos: piuCardIn .65s cubic-bezier(.2,.85,.3,1) .04s both */
+
+@keyframes piuShine{from{transform:translateX(-140%) skewX(-18deg)}to{transform:translateX(380%) skewX(-18deg)}}
+/* usos: piuShine 1.5s cubic-bezier(.4,0,.2,1) .55s both */
+
+@keyframes piuRowFresh{0%{opacity:0;transform:translateY(-14px);background:color-mix(in oklab,var(--ink) 10%,transparent)}22%{opacity:1;transform:none}100%{background:transparent}}
+/* usos: piuRowFresh 1.8s cubic-bezier(.2,.85,.3,1) .35s both */
+

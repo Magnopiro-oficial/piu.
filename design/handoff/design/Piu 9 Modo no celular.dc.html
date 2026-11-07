@@ -1,0 +1,604 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="icon" href="brand/favicon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0;background:#e9e9e6}a{color:#0c0c0c}a:hover{opacity:.7}button{font-family:inherit}
+@keyframes piuSpin{to{transform:rotate(360deg)}}
+@keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes piuRingS{from{transform:scale(1);opacity:.6}to{transform:scale(2.2);opacity:0}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;padding:56px 64px 120px;display:flex;flex-direction:column;gap:64px;font-family:Geist,system-ui,sans-serif;color:#0c0c0c;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);">
+
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:880px;">
+    <div style="display:flex;align-items:center;gap:10px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">NOVO</span><span style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.04em;">PIU 9 · CELULAR</span></div>
+    <div style="font-size:40px;font-weight:700;letter-spacing:-0.045em;line-height:1.02;">Modo nó no celular</div>
+    <div style="font-size:15px;color:#5f5f5c;line-height:1.5;text-wrap:pretty;">Do “Do celular” até pedir a caução de volta. Cada tela tem o estado padrão e, quando existe, o vazio e o erro ao lado. Os botões de segurar funcionam: segure 0,9 s.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+      <a href="#f1" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">01 Ativar</a>
+      <a href="#f2" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">02 Caução</a>
+      <a href="#f3" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">03 Acompanhar</a>
+      <a href="#f4" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">04 Avais</a>
+      <a href="#f5" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">05 Sair</a>
+    </div>
+  </div>
+
+  <section id="f1" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">01 · ATIVAR</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Ligar o “Do celular”</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+      <div id="m1" data-screen-label="M1 Ativar Do celular" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M1</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Ativar “Do celular”</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Entra por Provider → Adicionar → Do celular. Explica bateria, dados e que as recompensas ainda não abriram antes de pedir qualquer coisa.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 24px 34px;gap:22px;min-height:0;">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.04em;">MODO NÓ · DO CELULAR</div>
+                <div style="font-size:31px;font-weight:700;letter-spacing:-0.045em;line-height:1.04;text-wrap:pretty;">Seu celular também pode carregar a rede.</div>
+                <div style="font-size:15px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">Ele guarda e repassa mensagens cifradas de quem está por perto, sem conseguir ler nenhuma.</div>
+              </div>
+              <div style="display:flex;flex-direction:column;">
+                <div style="display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:12px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">battery_5_bar</span></div><div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:15.5px;font-weight:600;">Bateria</div><div style="font-size:13.5px;color:var(--ink2);line-height:1.38;text-wrap:pretty;">Pausa sozinho em 30%. Você pode limitar a quando estiver carregando.</div></div></div>
+                <div style="display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:12px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">swap_vert</span></div><div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:15.5px;font-weight:600;">Dados</div><div style="font-size:13.5px;color:var(--ink2);line-height:1.38;text-wrap:pretty;">Só Bluetooth e Wi-Fi local, nunca o plano de dados. Até 200 MB por dia.</div></div></div>
+                <div style="display:flex;gap:14px;padding:14px 0;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:12px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">toll</span></div><div style="display:flex;flex-direction:column;gap:5px;"><div style="display:flex;align-items:center;gap:8px;"><div style="font-size:15.5px;font-weight:600;">Recompensas</div><span style="height:20px;padding:0 7px;border-radius:10px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;font:500 10.5px 'Geist Mono',monospace;color:var(--ink2);">AINDA NÃO ABERTAS</span></div><div style="font-size:13.5px;color:var(--ink2);line-height:1.38;text-wrap:pretty;">Você já pode cumprir os 7 dias de prova. Quando abrirem, este nó começa a render LUNES.</div></div></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.05em;">ANTES DE RENDER</div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;">
+                  <div style="padding:10px 12px;border-radius:14px;background:var(--bg2);display:flex;flex-direction:column;gap:2px;"><span style="font:500 11px 'Geist Mono',monospace;color:var(--ink2);">1</span><span style="font-size:13px;font-weight:600;">Caução</span></div>
+                  <div style="padding:10px 12px;border-radius:14px;background:var(--bg2);display:flex;flex-direction:column;gap:2px;"><span style="font:500 11px 'Geist Mono',monospace;color:var(--ink2);">2</span><span style="font-size:13px;font-weight:600;">3 avais</span></div>
+                  <div style="padding:10px 12px;border-radius:14px;background:var(--bg2);display:flex;flex-direction:column;gap:2px;"><span style="font:500 11px 'Geist Mono',monospace;color:var(--ink2);">3</span><span style="font-size:13px;font-weight:600;">7 dias</span></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;">Continuar</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Agora não</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m1e" data-screen-label="M1e Aparelho nao atende" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M1e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Ainda não pode ser nó</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Aparece no lugar de M1 quando falta algum requisito. Cada pendência resolve direto daqui; “Continuar” só acende com tudo certo.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 24px 34px;gap:22px;min-height:0;">
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.04em;">MODO NÓ · DO CELULAR</div>
+                <div style="font-size:31px;font-weight:700;letter-spacing:-0.045em;line-height:1.04;text-wrap:pretty;">Faltam 2 coisas neste celular.</div>
+                <div style="font-size:15px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">Resolva e volte. Nada foi cobrado.</div>
+              </div>
+              <div style="border-radius:22px;background:var(--bg2);overflow:hidden;">
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:550;">Bluetooth e Wi-Fi local</div><div style="font-size:12.5px;color:var(--ink2);">Funcionando</div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:550;">Saldo para a caução</div><div style="font-size:12.5px;color:var(--ink2);">248,50 LUNES · precisa de 100</div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">error</span><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Espaço livre</div><div style="font-size:12.5px;color:var(--ink2);">1,1 GB livres · precisa de 2 GB</div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--ink);color:var(--invink);font:600 13px Geist;cursor:pointer;">Liberar</button></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">error</span><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Backup das chaves</div><div style="font-size:12.5px;color:var(--ink2);">A chave de operador depende dele</div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--ink);color:var(--invink);font:600 13px Geist;cursor:pointer;">Fazer</button></div>
+              </div>
+              <div style="padding:14px 16px;border-radius:18px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;gap:12px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">info</span><div style="font-size:13px;color:var(--ink2);line-height:1.4;text-wrap:pretty;">No iPhone, o nó só repassa com o Piu aberto na tela. No Android, também em segundo plano.</div></div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button disabled style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;opacity:.25;">Continuar</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Agora não</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="f2" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">02 · CAUÇÃO</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Pagar a caução e conferir no validador</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+      <div id="m2" data-screen-label="M2 Pagar caucao" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M2</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Pagar a caução</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Segurar 0,9 s assina com a chave de operador (mesmo gesto da carteira). Soltar antes cancela e a barra volta.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Caução</div><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-right:10px;">1 DE 3</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:18px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 0 8px;text-align:center;">
+                <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.04em;">VOCÊ TRAVA</div>
+                <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:76px;font-weight:700;letter-spacing:-0.06em;line-height:1;font-variant-numeric:tabular-nums;">100</span><span style="font:500 16px 'Geist Mono',monospace;">LUNES</span></div>
+                <div style="font-size:14px;color:var(--ink2);line-height:1.45;max-width:290px;text-wrap:pretty;">Não é gasta. Fica presa enquanto você for nó e volta quando sair.</div>
+              </div>
+              <div style="border-radius:22px;background:var(--bg2);padding:4px 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;"><span style="color:var(--ink2);">De</span><span style="font-weight:550;">Carteira pessoal</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Saldo atual</span><span style="font-weight:550;font-variant-numeric:tabular-nums;">248,50 LUNES</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Taxa da rede</span><span style="font-weight:550;font-variant-numeric:tabular-nums;">0,01 LUNES</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Fica livre</span><span style="font-weight:650;font-variant-numeric:tabular-nums;">148,49 LUNES</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Conferida por</span><span style="font:500 13px 'Geist Mono',monospace;">validador V-07</span></div>
+              </div>
+              <div style="display:flex;gap:10px;padding:0 4px;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">verified_user</span><div style="font-size:13px;color:var(--ink2);line-height:1.4;text-wrap:pretty;">O validador confere a caução antes de emitir o primeiro certificado do dia.</div></div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:10px;">
+                <button onPointerDown="{{ hCaucao.down }}" onPointerUp="{{ hCaucao.up }}" onPointerLeave="{{ hCaucao.up }}" style="position:relative;overflow:hidden;height:58px;border:none;border-radius:29px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none;">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ hCaucao.w }};background:rgba(255,255,255,.22);transition:{{ hCaucao.tr }};"></div>
+                  <span style="position:relative;font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">{{ hCaucao.icon }}</span><span style="position:relative;">{{ hCaucao.label }}</span>
+                </button>
+                <div style="text-align:center;font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">assina com a chave de operador · op:7F3A 91C2</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m2b" data-screen-label="M2b Conferindo no validador" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M2b</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Conferindo no validador</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">CARREGANDO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Depois de assinar. Mostra a chave de operador, a conferência da caução e o certificado do dia como etapas reais.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:40px 24px 34px;gap:28px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;">
+                <div style="position:relative;width:96px;height:96px;display:flex;align-items:center;justify-content:center;">
+                  <div style="position:absolute;inset:0;border-radius:50%;border:2px solid var(--bg3);"></div>
+                  <div style="position:absolute;inset:0;border-radius:50%;border:2px solid transparent;border-top-color:var(--ink);animation:piuSpin 1.1s linear infinite;"></div>
+                  <span style="font-family:'Material Symbols Rounded';font-size:36px;line-height:1;font-variation-settings:'wght' 300;">lock</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:26px;font-weight:700;letter-spacing:-0.035em;">Conferindo no validador</div><div style="font-size:14.5px;color:var(--ink2);line-height:1.45;max-width:290px;text-wrap:pretty;">Pela malha leva até 2 minutos. Pode fechar o Piu: avisamos quando terminar.</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;padding:0 4px;">
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--ink);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:18px;"><div style="font-size:15px;font-weight:600;">Assinado neste aparelho</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">09:41:02 · op:7F3A 91C2</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--ink);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:18px;"><div style="font-size:15px;font-weight:600;">Enviado pela malha</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">3 saltos até V-07</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><div style="width:22px;height:22px;border-radius:50%;border:2px solid var(--bg3);border-top-color:var(--ink);animation:piuSpin .9s linear infinite;flex:none;"></div><div style="width:2px;flex:1;background:var(--bg3);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:18px;"><div style="font-size:15px;font-weight:650;">Validador conferindo a caução</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">100 LUNES · contrato de caução</div></div></div>
+                <div style="display:flex;gap:14px;opacity:.4;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">radio_button_unchecked</span><div style="width:2px;flex:1;background:var(--bg3);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:18px;"><div style="font-size:15px;font-weight:600;">Chave de operador registrada</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">fica só neste celular</div></div></div>
+                <div style="display:flex;gap:14px;opacity:.4;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">radio_button_unchecked</span></div><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Primeiro certificado do dia</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">começa o dia 1 de 7</div></div></div>
+              </div>
+              <div style="flex:1;"></div>
+              <button style="height:48px;border:none;border-radius:24px;background:var(--bg2);color:var(--ink);font:600 15px Geist,system-ui;cursor:pointer;">Fechar</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m2e1" data-screen-label="M2e1 Saldo insuficiente" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M2e1</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Saldo insuficiente</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">O botão de segurar some. No lugar, as duas saídas da carteira: receber ou pedir a um contato.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Caução</div><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-right:10px;">1 DE 3</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:18px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:18px 0 8px;text-align:center;">
+                <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);letter-spacing:.04em;">VOCÊ TRAVA</div>
+                <div style="display:flex;align-items:baseline;gap:8px;"><span style="font-size:76px;font-weight:700;letter-spacing:-0.06em;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink3);">100</span><span style="font:500 16px 'Geist Mono',monospace;color:var(--ink3);">LUNES</span></div>
+              </div>
+              <div style="padding:18px;border-radius:22px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">error</span><div style="font-size:18px;font-weight:650;letter-spacing:-0.02em;">Faltam 12,31 LUNES</div></div>
+                <div style="font-size:13.5px;opacity:.75;line-height:1.4;text-wrap:pretty;">Seu saldo é 87,70. A caução pede 100 mais 0,01 de taxa.</div>
+              </div>
+              <div style="border-radius:22px;background:var(--bg2);padding:4px 16px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;"><span style="color:var(--ink2);">Saldo atual</span><span style="font-weight:650;font-variant-numeric:tabular-nums;">87,70 LUNES</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Caução + taxa</span><span style="font-weight:550;font-variant-numeric:tabular-nums;">100,01 LUNES</span></div>
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Bônus de convite a liberar</span><span style="font-weight:550;font-variant-numeric:tabular-nums;">15,00 LUNES</span></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">qr_code_2</span>Receber LUNES</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Pedir a um contato</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m2e2" data-screen-label="M2e2 Validador nao respondeu" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M2e2</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Validador não respondeu</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">A primeira coisa a dizer é que nada foi travado. Tentar de novo reaproveita a assinatura.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:40px 24px 34px;gap:26px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:18px;text-align:center;">
+                <div style="width:96px;height:96px;border-radius:50%;border:2px dashed var(--line2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:38px;line-height:1;font-variation-settings:'wght' 300;">cloud_off</span></div>
+                <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:26px;font-weight:700;letter-spacing:-0.035em;">V-07 não respondeu</div><div style="font-size:14.5px;color:var(--ink2);line-height:1.45;max-width:300px;text-wrap:pretty;">Esperamos 2 minutos sem resposta pela malha.</div></div>
+              </div>
+              <div style="padding:16px;border-radius:20px;background:var(--bg2);display:flex;gap:12px;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' 1;">lock_open</span><div style="display:flex;flex-direction:column;gap:3px;"><div style="font-size:15px;font-weight:650;">Nada foi travado</div><div style="font-size:13px;color:var(--ink2);line-height:1.4;text-wrap:pretty;">Os 100 LUNES continuam livres na sua carteira.</div></div></div>
+              <div style="display:flex;flex-direction:column;padding:0 4px;">
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--ink);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:16px;"><div style="font-size:15px;font-weight:600;">Assinado neste aparelho</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">09:41:02</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--bg3);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:16px;"><div style="font-size:15px;font-weight:600;">Enviado pela malha</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">3 saltos</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">cancel</span></div><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:650;">Conferência da caução</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">sem resposta · 09:43:04</div></div></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">refresh</span>Tentar de novo</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Cancelar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="f3" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">03 · ACOMPANHAR</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Avais e os 7 dias até poder render</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+      <div id="m3" data-screen-label="M3 Acompanhar" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M3</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Do celular · painel</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Substitui o “em breve” na lista do Provider. Os 7 traços são os dias com certificado; o de hoje pulsa até renovar.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Do celular</div><div style="height:28px;padding:0 11px;margin-right:6px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;gap:7px;font:550 12.5px Geist;"><div style="position:relative;width:7px;height:7px;"><div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;inset:0;border-radius:50%;border:1px solid var(--ink);animation:piuRingS 2s ease-out infinite;"></div></div>Repassando</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:6px 20px 24px;gap:16px;min-height:0;overflow:hidden;">
+              <div style="padding:18px;border-radius:24px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;"><div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;opacity:.7;">EM PROVA</div><div style="font:500 11.5px 'Geist Mono',monospace;opacity:.7;">desde 4 nov</div></div>
+                <div style="font-size:34px;font-weight:700;letter-spacing:-0.045em;line-height:1;">Dia 3 de 7</div>
+                <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;">
+                  <div style="height:6px;border-radius:3px;background:var(--invink);"></div><div style="height:6px;border-radius:3px;background:var(--invink);"></div><div style="height:6px;border-radius:3px;background:var(--invink);animation:piuBreath 1.8s ease-in-out infinite;"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div>
+                </div>
+                <div style="font-size:13px;opacity:.75;line-height:1.4;text-wrap:pretty;">Pronto para render em 11 nov, com 3 avais.</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px;"><div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">AVAIS · 1 DE 3</div><button style="border:none;background:transparent;font:600 13.5px Geist;color:var(--ink);cursor:pointer;padding:0;">Pedir aval</button></div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                  <div style="padding:12px;border-radius:18px;background:var(--bg2);display:flex;flex-direction:column;gap:8px;"><div style="position:relative;width:38px;height:38px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13px Geist;">MC<span style="position:absolute;right:-4px;bottom:-4px;font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;background:var(--bg2);border-radius:50%;">verified</span></div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;">Marina</div><div style="font-size:11.5px;color:var(--ink2);">avalizou 4 nov</div></div></div>
+                  <div style="padding:12px;border-radius:18px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:8px;"><div style="width:38px;height:38px;border-radius:50%;border:1.5px dashed var(--ink3);display:flex;align-items:center;justify-content:center;font:600 13px Geist;color:var(--ink2);">JS</div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;">João</div><div style="font-size:11.5px;color:var(--ink2);">aguardando</div></div></div>
+                  <div style="padding:12px;border-radius:18px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;gap:8px;cursor:pointer;"><div style="width:38px;height:38px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">add</span></div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;color:var(--ink2);">Vaga</div><div style="font-size:11.5px;color:var(--ink3);">pedir</div></div></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">HOJE</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">key</span><div style="flex:1;font-size:14px;font-weight:550;">Chave de operador</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">op:7F3A 91C2</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">workspace_premium</span><div style="flex:1;font-size:14px;font-weight:550;">Certificado do dia</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">08:14 · até 23:59</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">lock</span><div style="flex:1;font-size:14px;font-weight:550;">Caução</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">100 · conferida V-07</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">swap_vert</span><div style="flex:1;font-size:14px;font-weight:550;">Repassadas</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">312 · 41 de 200 MB</div></div>
+                </div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:18px;box-shadow:0 0 0 1px var(--line2) inset;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">toll</span><div style="flex:1;font-size:13.5px;line-height:1.35;"><span style="font-weight:600;">Recompensas ainda não abertas.</span><span style="color:var(--ink2);"> A prova conta mesmo assim.</span></div></div>
+              <button style="height:40px;border:none;background:transparent;color:var(--ink);font:550 14.5px Geist;cursor:pointer;">Sair do modo nó</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m3v" data-screen-label="M3v Painel vazio" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M3v</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Primeiro dia, sem avais</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">VAZIO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Logo depois de M2b. O bloco de avais vira o convite principal; sem vizinhos, “Repassadas” explica em vez de mostrar zero.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Do celular</div><div style="height:28px;padding:0 11px;margin-right:6px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;gap:7px;font:550 12.5px Geist;"><div style="position:relative;width:7px;height:7px;"><div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;inset:0;border-radius:50%;border:1px solid var(--ink);animation:piuRingS 2s ease-out infinite;"></div></div>Repassando</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:6px 20px 24px;gap:16px;min-height:0;overflow:hidden;">
+              <div style="padding:18px;border-radius:24px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:baseline;"><div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;opacity:.7;">EM PROVA</div><div style="font:500 11.5px 'Geist Mono',monospace;opacity:.7;">desde hoje</div></div>
+                <div style="font-size:34px;font-weight:700;letter-spacing:-0.045em;line-height:1;">Dia 1 de 7</div>
+                <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;">
+                  <div style="height:6px;border-radius:3px;background:var(--invink);animation:piuBreath 1.8s ease-in-out infinite;"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div><div style="height:6px;border-radius:3px;background:rgba(255,255,255,.22);"></div>
+                </div>
+                <div style="font-size:13px;opacity:.75;line-height:1.4;text-wrap:pretty;">A contagem começou com o certificado de hoje.</div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">AVAIS · 0 DE 3</div>
+                <div style="padding:20px 18px;border-radius:22px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center;">
+                  <div style="display:flex;"><div style="width:38px;height:38px;border-radius:50%;border:1.5px dashed var(--ink3);background:var(--bg);"></div><div style="width:38px;height:38px;border-radius:50%;border:1.5px dashed var(--ink3);background:var(--bg);margin-left:-10px;"></div><div style="width:38px;height:38px;border-radius:50%;border:1.5px dashed var(--ink3);background:var(--bg);margin-left:-10px;"></div></div>
+                  <div style="display:flex;flex-direction:column;gap:4px;"><div style="font-size:16px;font-weight:650;">Ninguém avalizou ainda</div><div style="font-size:13px;color:var(--ink2);line-height:1.4;max-width:260px;text-wrap:pretty;">Peça a 3 contatos que conhecem você pessoalmente.</div></div>
+                  <button style="height:40px;padding:0 18px;border:none;border-radius:20px;background:var(--ink);color:var(--invink);font:600 14px Geist;cursor:pointer;">Pedir aval</button>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">HOJE</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">key</span><div style="flex:1;font-size:14px;font-weight:550;">Chave de operador</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">op:7F3A 91C2</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">workspace_premium</span><div style="flex:1;font-size:14px;font-weight:550;">Certificado do dia</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">09:43 · até 23:59</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">swap_vert</span><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:550;">Repassadas</div><div style="font-size:12px;color:var(--ink2);">Nenhum vizinho por perto ainda</div></div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">0</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m3e" data-screen-label="M3e Contagem pausada" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M3e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Certificado não renovado</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Sem validador desde ontem: o cartão escuro vira claro, o traço de hoje fica vazado. Junto, um aval recusado.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Do celular</div><div style="height:28px;padding:0 11px;margin-right:6px;border-radius:14px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;gap:7px;font:550 12.5px Geist;"><div style="width:7px;height:7px;border-radius:50%;border:1.5px solid var(--ink);"></div>Pausado</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:6px 20px 24px;gap:16px;min-height:0;overflow:hidden;">
+              <div style="padding:18px;border-radius:24px;background:var(--bg2);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;flex-direction:column;gap:12px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;"><div style="display:flex;align-items:center;gap:6px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">sync_problem</span>CONTAGEM PAUSADA</div><div style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);">desde 4 nov</div></div>
+                <div style="font-size:34px;font-weight:700;letter-spacing:-0.045em;line-height:1;">Dia 3 de 7</div>
+                <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px;">
+                  <div style="height:6px;border-radius:3px;background:var(--ink);"></div><div style="height:6px;border-radius:3px;background:var(--ink);"></div><div style="height:6px;border-radius:3px;box-shadow:0 0 0 1.5px var(--ink) inset;"></div><div style="height:6px;border-radius:3px;background:var(--bg3);"></div><div style="height:6px;border-radius:3px;background:var(--bg3);"></div><div style="height:6px;border-radius:3px;background:var(--bg3);"></div><div style="height:6px;border-radius:3px;background:var(--bg3);"></div>
+                </div>
+                <div style="font-size:13px;color:var(--ink2);line-height:1.4;text-wrap:pretty;">Sem validador desde ontem, 18:40. O certificado de hoje não saiu. Fique perto de outros nós ou ligue o Wi-Fi local.</div>
+                <button style="align-self:flex-start;height:38px;padding:0 16px;border:none;border-radius:19px;background:var(--ink);color:var(--invink);font:600 13.5px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">refresh</span>Tentar agora</button>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="display:flex;justify-content:space-between;align-items:center;padding:0 4px;"><div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">AVAIS · 1 DE 3</div><button style="border:none;background:transparent;font:600 13.5px Geist;color:var(--ink);cursor:pointer;padding:0;">Pedir aval</button></div>
+                <div style="display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;">
+                  <div style="padding:12px;border-radius:18px;background:var(--bg2);display:flex;flex-direction:column;gap:8px;"><div style="position:relative;width:38px;height:38px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13px Geist;">MC<span style="position:absolute;right:-4px;bottom:-4px;font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;background:var(--bg2);border-radius:50%;">verified</span></div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;">Marina</div><div style="font-size:11.5px;color:var(--ink2);">avalizou 4 nov</div></div></div>
+                  <div style="padding:12px;border-radius:18px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:8px;"><div style="position:relative;width:38px;height:38px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;font:600 13px Geist;color:var(--ink3);">JS<span style="position:absolute;right:-4px;bottom:-4px;font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;background:var(--bg);border-radius:50%;color:var(--ink);">cancel</span></div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;">João</div><div style="font-size:11.5px;color:var(--ink2);">recusou · pedir a outro</div></div></div>
+                  <div style="padding:12px;border-radius:18px;border:1.5px dashed var(--line2);display:flex;flex-direction:column;gap:8px;"><div style="width:38px;height:38px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">add</span></div><div style="display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:600;color:var(--ink2);">Vaga</div><div style="font-size:11.5px;color:var(--ink3);">pedir</div></div></div>
+                </div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">HOJE</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">key</span><div style="flex:1;font-size:14px;font-weight:550;">Chave de operador</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">op:7F3A 91C2</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'FILL' 1;">error</span><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:14px;font-weight:650;">Certificado do dia</div><div style="font-size:12px;color:var(--ink2);">Não renovado · último ontem 08:10</div></div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:11px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;font-variation-settings:'wght' 300;">lock</span><div style="flex:1;font-size:14px;font-weight:550;">Caução</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">100 · conferida V-07</div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="f4" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">04 · AVAIS</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Pedir aval, aceitar ou recusar</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+      <div id="m4" data-screen-label="M4 Pedir aval" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M4</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Pedir aval a um contato</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Um contato por pedido. Quem não pode avalizar aparece apagado com o motivo, em vez de sumir da lista.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">close</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Pedir aval</div><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-right:10px;">FALTAM 2</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 20px 34px;gap:16px;min-height:0;">
+              <div style="display:flex;flex-direction:column;gap:6px;padding:0 4px;"><div style="font-size:24px;font-weight:700;letter-spacing:-0.035em;line-height:1.1;">Quem conhece você pessoalmente?</div><div style="font-size:14px;color:var(--ink2);line-height:1.42;text-wrap:pretty;">Quem avaliza confirma que você é você e que este celular é seu.</div></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:18px;border:1.5px solid var(--ink);background:var(--bg2);cursor:pointer;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13.5px Geist;flex:none;">LR</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:4px;font-size:15px;font-weight:600;">Lia Ramos<span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;font-variation-settings:'FILL' 1;">verified</span></div><div style="font-size:12.5px;color:var(--ink2);">nó há 3 meses</div></div><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid var(--ink);display:flex;align-items:center;justify-content:center;flex:none;"><div style="width:12px;height:12px;border-radius:50%;background:var(--ink);"></div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;border-radius:18px;border:1.5px solid var(--line2);cursor:pointer;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13.5px Geist;flex:none;">BA</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="display:flex;align-items:center;gap:4px;font-size:15px;font-weight:600;">Bento Alves<span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;font-variation-settings:'FILL' 1;">verified</span></div><div style="font-size:12.5px;color:var(--ink2);">nó há 21 dias</div></div><div style="width:22px;height:22px;border-radius:50%;border:1.5px solid var(--ink);flex:none;"></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;opacity:.45;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13.5px Geist;flex:none;">MC</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Marina Costa</div><div style="font-size:12.5px;color:var(--ink2);">já avalizou · 4 nov</div></div><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">check</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;opacity:.45;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13.5px Geist;flex:none;">JS</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">João Souza</div><div style="font-size:12.5px;color:var(--ink2);">pedido enviado ontem</div></div><span style="font:500 11px 'Geist Mono',monospace;">AGUARDANDO</span></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:11px 12px;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 13.5px Geist;flex:none;opacity:.45;">DC</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;opacity:.45;"><div style="font-size:15px;font-weight:600;">Dona Cida</div><div style="font-size:12.5px;color:var(--ink2);">não verificada</div></div><button style="height:30px;padding:0 12px;border:none;border-radius:15px;background:var(--bg2);color:var(--ink);font:600 12.5px Geist;cursor:pointer;">Verificar</button></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="font-size:13px;font-weight:500;color:var(--ink2);padding:0 4px;">Mensagem para Lia</div>
+                <div style="height:48px;border-radius:16px;background:var(--bg2);padding:0 16px;display:flex;align-items:center;font-size:15px;">Oi Lia! Pode avalizar meu nó?</div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;">Enviar pedido a Lia</button>
+                <div style="text-align:center;font-size:12.5px;color:var(--ink2);">Só verificados com modo nó há mais de 7 dias · expira em 3 dias</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m4v" data-screen-label="M4v Ninguem pode avalizar" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M4v</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Ninguém pode avalizar</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">VAZIO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Nenhum contato cumpre a regra. Mostra o que falta em cada um e leva direto para verificar por perto.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">close</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Pedir aval</div><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-right:10px;">FALTAM 3</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 20px 34px;gap:22px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:34px 12px 4px;text-align:center;">
+                <div style="width:80px;height:80px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:36px;line-height:1;font-variation-settings:'wght' 300;">group_off</span></div>
+                <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:24px;font-weight:700;letter-spacing:-0.035em;">Ninguém pode avalizar ainda</div><div style="font-size:14px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">Quem avaliza precisa ter sido verificado pessoalmente e estar com o modo nó há mais de 7 dias.</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">SEUS CONTATOS</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;"><div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">MC</div><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:14.5px;font-weight:600;">Marina Costa</div><div style="font-size:12px;color:var(--ink2);">não verificada</div></div><button style="height:30px;padding:0 12px;border:none;border-radius:15px;background:var(--bg);color:var(--ink);font:600 12.5px Geist;cursor:pointer;">Verificar</button></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);"><div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">JS</div><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:14.5px;font-weight:600;">João Souza</div><div style="font-size:12px;color:var(--ink2);">nó há 2 dias · pode em 5</div></div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:12px 14px;border-top:1px solid var(--line);"><div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">BA</div><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:14.5px;font-weight:600;">Bento Alves</div><div style="font-size:12px;color:var(--ink2);">não usa o modo nó</div></div></div>
+                </div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">qr_code_scanner</span>Verificar alguém por perto</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Convidar para o Piu</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m5" data-screen-label="M5 Pedido recebido" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M5</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Alguém pediu seu aval</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Abre pela notificação ou pelo cartão na conversa. Aceitar exige segurar; recusar é um toque e não envia motivo.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">close</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Pedido de aval</div><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);padding-right:10px;">EXPIRA EM 2 DIAS</span></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:16px;min-height:0;">
+              <div style="display:flex;align-items:center;gap:14px;padding:0 4px;">
+                <div style="width:60px;height:60px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 19px Geist;flex:none;">LR</div>
+                <div style="display:flex;flex-direction:column;gap:4px;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;line-height:1.1;">Lia Ramos quer seu aval</div><div style="display:flex;align-items:center;gap:4px;font-size:12.5px;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;font-variation-settings:'FILL' 1;color:var(--ink);">verified</span>verificada pessoalmente em 12 out</div></div>
+              </div>
+              <div style="align-self:flex-start;max-width:86%;padding:10px 14px;border-radius:20px 20px 20px 6px;background:var(--bg2);font-size:15px;line-height:1.4;">Oi! Ativei o modo nó no celular. Pode me avalizar?</div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);padding:0 4px;">VOCÊ CONFIRMA QUE</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="font-size:14.5px;font-weight:550;">Conhece Lia pessoalmente</div></div>
+                  <div style="display:flex;align-items:center;gap:12px;padding:13px 14px;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;">Este celular é dela</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">Pixel 7 · op:2B9E 44A1</div></div></div>
+                </div>
+              </div>
+              <div style="display:flex;gap:10px;padding:0 4px;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 300;">info</span><div style="font-size:13px;color:var(--ink2);line-height:1.42;text-wrap:pretty;">Seu aval vale 90 dias. Se o nó dela fraudar, seus avais perdem peso. Sua caução não é tocada.</div></div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <button onPointerDown="{{ hAval.down }}" onPointerUp="{{ hAval.up }}" onPointerLeave="{{ hAval.up }}" style="position:relative;overflow:hidden;height:58px;border:none;border-radius:29px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none;">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ hAval.w }};background:rgba(255,255,255,.22);transition:{{ hAval.tr }};"></div>
+                  <span style="position:relative;font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">{{ hAval.icon }}</span><span style="position:relative;">{{ hAval.label }}</span>
+                </button>
+                <button style="height:46px;border:none;border-radius:23px;background:transparent;box-shadow:0 0 0 1px var(--line2) inset;color:var(--ink);font:600 15px Geist,system-ui;cursor:pointer;">Recusar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m5e" data-screen-label="M5e Pedido nao vale mais" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M5e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Pedido não vale mais</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Expirou, foi cancelado ou a caução de quem pediu não está conferida. Uma tela, três motivos; o texto muda.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">close</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Pedido de aval</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:22px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:40px 12px 0;text-align:center;">
+                <div style="position:relative;width:80px;height:80px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 24px Geist;color:var(--ink3);">LR<span style="position:absolute;right:-4px;bottom:-4px;width:32px;height:32px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:19px;line-height:1;box-shadow:0 0 0 3px var(--bg);">hourglass_disabled</span></div>
+                <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:24px;font-weight:700;letter-spacing:-0.035em;">O pedido de Lia expirou</div><div style="font-size:14px;color:var(--ink2);line-height:1.45;max-width:290px;text-wrap:pretty;">Pedidos valem 3 dias. Nada foi assinado. Se ela ainda precisar, pode pedir de novo.</div></div>
+              </div>
+              <div style="border-radius:20px;background:var(--bg2);padding:4px 16px;">
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;"><span style="color:var(--ink2);">Pedido em</span><span style="font-weight:550;">2 nov, 20:15</span></div>
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Expirou em</span><span style="font-weight:550;">5 nov, 20:15</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;padding:0 4px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">OUTROS MOTIVOS · MESMA TELA</div>
+                <div style="font-size:13px;color:var(--ink2);line-height:1.45;">“Lia cancelou o pedido.”<br>“A caução de Lia ainda não foi conferida.”</div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;">Abrir conversa com Lia</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Fechar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="f5" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">05 · SAIR</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Sair do modo nó e pedir a caução de volta</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:56px;align-items:flex-start;">
+
+      <div id="m6" data-screen-label="M6 Sair do modo no" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M6</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Sair e pedir a caução</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Diz o que se perde com números reais do usuário (dia, avais, fila) antes do gesto de segurar.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Sair do modo nó</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:4px 20px 34px;gap:16px;min-height:0;">
+              <div style="font-size:26px;font-weight:700;letter-spacing:-0.035em;line-height:1.08;padding:0 4px;text-wrap:pretty;">Sair e pedir a caução de volta?</div>
+              <div style="display:flex;flex-direction:column;padding:0 4px;">
+                <div style="display:flex;gap:14px;padding:12px 0;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">pause_circle</span><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Para de repassar agora</div><div style="font-size:13px;color:var(--ink2);line-height:1.38;">Suas conversas continuam normais.</div></div></div>
+                <div style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">move_down</span><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">A fila vai para outros nós</div><div style="font-size:13px;color:var(--ink2);line-height:1.38;">41 mensagens de terceiros saem daqui.</div></div></div>
+                <div style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">restart_alt</span><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">Dias e avais zeram</div><div style="font-size:13px;color:var(--ink2);line-height:1.38;">Hoje: dia 3 de 7 e 1 aval. Se voltar, começa do zero.</div></div></div>
+                <div style="display:flex;gap:14px;padding:12px 0;border-top:1px solid var(--line);"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'wght' 300;">schedule</span><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">A caução volta em 7 dias</div><div style="font-size:13px;color:var(--ink2);line-height:1.38;">Depois da conferência final do validador.</div></div></div>
+              </div>
+              <div style="padding:16px 18px;border-radius:22px;background:var(--bg2);display:flex;align-items:center;gap:12px;">
+                <div style="flex:1;display:flex;flex-direction:column;gap:3px;"><div style="font-size:13px;color:var(--ink2);">Volta para a carteira pessoal</div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);">previsto 13 nov</div></div>
+                <div style="display:flex;align-items:baseline;gap:5px;"><span style="font-size:28px;font-weight:700;letter-spacing:-0.04em;font-variant-numeric:tabular-nums;">100</span><span style="font:500 12px 'Geist Mono',monospace;">LUNES</span></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button onPointerDown="{{ hSair.down }}" onPointerUp="{{ hSair.up }}" onPointerLeave="{{ hSair.up }}" style="position:relative;overflow:hidden;height:58px;border:none;border-radius:29px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:10px;touch-action:none;user-select:none;-webkit-user-select:none;">
+                  <div style="position:absolute;left:0;top:0;bottom:0;width:{{ hSair.w }};background:rgba(255,255,255,.22);transition:{{ hSair.tr }};"></div>
+                  <span style="position:relative;font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">{{ hSair.icon }}</span><span style="position:relative;">{{ hSair.label }}</span>
+                </button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Continuar como nó</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m6b" data-screen-label="M6b Caucao a caminho" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M6b</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Caução a caminho</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Fica no lugar do painel M3 até o dinheiro voltar. O anel mostra os dias que faltam; também aparece na carteira como “travado”.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Do celular</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:24px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:16px;text-align:center;">
+                <div style="position:relative;width:168px;height:168px;border-radius:50%;background:conic-gradient(var(--ink) 0 28.6%,var(--bg3) 0);display:flex;align-items:center;justify-content:center;">
+                  <div style="width:148px;height:148px;border-radius:50%;background:var(--bg);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;"><span style="font-size:44px;font-weight:700;letter-spacing:-0.05em;line-height:1;">5 dias</span><span style="font-size:12.5px;color:var(--ink2);">para voltar</span></div>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:4px;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">100 LUNES a caminho</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">previsto 13 nov · carteira pessoal</div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;padding:0 8px;">
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--ink);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:16px;"><div style="font-size:15px;font-weight:600;">Saiu do modo nó</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">6 nov, 09:46</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span><div style="width:2px;flex:1;background:var(--bg3);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:16px;"><div style="font-size:15px;font-weight:600;">Fila entregue a outros nós</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">41 de 41</div></div></div>
+                <div style="display:flex;gap:14px;"><div style="display:flex;flex-direction:column;align-items:center;"><div style="width:22px;height:22px;border-radius:50%;border:2px solid var(--ink);display:flex;align-items:center;justify-content:center;flex:none;"><div style="width:8px;height:8px;border-radius:50%;background:var(--ink);animation:piuBreath 1.8s ease-in-out infinite;"></div></div><div style="width:2px;flex:1;background:var(--bg3);margin:4px 0;"></div></div><div style="display:flex;flex-direction:column;gap:2px;padding-bottom:16px;"><div style="font-size:15px;font-weight:650;">Conferência final do validador</div><div style="font:400 12px 'Geist Mono',monospace;color:var(--ink2);">13 nov</div></div></div>
+                <div style="display:flex;gap:14px;opacity:.4;"><div style="display:flex;flex-direction:column;align-items:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">radio_button_unchecked</span></div><div style="display:flex;flex-direction:column;gap:2px;"><div style="font-size:15px;font-weight:600;">De volta na carteira</div></div></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <div style="text-align:center;font-size:12.5px;color:var(--ink2);line-height:1.4;padding:0 16px;text-wrap:pretty;">Enquanto isso o valor fica travado. Voltar a ser nó cancela a devolução e os 7 dias recomeçam.</div>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:550 15px Geist,system-ui;cursor:pointer;">Voltar a ser nó</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="m6e" data-screen-label="M6e Devolucao pausada" style="display:flex;flex-direction:column;gap:14px;width:414px;">
+        <div style="display:flex;flex-direction:column;gap:6px;"><div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">M6e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Devolução pausada</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div><div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">O prazo passou e o validador não conferiu. O anel fica cheio, mas vazado; o Piu tenta de novo a cada hora.</div></div>
+        <div style="width:414px;height:868px;padding:12px;border-radius:64px;background:#0b0b0b;box-shadow:0 40px 80px -30px rgba(0,0,0,.4),0 0 0 1px rgba(0,0,0,.25);">
+          <div style="width:390px;height:844px;border-radius:52px;overflow:hidden;position:relative;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;">
+            <div style="height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 32px 0 38px;position:relative;"><div style="font-size:16px;font-weight:600;">9:41</div><div style="position:absolute;left:50%;top:11px;transform:translateX(-50%);width:122px;height:35px;border-radius:20px;background:#000;"></div><div style="display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">bluetooth</span><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">wifi_off</span><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;transform:rotate(90deg);">battery_5_bar</span></div></div>
+            <div style="height:52px;flex:none;display:flex;align-items:center;gap:6px;padding:4px 12px;"><button style="width:40px;height:40px;border:none;background:transparent;color:var(--ink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">arrow_back_ios_new</span></button><div style="flex:1;font-size:18px;font-weight:650;letter-spacing:-0.02em;">Do celular</div></div>
+            <div style="flex:1;display:flex;flex-direction:column;padding:8px 20px 34px;gap:22px;min-height:0;">
+              <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding-top:16px;text-align:center;">
+                <div style="width:168px;height:168px;border-radius:50%;border:10px solid var(--bg3);box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;">
+                  <span style="font-family:'Material Symbols Rounded';font-size:52px;line-height:1;font-variation-settings:'wght' 300;">sync_problem</span>
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">Devolução pausada</div><div style="font-size:14px;color:var(--ink2);line-height:1.45;max-width:300px;text-wrap:pretty;">V-07 ainda não fez a conferência final. Nada se perde: o Piu tenta de novo a cada hora.</div></div>
+              </div>
+              <div style="border-radius:20px;background:var(--bg2);padding:4px 16px;">
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;"><span style="color:var(--ink2);">Valor</span><span style="font-weight:650;">100 LUNES · travado</span></div>
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Previsto</span><span style="font-weight:550;">13 nov</span></div>
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Última tentativa</span><span style="font:500 13px 'Geist Mono',monospace;">14 nov, 18:02</span></div>
+                <div style="display:flex;justify-content:space-between;padding:12px 0;font-size:14px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Próxima</span><span style="font:500 13px 'Geist Mono',monospace;">19:02</span></div>
+              </div>
+              <div style="flex:1;"></div>
+              <div style="display:flex;flex-direction:column;gap:6px;">
+                <button style="height:54px;border:none;border-radius:27px;background:var(--ink);color:var(--invink);font:600 16px Geist,system-ui;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">refresh</span>Tentar agora</button>
+                <button style="height:44px;border:none;background:transparent;color:var(--ink);font:500 15px Geist,system-ui;cursor:pointer;">Ver no diagnóstico</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { holding: null, done: {} };
+  componentWillUnmount() { clearTimeout(this.t); clearTimeout(this.r); }
+  hold(k, base, doneLabel) {
+    const s = this.state, on = s.holding === k, dn = !!s.done[k];
+    return {
+      w: on || dn ? '100%' : '0%',
+      tr: on ? 'width .9s linear' : 'width .3s cubic-bezier(.2,.85,.3,1)',
+      label: dn ? doneLabel : on ? 'Continue segurando…' : base,
+      icon: dn ? 'check' : 'fingerprint',
+      down: () => {
+        if (this.state.done[k]) return;
+        clearTimeout(this.t);
+        this.setState({ holding: k });
+        this.t = setTimeout(() => {
+          this.setState(st => ({ holding: null, done: { ...st.done, [k]: true } }));
+          clearTimeout(this.r);
+          this.r = setTimeout(() => this.setState(st => ({ done: { ...st.done, [k]: false } })), 2200);
+        }, 900);
+      },
+      up: () => { if (this.state.holding === k) { clearTimeout(this.t); this.setState({ holding: null }); } }
+    };
+  }
+  renderVals() {
+    return {
+      hCaucao: this.hold('caucao', 'Segure para assinar', 'Caução assinada'),
+      hAval: this.hold('aval', 'Segure para avalizar', 'Aval enviado a Lia'),
+      hSair: this.hold('sair', 'Segure para sair', 'Saída assinada')
+    };
+  }
+}
+</script>
+</body>
+</html>

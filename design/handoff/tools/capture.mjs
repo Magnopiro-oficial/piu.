@@ -59,11 +59,13 @@ async function shot(page, file) {
   console.log('✓', path.relative(OUT, file));
 }
 
-if (want('app')) for (const theme of ['light', 'dark']) {
+if (want('app')) {
+  for (const theme of ['light', 'dark']) {
   const { ctx, page } = await harness({ mode: 'app', theme }, { width: 390, height: 844 });
   for (const s of APP) { await page.evaluate(x => window.__go(x), s); await settle(page); await shot(page, `${OUT}/app/${theme}/${safe(s)}.png`); }
   for (const t of APP_NOTIFY) { await page.evaluate(() => window.__go('chats')); await settle(page, 600); await page.evaluate(x => window.__notify(x), t); await settle(page, 900); await shot(page, `${OUT}/app/${theme}/notify_${t}.png`); }
   await ctx.close();
+}
 }
 if (want('prov')) for (const theme of ['light', 'dark']) {
   const { ctx, page } = await harness({ mode: 'prov', theme }, { width: 1280, height: 820 });
@@ -107,6 +109,8 @@ if (!args['no-video'] && !args.only) {
   await rec('app_send_message', { mode: 'app' }, A, async p => { await p.waitForTimeout(3000); await p.evaluate(() => window.__notify('demoSend')); }, 7000);
   await rec('app_incoming_banner', { mode: 'app' }, A, async p => { await p.waitForTimeout(3000); await p.evaluate(() => window.__notify('msg')); }, 7000);
   await rec('app_emergency', { mode: 'app' }, A, async p => { await p.waitForTimeout(3000); await p.evaluate(() => window.__notify('emergency')); }, 4000);
+  await rec('app_payment', { mode: 'app' }, A, async p => { await p.waitForTimeout(3000); await p.evaluate(() => window.__go('pay')); await p.waitForTimeout(6500); await p.click('text=Concluir'); }, 2500);
+  await rec('app_payment_dark', { mode: 'app', theme: 'dark' }, A, async p => { await p.waitForTimeout(3000); await p.evaluate(() => window.__go('pay')); }, 6500);
   await rec('app_tabs', { mode: 'app' }, A, async p => { await p.waitForTimeout(3000); for (const s of ['nearby', 'network', 'wallet', 'profile', 'chats', 'chat']) { await p.evaluate(x => window.__go(x), s); await p.waitForTimeout(900); } }, 1000);
   await rec('desktop_mac_launch', { mode: 'desk', os: 'mac', start: 'splash' }, D, null, 5000);
   await rec('desktop_linux_launch', { mode: 'desk', os: 'linux', theme: 'dark', start: 'splash' }, D, null, 5000);

@@ -9,12 +9,23 @@ Piu é um mensageiro **offline-first** da Lunes Network: as mensagens viajam de 
 
 Requisitos de produto: `docs/Lunes_Network_Documento_de_Requisitos_v1.1.docx` (IDs FUN-xxx, INF-xxx, NFR-xxx citados abaixo vêm desse documento).
 
+## Vídeos de referência (já incluídos)
+Gravados quadro a quadro com relógio virtual (timing exato do protótipo), em `reference/video/`:
+- `app_launch.webm` — abertura do app (ícone, nome, "procurando por perto", entrada).
+- `app_payment.webm` — segurar para assinar → cena de pagamento completa → Concluir → saldo descendo e nova linha destacada (9,5 s).
+- `app_receive_qr.webm` — folha Receber com QR nascendo em onda e linha de leitura.
+- `desktop_mac_launch.webm` / `desktop_linux_launch_dark.webm` — abertura do Piu Desktop até a tela de entrada.
+- `desktop_qr_pairing.webm` — QR de pareamento com o celular.
+- `desktop_wallet.webm` — carteira do Desktop com contagem do saldo.
+
+Quadros-chave em PNG (nomeados pelo tempo, ex.: `2500ms.png`) em `reference/app/<fluxo>/` e `reference/desktop/<fluxo>/`. Mobile em 390×844 (1×); Desktop em 832×533 (janela 1280×820 a 65%). Para gerar PNG de **todas** as telas, rode `tools/capture.mjs`.
+
 ## ⚠ Leia primeiro — como garantir fidelidade
-1. **Gere as referências renderizadas** antes de escrever código (precisa de Node 18+):
+1. **Assista aos vídeos em `reference/video/`** e, para as demais telas, **gere as referências renderizadas** antes de escrever código (precisa de Node 18+):
    ```
    cd tools && npm i && npx playwright install chromium && node capture.mjs
    ```
-   Sai em `reference/`: PNG @2x de **todas as telas** (app mobile ~65, provider claro/escuro, Desktop mac/linux × claro/escuro com entrada, conversa, rota, carteira e 11 ajustes), notificações, canvases, e **vídeos `.webm` das animações** (abertura do app, envio de mensagem, banner, emergência, troca de abas, abertura do Desktop mac/linux, contagem da carteira, malha do provider). Compare sua implementação com esses arquivos tela a tela.
+   Sai em `reference/`: PNG @2x de **todas as telas** (app mobile ~65 em claro e escuro, provider claro/escuro, Desktop mac/linux × claro/escuro com entrada, conversa, rota, carteira e 11 ajustes), notificações, canvases, e **vídeos `.webm` das animações** (abertura do app, pagamento completo, envio de mensagem, banner, emergência, troca de abas, abertura do Desktop mac/linux, contagem da carteira, malha do provider). Compare sua implementação com esses arquivos tela a tela.
 2. **Leia `docs/COMO-LER-DC.md`** — os `.dc.html` são componentes com template `{{ }}`; muitos estilos e todas as `animation:` dinâmicas são calculados na classe `Component`, não aparecem no markup.
 3. **Animações exatas**: `docs/animations/app.css`, `desktop.css`, `provider-desktop.css` trazem os `@keyframes` copiados dos arquivos + os usos (duração/curva/atraso) encontrados. Use estes valores, não aproximações.
 4. **Fontes**: Geist, Geist Mono e Material Symbols Rounded (Google Fonts). Sem elas o layout quebra (larguras e ícones). Ícones são ligaduras de texto (`<span>chat</span>`) — no app nativo use o pacote de ícones correspondente.
@@ -97,6 +108,32 @@ Estrutura: status bar 54px; barra de abas inferior 84px com 5 abas **Conversas �
 - **App fechado**: tela inicial simulada com ícone do Piu e badge de não lidas; o app fecha com `piuAppOut` 330ms em direção ao ícone e abre a partir dele (`piuAppIn`). Notificação push no topo; tocar abre direto na conversa/tela de origem.
 - **Idioma** (Perfil → Idioma): 11 idiomas + formato de números e datas; mesma preferência no Desktop e no painel do provider. Traduções completas ainda pendentes (PT-BR é a fonte).
 
+### Carteira e pagamento (mobile)
+**Especificação obrigatória: `docs/APP-CARTEIRA-ENVIAR-RECEBER.md`** (botões Enviar/Receber/Convidar, folhas, QR, cena de pagamento segundo a segundo) + `docs/reference-code/app-wallet.js` + `reference/app/wallet_send_receive/`.
+- **Entrada da carteira**: cartão de saldo entra com `piuCardIn` .65s (perspectiva, sobe 26px, rotateX 16°→0); anéis decorativos no canto (um gira `piuSpin` 22s com ponto orbitando); brilho atravessa uma vez (`piuShine` 1.5s, atraso .55s). Saldo **conta de 0 até o valor** em 950ms (rAF, easing `1-(1-p)^4`). Botões Enviar/Receber/Convidar com `piuPop` .5s (atraso .32s + 70ms cada); linhas de atividade `piuUp` .45s com 45ms de defasagem.
+- **Receber (QR)**: mesma animação do QR do Desktop. Cartão branco (raio 26, padding 16) entra com `piuPop` .6s; grade 29×29 em 200px; cada módulo nasce com `piuQr` .35s `cubic-bezier(.2,.9,.3,1.5)`, atraso = 120ms + distância ao centro × 28ms (onda do centro para fora); 3 marcadores de canto; centro livre 7×7 com o ícone do app (48px, `piuPop` 1s); linha de leitura `piuScan` 2.6s infinita a partir de 1,1s. Tocar no código gera outro (nova semente, a onda recomeça).
+- **Segurar para assinar**: o botão "Segure para assinar e enviar" enche da esquerda para a direita em 900ms enquanto pressionado (camada `invink` 24%), encolhe 3% e engrossa o ícone de digital. Soltar antes zera e mostra "Continue segurando até completar". Enter/Espaço assina direto (acessibilidade).
+- **Cena de pagamento** (tela cheia em `--ink`, ~5s), cronologia a partir do fim do gesto:
+  - 0–0,75s: íris abre a partir do botão (`clip-path: circle()` de 50% 93%). Fundo de pontos 22px. Topo: "PAGAMENTO P2P", barra de progresso (3,6s) e status ao vivo.
+  - 0,3–1,15s: anel 168px desenha (`stroke-dashoffset`), digital com linha de leitura subindo e descendo, assinatura digitada em mono (`steps(27)`).
+  - 1,2s: digital vira selo `verified` (`piuPop`), "Assinando"→"Assinado", onda de anel.
+  - 1,6s: bloco sai para cima com blur. 1,75s: valor grande aparece e em 2,2s **encolhe e vira moeda** sobre "Você".
+  - 2,4–3,8s: moeda (30px, gira em Y, brilho) percorre a rota Você → 7F·A2 (Wi-Fi Direct) → C2·19 (Wi-Fi Mesh) → 88·E0 (Bluetooth) → destinatário, com 3 fantasmas de rastro; a linha sólida se desenha junto (velocidade constante; paradas proporcionais ao comprimento: 20,9% / 51,8% / 80,3%). Cada nó acende e solta onda ao ser tocado.
+  - 3,8s: avatar do destinatário pulsa (`piuBump`), 3 ondas e 16 faíscas radiais.
+  - 4,15s: rota se dissolve. 4,3–5s: círculo e check se desenham, valor, "Marina recebeu a transação assinada", resumo (rota, tempo, taxa, liquidação, tx) e botão "Concluir" (5s).
+  - Status do topo: Assinando → Assinado · Ed25519 → Saindo pelo Bluetooth → Salto 1/2/3 → Entregue.
+- **Concluir**: íris fecha em direção ao cartão de saldo (.52s); o saldo **desce do valor antigo ao novo** em 1,3s e a nova linha "Enviado para…" entra destacada (`piuRowFresh` 1.8s).
+- Barra de status fica branca enquanto a cena cobre o topo. Vídeos: `reference/video/app_payment.webm` e `app_payment_dark.webm`.
+
+### Site (Piu Site / Piu Site EN)
+- **Hero**: título entra palavra por palavra (`siteWord` .95s, atraso .12s + 80ms, máscara por palavra); texto, botões e números em `siteUp` escalonado (.55–.9s); celular sobe girando levemente (`sitePhone` 1.2s); 3 ondas saindo do celular (`siteRing` 3.6s); órbita contrária (`siteSpinR` 46s); 3 selos flutuantes (`siteChip` + `siteFloat`).
+- **Faixa de transportes** em rolagem infinita (`siteMarquee` 34s, pausa no hover, máscara nas bordas).
+- **Revelação na rolagem** via `animation-timeline: view()` (`siteReveal`: sobe 56px, blur 6→0); cartões escalonados em 8% do intervalo. Navegadores sem suporte mostram o conteúdo direto, sem animação.
+- **Diagrama de saltos**: linha se desenha com a rolagem; cada nó pulsa (`sitePing`) no instante em que o pacote passa.
+- **Prévias de Desktop** (provider e Piu Desktop) entram inclinadas em perspectiva (`siteDeskIn`) conforme a rolagem.
+- **Piu Desktop para download** (`#desktop`, dentro de Baixar): abas macOS/Linux (detecta o sistema do visitante), botão principal, prévia ao vivo do app, lista de pacotes (dmg arm64/x64, Homebrew; AppImage, .deb, .rpm, Flatpak, ARM64) e assinatura. Link no menu, no hero, no rodapé e uma pergunta no FAQ.
+- Avisos de download viram toast fixo inferior (`siteToast`), somem em 6,5 s.
+
 ### Onboarding (FUN-001..004)
 - **welcome**: logotipo grande com órbitas girando (90s), proposta, 3 benefícios, “Criar identidade” e “Restaurar de outro aparelho”.
 - **identity**: escolher pública (nome → `@handle · piu:7f3a…c19e`) ou anônima (nome derivado da chave, aviso de que o anonimato não é absoluto).
@@ -164,6 +201,13 @@ Regras que o front precisa respeitar:
 - Nada de mensagens na blockchain.
 
 ## Assets
+**Ícones de instalação dos apps de computador são DIFERENTES (obrigatório):**
+- **Piu Desktop** (mensageiro): `design/brand/desktop/` — fundo preto, marca branca. `piu-desktop-icon.svg` + PNG 16–1024.
+- **Piu Provider** (painel do provider): `design/brand/provider/` — fundo claro, marca preta com duas ondas de sinal saindo do olho. `piu-provider-icon.svg` + PNG 16–1024.
+- Comparação: `design/brand/desktop-vs-provider-preview.png`.
+- Ambos seguem a grade de ícone do macOS (corpo 824×824 centrado em 1024, raio 185, margem transparente) — use direto para `.icns` (iconutil) e para Linux (`.png` 512/256/128 em `hicolor`, `.desktop` com `Icon=piu-desktop` / `Icon=piu-provider`). Nome do app: "Piu" e "Piu Provider"; bundle ids distintos (ex.: `network.lunes.piu.desktop` e `network.lunes.piu.provider`).
+- O app de celular continua com `icon-1024.png` (sangrado, a máscara é do sistema).
+
 `design/brand/`: ícone do app (`piu-icon.svg`, `icon-1024.png`, `icon-light-1024.png`, `icon-maskable-512.png`, `icon-512/192.png`, `apple-touch-icon.png`), marca (`piu-mark.svg`), favicons (svg, ico, 16/32/48) e `site.webmanifest`. O ícone aparece na abertura do app e do Desktop e na tela inicial simulada. Fotos de perfil e QR codes são **placeholders** (listras). Ícones de UI: Material Symbols Rounded. Fontes: Geist / Geist Mono (Google Fonts). Logotipo em texto “piu.” (Geist 750, ponto em `ink3`).
 
 ## Arquivos
@@ -177,7 +221,7 @@ Regras que o front precisa respeitar:
 - `design/brand/` — ícones e marca.
 - `tools/capture.mjs` — gera `reference/` (PNG + vídeos).
 - `docs/COMO-LER-DC.md` — guia do formato.
-- `docs/animations/*.css` — keyframes exatos por plataforma.
+- `docs/animations/*.css` — keyframes exatos por plataforma (app, desktop, provider-desktop, site).
 - `docs/Lunes_Network_Documento_de_Requisitos_v1.1.docx` — requisitos.
 
 ## Pontos em aberto (do documento, seção 18.2)
@@ -211,6 +255,8 @@ Duas colunas: texto à esquerda (kicker mono 12, título 46/700/-0.045em, subtí
 4. **Detalhes** 320px (opcional, `piuSide` .4s): avatar 76px, silenciar, verificar (código de segurança), mensagens temporárias, mídia, bloquear/sair. **Rota da mensagem** ao clicar num balão.
 
 ### Carteira
+**Enviar e Receber têm especificação própria e obrigatória: `docs/DESKTOP-CARTEIRA-ENVIAR-RECEBER.md`** (destinatários, valor inicial 5, chips 1/5/10/25, resumo, sucesso, QR 29×29 com onda e ícone), código em `docs/reference-code/desktop-wallet.js` e PNG em `reference/desktop/wallet_send_receive/`.
+
 Grid 1.35fr / 1fr (máx. 980px). Cartão de saldo invertido (raio 26, `piuDialog` .6s) com anéis decorativos e ponto orbitando (`piuSpin` 24s); saldo 58/700 com **contagem animada** (requestAnimationFrame, 1100ms, easing \`1-(1-p)^4\`, de 0 ou do saldo anterior); olho alterna •••••• e grava `localStorage['piu.hideBal']` (mesma preferência do celular). Ações Enviar / Receber / Converter (`piuPop` .5s, atraso .35s + 70ms cada). Painel lateral troca entre Enviar e Receber (QR + endereço). Movimentações; **Créditos de rede** com 7 barras 110px (`piuGrowY`, defasadas).
 
 ### Ajustes

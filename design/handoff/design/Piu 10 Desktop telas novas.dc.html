@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="icon" href="brand/desktop/piu-desktop-icon.svg" type="image/svg+xml">
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..800&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=block" rel="stylesheet">
+<style>*{box-sizing:border-box}body{margin:0;background:#e9e9e6}a{color:#0c0c0c}a:hover{opacity:.7}button,input{font-family:inherit}
+@keyframes piuSpin{to{transform:rotate(360deg)}}
+@keyframes piuBreath{0%,100%{opacity:1}50%{opacity:.3}}
+@keyframes piuRingS{from{transform:scale(1);opacity:.55}to{transform:scale(2.4);opacity:0}}
+@keyframes piuShake{0%,100%{transform:none}20%{transform:translateX(-8px)}40%{transform:translateX(7px)}60%{transform:translateX(-5px)}80%{transform:translateX(3px)}}
+@media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
+</style>
+</helmet>
+<div style="min-height:100vh;padding:56px 64px 120px;display:flex;flex-direction:column;gap:64px;font-family:Geist,system-ui,sans-serif;color:#0c0c0c;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--scrim:rgba(0,0,0,.28);--dot:rgba(0,0,0,.07);">
+
+  <div style="display:flex;flex-direction:column;gap:10px;max-width:880px;">
+    <div style="display:flex;align-items:center;gap:10px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">NOVO</span><span style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.04em;">PIU 10 · DESKTOP</span></div>
+    <div style="font-size:40px;font-weight:700;letter-spacing:-0.045em;line-height:1.02;">Telas novas do Desktop</div>
+    <div style="font-size:15px;color:#5f5f5c;line-height:1.5;text-wrap:pretty;">Para as linhas que hoje estão “em breve” nas Configurações. Janela em tamanho real (1280 × 820); estados de vazio e erro em cartões ao lado, só com a parte que muda.</div>
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:6px;">
+      <a href="#g1" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">01 Piu bloqueado</a>
+      <a href="#g2" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">02 Contatos bloqueados</a>
+      <a href="#g3" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">03 Atualização</a>
+      <a href="#g4" style="height:30px;padding:0 12px;border-radius:15px;background:#fff;display:flex;align-items:center;font:500 12.5px Geist;text-decoration:none;">04 Armazenamento</a>
+    </div>
+  </div>
+
+  <section id="g1" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">01 · BLOQUEIO</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Piu bloqueado</div><div style="font-size:13.5px;color:#5f5f5c;max-width:760px;line-height:1.45;">Liga com “Bloquear o Piu ao suspender”, “Bloquear depois de inativo” e o atalho ⌘L / Ctrl L. Esconde tudo, inclusive nomes nas notificações, mas o Piu continua recebendo e repassando pela malha.</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start;">
+
+      <div id="d1" data-screen-label="D1 Bloqueado macOS" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D1</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Bloqueado ao suspender · macOS</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div>
+        <div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2),0 40px 80px -30px rgba(0,0,0,.35);">
+          <div style="height:40px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;"><div style="display:flex;gap:8px;"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840;"></div></div><div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;color:var(--ink2);">Piu</div></div>
+          <div style="flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background-color:var(--bg);background-image:radial-gradient(var(--dot) 1px, transparent 1.2px);background-size:18px 18px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center;">
+              <div style="position:relative;width:84px;height:84px;">
+                <img src="brand/icon-192.png" alt="Piu" style="width:84px;height:84px;border-radius:22px;display:block;">
+                <div style="position:absolute;right:-8px;bottom:-8px;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px var(--bg);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;">lock</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:32px;font-weight:700;letter-spacing:-0.045em;">O Piu está bloqueado</div><div style="font-size:14.5px;color:var(--ink2);">Bloqueado ao suspender · hoje, 14:32</div></div>
+              <div style="height:34px;padding:0 14px;border-radius:17px;background:var(--bg2);display:flex;align-items:center;gap:8px;font-size:13.5px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">chat_bubble</span><span style="font-weight:600;">3 mensagens novas</span><span style="color:var(--ink2);">· remetentes ocultos</span></div>
+              <div style="display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:6px;">
+                <button style="position:relative;width:72px;height:72px;border:none;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:piuRingS 2.4s ease-out infinite;"></div><span style="font-family:'Material Symbols Rounded';font-size:34px;line-height:1;font-variation-settings:'wght' 300;">fingerprint</span></button>
+                <div style="font-size:14px;font-weight:550;">Toque no Touch ID</div>
+                <button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:transparent;color:var(--ink);font:550 13.5px Geist;cursor:pointer;">Usar a senha do Mac</button>
+              </div>
+            </div>
+            <div style="position:absolute;bottom:22px;left:0;right:0;display:flex;justify-content:center;"><div style="display:flex;align-items:center;gap:8px;font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);"><div style="position:relative;width:7px;height:7px;"><div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;inset:0;border-radius:50%;border:1px solid var(--ink);animation:piuRingS 2s ease-out infinite;"></div></div>Bloqueado, mas recebendo · 6 nós por perto</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="d1e" data-screen-label="D1e Bloqueado Linux senha errada" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D1e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Inativo · Linux · senha errada</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div>
+        <div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2),0 40px 80px -30px rgba(0,0,0,.35);">
+          <div style="height:46px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:0 10px 0 14px;background:var(--side);border-bottom:1px solid var(--line);"><div style="display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;"><img src="brand/icon-192.png" alt="" style="width:20px;height:20px;border-radius:5px;display:block;">Piu</div><div style="display:flex;gap:4px;"><div style="width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">remove</span></div><div style="width:30px;height:30px;border-radius:15px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">crop_square</span></div><div style="width:30px;height:30px;border-radius:15px;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">close</span></div></div></div>
+          <div style="flex:1;position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;background-color:var(--bg);background-image:radial-gradient(var(--dot) 1px, transparent 1.2px);background-size:18px 18px;">
+            <div style="display:flex;flex-direction:column;align-items:center;gap:28px;text-align:center;width:360px;">
+              <div style="position:relative;width:84px;height:84px;">
+                <img src="brand/icon-192.png" alt="Piu" style="width:84px;height:84px;border-radius:22px;display:block;">
+                <div style="position:absolute;right:-8px;bottom:-8px;width:34px;height:34px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 4px var(--bg);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;">lock</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;"><div style="font-size:32px;font-weight:700;letter-spacing:-0.045em;">O Piu está bloqueado</div><div style="font-size:14.5px;color:var(--ink2);">15 min sem uso · hoje, 14:47</div></div>
+              <div style="width:100%;display:flex;flex-direction:column;gap:10px;">
+                <div style="height:48px;border-radius:14px;background:var(--bg);box-shadow:0 0 0 2px var(--ink) inset;display:flex;align-items:center;gap:10px;padding:0 8px 0 14px;animation:piuShake .45s ease-in-out both;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;color:var(--ink2);">key</span><div style="flex:1;text-align:left;font-size:20px;letter-spacing:.2em;">••••••••</div><button style="width:34px;height:34px;border:none;border-radius:10px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">arrow_forward</span></button></div>
+                <div style="display:flex;align-items:center;gap:6px;font-size:13px;font-weight:550;padding:0 4px;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;font-variation-settings:'FILL' 1;">error</span>Senha incorreta · restam 3 tentativas</div>
+              </div>
+              <div style="font-size:12.5px;color:var(--ink2);">Use a senha da sua sessão no sistema.</div>
+            </div>
+            <div style="position:absolute;bottom:22px;left:0;right:0;display:flex;justify-content:center;"><div style="display:flex;align-items:center;gap:8px;font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);"><div style="position:relative;width:7px;height:7px;"><div style="position:absolute;inset:0;border-radius:50%;background:var(--ink);"></div><div style="position:absolute;inset:0;border-radius:50%;border:1px solid var(--ink);animation:piuRingS 2s ease-out infinite;"></div></div>Bloqueado, mas recebendo · 6 nós por perto</div></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="d1x" data-screen-label="D1x Muitas tentativas" style="display:flex;flex-direction:column;gap:14px;width:440px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D1x</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Muitas tentativas</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div>
+        <div style="padding:40px 40px 36px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);display:flex;flex-direction:column;align-items:center;gap:20px;text-align:center;">
+          <div style="position:relative;width:92px;height:92px;border-radius:50%;background:conic-gradient(var(--ink) 0 62%,var(--bg3) 0);display:flex;align-items:center;justify-content:center;"><div style="width:80px;height:80px;border-radius:50%;background:var(--bg);display:flex;align-items:center;justify-content:center;font:600 22px Geist;font-variant-numeric:tabular-nums;letter-spacing:-0.02em;">0:19</div></div>
+          <div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">Muitas tentativas</div><div style="font-size:13.5px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">Espere para tentar de novo. A cada novo erro a espera dobra: 30 s, 1 min, 2 min.</div></div>
+          <div style="width:100%;height:48px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;gap:10px;padding:0 14px;opacity:.5;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;color:var(--ink2);">key</span><span style="font-size:14px;color:var(--ink3);">Senha</span></div>
+        </div>
+        <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Substitui o campo de D1e depois da 5ª senha errada. No macOS, o Touch ID também fica pausado no mesmo prazo.</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="g2" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">02 · PRIVACIDADE</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Contatos bloqueados</div><div style="font-size:13.5px;color:#5f5f5c;max-width:760px;line-height:1.45;">Abre pela linha “Contatos bloqueados” em Privacidade. Desbloquear usa o diálogo que já existe no protótipo (unblock:).</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start;">
+
+      <div id="d2" data-screen-label="D2 Contatos bloqueados" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D2</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Lista</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div>
+        <div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2),0 40px 80px -30px rgba(0,0,0,.35);">
+          <div style="height:40px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;"><div style="display:flex;gap:8px;"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840;"></div></div><div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;color:var(--ink2);">Piu</div></div>
+          <div style="flex:1;min-height:0;display:flex;">
+            <div style="width:68px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:14px 0 16px;gap:6px;">
+              <img src="brand/icon-192.png" alt="Piu" style="width:36px;height:36px;border-radius:10px;display:block;margin-bottom:12px;">
+              <div style="width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">chat_bubble</span></div>
+              <div style="width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">account_balance_wallet</span></div>
+              <div style="width:44px;height:44px;border-radius:13px;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1,'wght' 350;">settings</span></div>
+              <div style="flex:1;"></div>
+              <div style="width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font:600 13px Geist;">C</div>
+            </div>
+            <div style="width:248px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px 14px;gap:14px;">
+              <div style="font-size:24px;font-weight:700;letter-spacing:-0.04em;padding:0 8px;">Ajustes</div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">person</span>Perfil</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;background:var(--bg2);font:600 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'FILL' 1,'wght' 350;">shield_lock</span>Privacidade</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">notifications</span>Notificações</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">forum</span>Conversas</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">palette</span>Aparência</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">devices</span>Aparelhos</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">computer</span>Sistema</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">key</span>Backup</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">keyboard</span>Atalhos</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;overflow:hidden;">
+              <div style="max-width:720px;margin:0 auto;padding:26px 40px 48px;display:flex;flex-direction:column;gap:6px;">
+                <button style="align-self:flex-start;display:flex;align-items:center;gap:2px;height:28px;padding:0 8px 0 2px;margin-left:-4px;border:none;border-radius:8px;background:transparent;color:var(--ink2);font:550 13px Geist;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">chevron_left</span>Privacidade</button>
+                <div style="font-size:30px;font-weight:700;letter-spacing:-0.04em;">Contatos bloqueados</div>
+                <div style="font-size:14px;color:var(--ink2);line-height:1.45;margin-bottom:14px;max-width:560px;text-wrap:pretty;">Ninguém é avisado. O que a pessoa mandar é descartado neste computador; a malha continua entregando sem saber de quem é.</div>
+                <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">
+                  <div style="flex:1;height:38px;border-radius:11px;background:var(--bg2);display:flex;align-items:center;gap:8px;padding:0 12px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink2);">search</span><span style="font-size:14px;color:var(--ink3);">Buscar por nome ou impressão digital</span></div>
+                  <div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">4 BLOQUEADOS</div>
+                </div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:64px;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 14px Geist;flex:none;">RT</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">Rafael Teles</div><div style="font-size:12.5px;color:var(--ink2);">desde hoje · pela conversa</div></div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink3);">9C41 0E7B</div><button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:var(--bg);color:var(--ink);font:600 13px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Desbloquear</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:64px;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:12px;background:var(--bg3);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">visibility_off</span></div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">Anônimo · 3C1D</div><div style="font-size:12.5px;color:var(--ink2);">desde 3 nov · pedido de Por perto</div></div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink3);">3C1D 88F2</div><button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:var(--bg);color:var(--ink);font:600 13px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Desbloquear</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:64px;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 14px Geist;flex:none;">PV</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">Promo Vila</div><div style="font-size:12.5px;color:var(--ink2);">desde 28 out · pelo celular</div></div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink3);">51AA 7D03</div><button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:var(--bg);color:var(--ink);font:600 13px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Desbloquear</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:64px;border-top:1px solid var(--line);"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 14px Geist;flex:none;">GN</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">Gustavo N.</div><div style="font-size:12.5px;color:var(--ink2);">desde 12 out · pela conversa</div></div><div style="font:400 11.5px 'Geist Mono',monospace;color:var(--ink3);">E260 4B9C</div><button style="height:34px;padding:0 14px;border:none;border-radius:17px;background:var(--bg);color:var(--ink);font:600 13px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Desbloquear</button></div>
+                </div>
+                <div style="padding:16px 4px 8px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">OPÇÕES</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:56px;"><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;">Valer em todos os meus aparelhos</div><div style="font-size:12.5px;color:var(--ink2);">A lista viaja cifrada para o celular pareado</div></div><div style="width:42px;height:26px;border-radius:13px;background:var(--ink);position:relative;flex:none;"><div style="position:absolute;top:3px;left:19px;width:20px;height:20px;border-radius:10px;background:var(--invink);box-shadow:0 1px 3px rgba(0,0,0,.2);"></div></div></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:56px;border-top:1px solid var(--line);"><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;">Bloquear pedidos de anônimos</div><div style="font-size:12.5px;color:var(--ink2);">Só contatos e verificados podem iniciar conversa</div></div><div style="width:42px;height:26px;border-radius:13px;background:var(--bg3);position:relative;flex:none;"><div style="position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:10px;background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.2);"></div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:48px;width:560px;">
+        <div id="d2v" data-screen-label="D2v Nenhum bloqueado" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D2v</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Ninguém bloqueado</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">VAZIO</span></div>
+          <div style="padding:48px 40px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);display:flex;flex-direction:column;align-items:center;gap:16px;text-align:center;">
+            <div style="width:72px;height:72px;border-radius:50%;background:var(--bg2);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:32px;line-height:1;font-variation-settings:'wght' 300;">block</span></div>
+            <div style="display:flex;flex-direction:column;gap:6px;"><div style="font-size:20px;font-weight:700;letter-spacing:-0.03em;">Ninguém bloqueado</div><div style="font-size:13.5px;color:var(--ink2);line-height:1.45;max-width:340px;text-wrap:pretty;">Para bloquear alguém, abra a conversa e use Detalhes → Bloquear.</div></div>
+            <div style="display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--ink2);"><span style="min-width:26px;height:24px;padding:0 7px;border-radius:6px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 2px 0 var(--line2);display:flex;align-items:center;justify-content:center;font:550 11.5px 'Geist Mono',monospace;color:var(--ink);">⌘</span><span style="min-width:26px;height:24px;padding:0 7px;border-radius:6px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 2px 0 var(--line2);display:flex;align-items:center;justify-content:center;font:550 11.5px 'Geist Mono',monospace;color:var(--ink);">I</span>abre os detalhes da conversa</div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Substitui a busca e a lista. O bloco “Opções” continua embaixo.</div>
+        </div>
+        <div id="d2e" data-screen-label="D2e Desbloqueio nao sincronizou" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D2e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Desbloqueio não sincronizou</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div>
+          <div style="padding:16px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);display:flex;flex-direction:column;gap:12px;">
+            <div style="padding:14px 16px;border-radius:16px;background:var(--ink);color:var(--invink);display:flex;align-items:center;gap:12px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">sync_problem</span><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14px;font-weight:600;">Pixel 8 ainda bloqueia Rafael</div><div style="font-size:12.5px;opacity:.75;">O celular está fora de alcance. Sincroniza quando ele voltar.</div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--invink);color:var(--ink);font:600 12.5px Geist;cursor:pointer;">Tentar</button></div>
+            <div style="display:flex;align-items:center;gap:14px;padding:6px 4px;"><div style="width:40px;height:40px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 14px Geist;flex:none;">RT</div><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:600;">Rafael Teles</div><div style="font-size:12.5px;color:var(--ink2);">desbloqueado aqui · pendente em 1 aparelho</div></div><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;animation:piuBreath 1.8s ease-in-out infinite;">sync</span></div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Aparece no topo da lista quando “Valer em todos os meus aparelhos” está ligado e o outro aparelho não respondeu.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="g3" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">03 · SISTEMA</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Atualização disponível</div><div style="font-size:13.5px;max-width:760px;line-height:1.45;color:#5f5f5c;">Em “Perguntar”, abre este diálogo quando o pacote já foi baixado e conferido. Em “Automático”, só aparece o aviso no canto da lista. O pacote pode vir pela internet ou de um nó por perto.</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start;">
+
+      <div id="d3" data-screen-label="D3 Atualizacao disponivel" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D3</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Pronta para instalar</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div>
+        <div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;position:relative;box-shadow:0 0 0 1px var(--line2),0 40px 80px -30px rgba(0,0,0,.35);">
+          <div style="height:40px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;"><div style="display:flex;gap:8px;"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840;"></div></div><div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;color:var(--ink2);">Piu</div></div>
+          <div style="flex:1;min-height:0;display:flex;">
+            <div style="width:68px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:14px 0 16px;gap:6px;">
+              <img src="brand/icon-192.png" alt="Piu" style="width:36px;height:36px;border-radius:10px;display:block;margin-bottom:12px;">
+              <div style="width:44px;height:44px;border-radius:13px;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1,'wght' 350;">chat_bubble</span></div>
+              <div style="width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">account_balance_wallet</span></div>
+              <div style="position:relative;width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">settings</span><div style="position:absolute;top:8px;right:8px;width:9px;height:9px;border-radius:50%;background:var(--ink);box-shadow:0 0 0 2px var(--side);"></div></div>
+              <div style="flex:1;"></div>
+              <div style="width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font:600 13px Geist;">C</div>
+            </div>
+            <div style="width:320px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;">
+              <div style="padding:18px 16px 10px;display:flex;flex-direction:column;gap:12px;"><div style="font-size:24px;font-weight:700;letter-spacing:-0.04em;">Conversas</div><div style="height:36px;border-radius:11px;background:var(--bg2);"></div></div>
+              <div style="flex:1;padding:0 8px;display:flex;flex-direction:column;gap:2px;">
+                <div style="display:flex;align-items:center;gap:12px;padding:10px;"><div style="width:44px;height:44px;border-radius:50%;background:var(--bg2);flex:none;"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div style="width:52%;height:10px;border-radius:5px;background:var(--bg3);"></div><div style="width:80%;height:9px;border-radius:5px;background:var(--bg2);"></div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px;"><div style="width:44px;height:44px;border-radius:50%;background:var(--bg2);flex:none;"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div style="width:40%;height:10px;border-radius:5px;background:var(--bg3);"></div><div style="width:70%;height:9px;border-radius:5px;background:var(--bg2);"></div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px;"><div style="width:44px;height:44px;border-radius:14px;background:var(--bg2);flex:none;"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div style="width:60%;height:10px;border-radius:5px;background:var(--bg3);"></div><div style="width:76%;height:9px;border-radius:5px;background:var(--bg2);"></div></div></div>
+                <div style="display:flex;align-items:center;gap:12px;padding:10px;"><div style="width:44px;height:44px;border-radius:50%;background:var(--bg2);flex:none;"></div><div style="flex:1;display:flex;flex-direction:column;gap:7px;"><div style="width:46%;height:10px;border-radius:5px;background:var(--bg3);"></div><div style="width:64%;height:9px;border-radius:5px;background:var(--bg2);"></div></div></div>
+              </div>
+              <div style="margin:0 12px 14px;padding:12px 14px;border-radius:16px;background:var(--ink);color:var(--invink);display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">system_update_alt</span><div style="flex:1;display:flex;flex-direction:column;gap:1px;"><div style="font-size:13.5px;font-weight:600;">Piu 0.5.0 pronto</div><div style="font-size:12px;opacity:.72;">Instala ao reiniciar</div></div><div style="height:28px;padding:0 11px;border-radius:14px;background:var(--invink);color:var(--ink);display:flex;align-items:center;font:600 12px Geist;">Reiniciar</div></div>
+            </div>
+            <div style="flex:1;background-color:var(--bg);background-image:radial-gradient(var(--dot) 1px, transparent 1.2px);background-size:18px 18px;"></div>
+          </div>
+          <div style="position:absolute;inset:40px 0 0 0;background:var(--scrim);display:flex;align-items:center;justify-content:center;">
+            <div style="width:480px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset,0 30px 80px -20px rgba(0,0,0,.45);padding:26px;display:flex;flex-direction:column;gap:18px;">
+              <div style="display:flex;align-items:flex-start;gap:14px;">
+                <div style="width:48px;height:48px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:25px;line-height:1;font-variation-settings:'wght' 300;">system_update_alt</span></div>
+                <div style="flex:1;display:flex;flex-direction:column;gap:4px;"><div style="font-size:21px;font-weight:700;letter-spacing:-0.03em;">Piu 0.5.0 está pronto</div><div style="font-size:13.5px;color:var(--ink2);">Você está na 0.4.2. Reiniciar leva uns 10 segundos.</div></div>
+              </div>
+              <div style="border-radius:18px;background:var(--bg2);padding:2px 14px;">
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;font-size:13.5px;"><span style="color:var(--ink2);">Veio de</span><span style="display:flex;align-items:center;gap:6px;font-weight:550;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">hub</span>Mini-PC da garagem · pela malha</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;font-size:13.5px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Assinatura</span><span style="display:flex;align-items:center;gap:6px;font-weight:550;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;font-variation-settings:'FILL' 1;">verified</span>conferida · Lunes 4A7C</span></div>
+                <div style="display:flex;align-items:center;justify-content:space-between;padding:11px 0;font-size:13.5px;border-top:1px solid var(--line);"><span style="color:var(--ink2);">Tamanho</span><span style="font-weight:550;">38 MB · Universal</span></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;">
+                <div style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">O QUE MUDA</div>
+                <div style="display:flex;gap:10px;font-size:14px;line-height:1.4;"><span style="color:var(--ink3);">—</span>Painel do nó do celular pareado aparece aqui</div>
+                <div style="display:flex;gap:10px;font-size:14px;line-height:1.4;"><span style="color:var(--ink3);">—</span>Conversas longas abrem duas vezes mais rápido</div>
+                <div style="display:flex;gap:10px;font-size:14px;line-height:1.4;"><span style="color:var(--ink3);">—</span>Corrige notificações repetidas depois de suspender</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px;padding-top:4px;">
+                <div style="flex:1;font-size:12.5px;color:var(--ink2);">Conversas e chaves ficam como estão.</div>
+                <button style="height:40px;padding:0 16px;border:none;border-radius:20px;background:transparent;color:var(--ink);font:550 14px Geist;cursor:pointer;">Depois</button>
+                <button style="height:40px;padding:0 18px;border:none;border-radius:20px;background:var(--ink);color:var(--invink);font:600 14px Geist;cursor:pointer;">Reiniciar e atualizar</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:48px;width:480px;">
+        <div id="d3b" data-screen-label="D3b Baixando e conferindo" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D3b</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Baixando pela malha</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">CARREGANDO</span></div>
+          <div style="border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:center;gap:14px;"><div style="width:48px;height:48px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:25px;line-height:1;font-variation-settings:'wght' 300;">downloading</span></div><div style="flex:1;display:flex;flex-direction:column;gap:3px;"><div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">Baixando Piu 0.5.0</div><div style="font-size:13px;color:var(--ink2);">De 2 nós por perto, em pedaços</div></div></div>
+            <div style="display:flex;flex-direction:column;gap:8px;">
+              <div style="height:8px;border-radius:4px;background:var(--bg3);overflow:hidden;"><div style="width:61%;height:100%;border-radius:4px;background:var(--ink);"></div></div>
+              <div style="display:flex;justify-content:space-between;font:500 12px 'Geist Mono',monospace;color:var(--ink2);"><span>23 de 38 MB</span><span>~ 1 min</span></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:13.5px;">
+              <div style="display:flex;align-items:center;gap:10px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;font-variation-settings:'FILL' 1;">check_circle</span>Manifesto assinado conferido</div>
+              <div style="display:flex;align-items:center;gap:10px;"><div style="width:18px;height:18px;border-radius:50%;border:2px solid var(--bg3);border-top-color:var(--ink);animation:piuSpin .9s linear infinite;"></div>Baixando e conferindo cada pedaço</div>
+              <div style="display:flex;align-items:center;gap:10px;color:var(--ink3);"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">radio_button_unchecked</span>Assinatura do pacote completo</div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Só aparece se a pessoa abrir Sistema → Atualizações durante o download. O aviso da lista não mostra progresso.</div>
+        </div>
+        <div id="d3e" data-screen-label="D3e Assinatura nao confere" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D3e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Assinatura não confere</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div>
+          <div style="border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);padding:24px;display:flex;flex-direction:column;gap:16px;">
+            <div style="display:flex;align-items:flex-start;gap:14px;"><div style="width:48px;height:48px;border-radius:14px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;flex:none;"><span style="font-family:'Material Symbols Rounded';font-size:25px;line-height:1;">gpp_bad</span></div><div style="flex:1;display:flex;flex-direction:column;gap:4px;"><div style="font-size:18px;font-weight:700;letter-spacing:-0.02em;">O pacote foi descartado</div><div style="font-size:13.5px;color:var(--ink2);line-height:1.45;text-wrap:pretty;">A assinatura não bate com a chave da Lunes. Pode ser arquivo corrompido ou alterado no caminho. Nada foi instalado; você continua na 0.4.2.</div></div></div>
+            <div style="padding:10px 14px;border-radius:14px;background:var(--bg2);font:400 11.5px 'Geist Mono',monospace;color:var(--ink2);line-height:1.6;">origem: nó 7B21 · esperado 4A7C… · recebido 0000…</div>
+            <div style="display:flex;justify-content:flex-end;gap:8px;">
+              <button style="height:40px;padding:0 16px;border:none;border-radius:20px;background:transparent;color:var(--ink);font:550 14px Geist;cursor:pointer;">Fechar</button>
+              <button style="height:40px;padding:0 18px;border:none;border-radius:20px;background:var(--ink);color:var(--invink);font:600 14px Geist;cursor:pointer;">Baixar de outra fonte</button>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">O nó de origem deixa de ser usado para atualizações. Sem fonte por perto, o texto troca para “Nenhuma fonte encontrada” e o botão some.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="g4" style="display:flex;flex-direction:column;gap:24px;">
+    <div style="display:flex;flex-direction:column;gap:4px;border-top:1px solid rgba(0,0,0,.12);padding-top:24px;"><div style="font:500 12px 'Geist Mono',monospace;color:#5f5f5c;letter-spacing:.05em;">04 · CONVERSAS</div><div style="font-size:24px;font-weight:650;letter-spacing:-0.03em;">Detalhe do armazenamento</div><div style="font-size:13.5px;color:#5f5f5c;max-width:760px;line-height:1.45;">Abre clicando na barra de 1,2 GB em Conversas. Separa o que é seu do que é fila da malha (mensagens de outros, cifradas, de passagem).</div></div>
+    <div style="display:flex;flex-wrap:wrap;gap:48px;align-items:flex-start;">
+
+      <div id="d4" data-screen-label="D4 Armazenamento" style="display:flex;flex-direction:column;gap:14px;">
+        <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D4</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Armazenamento</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">PADRÃO</span></div>
+        <div style="width:1280px;height:820px;border-radius:12px;overflow:hidden;background:var(--bg);color:var(--ink);display:flex;flex-direction:column;box-shadow:0 0 0 1px var(--line2),0 40px 80px -30px rgba(0,0,0,.35);">
+          <div style="height:40px;flex:none;display:flex;align-items:center;padding:0 14px;background:var(--side);border-bottom:1px solid var(--line);position:relative;"><div style="display:flex;gap:8px;"><div style="width:12px;height:12px;border-radius:50%;background:#ff5f57;"></div><div style="width:12px;height:12px;border-radius:50%;background:#febc2e;"></div><div style="width:12px;height:12px;border-radius:50%;background:#28c840;"></div></div><div style="position:absolute;left:50%;transform:translateX(-50%);font-size:13px;font-weight:600;color:var(--ink2);">Piu</div></div>
+          <div style="flex:1;min-height:0;display:flex;">
+            <div style="width:68px;flex:none;background:var(--side);border-right:1px solid var(--line);display:flex;flex-direction:column;align-items:center;padding:14px 0 16px;gap:6px;">
+              <img src="brand/icon-192.png" alt="Piu" style="width:36px;height:36px;border-radius:10px;display:block;margin-bottom:12px;">
+              <div style="width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">chat_bubble</span></div>
+              <div style="width:44px;height:44px;border-radius:13px;display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'wght' 350;">account_balance_wallet</span></div>
+              <div style="width:44px;height:44px;border-radius:13px;background:var(--bg3);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;font-variation-settings:'FILL' 1,'wght' 350;">settings</span></div>
+              <div style="flex:1;"></div>
+              <div style="width:40px;height:40px;border-radius:50%;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font:600 13px Geist;">C</div>
+            </div>
+            <div style="width:248px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;padding:18px 12px 14px;gap:14px;">
+              <div style="font-size:24px;font-weight:700;letter-spacing:-0.04em;padding:0 8px;">Ajustes</div>
+              <div style="display:flex;flex-direction:column;gap:2px;">
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">person</span>Perfil</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">shield_lock</span>Privacidade</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">notifications</span>Notificações</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;background:var(--bg2);font:600 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'FILL' 1,'wght' 350;">forum</span>Conversas</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">palette</span>Aparência</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">devices</span>Aparelhos</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">computer</span>Sistema</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">key</span>Backup</div>
+                <div style="display:flex;align-items:center;gap:12px;height:38px;padding:0 10px;border-radius:11px;font:450 14px Geist;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;font-variation-settings:'wght' 350;">keyboard</span>Atalhos</div>
+              </div>
+            </div>
+            <div style="flex:1;min-width:0;overflow:hidden;">
+              <div style="max-width:720px;margin:0 auto;padding:26px 40px 48px;display:flex;flex-direction:column;gap:6px;">
+                <button style="align-self:flex-start;display:flex;align-items:center;gap:2px;height:28px;padding:0 8px 0 2px;margin-left:-4px;border:none;border-radius:8px;background:transparent;color:var(--ink2);font:550 13px Geist;cursor:pointer;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">chevron_left</span>Conversas</button>
+                <div style="font-size:30px;font-weight:700;letter-spacing:-0.04em;">Armazenamento</div>
+                <div style="font-size:14px;color:var(--ink2);line-height:1.45;margin-bottom:12px;max-width:560px;text-wrap:pretty;">Tudo cifrado neste computador. Apagar mídia não apaga a conversa.</div>
+                <div style="padding:18px;border-radius:20px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;">
+                  <div style="display:flex;align-items:baseline;justify-content:space-between;"><div style="display:flex;align-items:baseline;gap:10px;"><div style="font-size:26px;font-weight:700;letter-spacing:-0.03em;">1,2 GB</div><div style="font-size:13px;color:var(--ink2);">usados pelo Piu</div></div><div style="font:500 12px 'Geist Mono',monospace;color:var(--ink2);">18,4 GB livres no disco</div></div>
+                  <div style="height:10px;border-radius:5px;background:var(--bg3);display:flex;overflow:hidden;gap:2px;"><div style="width:62%;background:var(--ink);"></div><div style="width:17%;background:var(--ink2);"></div><div style="width:13%;background:var(--ink3);"></div><div style="width:8%;background:repeating-linear-gradient(45deg,var(--ink3) 0 2px,transparent 2px 5px);"></div></div>
+                  <div style="display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;color:var(--ink2);">
+                    <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:var(--ink);"></div>Fotos e arquivos · 760 MB</div>
+                    <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:var(--ink2);"></div>Mensagens · 210 MB</div>
+                    <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:var(--ink3);"></div>Fila da malha · 160 MB</div>
+                    <div style="display:flex;align-items:center;gap:6px;"><div style="width:8px;height:8px;border-radius:2px;background:repeating-linear-gradient(45deg,var(--ink3) 0 2px,transparent 2px 4px);"></div>Chaves e app · 90 MB</div>
+                  </div>
+                </div>
+                <div style="padding:16px 4px 8px;display:flex;justify-content:space-between;align-items:center;"><span style="font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">POR CONVERSA</span><span style="font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);">maior primeiro</span></div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;"><div style="width:36px;height:36px;border-radius:12px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">VE</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:14px;font-weight:600;">Vila Esperança · bairro</span><span style="font:500 12.5px 'Geist Mono',monospace;">412 MB</span></div><div style="height:4px;border-radius:2px;background:var(--bg3);"><div style="width:100%;height:100%;border-radius:2px;background:var(--ink);"></div></div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--bg);color:var(--ink);font:600 12.5px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Limpar mídia</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-top:1px solid var(--line);"><div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">MC</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:14px;font-weight:600;">Marina Costa</span><span style="font:500 12.5px 'Geist Mono',monospace;">238 MB</span></div><div style="height:4px;border-radius:2px;background:var(--bg3);"><div style="width:58%;height:100%;border-radius:2px;background:var(--ink);"></div></div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--bg);color:var(--ink);font:600 12.5px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Limpar mídia</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-top:1px solid var(--line);"><div style="width:36px;height:36px;border-radius:12px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">AV</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:14px;font-weight:600;">Avisos da Defesa Civil</span><span style="font:500 12.5px 'Geist Mono',monospace;">96 MB</span></div><div style="height:4px;border-radius:2px;background:var(--bg3);"><div style="width:23%;height:100%;border-radius:2px;background:var(--ink);"></div></div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--bg);color:var(--ink);font:600 12.5px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Limpar mídia</button></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:11px 16px;border-top:1px solid var(--line);"><div style="width:36px;height:36px;border-radius:50%;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">LR</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:5px;"><div style="display:flex;justify-content:space-between;"><span style="font-size:14px;font-weight:600;">Lia Ramos</span><span style="font:500 12.5px 'Geist Mono',monospace;">14 MB</span></div><div style="height:4px;border-radius:2px;background:var(--bg3);"><div style="width:4%;height:100%;border-radius:2px;background:var(--ink);"></div></div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--bg);color:var(--ink);font:600 12.5px Geist;cursor:pointer;box-shadow:0 0 0 1px var(--line2) inset;">Limpar mídia</button></div>
+                </div>
+                <div style="padding:16px 4px 8px;font:500 11.5px 'Geist Mono',monospace;letter-spacing:.05em;color:var(--ink2);">LIMITES</div>
+                <div style="border-radius:20px;background:var(--bg2);overflow:hidden;">
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:56px;"><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;">Apagar fotos e arquivos antigos</div></div><div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg3);flex:none;"><div style="height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font:450 12.5px Geist;">30 dias</div><div style="height:30px;padding:0 12px;border-radius:8px;background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.12);display:flex;align-items:center;font:600 12.5px Geist;">90 dias</div><div style="height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font:450 12.5px Geist;">Nunca</div></div></div>
+                  <div style="display:flex;align-items:center;gap:14px;padding:13px 16px;min-height:56px;border-top:1px solid var(--line);"><div style="flex:1;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14.5px;font-weight:550;">Espaço para a fila da malha</div><div style="font-size:12.5px;color:var(--ink2);">Mensagens de outros, guardadas até chegarem</div></div><div style="display:flex;gap:3px;padding:3px;border-radius:11px;background:var(--bg3);flex:none;"><div style="height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font:450 12.5px Geist;">100 MB</div><div style="height:30px;padding:0 12px;border-radius:8px;background:var(--bg);box-shadow:0 1px 3px rgba(0,0,0,.12);display:flex;align-items:center;font:600 12.5px Geist;">250 MB</div><div style="height:30px;padding:0 12px;border-radius:8px;display:flex;align-items:center;font:450 12.5px Geist;">500 MB</div></div></div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="display:flex;flex-direction:column;gap:48px;width:560px;">
+        <div id="d4e" data-screen-label="D4e Disco quase cheio" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D4e</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Disco quase cheio</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">ERRO</span></div>
+          <div style="padding:16px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);display:flex;flex-direction:column;gap:12px;">
+            <div style="padding:16px;border-radius:18px;background:var(--ink);color:var(--invink);display:flex;gap:12px;align-items:flex-start;"><span style="font-family:'Material Symbols Rounded';font-size:21px;line-height:1;font-variation-settings:'FILL' 1;">hard_drive</span><div style="flex:1;display:flex;flex-direction:column;gap:3px;"><div style="font-size:14.5px;font-weight:650;">Só 600 MB livres no disco</div><div style="font-size:12.5px;opacity:.75;line-height:1.4;text-wrap:pretty;">A fila da malha parou de aceitar mensagens de outros. As suas continuam chegando.</div></div><button style="height:32px;padding:0 13px;border:none;border-radius:16px;background:var(--invink);color:var(--ink);font:600 12.5px Geist;cursor:pointer;flex:none;">Limpar 760 MB</button></div>
+            <div style="padding:2px 6px 6px;display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:baseline;justify-content:space-between;"><div style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">1,2 GB</div><div style="font:500 12px 'Geist Mono',monospace;">0,6 GB livres</div></div>
+              <div style="height:10px;border-radius:5px;background:var(--bg3);display:flex;overflow:hidden;gap:2px;"><div style="width:62%;background:var(--ink);"></div><div style="width:17%;background:var(--ink2);"></div><div style="width:13%;background:var(--ink3);"></div><div style="width:8%;background:repeating-linear-gradient(45deg,var(--ink3) 0 2px,transparent 2px 5px);"></div></div>
+            </div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">Abaixo de 1 GB livre, entra no topo de D4 e vira aviso na lista de conversas. “Limpar” mostra o total antes de confirmar.</div>
+        </div>
+        <div id="d4v" data-screen-label="D4v Conversa sem midia" style="display:flex;flex-direction:column;gap:14px;">
+          <div style="display:flex;align-items:center;gap:8px;"><span style="font:600 11px 'Geist Mono',monospace;padding:3px 8px;background:#0c0c0c;color:#fff;border-radius:5px;">D4v</span><span style="font-size:17px;font-weight:650;letter-spacing:-0.02em;">Depois de limpar</span><span style="font:500 10.5px 'Geist Mono',monospace;padding:2px 7px;border-radius:5px;box-shadow:0 0 0 1px rgba(0,0,0,.18) inset;color:#5f5f5c;">VAZIO</span></div>
+          <div style="padding:6px 0;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2);display:flex;flex-direction:column;">
+            <div style="display:flex;align-items:center;gap:14px;padding:12px 16px;"><div style="width:36px;height:36px;border-radius:12px;background:var(--bg3);display:flex;align-items:center;justify-content:center;font:600 12.5px Geist;flex:none;">VE</div><div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;"><div style="font-size:14px;font-weight:600;">Vila Esperança · bairro</div><div style="font-size:12.5px;color:var(--ink2);">Só mensagens · 3,1 MB · 409 MB liberados</div></div><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">check</span></div>
+          </div>
+          <div style="font-size:13px;color:#5f5f5c;line-height:1.45;text-wrap:pretty;">A linha fica, sem barra e sem botão. Um toast confirma “409 MB liberados”.</div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+</x-dc>
+</body>
+</html>

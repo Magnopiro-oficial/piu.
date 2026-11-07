@@ -1,6 +1,6 @@
 /* Extraído de design/PiuProviderDesktop.dc.html — keyframes exatos + usos encontrados no arquivo. */
 
-/* ---- estilos globais do <helmet> (variáveis, resets, reduced-motion) ---- */
+/* ---- estilos globais do <helmet> ---- */
 *{box-sizing:border-box}input{font-family:inherit}input::placeholder{color:var(--ink3)}a{color:inherit}a:hover{opacity:.7}
 [data-piu-theme="light"]{--bg:#ffffff;--bg2:#f3f3f1;--bg3:#e6e6e3;--side:#f8f8f6;--ink:#0c0c0c;--ink2:#5f5f5c;--ink3:#9b9b97;--invink:#ffffff;--line:rgba(0,0,0,.07);--line2:rgba(0,0,0,.16);--knob:#ffffff;--scrim:rgba(0,0,0,.28)}
 [data-piu-theme="dark"]{--bg:#0a0a0a;--bg2:#161616;--bg3:#262626;--side:#0e0e0e;--ink:#f4f4f2;--ink2:#a2a29e;--ink3:#6c6c69;--invink:#0a0a0a;--line:rgba(255,255,255,.08);--line2:rgba(255,255,255,.18);--knob:#8c8c88;--scrim:rgba(0,0,0,.62)}
@@ -49,3 +49,4 @@
 
 @keyframes piuToast{from{transform:translateY(24px) scale(.96);opacity:0}to{transform:none;opacity:1}}
 /* usos: piuToast .4s cubic-bezier(.2,.9,.3,1.15) both */
+

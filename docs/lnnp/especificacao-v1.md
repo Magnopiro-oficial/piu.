@@ -200,6 +200,7 @@ contador u32 · XChaCha20-Poly1305(chave do sentido, nonce = prefixo (20) ‖ co
 | `0x41` | `REVOCATION_LIST` | lista de revogação assinada pelo operador (seção 8.1) |
 | `0x42` | `DEVICE_POLICY` | pausa e regras de um equipamento, assinadas pelo operador (seção 8.2) |
 | `0x43` | `DEVICE_REPORT` | resumo das estatísticas de um nó, assinado por ele (seção 8.2) |
+| `0x50` | `NODE_HINT` | nome curto do nó no app do celular (`piu-` + 6 hex, UTF-8, até 16 bytes), mandado uma vez depois do handshake. Só serve para o celular juntar no mesmo vizinho o enlace da rede local e o do Bluetooth/Nearby (o nome não é identidade). Só o primeiro vale; nós que não o conhecem ignoram (regra do tipo desconhecido). `apps/mobile/src/transport/lan/engine.ts` |
 
 ### 8.1 Extensão de operador: certificado, rotação e revogação
 
