@@ -2,10 +2,10 @@
 # conferido pelo SHA-256 do SHA256SUMS.txt. Nova versão: troque url e sha256 e acrescente <release> no metainfo.
 app-id: io.github.Magnopiro_oficial.Piu
 runtime: org.freedesktop.Platform
-runtime-version: '24.08'
+runtime-version: '26.08'
 sdk: org.freedesktop.Sdk
 base: org.electronjs.Electron2.BaseApp
-base-version: '24.08'
+base-version: '26.08'
 command: piu
 separate-locales: false
 finish-args:
