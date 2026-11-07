@@ -35,6 +35,9 @@
 @keyframes piuRingL{from{transform:scale(.6);opacity:.5}to{transform:scale(3.2);opacity:0}}
 @keyframes piuSpin{to{transform:rotate(360deg)}}
 @keyframes piuSpinR{to{transform:rotate(-360deg)}}
+/* Telas novas do Desktop (Piu 10 Desktop telas novas.dc.html): senha errada no bloqueio (D1e). */
+/* Piu 12: erros chacoalham uma vez (0,45 s), ±6 px. */
+@keyframes piuShake{0%,100%{transform:translateX(0)}20%,60%{transform:translateX(-6px)}40%,80%{transform:translateX(6px)}}
 @keyframes piuQr{from{transform:scale(0);opacity:0}to{transform:none;opacity:1}}
 @keyframes piuScan{0%{top:0%;opacity:0}10%{opacity:1}90%{opacity:1}100%{top:100%;opacity:0}}
 @keyframes piuTravelY{from{top:-3px}to{top:calc(100% - 3px)}}
@@ -57,7 +60,11 @@ input,textarea,.sel{user-select:text}
 button{letter-spacing:inherit}
 .ms{font-family:'Material Symbols Rounded';line-height:1;font-weight:normal;font-style:normal;display:inline-block;white-space:nowrap;direction:ltr;-webkit-font-feature-settings:'liga';font-feature-settings:'liga';font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24}
 .drag{-webkit-app-region:drag}.nodrag{-webkit-app-region:no-drag}
-::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}::-webkit-scrollbar-track{background:transparent}
+/* Rolagem discreta (design): barra fina sem trilho, polegar translúcido que só aparece com o mouse sobre a área.
+   Nada de `scrollbar-width` nos elementos: no Chromium ele desliga o ::-webkit-scrollbar e volta a barra cinza grossa. */
+::-webkit-scrollbar{width:6px;height:6px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-corner{background:transparent}
+::-webkit-scrollbar-thumb{background:transparent;border-radius:3px}
+*:hover::-webkit-scrollbar-thumb{background:rgba(127,127,127,.35)}*::-webkit-scrollbar-thumb:hover{background:rgba(127,127,127,.55)}
 
 /* style-hover / style-active do protótipo, como classes. */
 .h-bg2:hover{background:var(--bg2)!important}
@@ -80,3 +87,14 @@ button{letter-spacing:inherit}
 .h-flip:hover{transform:rotateY(180deg)!important}
 .f-ring:focus{box-shadow:0 0 0 2px var(--ink)!important}
 input:focus{outline:none}
+/* Carteira → Enviar → "Outro": o endereço digitado é Geist Mono 11px (cabe inteiro), mas o texto de ajuda segue a fonte do painel. */
+.addr-in::placeholder{font:500 13px var(--f);letter-spacing:-0.005em}
+
+/* Cartaz do ponto (E5f): só ele sai no papel, em A4 retrato. */
+@media print{
+  @page{size:A4 portrait;margin:12mm}
+  body *{visibility:hidden!important}
+  .piu-poster,.piu-poster *{visibility:visible!important}
+  .piu-poster{position:fixed!important;left:0;top:0;width:100%!important;box-shadow:none!important;border-radius:0!important}
+  .no-print{display:none!important}
+}

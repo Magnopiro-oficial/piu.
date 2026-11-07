@@ -31,7 +31,7 @@ npm ci
 npm run dev        # compila main/preload (esbuild) + renderer (Vite) e abre o Electron
 npm test           # node:test (lógica pura, transporte LAN, interop com piu-node real)
 npm run build      # só compila
-npm run dist:mac   # .dmg/.zip da arquitetura atual (sem assinatura)
+npm run dist:mac   # .dmg/.zip da arquitetura atual (ad-hoc; Developer ID se houver certificado)
 npm run dist:mac -- --x64 --arm64 # ambas as arquiteturas do Mac
 npm run dist:linux # AppImage e .deb
 npm run dist:win   # instalador NSIS x64
@@ -74,3 +74,7 @@ O workflow existente `release-desktop.yml` gera macOS x64/arm64, Linux x64 e Win
 `release-electron.yml`. Pode ser executado manualmente com uma versão para guardar apenas os artefatos;
 a tag `desktop-v<versão>` gera um release em rascunho. Os nomes incluem SO e arquitetura.
 A arquitetura é escolhida pelo job, sem empacotar as duas versões do Mac em cada runner.
+
+Assinatura de código: hoje ad-hoc no macOS e sem assinatura no Windows. Liga sozinha quando os
+certificados estiverem no ambiente/secrets (`electron-builder.signing.cjs`); ver
+[docs/distribuicao/assinatura.md](../../docs/distribuicao/assinatura.md).

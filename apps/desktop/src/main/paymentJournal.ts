@@ -8,6 +8,7 @@ import { closeSync, fsyncSync, mkdirSync, openSync, readFileSync, renameSync, rm
 import { dirname } from 'node:path';
 import { parseLunesAmount } from '../../../mobile/src/lib/paymentRequest';
 import { decodeSs58 } from '../../../mobile/src/lib/ss58';
+import { tm } from './i18n';
 
 import type { DesktopPayment, DesktopPaymentState, DesktopPaymentStatus, IncomingPaymentStatus, PaymentRequestInput, PaymentStatusMessage } from '../shared/paymentTypes';
 const MAGIC = Buffer.from('PIUPAY1');
@@ -21,16 +22,16 @@ export const paymentActive = (p: DesktopPayment) => !terminal.includes(p.status)
 /** Destino e conta de origem são endereços reais; quantia sempre fica em texto, sem arredondar float. */
 export function validatePaymentInput(from: string | null, dest: unknown, amount: unknown): { expectedFrom: string; dest: string; amount: string } {
   const origin = typeof from === 'string' ? from.trim() : '';
-  if (!decodeSs58(origin).ok) throw new Error('Selecione antes o endereço Lunes que o celular usará para enviar.');
-  if (typeof dest !== 'string' || dest.length > 60 || !decodeSs58(dest.trim()).ok) throw new Error('Endereço de destino Lunes inválido.');
-  if (typeof amount !== 'string' || amount.length > 40) throw new Error('Informe um valor positivo com até 8 casas decimais.');
+  if (!decodeSs58(origin).ok) throw new Error(tm('main.pay.originFirst'));
+  if (typeof dest !== 'string' || dest.length > 60 || !decodeSs58(dest.trim()).ok) throw new Error(tm('main.pay.badDest'));
+  if (typeof amount !== 'string' || amount.length > 40) throw new Error(tm('main.pay.badAmount'));
   const planck = parseLunesAmount(amount.trim());
-  if (planck === null) throw new Error('Informe um valor positivo com até 8 casas decimais.');
+  if (planck === null) throw new Error(tm('main.pay.badAmount'));
   const units = planck / 100_000_000n;
   const fraction = (planck % 100_000_000n).toString().padStart(8, '0').replace(/0+$/, '');
   const canonicalAmount = fraction ? `${units},${fraction}` : String(units);
   const d = decodeSs58(dest.trim()), f = decodeSs58(origin);
-  if (d.ok && f.ok && d.publicKey.every((b, i) => b === f.publicKey[i])) throw new Error('O destino é a própria carteira.');
+  if (d.ok && f.ok && d.publicKey.every((b, i) => b === f.publicKey[i])) throw new Error(tm('main.pay.selfDest'));
   return { expectedFrom: origin, dest: dest.trim(), amount: canonicalAmount };
 }
 
@@ -63,16 +64,16 @@ export function parsePaymentStatus(x: unknown): PaymentStatusMessage | null {
 /** Só a resposta do pedido atual pode mudar o diário; estado terminal não regride. */
 export function applyPaymentStatus(p: DesktopPayment, m: PaymentStatusMessage, now: number): DesktopPayment {
   if (p.id !== m.id || !paymentActive(p)) return p;
-  if (p.hash && m.hash && p.hash.toLowerCase() !== m.hash.toLowerCase()) return { ...p, status: 'unknown', error: 'O celular informou um hash diferente. Confira o histórico no celular.', updatedAt: Math.max(p.updatedAt, now) };
+  if (p.hash && m.hash && p.hash.toLowerCase() !== m.hash.toLowerCase()) return { ...p, status: 'unknown', error: tm('main.pay.hashMismatch'), updatedAt: Math.max(p.updatedAt, now) };
   // Cancelar só é conclusivo antes de haver qualquer hash. Um aviso tardio é ambíguo.
-  if (m.status === 'cancelled' && p.hash) return { ...p, status: 'unknown', error: 'O pedido já tem hash. Confira o histórico no celular.', updatedAt: Math.max(p.updatedAt, now) };
+  if (m.status === 'cancelled' && p.hash) return { ...p, status: 'unknown', error: tm('main.pay.alreadyHash'), updatedAt: Math.max(p.updatedAt, now) };
   const status = m.status === 'error' ? 'unknown' : m.status;
   const hash = m.hash ?? p.hash;
   return { ...p, status, ...(hash ? { hash } : {}), ...(m.error ? { error: m.error } : { error: undefined }), updatedAt: Math.max(p.updatedAt, now) };
 }
 
 export class PaymentJournal {
-  private current: DesktopPaymentState = { state: 'blocked', reason: 'Não foi possível verificar o registro local de pagamentos.' };
+  private current: DesktopPaymentState = { state: 'blocked', reason: tm('main.pay.cantVerify') };
   constructor(private file: string, private key: Buffer) {
     if (key.length !== 32) throw new Error('Chave do diário inválida.');
     mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
@@ -93,10 +94,10 @@ export class PaymentJournal {
       const p = JSON.parse(plain.toString('utf8'));
       if (!isDesktopPayment(p)) throw new Error('Registro inválido.');
       this.current = { state: 'payment', payment: p };
-    } catch { this.current = { state: 'blocked', reason: 'Registro de pagamento ilegível. Confira o histórico no celular antes de fazer outro envio.' }; }
+    } catch { this.current = { state: 'blocked', reason: tm('main.pay.unreadable') }; }
   }
   private write(p: DesktopPayment) {
-    if (!isDesktopPayment(p)) throw new Error('Registro de pagamento inválido.');
+    if (!isDesktopPayment(p)) throw new Error(tm('main.pay.invalidRecord'));
     const iv = randomBytes(12), cipher = createCipheriv('aes-256-gcm', this.key, iv); cipher.setAAD(MAGIC);
     const ct = Buffer.concat([cipher.update(JSON.stringify(p), 'utf8'), cipher.final()]);
     const bytes = Buffer.concat([MAGIC, iv, ct, cipher.getAuthTag()]);
@@ -107,7 +108,7 @@ export class PaymentJournal {
       renameSync(temp, this.file);
     } catch (e) {
       try { rmSync(temp, { force: true }); } catch { /* mantém diário anterior */ }
-      this.current = { state: 'blocked', reason: 'Não foi possível guardar o acompanhamento. Confira o celular antes de outro envio.' };
+      this.current = { state: 'blocked', reason: tm('main.pay.cantSave') };
       throw e;
     }
     this.current = { state: 'payment', payment: p };
@@ -115,7 +116,7 @@ export class PaymentJournal {
   /** Exige persistência antes do frame sair. */
   create(from: string | null, input: PaymentRequestInput, now = Date.now()): DesktopPayment {
     if (this.current.state === 'blocked') throw new Error(this.current.reason);
-    if (this.current.state === 'payment' && paymentActive(this.current.payment)) throw new Error('Há um pagamento pendente. Confira o histórico no celular antes de outro envio.');
+    if (this.current.state === 'payment' && paymentActive(this.current.payment)) throw new Error(tm('main.pay.pending'));
     const fields = validatePaymentInput(from, input.dest, input.amount);
     const p: DesktopPayment = { id: randomUUID(), ...fields, status: 'waiting', createdAt: now, updatedAt: now };
     this.write(p); return { ...p };
@@ -129,7 +130,7 @@ export class PaymentJournal {
   }
   disconnected(now = Date.now()): DesktopPayment | null {
     if (this.current.state !== 'payment' || !paymentActive(this.current.payment)) return null;
-    const p = { ...this.current.payment, status: 'unknown' as const, error: 'Conexão interrompida. Confira o histórico no celular; não repita o pagamento.', updatedAt: Math.max(this.current.payment.updatedAt, now) };
+    const p = { ...this.current.payment, status: 'unknown' as const, error: tm('main.pay.interrupted'), updatedAt: Math.max(this.current.payment.updatedAt, now) };
     this.write(p); return { ...p };
   }
 }

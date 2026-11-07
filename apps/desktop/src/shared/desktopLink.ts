@@ -6,8 +6,9 @@
  * desktop (ContactInfo/Message/ConversationsState).
  */
 import {
-  encodeLinkQr, type LinkChat, type LinkEvent, type LinkMsg, type PhoneMessage, type Snapshot,
+  encodeLinkQr, type LinkChat, type LinkEvent, type LinkMsg, MAX_TEXT, type PhoneMessage, type Snapshot,
 } from '../../../mobile/src/lib/desktopLink';
+import { decodeSs58 } from '../../../mobile/src/lib/ss58';
 import { agree, random } from '../../../mobile/src/protocol/suite';
 import { type ConversationsState, emptyState, markRead } from './conversations';
 import type { ContactInfo, Message, MessageStatus } from './types';
@@ -42,29 +43,60 @@ export const CLOSE_BAD_VERSION = 4002;
 // ── modelo do celular → modelo do desktop ───────────────────────
 const STATUS: Record<string, MessageStatus> = { criada: 'criada', aguardando: 'aguardando', encaminhada: 'encaminhada', entregue: 'entregue', expirada: 'expirada' };
 
+/**
+ * Tetos do espelho (B-04): o celular legítimo fica bem abaixo; o resto é descartado (mensagens: ficam
+ * as mais novas). Os dados vêm de outro aparelho: tipo e tamanho são conferidos antes de virar estado.
+ */
+export const MAX_LINK_CHATS = 2000;
+export const MAX_LINK_MESSAGES = 1000;
+const MAX_LINK_ID = 64;
+const MAX_NAME = 200;
+
+/** Texto do celular: só string, cortada no tamanho combinado; o resto vira vazio. */
+const str = (x: unknown, max: number) => (typeof x === 'string' ? x.slice(0, max) : '');
+/** Id usado como chave de objeto: string curta e nunca um nome do `Object.prototype` (`constructor`, `__proto__`…). */
+export const safeLinkId = (x: unknown): string | null =>
+  typeof x === 'string' && x.length > 0 && x.length <= MAX_LINK_ID && !(x in Object.prototype) && x !== '__proto__' ? x : null;
+
 export const contactFromChat = (c: LinkChat): ContactInfo => {
   const kind: NonNullable<ContactInfo['kind']> = ['direct', 'group', 'channel', 'community'].includes(c.kind) ? c.kind : 'unknown';
-  return { id: c.id, name: c.name, via: c.ident === 'anon' ? 'anon' : 'public', request: !!c.request, kind,
-    ...(kind !== 'direct' ? { canPost: c.owner === true } : {}), ...(c.sub ? { subtitle: c.sub } : {}) };
+  const lunes = kind === 'direct' ? walletFromLink(c.lunes) : null;
+  const sub = str(c.sub, MAX_NAME);
+  return { id: c.id, name: str(c.name, MAX_NAME), via: c.ident === 'anon' ? 'anon' : 'public', request: c.request === true, kind,
+    ...(kind !== 'direct' ? { canPost: c.owner === true } : {}), ...(sub ? { subtitle: sub } : {}), ...(lunes ? { lunesAddress: lunes } : {}) };
 };
+/** Conversa do celular com id válido (senão `null`: fica de fora). */
+const chatFromLink = (c: unknown): ContactInfo | null => (c && typeof c === 'object' && safeLinkId((c as LinkChat).id) ? contactFromChat(c as LinkChat) : null);
 
-/** `at` do celular é em ms; `time` é só o texto. Mensagens do sistema (`sys`) não entram na lista. */
+/** `at` do celular é em ms; `time` é só o texto. Mensagens do sistema (`sys`) e sem id válido não entram na lista. */
 export function messageFromLink(chatId: string, m: LinkMsg, nowSec: number): Message | null {
-  if (m.from === 'sys') return null;
+  if (!m || typeof m !== 'object' || m.from === 'sys') return null;
+  const id = safeLinkId(m.id);
+  if (!id) return null;
   const dir = m.from === 'me' ? 'out' : 'in';
+  const sender = str(m.sender, MAX_NAME);
   return {
-    id: m.id, contactId: chatId, dir, text: m.text, at: m.at ? Math.floor(m.at / 1000) : nowSec,
-    status: dir === 'in' ? 'recebida' : STATUS[m.status ?? ''] ?? 'entregue',
-    ...(m.sender ? { sender: m.sender } : {}),
+    id, contactId: chatId, dir, text: str(m.text, MAX_TEXT), at: typeof m.at === 'number' && Number.isFinite(m.at) && m.at > 0 ? Math.floor(m.at / 1000) : nowSec,
+    status: dir === 'in' ? 'recebida' : STATUS[typeof m.status === 'string' ? m.status : ''] ?? 'entregue',
+    ...(sender ? { sender } : {}),
   };
 }
 
 /** Snapshot do celular vira contatos + conversas (tudo já visto no celular conta como lido). */
 export function stateFromSnapshot(s: Snapshot, nowSec: number): { contacts: ContactInfo[]; conv: ConversationsState } {
-  const contacts = s.chats.map(contactFromChat);
+  const contacts: ContactInfo[] = [];
+  const seen = new Set<string>();
+  for (const c of Array.isArray(s?.chats) ? s.chats : []) {
+    if (contacts.length >= MAX_LINK_CHATS) break;
+    const x = chatFromLink(c);
+    if (x && !seen.has(x.id)) { seen.add(x.id); contacts.push(x); }
+  }
   let conv = emptyState();
-  for (const [chatId, list] of Object.entries(s.messages)) {
-    const msgs = list.map(m => messageFromLink(chatId, m, nowSec)).filter((m): m is Message => !!m);
+  const messages = s?.messages && typeof s.messages === 'object' && !Array.isArray(s.messages) ? s.messages : {};
+  for (const [rawId, list] of Object.entries(messages)) {
+    const chatId = safeLinkId(rawId);
+    if (!chatId || !Array.isArray(list)) continue;
+    const msgs = list.slice(-MAX_LINK_MESSAGES).map(m => messageFromLink(chatId, m, nowSec)).filter((m): m is Message => !!m);
     conv = { ...conv, byContact: { ...conv.byContact, [chatId]: msgs } };
     conv = markRead(conv, chatId);
   }
@@ -73,6 +105,9 @@ export function stateFromSnapshot(s: Snapshot, nowSec: number): { contacts: Cont
 
 /** Aplica um `event` do celular. Devolve o novo estado e a mensagem tocada (para o renderer). */
 export function applyLinkEvent(contacts: ContactInfo[], conv: ConversationsState, e: LinkEvent, nowSec: number): { contacts: ContactInfo[]; conv: ConversationsState; touched: Message | null } {
+  const same = { contacts, conv, touched: null };
+  // Evento com conversa de id inválido (ou nome do protótipo): ignorado inteiro.
+  if (e.k !== 'chat' && !safeLinkId((e as { chatId?: unknown }).chatId)) return same;
   switch (e.k) {
     case 'message': {
       const m = messageFromLink(e.chatId, e.msg, nowSec);
@@ -81,7 +116,7 @@ export function applyLinkEvent(contacts: ContactInfo[], conv: ConversationsState
       // O que o desktop pediu para enviar chega de volta como mensagem do celular (`from:'me'`):
       // a cópia local provisória (mesmo texto, ainda sem id do celular) sai da lista.
       const without = list.filter(x => x.id !== m.id && !(m.dir === 'out' && x.dir === 'out' && x.id.startsWith('d') && x.text === m.text && (x.status === 'aguardando' || x.status === 'encaminhada')));
-      return { contacts, conv: { ...conv, byContact: { ...conv.byContact, [e.chatId]: [...without, m] } }, touched: m };
+      return { contacts, conv: { ...conv, byContact: { ...conv.byContact, [e.chatId]: [...without, m].slice(-MAX_LINK_MESSAGES) } }, touched: m };
     }
     case 'status': {
       const list = conv.byContact[e.chatId] ?? [];
@@ -96,8 +131,11 @@ export function applyLinkEvent(contacts: ContactInfo[], conv: ConversationsState
       return { contacts, conv: { ...conv, byContact: { ...conv.byContact, [e.chatId]: list } }, touched: null };
     }
     case 'chat': {
-      const c = contactFromChat(e.chat);
-      const next = contacts.some(x => x.id === c.id) ? contacts.map(x => (x.id === c.id ? c : x)) : [...contacts, c];
+      const c = chatFromLink(e.chat);
+      if (!c) return same;
+      const exists = contacts.some(x => x.id === c.id);
+      if (!exists && contacts.length >= MAX_LINK_CHATS) return same;
+      const next = exists ? contacts.map(x => (x.id === c.id ? c : x)) : [...contacts, c];
       return { contacts: next, conv, touched: null };
     }
     case 'chatRemoved': {
@@ -107,6 +145,16 @@ export function applyLinkEvent(contacts: ContactInfo[], conv: ConversationsState
     }
     default: return { contacts, conv, touched: null }; // typing e tipos futuros
   }
+}
+
+/**
+ * Endereço Lunes vindo do espelho do vínculo (`Snapshot.wallet`, `LinkChat.lunes`, `LinkContact.lunes`):
+ * nunca confie no outro lado — só um SS58 válido (prefixo 57 ou 42) entra; qualquer outra coisa vira `null`.
+ */
+export function walletFromLink(x: unknown): string | null {
+  if (typeof x !== 'string' || x.length > 64) return null;
+  const t = x.trim();
+  return t && decodeSs58(t).ok ? t : null;
 }
 
 /** Mensagem do celular já aberta: só o que o desktop entende; o resto é ignorado (compatibilidade). */

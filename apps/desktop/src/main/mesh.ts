@@ -6,12 +6,17 @@
 import { canPost, type GroupState } from '../../../mobile/src/messaging/groups';
 import { decodeCard, encodeCard } from '../../../mobile/src/messaging/card';
 import { type Contact, type IncomingText, Messenger, type MessengerEvents, type RouteInfo } from '../../../mobile/src/messaging/messenger';
+import type { AlertNotice, AlertView } from '../../../mobile/src/messaging/communityAlerts';
 import { toHex } from '../../../mobile/src/protocol/bytes';
 import type { IdentityKind } from '../../../mobile/src/protocol/keys';
 import { safetyNumber } from '../../../mobile/src/protocol/safety';
+import { CarryGateway } from '../../../mobile/src/lib/carryGateway';
+import { bundlePoster } from '../../../mobile/src/lib/carryConfig';
+import { finalizedHead, LunesRpc } from '../../../mobile/src/lib/lunesRpc';
 import type { ContactInfo, Route } from '../shared/types';
 import type { Transport, TransportEvent } from '../transport/types';
 import type { DerivedKeys } from './identity';
+import { tm } from './i18n';
 
 export interface MeshEvents {
   /** Texto de um contato (novo ou conhecido). `isNew`: apareceu como pedido de conversa. */
@@ -22,8 +27,19 @@ export interface MeshEvents {
   groupMessage(contact: ContactInfo, m: IncomingText, sender: string): void;
   /** Algo no estado do Messenger mudou (salvar). */
   changed(): void;
+  /** Um contato público aceito compartilhou (`address`) ou retirou (`null`) o endereço Lunes dele. */
+  peerWallet(contactId: string, address: string | null): void;
   /** Vizinhos/enlaces mudaram. */
   peers(): void;
+  /** O contato está digitando (sinal efêmero `ty`; só de contato aceito). */
+  typing(contactId: string): void;
+  /**
+   * Alerta da comunidade novo ou mudado (mensageiro do celular, `communityAlert`). `contactId`: a conversa da
+   * comunidade (`group:<id>`), para conferir se está silenciada. `notice`: o que merece aviso (`noticeFor`).
+   */
+  communityAlert(a: { id: string; contactId: string; sev: AlertView['sev']; cat: AlertView['cat']; title: string; area: string; communityName: string }, notice: AlertNotice | null): void;
+  /** O contato leu estas mensagens minhas (recibo `r`, só se o ajuste dele estiver ligado). */
+  read(contactId: string, msgIds: string[]): void;
 }
 
 export interface MeshOptions {
@@ -36,11 +52,21 @@ export interface MeshOptions {
   events: Partial<MeshEvents>;
   now?: () => number;
   log?: (msg: string) => void;
+  /** Privacidade → Metadados (lidos a cada envio, como no celular): atraso aleatório e preenchimento. */
+  randomDelay?: () => boolean;
+  pad?: () => boolean;
+  /**
+   * Computador como gateway da carga pela malha (docs/carteira/transacoes-pela-malha.md), opcional: com
+   * rota até a Lunes, envia as transações assinadas que chegam e devolve o recibo. Ausente: desligado.
+   * `inboxUrl`: caixa HTTPS do validador para os pacotes (padrão: nenhuma).
+   */
+  gateway?: { rpc?: () => LunesRpc; inboxUrl?: string | null; probeMs?: number; tickMs?: number } | null;
 }
 
 const toRoute = (r?: RouteInfo): Route | undefined => (r ? { peer: r.peer, via: r.via, bytes: r.bytes, hops: r.hops, priority: r.priority } : undefined);
 
-export const toContactInfo = (c: Contact): ContactInfo => ({ id: c.id, name: c.name, via: c.via, request: !!c.request });
+/** `lunes` (endereço que o contato compartilhou por `wa`, já conferido pelo Messenger) vira `lunesAddress`. */
+export const toContactInfo = (c: Contact): ContactInfo => ({ id: c.id, name: c.name, via: c.via, request: !!c.request, ...(c.lunes ? { lunesAddress: c.lunes } : {}) });
 
 export class MeshNode {
   readonly messenger: Messenger;
@@ -57,6 +83,11 @@ export class MeshNode {
       groupUpdated: (g, change) => o.events.groupChanged?.(this.groupInfo(g), change),
       groupMessage: (id, _from, sender, m) => { const g = this.messenger.getGroup(id); if (g) o.events.groupMessage?.(this.groupInfo(g), m, sender); },
       changed: () => o.events.changed?.(),
+      peerWallet: (contactId, address) => o.events.peerWallet?.(contactId, address),
+      typing: contactId => o.events.typing?.(contactId),
+      read: (contactId, msgIds) => o.events.read?.(contactId, msgIds),
+      communityAlert: (v, notice) => o.events.communityAlert?.({ id: v.id, contactId: `group:${v.community}`, sev: v.sev, cat: v.cat, title: v.title, area: v.area ?? '', communityName: v.communityName }, notice),
+      gatewayCarry: c => { void this.carryGateway?.handle(c).then(r => o.log?.(`gateway: carga ${c.id.slice(0, 8)}… → ${r}`)); },
     };
     this.messenger = new Messenger({
       identities: o.keys.identities,
@@ -66,9 +97,29 @@ export class MeshNode {
       transmit: (peerId, bytes) => this.transmit(peerId, bytes),
       events,
       state: o.state ?? undefined,
+      randomDelay: o.randomDelay,
+      pad: o.pad,
     });
     this.messenger.displayName = o.displayName;
+    if (o.gateway) {
+      const g = o.gateway, rpc = g.rpc ?? (() => new LunesRpc());
+      const post = bundlePoster(g.inboxUrl ?? null);
+      this.carryGateway = new CarryGateway({ rpc, now, postBundle: post, log: o.log, reply: (to, rc) => this.messenger.sendCarryReceipt(to, rc) });
+      this.gatewayProbe = async () => {
+        const c = rpc();
+        try { await finalizedHead(c); this.messenger.setGateway({ tx: true, inbox: !!post }); return true; }
+        catch { this.messenger.setGateway({}); return false; }
+        finally { c.close(); }
+      };
+    }
   }
+
+  private carryGateway: CarryGateway | null = null;
+  private gatewayProbe: (() => Promise<boolean>) | null = null;
+  private gatewayTimers: NodeJS.Timeout[] = [];
+  /** Gateway agora (com rota até a Lunes)? Também sonda de novo. `false` sem a opção. */
+  async probeGateway() { return this.gatewayProbe ? this.gatewayProbe() : false; }
+  get gatewayStats() { return this.carryGateway ? { ...this.carryGateway.counters, roles: this.messenger.gateway } : null; }
 
   get nodePk() { return toHex(this.o.keys.node.pk); }
   get ids() { return { publicId: this.o.keys.identities.public.id, anonId: this.o.keys.identities.anon.id }; }
@@ -81,10 +132,18 @@ export class MeshNode {
     }
     this.timer = setInterval(() => { try { this.messenger.tick(); } catch (e) { this.o.log?.(`mesh: tick falhou (${(e as Error).message})`); } }, tickMs);
     this.timer.unref();
+    if (this.carryGateway && this.gatewayProbe) {
+      const gw = this.carryGateway, probe = this.gatewayProbe;
+      void probe();
+      this.gatewayTimers = [setInterval(() => { void probe(); }, this.o.gateway?.probeMs ?? 60_000), setInterval(() => { void gw.tick(); }, this.o.gateway?.tickMs ?? 15_000)];
+      for (const t of this.gatewayTimers) t.unref();
+    }
   }
 
   async stop() {
     if (this.timer) clearInterval(this.timer);
+    for (const t of this.gatewayTimers.splice(0)) clearInterval(t);
+    this.messenger.setGateway({});
     for (const u of this.unsubs.splice(0)) u();
     await Promise.all(this.o.transports.map(t => t.stop()));
     this.messenger.clearPeers();
@@ -110,7 +169,7 @@ export class MeshNode {
       if (t.state !== 'running') continue;
       try { await t.send(peerId, bytes); return; } catch (e) { lastErr = e as Error; }
     }
-    throw lastErr ?? new Error('Nenhum transporte ligado.');
+    throw lastErr ?? new Error(tm('main.mesh.noTransport'));
   }
 
   set relay(v: boolean) { this.messenger.relay = v; }
@@ -140,7 +199,7 @@ export class MeshNode {
   listGroups(): ContactInfo[] { return this.messenger.listGroups().map(g => this.groupInfo(g)); }
 
   createGroup(options: Parameters<Messenger['createGroup']>[0]): ContactInfo {
-    if (!options.name.trim()) throw new Error('O nome não pode ficar vazio.');
+    if (!options.name.trim()) throw new Error(tm('main.mesh.emptyName'));
     const group = this.messenger.createGroup(options);
     const contact = this.groupInfo(group);
     this.o.events.groupChanged?.(contact, 'joined');
@@ -157,8 +216,15 @@ export class MeshNode {
   removeGroupMember(id: string, memberId: string) { const g = this.messenger.removeMember(this.groupId(id), memberId); this.o.events.groupChanged?.(this.groupInfo(g), 'updated'); this.messenger.tick(); }
   setGroupRole(id: string, memberId: string, role: 'admin' | 'mod' | 'member') { const g = this.messenger.setRole(this.groupId(id), memberId, role); this.o.events.groupChanged?.(this.groupInfo(g), 'updated'); this.messenger.tick(); }
   leaveGroup(id: string) { const gid = this.groupId(id); const g = this.messenger.getGroup(gid); this.messenger.leaveGroup(gid); if (g) this.o.events.groupChanged?.(this.groupInfo(g), 'removed'); this.messenger.tick(); }
+  /** Ids dos membros de um grupo meu (para não convidar quem já está). Grupo desconhecido: erro. */
+  groupMemberIds(id: string): string[] {
+    const g = this.messenger.getGroup(this.groupId(id));
+    if (!g) throw new Error(tm('main.mesh.unknownGroup'));
+    return g.members.map(m => m.id);
+  }
+
   private groupId(id: string): string {
-    if (!/^group:[0-9a-f]{32}$/.test(id)) throw new Error('Grupo desconhecido.');
+    if (!/^group:[0-9a-f]{32}$/.test(id)) throw new Error(tm('main.mesh.unknownGroup'));
     return id.slice(6);
   }
 
@@ -168,21 +234,24 @@ export class MeshNode {
   /** Código de segurança 12 × 5 entre mim (identidade usada com ele) e o contato. */
   safetyCode(contactId: string): string[] {
     const c = this.messenger.getContact(contactId);
-    if (!c) throw new Error('Contato desconhecido.');
+    if (!c) throw new Error(tm('main.mesh.unknownContact'));
     return safetyNumber(this.o.keys.identities[c.via], c.pub);
   }
 
   /** Id novo de mensagem (quem chama pode registrar a mensagem ANTES de enfileirar, para não perder o primeiro estado). */
   newMessageId(): string { return `${Date.now().toString(36)}-${(++this.seq).toString(36)}-${Math.random().toString(36).slice(2, 8)}`; }
 
-  /** Cifra e enfileira; devolve o id da mensagem (estados chegam por `events.status`, já durante esta chamada). */
-  sendText(contactId: string, text: string, msgId = this.newMessageId()): string {
+  /**
+   * Cifra e enfileira; devolve o id da mensagem (estados chegam por `events.status`, já durante esta chamada).
+   * `expireSec`: mensagem temporária (só conversa direta; campo `e` do celular, some nos dois lados).
+   */
+  sendText(contactId: string, text: string, msgId = this.newMessageId(), expireSec?: number): string {
     if (contactId.startsWith('group:')) {
       this.messenger.sendGroupText(this.groupId(contactId), msgId, text);
       this.messenger.tick();
       return msgId;
     }
-    this.messenger.sendText(contactId, msgId, text);
+    this.messenger.sendText(contactId, msgId, text, expireSec);
     // Responder a um pedido de conversa o transforma em conversa normal.
     const c = this.messenger.getContact(contactId);
     if (c?.request) this.messenger.addContact({ ...c, request: false });

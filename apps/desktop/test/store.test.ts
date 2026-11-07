@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { test } from 'node:test';
 import { emptyState } from '../src/shared/conversations';
 import { DEFAULT_PREFS } from '../src/shared/types';
-import { type AppState, Store } from '../src/main/store';
+import { type AppState, Store, StoreUnreadableError } from '../src/main/store';
 
 const state = (): AppState => ({ v: 1, messenger: '{"v":1,"segredo":"abc"}', conversations: emptyState(), prefs: { ...DEFAULT_PREFS, displayName: 'Lucas' } });
 
@@ -24,19 +24,28 @@ test('armazenamento: grava cifrado (AES-256-GCM) e lê de volta igual', () => {
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test('armazenamento: chave errada ou arquivo adulterado → null (o app começa limpo, não quebra)', () => {
+test('armazenamento (A-01): chave errada ou arquivo adulterado → erro (não `null`); a cópia ilegível vai para quarentena, nunca é sobrescrita', () => {
   const dir = mkdtempSync(join(tmpdir(), 'piu-store-'));
   try {
     const file = join(dir, 'state.bin');
     new Store(file, randomBytes(32)).save(state());
-    assert.equal(new Store(file, randomBytes(32)).load(), null);
+    const original = readFileSync(file);
+    const other = new Store(file, randomBytes(32));
+    assert.throws(() => other.load(), (e: unknown) => e instanceof StoreUnreadableError);
     const key = randomBytes(32);
     const st = new Store(file, key);
+    assert.throws(() => st.load(), StoreUnreadableError);
+    // Quarentena: renomeia para state.bin.corrupt-<ts> e o próximo `save` começa num arquivo novo.
+    const moved = st.quarantine();
+    assert.ok(moved && /state\.bin\.corrupt-\d+$/.test(moved));
+    assert.deepEqual(readFileSync(moved!), original, 'o arquivo antigo fica guardado como estava');
+    assert.equal(st.load(), null, 'sem state.bin: começa limpo');
     st.save(state());
+    assert.deepEqual(readFileSync(moved!), original);
     const raw = readFileSync(file);
     raw[raw.length - 1] ^= 0xff;
     require('node:fs').writeFileSync(file, raw);
-    assert.equal(st.load(), null);
+    assert.throws(() => st.load(), StoreUnreadableError);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 

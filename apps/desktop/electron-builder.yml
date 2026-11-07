@@ -1,4 +1,8 @@
 # Piu Desktop: o mensageiro Piu para computador.
+# Assinatura de código condicional (YAML não tem `if`): o .cjs devolve só os blocos mac/win de
+# assinatura conforme o ambiente; tudo o que está aqui tem prioridade sobre ele.
+# Ver docs/distribuicao/assinatura.md.
+extends: ./electron-builder.signing.cjs
 appId: net.piu.desktop
 productName: Piu
 copyright: Lunes Network · AGPL-3.0-only
@@ -10,6 +14,10 @@ files:
   - dist/preload.cjs
   - dist/renderer/**
   - package.json
+  # Main e preload saem inteiros do esbuild e o renderer do Vite: nenhum node_modules em tempo de execução
+  # (ws tenta bufferutil/utf-8-validate opcionais, com reserva). Sem isto o electron-builder copiaria as
+  # dependências de produção para o app.asar (~55 MB de código que nunca roda).
+  - "!node_modules/**/*"
 extraResources:
   - from: assets
     to: assets
@@ -30,11 +38,12 @@ mac:
     - target: zip
   category: public.app-category.social-networking
   icon: assets/icon.png
-  # Sem assinatura nem notarização por enquanto (testes locais).
-  identity: null
-  hardenedRuntime: true
+  # Assinatura (identity, hardenedRuntime, entitlements, notarize): vem do electron-builder.signing.cjs
+  # (`extends` no topo). Sem certificado continua ad-hoc ("-"), sem hardened runtime, como antes.
   extendInfo:
     NSUserNotificationAlertStyle: alert
+    # macOS 15+ pede permissão de rede local (LNNP anuncia e conversa na LAN); o texto vem daqui.
+    NSLocalNetworkUsageDescription: O Piu conversa com aparelhos na mesma rede para entregar mensagens sem internet.
 dmg:
   title: Piu
 linux:
@@ -49,6 +58,8 @@ win:
     - target: nsis
       arch: [x64]
   icon: assets/icon.png
+  # Assinatura: WIN_CSC_LINK (.pfx) ou Azure Trusted Signing, pelo electron-builder.signing.cjs.
+  # Sem nenhum dos dois, o instalador sai sem assinatura (o SmartScreen avisa).
 nsis:
   oneClick: false
   allowToChangeInstallationDirectory: true

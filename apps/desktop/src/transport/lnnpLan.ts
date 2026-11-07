@@ -22,6 +22,7 @@ import {
   compareBytes, decodeBeacon, defaultCapabilities, encodeBeacon, errorFrame, Feature, FrameType, Handshake, type LinkSession, LNNP_MIN_VERSION, LNNP_VERSION,
   LnnpError, LnnpErrorCode, MAX_FRAME_BYTES, Medium, nodeTag, RECORD_OVERHEAD, ReplayGuard,
 } from '../../../mobile/src/protocol/lnnp';
+import { t } from '../shared/i18n';
 import type { PeerInfo, PeerState, TransportState } from '../shared/types';
 import type { Transport, TransportEvent } from './types';
 
@@ -82,21 +83,39 @@ export function parsePeerAddress(raw: unknown): string | null {
   return `${host}:${portStr}`;
 }
 
+/**
+ * Endereço de rede local (B-03): RFC 1918, link-local, loopback, IPv6 ULA/link-local (e o IPv4 mapeado
+ * em IPv6). O beacon UDP não é autenticado: só esses viram discagem TCP.
+ */
+export function isPrivateLan(address: string): boolean {
+  const a = address.toLowerCase().replace(/^::ffff:(?=\d+\.)/, '');
+  if (isIPv4(a)) {
+    const [x, y] = a.split('.').map(Number) as [number, number];
+    return x === 10 || x === 127 || (x === 172 && y >= 16 && y <= 31) || (x === 192 && y === 168) || (x === 169 && y === 254);
+  }
+  if (isIPv6(a)) return a === '::1' || /^f[cd][0-9a-f]{0,2}:/.test(a) || /^fe[89ab][0-9a-f]?:/.test(a);
+  return false;
+}
+
+/** Discagens por beacon: um IP disca no máximo uma vez por janela; no máximo 16 IPs diferentes por janela. */
+const BEACON_DIAL_WINDOW_MS = 15_000;
+const MAX_BEACON_DIALS = 16;
+
 /** Motivo legível para um erro de conexão TCP. */
 function connectError(e: NodeJS.ErrnoException): string {
   switch (e.code) {
-    case 'ECONNREFUSED': return 'conexão recusada (nada escutando nessa porta)';
-    case 'ETIMEDOUT': return 'sem resposta (tempo esgotado)';
-    case 'EHOSTUNREACH': case 'ENETUNREACH': return 'endereço inalcançável a partir deste computador';
-    case 'ENOTFOUND': case 'EAI_AGAIN': return 'nome não encontrado na rede local';
-    case 'ECONNRESET': return 'conexão encerrada pelo outro lado';
-    default: return e.code ? `erro de rede (${e.code})` : e.message || 'erro de rede';
+    case 'ECONNREFUSED': return t('main.lnnp.refused');
+    case 'ETIMEDOUT': return t('main.lnnp.timeout');
+    case 'EHOSTUNREACH': case 'ENETUNREACH': return t('main.lnnp.unreachable');
+    case 'ENOTFOUND': case 'EAI_AGAIN': return t('main.lnnp.notFound');
+    case 'ECONNRESET': return t('main.lnnp.reset');
+    default: return e.code ? t('main.lnnp.netErrorCode', { code: e.code }) : e.message || t('main.lnnp.netError');
   }
 }
 
 function splitHostPort(s: string, defPort: number): { host: string; port: number } {
   const m = /^\[?([^\]]+?)\]?(?::(\d+))?$/.exec(s.trim());
-  if (!m || !m[1]) throw new Error(`Endereço inválido: ${s}`);
+  if (!m || !m[1]) throw new Error(t('main.lnnp.badAddressOf', { address: s }));
   if (m[1].includes(':') && !s.includes('[')) return { host: s.trim(), port: defPort };
   return { host: m[1], port: m[2] ? Number(m[2]) : defPort };
 }
@@ -159,6 +178,8 @@ export class LnnpLanTransport implements Transport {
   private replay = new ReplayGuard();
   /** Destinos em conexão ou conectados por este nó (chave host:porta). */
   private outbound = new Map<string, Socket>();
+  /** Última discagem disparada por beacon, por IP (B-03). */
+  private beaconDials = new Map<string, number>();
   /** Nó (id) que respondeu em cada destino. */
   private peerOf = new Map<string, string>();
   private configPeers: string[];
@@ -218,7 +239,7 @@ export class LnnpLanTransport implements Transport {
     } catch (e) {
       await this.stop();
       const msg = e instanceof Error ? e.message : String(e);
-      this.setState('unavailable', /EADDRINUSE/.test(msg) ? `porta ${this.o.port ?? LNNP_DEFAULT_PORT} já em uso (outro Piu ou piu-node neste computador?)` : msg);
+      this.setState('unavailable', /EADDRINUSE/.test(msg) ? t('main.lnnp.portInUse', { port: this.o.port ?? LNNP_DEFAULT_PORT }) : msg);
       return;
     }
     const every = (ms: number, fn: () => void) => { const t = setInterval(fn, ms); t.unref(); this.timers.push(t); };
@@ -256,7 +277,7 @@ export class LnnpLanTransport implements Transport {
   /** Vizinho fixo (já validado por `parsePeerAddress`): conecta na hora e reconecta a cada `beaconMs`. */
   addPeer(address: string) {
     if (!this.hasPeerAddress(address)) {
-      if (this.manualPeers.length >= MAX_MANUAL_PEERS) throw new Error(`No máximo ${MAX_MANUAL_PEERS} vizinhos adicionados manualmente.`);
+      if (this.manualPeers.length >= MAX_MANUAL_PEERS) throw new Error(t('main.lnnp.maxPeers', { max: MAX_MANUAL_PEERS }));
       this.manualPeers.push(address);
       this.dialInfo.delete(address);
       this.emit({ type: 'peers' });
@@ -329,6 +350,12 @@ export class LnnpLanTransport implements Transport {
     if (b.maxVersion < LNNP_MIN_VERSION || b.minVersion > LNNP_VERSION) return;
     if (compareBytes(this.tag, b.tag) > 0) return;                      // o outro (etiqueta menor) conecta
     for (const l of this.links.values()) if (compareBytes(nodeTag(l.session.peerPk), b.tag) === 0) return;
+    // B-03: o anúncio não é autenticado (origem UDP forjável): só rede local, com ritmo e teto.
+    if (!isPrivateLan(address)) return;
+    const now = Date.now();
+    for (const [ip, at] of this.beaconDials) if (now - at >= BEACON_DIAL_WINDOW_MS) this.beaconDials.delete(ip);
+    if (this.beaconDials.has(address) || this.beaconDials.size >= MAX_BEACON_DIALS) return;
+    this.beaconDials.set(address, now);
     this.dial(`${address}:${b.port}`);
   }
 
@@ -344,10 +371,10 @@ export class LnnpLanTransport implements Transport {
       this.dialInfo.set(target, d);
     }
     let host: string, port: number;
-    try { ({ host, port } = splitHostPort(target, LNNP_DEFAULT_PORT)); } catch { this.noteError(target, 'endereço inválido'); return; }
+    try { ({ host, port } = splitHostPort(target, LNNP_DEFAULT_PORT)); } catch { this.noteError(target, t('main.lnnp.badAddress')); return; }
     const sock = connect({ host, port });
     this.outbound.set(target, sock);
-    const timer = setTimeout(() => { this.noteError(target, 'sem resposta (tempo esgotado)'); sock.destroy(); }, this.o.handshakeTimeoutMs ?? 5000);
+    const timer = setTimeout(() => { this.noteError(target, t('main.lnnp.timeout')); sock.destroy(); }, this.o.handshakeTimeoutMs ?? 5000);
     timer.unref();
     let connected = false;
     sock.once('close', () => { clearTimeout(timer); if (this.outbound.get(target) === sock) this.outbound.delete(target); });
@@ -403,13 +430,13 @@ export class LnnpLanTransport implements Transport {
     const fail = (reason: string) => {
       if (state === 'closed') return;
       endPending();
-      if (!inbound) this.noteError(address, `handshake recusado: ${reason}`);
+      if (!inbound) this.noteError(address, t('main.lnnp.handshakeRefused', { reason }));
       else this.o.log?.(`LAN: handshake recusado (${reason})`);
       state = 'closed';
       sock.destroy();
     };
     const timer = setTimeout(() => {
-      if (state !== 'open') { writeFrame(sock, errorFrame(LnnpErrorCode.State, 'Tempo esgotado.')); fail('tempo esgotado'); }
+      if (state !== 'open') { writeFrame(sock, errorFrame(LnnpErrorCode.State, 'Tempo esgotado.')); fail(t('main.lnnp.timedOut')); }
     }, this.o.handshakeTimeoutMs ?? 5000);
     timer.unref();
     writeFrame(sock, hs.hello);
@@ -430,7 +457,7 @@ export class LnnpLanTransport implements Transport {
             if (!inbound) this.peerOf.set(address, session.peerId);
             sock.once('close', () => {
               this.detach(l);
-              if (!inbound && !this.stopped) this.noteError(address, 'enlace encerrado (o vizinho saiu ou a rede caiu)');
+              if (!inbound && !this.stopped) this.noteError(address, t('main.lnnp.linkEnded'));
             });
             if (!this.attach(l)) { state = 'closed'; sock.end(); return; }
             if (!inbound) { const d = this.dialInfo.get(address); if (d) { d.error = null; d.errorAt = null; } }
@@ -440,10 +467,10 @@ export class LnnpLanTransport implements Transport {
         }
       } catch (e) {
         if (e instanceof LnnpError && !e.fromPeer && state !== 'open') writeFrame(sock, errorFrame(e.wire, e.message));
-        fail(e instanceof Error ? e.message : 'erro');
+        fail(e instanceof Error ? e.message : t('main.lnnp.error'));
       }
     });
-    sock.once('close', () => { clearTimeout(timer); if (state !== 'closed' && state !== 'open') fail('conexão fechada'); state = 'closed'; });
+    sock.once('close', () => { clearTimeout(timer); if (state !== 'closed' && state !== 'open') fail(t('main.lnnp.closed')); state = 'closed'; });
   }
 
   /** Quadro decifrado. Só envelopes (inteiros ou em fragmentos) sobem; o resto é coisa de nó. */
@@ -466,10 +493,10 @@ export class LnnpLanTransport implements Transport {
   /** Envelope para o vizinho pelo enlace aberto; fragmenta se não cabe no MTU negociado. */
   async send(peerId: string, data: Uint8Array): Promise<void> {
     const link = this.linkOfPeer(peerId);
-    if (!link || link.sock.destroyed) throw new Error('Sem enlace com este vizinho agora.');
+    if (!link || link.sock.destroyed) throw new Error(t('main.lnnp.noLink'));
     const max = link.session.maxFrame - 1;
     if (data.length <= max) { writeFrame(link.sock, link.session.seal(FrameType.Envelope, data)); return; }
-    if (!(link.session.negotiated.features & Feature.Fragments)) throw new Error('Envelope maior que o MTU e o vizinho não aceita fragmentos.');
+    if (!(link.session.negotiated.features & Feature.Fragments)) throw new Error(t('main.lnnp.noFragments'));
     for (const part of fragment(data, max)) writeFrame(link.sock, link.session.seal(FrameType.Fragment, part));
   }
 }

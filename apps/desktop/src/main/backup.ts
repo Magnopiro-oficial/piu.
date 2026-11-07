@@ -3,6 +3,7 @@
  * A frase e o texto cifrado permanecem no processo principal. */
 import { passwordProblem, sealBackup } from '../../../mobile/src/lib/backupFile';
 import type { Vault } from './vault';
+import { tm } from './i18n';
 
 export { passwordProblem };
 
@@ -10,9 +11,9 @@ export { passwordProblem };
 export async function createIdentityBackup(vault: Pick<Vault, 'secure' | 'getPhrase'>, password: string): Promise<string> {
   const problem = passwordProblem(password);
   if (problem) throw new Error(problem);
-  if (!vault.secure) throw new Error('O cofre do sistema não está disponível.');
+  if (!vault.secure) throw new Error(tm('main.backup.noVault'));
   const words = await vault.getPhrase();
-  if (!words) throw new Error('Nenhuma identidade disponível para backup.');
+  if (!words) throw new Error(tm('main.backup.noIdentity'));
   try {
     return await sealBackup({ phrase: words, createdAt: Date.now(), from: 'Piu Desktop' }, password);
   } finally {

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
-import { type SafeStorageLike, Vault } from '../src/main/vault';
+import { type SafeStorageLike, Vault, VaultLockedError } from '../src/main/vault';
 
 /** Cofre falso: "cifra" invertendo bytes, para o teste ver que nada fica em claro no disco. */
 function fakeSafeStorage(available = true): SafeStorageLike & { calls: number } {
@@ -62,5 +62,77 @@ test('cofre: apagar remove frase e chave', async () => {
     await v.clear();
     assert.equal(await v.getPhrase(), null);
     assert.deepEqual(await new Vault(dir, fakeSafeStorage()).getPhrase(), null);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── A-01: cofre ilegível falha fechado (nunca vira "não existe") ──────────────
+/** Cofre que lê o que gravou até alguém "negar" o acesso (Keychain recusado/bloqueado). */
+function deniableSafeStorage() {
+  const f = { ...fakeSafeStorage(), denied: false };
+  const decrypt = f.decryptString;
+  f.decryptString = (b: Buffer) => { if (f.denied) throw new Error('Error while decrypting the ciphertext provided to safeStorage.decryptString.'); return decrypt(b); };
+  return f;
+}
+
+test('cofre (A-01): Keychain negado → erro de cofre bloqueado, sem gerar chave nova nem sobrescrever datakey.bin', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-vault-'));
+  try {
+    const ss = deniableSafeStorage();
+    const v = new Vault(dir, ss);
+    const k1 = await v.dataKey();
+    const before = readFileSync(join(dir, 'datakey.bin'));
+    ss.denied = true;
+    await assert.rejects(new Vault(dir, ss).dataKey(), (e: unknown) => e instanceof VaultLockedError);
+    assert.deepEqual(readFileSync(join(dir, 'datakey.bin')), before, 'a chave antiga continua intacta no disco');
+    ss.denied = false;
+    assert.deepEqual(await new Vault(dir, ss).dataKey(), k1, 'liberado o acesso, a MESMA chave volta');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cofre (A-01): frase ilegível → erro (não `null`); com frase guardada, `setPhrase` recusa sobrescrever', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-vault-'));
+  try {
+    const ss = deniableSafeStorage();
+    const v = new Vault(dir, ss);
+    assert.equal(v.hasPhrase(), false);
+    await v.setPhrase(words);
+    assert.equal(v.hasPhrase(), true);
+    ss.denied = true;
+    await assert.rejects(v.getPhrase(), (e: unknown) => e instanceof VaultLockedError);
+    ss.denied = false;
+    await assert.rejects(v.setPhrase([...words].reverse()), /já existe/i);
+    assert.deepEqual(await v.getPhrase(), words, 'a frase original continua lá');
+    // Apagar explicitamente libera gravar outra.
+    await v.clear();
+    await v.setPhrase([...words].reverse());
+    assert.deepEqual(await v.getPhrase(), [...words].reverse());
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('cofre (A-01): datakey.bin com conteúdo inesperado → erro, sem gerar outra por cima', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-vault-'));
+  try {
+    const ss = fakeSafeStorage();
+    new Vault(dir, ss);
+    writeFileSync(join(dir, 'datakey.bin'), ss.encryptString('não é hex'));
+    const before = readFileSync(join(dir, 'datakey.bin'));
+    await assert.rejects(new Vault(dir, ss).dataKey(), (e: unknown) => e instanceof VaultLockedError);
+    assert.deepEqual(readFileSync(join(dir, 'datakey.bin')), before);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+// ── B-05: Linux com backend `basic_text` (senha fixa) não é cofre ─────────────
+test('cofre (B-05): no Linux, backend basic_text/unknown conta como cofre indisponível', () => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-vault-'));
+  try {
+    const withBackend = (backend: string) => ({ ...fakeSafeStorage(), getSelectedStorageBackend: () => backend });
+    assert.equal(new Vault(dir, withBackend('basic_text'), 'linux').secure, false);
+    assert.equal(new Vault(dir, withBackend('unknown'), 'linux').secure, false);
+    assert.equal(new Vault(dir, withBackend('gnome_libsecret'), 'linux').secure, true);
+    assert.equal(new Vault(dir, withBackend('kwallet5'), 'linux').secure, true);
+    // macOS/Windows não têm essa API: vale o `isEncryptionAvailable`.
+    assert.equal(new Vault(dir, fakeSafeStorage(), 'darwin').secure, true);
+    const throwing = { ...fakeSafeStorage(), getSelectedStorageBackend: () => { throw new Error('antes do ready'); } };
+    assert.equal(new Vault(dir, throwing, 'linux').secure, false);
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });

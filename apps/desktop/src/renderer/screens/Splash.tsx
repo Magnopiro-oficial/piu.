@@ -1,7 +1,9 @@
 /** Abertura (protótipo `isSplash`): anéis, órbitas, ícone da marca, "piu." letra a letra, três pontos. 2,2 s + saída .45 s = 2,65 s. */
 import icon512 from '../brand/icon-512.png';
+import { useT } from '../i18n';
 
 export function Splash({ out }: { out: boolean }) {
+  const t = useT();
   const ring = (delay: string) => <div style={{ position: 'absolute', width: 180, height: 180, borderRadius: '50%', border: '1.5px solid var(--ink)', animation: `piuRingL 2.4s ${delay} cubic-bezier(.2,.7,.3,1) infinite` }} />;
   const letter = (ch: string, delay: string, extra = {}) => <span style={{ display: 'inline-block', animation: `piuLetter .55s ${delay} cubic-bezier(.2,.9,.3,1.2) both`, ...extra }}>{ch}</span>;
   return (
@@ -25,7 +27,7 @@ export function Splash({ out }: { out: boolean }) {
         <div style={{ display: 'flex', gap: 6 }}>
           {['0s', '.15s', '.3s'].map(d => <div key={d} style={{ width: 6, height: 6, borderRadius: 3, background: 'var(--ink)', animation: `piuDot 1s ${d} ease-in-out infinite` }} />)}
         </div>
-        <div style={{ font: "500 12px 'Geist Mono',monospace", color: 'var(--ink2)', letterSpacing: '.04em' }}>iniciando o nó local</div>
+        <div style={{ font: "500 12px 'Geist Mono',monospace", color: 'var(--ink2)', letterSpacing: '.04em' }}>{t('app.splash.starting')}</div>
       </div>
     </div>
   );

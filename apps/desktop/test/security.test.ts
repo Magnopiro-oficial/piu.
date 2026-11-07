@@ -1,0 +1,86 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import {
+  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, rendererOriginOf,
+} from '../src/main/security';
+
+test('M-05: switches de depuração no app empacotado são detectados (--remote-debugging-port, --inspect, --js-flags…)', () => {
+  const exe = '/Applications/Piu.app/Contents/MacOS/Piu';
+  assert.deepEqual(forbiddenDebugSwitches([exe]), []);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--remote-debugging-port=9222']), ['remote-debugging-port']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--remote-debugging-pipe']), ['remote-debugging-pipe']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '-remote-debugging-address=0.0.0.0', '--REMOTE-DEBUGGING-PORT', '9222']), ['remote-debugging-address', 'remote-debugging-port']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--inspect']), ['inspect']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--inspect-brk=0']), ['inspect-brk']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--inspect-port=9229']), ['inspect-port']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--js-flags=--allow-natives-syntax']), ['js-flags']);
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--remote-allow-origins=*']), ['remote-allow-origins']);
+  // Windows aceita `/switch`.
+  assert.deepEqual(forbiddenDebugSwitches(['C:\\Piu\\Piu.exe', '/remote-debugging-port=9222'], 'win32'), ['remote-debugging-port']);
+  // Argumentos comuns (arquivos, URL do protocolo, -psn do Finder) passam.
+  assert.deepEqual(forbiddenDebugSwitches([exe, '-psn_0_12345', '/Users/ana/piu-identidade.piu', '--lang=pt-BR']), []);
+  // Depois de `--` nada é switch.
+  assert.deepEqual(forbiddenDebugSwitches([exe, '--', '--inspect']), []);
+  // O `app.commandLine` também conta (switch acrescentado por outro caminho).
+  assert.deepEqual(forbiddenDebugSwitches([exe], 'darwin', s => s === 'remote-debugging-port'), ['remote-debugging-port']);
+});
+
+test('B-06: origem do renderer termina em "/" (pasta irmã com o mesmo prefixo não passa)', () => {
+  const origin = rendererOriginOf('file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer');
+  assert.equal(origin, 'file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer/');
+  assert.equal(rendererOriginOf(origin), origin, 'não duplica a barra');
+  assert.equal(isRendererUrl(origin + 'index.html', origin), true);
+  assert.equal(isRendererUrl(origin + 'assets/index-abc.js', origin), true);
+  assert.equal(isRendererUrl('file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer-evil/index.html', origin), false);
+  assert.equal(isRendererUrl('file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer', origin), false);
+  assert.equal(isRendererUrl('https://example.com/', origin), false);
+});
+
+test('B-02: links externos só para a allowlist (https, origem exata)', () => {
+  assert.equal(externalUrlAllowed('https://lunes.io/'), true);
+  assert.equal(externalUrlAllowed('https://explorer.lunes.io/account/6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse'), true);
+  assert.equal(externalUrlAllowed('https://github.com/lunes-platform'), true);
+  assert.equal(externalUrlAllowed('https://lunes.io.evil.com/'), false);
+  assert.equal(externalUrlAllowed('https://evil.com/?https://lunes.io'), false);
+  assert.equal(externalUrlAllowed('http://lunes.io/'), false);
+  assert.equal(externalUrlAllowed('https://user@lunes.io/'), false, 'credenciais na URL: não');
+  assert.equal(externalUrlAllowed('file:///etc/passwd'), false);
+  assert.equal(externalUrlAllowed('javascript:alert(1)'), false);
+  assert.equal(externalUrlAllowed('não é url'), false);
+});
+
+test('B-01: IPC só aceita o quadro principal da janela do Piu com URL do próprio renderer', () => {
+  const origin = 'file:///app/dist/renderer/';
+  assert.equal(isTrustedSender({ url: origin + 'index.html', isMain: true }, origin), true);
+  assert.equal(isTrustedSender({ url: origin + 'index.html', isMain: false }, origin), false, 'iframe/subquadro: não');
+  assert.equal(isTrustedSender({ url: 'https://evil.com/', isMain: true }, origin), false);
+  assert.equal(isTrustedSender({ url: 'file:///app/dist/renderer-x/index.html', isMain: true }, origin), false);
+  assert.equal(isTrustedSender(null, origin), false);
+});
+
+test('M-01: mostrar a frase pede Touch ID quando há; sem Touch ID, confirmação nativa; cancelar recusa', async () => {
+  const calls: string[] = [];
+  const deps = (o: { platform: string; touch: boolean; touchOk?: boolean; confirm?: boolean }) => ({
+    platform: o.platform,
+    canPromptTouchID: () => o.touch,
+    promptTouchID: async (reason: string) => { calls.push(`touch:${reason}`); if (!o.touchOk) throw new Error('cancelado'); },
+    confirm: async () => { calls.push('confirm'); return o.confirm ?? false; },
+  });
+  assert.equal(await reauthForPhrase(deps({ platform: 'darwin', touch: true, touchOk: true })), true);
+  assert.match(calls.pop()!, /^touch:.*frase/);
+  assert.equal(await reauthForPhrase(deps({ platform: 'darwin', touch: true, touchOk: false, confirm: true })), false, 'Touch ID recusado não cai para um clique');
+  assert.deepEqual(calls.splice(0), ['touch:mostrar a frase de recuperação do Piu']);
+  assert.equal(await reauthForPhrase(deps({ platform: 'darwin', touch: false, confirm: true })), true);
+  assert.equal(await reauthForPhrase(deps({ platform: 'win32', touch: false, confirm: false })), false);
+  assert.equal(await reauthForPhrase(deps({ platform: 'linux', touch: true, confirm: true })), true, 'Touch ID só existe no macOS');
+  assert.deepEqual(calls.splice(0), ['confirm', 'confirm', 'confirm']);
+  // Erro na própria confirmação também recusa (falha fechada).
+  assert.equal(await reauthForPhrase({ ...deps({ platform: 'win32', touch: false }), confirm: async () => { throw new Error('sem janela'); } }), false);
+});
+
+test('PIU_PROFILE: perfil separado (pasta de dados e nome) só com nome curto e seguro; sem ele, o perfil normal', () => {
+  assert.equal(profileFromEnv({}), null);
+  assert.equal(profileFromEnv({ PIU_PROFILE: '' }), null);
+  assert.equal(profileFromEnv({ PIU_PROFILE: 'smoke-1' }), 'smoke-1');
+  for (const bad of ['../x', 'a/b', 'A B', 'x'.repeat(25), '.', 'ção', 'a\\b']) assert.equal(profileFromEnv({ PIU_PROFILE: bad }), null, bad);
+});

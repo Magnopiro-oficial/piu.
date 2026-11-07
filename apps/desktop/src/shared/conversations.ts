@@ -2,7 +2,12 @@
  * Estado das conversas (mensagens por contato) como funções puras: o processo principal aplica os
  * eventos do Messenger e o renderer só mostra. Testado em test/conversations.test.ts.
  */
-import type { ContactInfo, ConversationSummary, Message, MessageStatus, Route } from './types';
+import type { ContactInfo, ConversationSummary, Message, MessageStatus, Route, TempMode } from './types';
+
+/** Prazos das mensagens temporárias (os do celular e do protótipo). */
+export const TEMP_MODES: readonly TempMode[] = ['off', '1h', '24h', '7d'];
+const TEMP_SEC: Record<TempMode, number | undefined> = { off: undefined, '1h': 3600, '24h': 86400, '7d': 7 * 86400 };
+export const expireSecOf = (t: TempMode | undefined): number | undefined => (t ? TEMP_SEC[t] : undefined);
 
 export interface ConversationsState {
   /** Mensagens por contato, na ordem em que entraram. */
@@ -13,25 +18,37 @@ export interface ConversationsState {
 
 export const emptyState = (): ConversationsState => ({ byContact: {}, readCount: {} });
 
-export const messagesOf = (s: ConversationsState, contactId: string): Message[] => s.byContact[contactId] ?? [];
+/**
+ * Teto do histórico local por conversa (B-04): ficam as mais novas, para um contato (ou nó) insistente
+ * não inflar `state.bin` sem limite.
+ */
+export const MAX_LOCAL_MESSAGES = 5000;
 
-const withList = (s: ConversationsState, contactId: string, list: Message[]): ConversationsState =>
-  ({ ...s, byContact: { ...s.byContact, [contactId]: list } });
+/** Só listas próprias: `constructor`/`__proto__` não resolvem para o `Object.prototype`. */
+export const messagesOf = (s: ConversationsState, contactId: string): Message[] => (Object.hasOwn(s.byContact, contactId) ? s.byContact[contactId]! : []);
+
+const withList = (s: ConversationsState, contactId: string, list: Message[]): ConversationsState => {
+  if (list.length <= MAX_LOCAL_MESSAGES) return { ...s, byContact: { ...s.byContact, [contactId]: list } };
+  const drop = list.length - MAX_LOCAL_MESSAGES;
+  const read = s.readCount[contactId];
+  return { byContact: { ...s.byContact, [contactId]: list.slice(drop) }, readCount: read === undefined ? s.readCount : { ...s.readCount, [contactId]: Math.max(0, read - drop) } };
+};
 
 /** Mensagem minha, já cifrada e na fila do roteador ("aguardando"). */
-export function appendOutgoing(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number }): ConversationsState {
+export function appendOutgoing(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number; expiresAt?: number }): ConversationsState {
   const list = messagesOf(s, m.contactId);
   if (list.some(x => x.id === m.id)) return s;
-  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'out', text: m.text, at: m.at, status: 'aguardando' };
+  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'out', text: m.text, at: m.at, status: 'aguardando', ...(m.expiresAt ? { expiresAt: m.expiresAt } : {}) };
   // O que eu mesmo escrevi conta como lido.
-  return { ...withList(s, m.contactId, [...list, msg]), readCount: { ...s.readCount, [m.contactId]: list.length + 1 } };
+  const next = withList(s, m.contactId, [...list, msg]);
+  return { ...next, readCount: { ...next.readCount, [m.contactId]: messagesOf(next, m.contactId).length } };
 }
 
 /** Mensagem recebida de um contato (não lida até `markRead`). Repetida (mesmo id) não duplica. */
-export function receiveIncoming(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number; route?: Route; sender?: string }): ConversationsState {
+export function receiveIncoming(s: ConversationsState, m: { id: string; contactId: string; text: string; at: number; route?: Route; sender?: string; expiresAt?: number }): ConversationsState {
   const list = messagesOf(s, m.contactId);
   if (list.some(x => x.id === m.id)) return s;
-  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'in', text: m.text, at: m.at, status: 'recebida', ...(m.sender ? { sender: m.sender } : {}), ...(m.route ? { route: m.route } : {}) };
+  const msg: Message = { id: m.id, contactId: m.contactId, dir: 'in', text: m.text, at: m.at, status: 'recebida', ...(m.sender ? { sender: m.sender } : {}), ...(m.route ? { route: m.route } : {}), ...(m.expiresAt ? { expiresAt: m.expiresAt } : {}) };
   return withList(s, m.contactId, [...list, msg]);
 }
 
@@ -66,14 +83,35 @@ export function removeConversation(s: ConversationsState, contactId: string): Co
   return { byContact, readCount };
 }
 
+/**
+ * Mensagens temporárias vencidas saem do histórico (nos dois lados, como no celular). A contagem de lidas
+ * desconta as que sumiram dentro da parte já lida. Nada venceu: devolve o mesmo objeto.
+ */
+export function dropExpired(s: ConversationsState, now: number): ConversationsState {
+  let changed = false;
+  const byContact: Record<string, Message[]> = {}, readCount = { ...s.readCount };
+  for (const [contactId, list] of Object.entries(s.byContact)) {
+    if (!list.some(m => m.expiresAt !== undefined && m.expiresAt <= now)) { byContact[contactId] = list; continue; }
+    changed = true;
+    const read = s.readCount[contactId] ?? 0;
+    const goneRead = list.slice(0, read).filter(m => m.expiresAt !== undefined && m.expiresAt <= now).length;
+    byContact[contactId] = list.filter(m => !(m.expiresAt !== undefined && m.expiresAt <= now));
+    if (s.readCount[contactId] !== undefined) readCount[contactId] = read - goneRead;
+  }
+  return changed ? { byContact, readCount } : s;
+}
+
 const unreadOf = (s: ConversationsState, contactId: string) =>
   messagesOf(s, contactId).slice(s.readCount[contactId] ?? 0).filter(m => m.dir === 'in').length;
 
 /** Lista de conversas ordenada pela última atividade (contatos sem mensagem ficam no fim, em ordem). */
-export function summaries(s: ConversationsState, contacts: ContactInfo[]): ConversationSummary[] {
+export function summaries(s: ConversationsState, contacts: ContactInfo[], local: { muted?: ReadonlySet<string>; temp?: Readonly<Record<string, TempMode>> } = {}): ConversationSummary[] {
   const rows = contacts.map(contact => {
     const list = messagesOf(s, contact.id);
+    const temp = local.temp && Object.hasOwn(local.temp, contact.id) ? local.temp[contact.id] : undefined;
     return {
+      ...(local.muted?.has(contact.id) ? { muted: true } : {}),
+      ...(temp && temp !== 'off' ? { temp } : {}),
       contact,
       last: list.length ? list[list.length - 1]! : null,
       unread: unreadOf(s, contact.id),

@@ -117,3 +117,52 @@ test('mensagens recebidas em grupos preservam o remetente', () => {
   assert.equal(messagesOf(state, 'group:1')[0]?.sender, 'Ana');
   assert.equal(messagesOf(JSON.parse(JSON.stringify(state)), 'group:1')[0]?.sender, 'Ana');
 });
+
+test('B-04: histórico local tem teto por conversa (ficam as mais novas) e ids do protótipo não quebram a leitura', async () => {
+  const { MAX_LOCAL_MESSAGES } = await import('../src/shared/conversations');
+  let s = emptyState();
+  for (let i = 0; i < MAX_LOCAL_MESSAGES + 3; i++) s = receiveIncoming(s, { id: `m${i}`, contactId: ana.id, text: `t${i}`, at: i });
+  assert.equal(messagesOf(s, ana.id).length, MAX_LOCAL_MESSAGES);
+  assert.equal(messagesOf(s, ana.id)[0]!.id, 'm3');
+  s = appendOutgoing(s, { id: 'eu', contactId: ana.id, text: 'oi', at: 9999 });
+  assert.equal(messagesOf(s, ana.id).length, MAX_LOCAL_MESSAGES);
+  assert.equal(messagesOf(s, ana.id).at(-1)!.id, 'eu');
+  assert.ok(s.readCount[ana.id]! <= MAX_LOCAL_MESSAGES);
+  assert.deepEqual(messagesOf(emptyState(), 'constructor'), []);
+  assert.deepEqual(messagesOf(emptyState(), '__proto__'), []);
+});
+
+test('temporárias: a mensagem guarda o vencimento e some na varredura; a contagem de lidas acompanha', async () => {
+  const { dropExpired, expireSecOf, TEMP_MODES } = await import('../src/shared/conversations');
+  assert.deepEqual(TEMP_MODES, ['off', '1h', '24h', '7d']);
+  assert.equal(expireSecOf('off'), undefined);
+  assert.equal(expireSecOf('1h'), 3600);
+  assert.equal(expireSecOf('24h'), 86400);
+  assert.equal(expireSecOf('7d'), 604800);
+  let s = emptyState();
+  s = receiveIncoming(s, { id: 'a', contactId: ana.id, text: 'some', at: 100, expiresAt: 200 });
+  s = receiveIncoming(s, { id: 'b', contactId: ana.id, text: 'fica', at: 101 });
+  s = appendOutgoing(s, { id: 'c', contactId: ana.id, text: 'minha some', at: 102, expiresAt: 150 });
+  assert.equal(messagesOf(s, ana.id)[0]!.expiresAt, 200);
+  assert.equal(dropExpired(s, 149), s, 'nada venceu: mesmo objeto');
+  s = dropExpired(s, 150);
+  assert.deepEqual(messagesOf(s, ana.id).map(m => m.id), ['a', 'b']);
+  assert.equal(summaries(s, [ana])[0]!.unread, 0, 'escrever marca tudo como lido; a minha que sumiu não muda isso');
+  s = receiveIncoming(s, { id: 'd', contactId: ana.id, text: 'nova', at: 103, expiresAt: 500 });
+  assert.equal(summaries(s, [ana])[0]!.unread, 1);
+  s = dropExpired(s, 200);
+  assert.deepEqual(messagesOf(s, ana.id).map(m => m.id), ['b', 'd']);
+  assert.equal(summaries(s, [ana])[0]!.unread, 1, 'a lida que sumiu não transforma outra em lida nem em não lida');
+  s = markRead(s, ana.id);
+  assert.equal(dropExpired(s, 500).readCount[ana.id], 1);
+});
+
+test('lista: marca silenciadas e o prazo das temporárias de cada conversa', () => {
+  let s = emptyState();
+  s = receiveIncoming(s, { id: 'a', contactId: ana.id, text: 'oi', at: 100 });
+  const rows = summaries(s, [ana, bia], { muted: new Set([ana.id]), temp: { [bia.id]: '24h' } });
+  assert.equal(rows.find(r => r.contact.id === ana.id)!.muted, true);
+  assert.equal(rows.find(r => r.contact.id === bia.id)!.muted, undefined);
+  assert.equal(rows.find(r => r.contact.id === bia.id)!.temp, '24h');
+  assert.equal(rows.find(r => r.contact.id === ana.id)!.temp, undefined);
+});

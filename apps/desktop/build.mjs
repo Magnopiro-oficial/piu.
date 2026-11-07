@@ -16,7 +16,13 @@ const common = {
   logOverride: { 'require-resolve-not-external': 'silent' },
 };
 
-await build({ ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.cjs' });
+// `import.meta.url` não existe em CommonJS: o esbuild o troca por `{}` e o openpgp (createRequire(import.meta.url),
+// avaliado ao carregar) derrubava o processo principal antes da janela. Aqui ele vira a URL do próprio main.cjs.
+await build({
+  ...common, entryPoints: ['src/main/main.ts'], outfile: 'dist/main.cjs',
+  define: { 'import.meta.url': '__piuImportMetaUrl' },
+  banner: { js: "const __piuImportMetaUrl = require('node:url').pathToFileURL(__filename).href;" },
+});
 // O preload roda em sandbox: só pode usar `electron` (contextBridge/ipcRenderer) e nada do Node.
 await build({ ...common, entryPoints: ['src/preload/preload.ts'], outfile: 'dist/preload.cjs', platform: 'browser', format: 'cjs' });
 console.log('dist/main.cjs e dist/preload.cjs prontos');

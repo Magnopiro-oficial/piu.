@@ -87,3 +87,69 @@ test('snapshot e eventos preservam grupos, canais, permissão e remetente', () =
   assert.equal(changed.contacts.find(c => c.id === 'c')!.canPost, true);
   assert.equal(changed.contacts.find(c => c.id === 'c')!.kind, 'channel');
 });
+
+test('carteira do celular no espelho: só SS58 válido entra; ausente ou inválido vira null', async () => {
+  const { walletFromLink } = await import('../src/shared/desktopLink');
+  assert.equal(walletFromLink(' 6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse '), '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse');
+  assert.equal(walletFromLink(undefined), null);
+  assert.equal(walletFromLink(''), null);
+  assert.equal(walletFromLink('lunes:nada'), null);
+  assert.equal(walletFromLink('x'.repeat(65)), null);
+  assert.equal(walletFromLink({ address: '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse' }), null, 'é uma string, não um objeto');
+});
+
+test('endereço Lunes que o contato compartilhou (`LinkChat.lunes`) vira `lunesAddress`; inválido ou em grupo não entra', async () => {
+  const { contactFromChat, stateFromSnapshot } = await import('../src/shared/desktopLink');
+  const base = { ident: 'public' as const, kind: 'direct' as const, initials: 'MA', time: '10:00', unread: 0 };
+  assert.equal(contactFromChat({ ...base, id: 'c1', name: 'Marina', lunes: '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse' }).lunesAddress, '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse');
+  assert.equal(contactFromChat({ ...base, id: 'c2', name: 'Ana' }).lunesAddress, undefined);
+  assert.equal(contactFromChat({ ...base, id: 'c3', name: 'Zé', lunes: 'invalido' }).lunesAddress, undefined);
+  assert.equal(contactFromChat({ ...base, id: 'g1', kind: 'group', name: 'Turma', lunes: '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse' }).lunesAddress, undefined);
+  const { contacts } = stateFromSnapshot({ t: 'snapshot', contacts: [], chats: [{ ...base, id: 'c1', name: 'Marina', lunes: '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse' }], messages: {}, wallet: '6hiMqKZbNejk5Wat7uBBN2krtAd8Bde1Ja4ofzR6goLSd4Kt' }, 0);
+  assert.equal(contacts[0]!.lunesAddress, '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse');
+});
+
+test('B-04: dados do celular com tipo/tamanho errado são saneados ou ignorados (sem tela branca nem queda da sessão)', async () => {
+  const { messageFromLink, contactFromChat, stateFromSnapshot, applyLinkEvent, MAX_LINK_CHATS, MAX_LINK_MESSAGES } = await import('../src/shared/desktopLink');
+  const now = 1_700_000_000;
+  const bad = (x: unknown) => x as never;
+  // Texto objeto (React lançaria "Objects are not valid as a React child") → vira texto vazio; texto enorme é cortado.
+  assert.equal(messageFromLink('c1', bad({ id: 'm1', from: 'them', text: { x: 1 }, time: '' }), now)!.text, '');
+  assert.equal(messageFromLink('c1', bad({ id: 'm1', from: 'them', text: 'a'.repeat(10_000), time: '' }), now)!.text.length, 4000);
+  // Remetente e `at` com tipo errado.
+  const m = messageFromLink('c1', bad({ id: 'm1', from: 'them', text: 'oi', time: '', sender: { n: 1 }, at: 'ontem' }), now)!;
+  assert.equal(m.sender, undefined); assert.equal(m.at, now);
+  // Id ausente, não-string, grande demais ou nome do protótipo → mensagem ignorada.
+  for (const id of [undefined, 7, '', 'x'.repeat(65), '__proto__', 'constructor', 'toString']) assert.equal(messageFromLink('c1', bad({ id, from: 'them', text: 'oi', time: '' }), now), null, String(id));
+  // Conversa com id perigoso não entra; nome não-string vira vazio.
+  const { contacts, conv } = stateFromSnapshot(bad({ t: 'snapshot', contacts: [], chats: [
+    { id: 'constructor', ident: 'public', kind: 'direct', name: 'X', initials: '', time: '', unread: 0 },
+    { id: 'c1', ident: 'public', kind: 'direct', name: { evil: true }, initials: '', time: '', unread: 0, sub: 5 },
+  ], messages: { constructor: [{ id: 'm', from: 'them', text: 'x', time: '' }], c1: 'não é lista', c2: [{ id: 'ok', from: 'them', text: 'oi', time: '' }] } }), now);
+  assert.deepEqual(contacts.map(c => [c.id, c.name, c.subtitle]), [['c1', '', undefined]]);
+  assert.ok(!Object.hasOwn(conv.byContact, 'constructor'));
+  assert.deepEqual(conv.byContact.c1, undefined);
+  assert.equal(conv.byContact.c2!.length, 1);
+  // Snapshot sem listas (ou com tipos errados) não derruba: vira vazio.
+  assert.deepEqual(stateFromSnapshot(bad({ t: 'snapshot' }), now).contacts, []);
+  // Eventos com chatId perigoso são ignorados.
+  const r = applyLinkEvent(contacts, conv, bad({ t: 'event', k: 'message', chatId: 'constructor', msg: { id: 'm9', from: 'them', text: 'x', time: '' } }), now);
+  assert.equal(r.touched, null); assert.equal(r.conv, conv);
+  const r2 = applyLinkEvent(contacts, conv, bad({ t: 'event', k: 'status', chatId: '__proto__', msgId: 'x', status: 'entregue' }), now);
+  assert.equal(r2.conv, conv);
+  const r3 = applyLinkEvent(contacts, conv, bad({ t: 'event', k: 'chat', chat: { id: 7, name: 'x' } }), now);
+  assert.equal(r3.contacts, contacts);
+  // Tetos: conversas e mensagens por conversa (ficam as mais novas).
+  const many = Array.from({ length: MAX_LINK_CHATS + 10 }, (_, i) => ({ id: `c${i}`, ident: 'public', kind: 'direct', name: `N${i}`, initials: '', time: '', unread: 0 }));
+  const msgs = Array.from({ length: MAX_LINK_MESSAGES + 5 }, (_, i) => ({ id: `m${i}`, from: 'them', text: `t${i}`, time: '' }));
+  const big = stateFromSnapshot(bad({ t: 'snapshot', contacts: [], chats: many, messages: { c0: msgs } }), now);
+  assert.equal(big.contacts.length, MAX_LINK_CHATS);
+  assert.equal(big.conv.byContact.c0!.length, MAX_LINK_MESSAGES);
+  assert.equal(big.conv.byContact.c0!.at(-1)!.id, `m${MAX_LINK_MESSAGES + 4}`, 'as mais novas ficam');
+  let s = { contacts: big.contacts, conv: big.conv };
+  s = applyLinkEvent(s.contacts, s.conv, { t: 'event', k: 'message', chatId: 'c0', msg: { id: 'novo', from: 'them', text: 'mais', time: '' } }, now);
+  assert.equal(s.conv.byContact.c0!.length, MAX_LINK_MESSAGES);
+  s = applyLinkEvent(s.contacts, s.conv, bad({ t: 'event', k: 'chat', chat: { id: 'extra', ident: 'public', kind: 'direct', name: 'E', initials: '', time: '', unread: 0 } }), now);
+  assert.equal(s.contacts.length, MAX_LINK_CHATS, 'chat novo além do teto não entra');
+  void emptyState;
+});

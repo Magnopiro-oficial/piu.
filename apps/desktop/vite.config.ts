@@ -12,6 +12,8 @@ export default defineConfig({
     emptyOutDir: true,
     target: 'chrome140',
     sourcemap: false,
+    // Fontes viram arquivos de verdade: a CSP (`font-src 'self'`) bloqueia fonte embutida em data:.
+    assetsInlineLimit: (file) => (/\.(woff2?|ttf|otf)$/.test(file) ? false : undefined),
   },
   server: { port: 5188, strictPort: true },
 });

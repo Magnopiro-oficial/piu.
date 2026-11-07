@@ -94,3 +94,24 @@ test('LAN: descoberta por UDP em localhost conecta os dois sem vizinho fixo', as
   await A.stop();
   await until(() => B.linkCount === 0, 'B percebe a saída de A');
 });
+
+test('B-03: beacon só faz discar para endereço da rede local, uma vez por IP no intervalo, com teto de discagens descobertas', async t => {
+  t.after(closeAll);
+  const { isPrivateLan } = await import('../src/transport/lnnpLan');
+  const { encodeBeacon, LNNP_MIN_VERSION, LNNP_VERSION } = await import('../../mobile/src/protocol/lnnp');
+  for (const a of ['10.0.0.5', '172.16.3.4', '172.31.255.1', '192.168.0.10', '169.254.1.1', '127.0.0.1', '::1', 'fe80::1', 'fd12:3456::1', '::ffff:192.168.1.2']) assert.equal(isPrivateLan(a), true, a);
+  for (const a of ['8.8.8.8', '172.32.0.1', '100.64.0.1', '1.1.1.1', '2001:4860::8888', '::ffff:8.8.8.8', 'lixo', '']) assert.equal(isPrivateLan(a), false, a);
+  const A = await lan();
+  const dials: string[] = [];
+  (A as unknown as { dial: (x: string) => void }).dial = x => { dials.push(x); };
+  const beacon = (port: number) => Buffer.from(encodeBeacon({ minVersion: LNNP_MIN_VERSION, maxVersion: LNNP_VERSION, port, tag: new Uint8Array(8).fill(0xff), relay: false }));
+  const onBeacon = (msg: Buffer, from: string) => (A as unknown as { onBeacon: (m: Buffer, a: string) => void }).onBeacon(msg, from);
+  onBeacon(beacon(8422), '8.8.8.8');
+  assert.deepEqual(dials, [], 'endereço público: ignora');
+  onBeacon(beacon(8422), '192.168.0.20');
+  onBeacon(beacon(9000), '192.168.0.20');
+  onBeacon(beacon(9001), '192.168.0.20');
+  assert.deepEqual(dials, ['192.168.0.20:8422'], 'portas variadas do mesmo IP: uma discagem por intervalo');
+  for (let i = 1; i <= 40; i++) onBeacon(beacon(8422), `10.0.0.${i}`);
+  assert.ok(dials.length <= 1 + 16, `teto de discagens descobertas (${dials.length})`);
+});

@@ -1,0 +1,22 @@
+/** Textos comuns a várias telas (pt-BR, referência). */
+export const common = {
+  'common.back': 'Voltar',
+  'common.close': 'Fechar',
+  'common.cancel': 'Cancelar',
+  'common.ok': 'OK',
+  'common.continue': 'Continuar',
+  'common.save': 'Salvar',
+  'common.copy': 'Copiar',
+  'common.copied': 'Copiado',
+  'common.remove': 'Remover',
+  'common.done': 'Pronto',
+  'common.show': 'Mostrar',
+  'common.hide': 'Ocultar',
+  'common.now': 'agora',
+  'common.yes': 'Sim',
+  'common.no': 'Não',
+  'common.never': 'Nunca',
+  'common.system': 'Sistema',
+  'common.today': 'hoje, {time}',
+  'common.dateTime': '{date}, {time}',
+};

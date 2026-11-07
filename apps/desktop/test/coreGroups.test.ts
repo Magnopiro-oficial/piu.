@@ -21,7 +21,9 @@ const until = async (fn: () => boolean, what: string, ms = 10000) => {
 test('PiuCore: criação e mensagens de grupos e canais, validação e restauração', async t => {
   const dir = mkdtempSync(join(tmpdir(), 'piu-core-groups-'));
   const opts = (name: string) => ({ userData: join(dir, name), safeStorage, platform: 'test', version: 'test', hostname: name,
-    lan: { port: 0, discoveryPort: null, listen: '127.0.0.1', broadcast: [] } });
+    lan: { port: 0, discoveryPort: null, listen: '127.0.0.1', broadcast: [] },
+    // Com identidade própria a carteira já tem endereço (derivado da frase); sem rede nos testes.
+    walletBalance: async () => { throw new Error('sem rede nos testes'); } });
   let a = new PiuCore(opts('ana'));
   let b = new PiuCore(opts('bia'));
   t.after(async () => { await Promise.all([a.close(), b.close()]); rmSync(dir, { recursive: true, force: true }); });
@@ -61,4 +63,40 @@ test('PiuCore: criação e mensagens de grupos e canais, validação e restaura�
   assert.equal(a.listConversations().find(c => c.contact.id === group.id)?.contact.name, 'Equipe');
   assert.equal(b.listConversations().find(c => c.contact.id === channel.id)?.contact.canPost, false);
   assert.equal(b.getMessages(group.id).find(m => m.text === 'Mensagem protegida')?.sender, 'Ana');
+});
+
+test('PiuCore: convidar contatos aceitos para um grupo e sair do grupo (a conversa some daqui)', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-core-groups2-'));
+  const opts = (name: string) => ({ userData: join(dir, name), safeStorage, platform: 'test', version: 'test', hostname: name,
+    lan: { port: 0, discoveryPort: null, listen: '127.0.0.1', broadcast: [] },
+    walletBalance: async () => { throw new Error('sem rede nos testes'); } });
+  const a = new PiuCore(opts('ana')), b = new PiuCore(opts('bia')), c = new PiuCore(opts('caio'));
+  t.after(async () => { await Promise.all([a.close(), b.close(), c.close()]); rmSync(dir, { recursive: true, force: true }); });
+  for (const [x, n] of [[a, 'Ana'], [b, 'Bia'], [c, 'Caio']] as const) { await x.open(); await x.createIdentity({ kind: 'public', name: n }); }
+  a.addPeer(`127.0.0.1:${b.networkStatus().lan.port}`);
+  a.addPeer(`127.0.0.1:${c.networkStatus().lan.port}`);
+  await until(() => a.networkStatus().lan.links >= 2, 'conexões');
+  const friend = async (other: PiuCore, name: string) => {
+    const k = a.addContactByCard(other.myCard('public').card);
+    a.sendText(k.id, `Oi, ${name}`);
+    await until(() => other.listConversations().some(r => r.contact.request), 'pedido');
+    other.sendText(other.listConversations().find(r => r.contact.request)!.contact.id, 'Oi');
+    await until(() => a.listGroupCandidates().some(x => x.id === k.id), 'aceito');
+    return k;
+  };
+  const bia = await friend(b, 'Bia');
+  const caio = await friend(c, 'Caio');
+  const group = a.createGroup({ kind: 'group', name: 'Equipe', via: 'public', memberIds: [bia.id] });
+  assert.deepEqual(a.groupInviteCandidates(group.id).map(x => x.id), [caio.id], 'só quem ainda não está no grupo');
+  assert.throws(() => a.addGroupMembers(group.id, []), /inválid/i);
+  assert.throws(() => a.addGroupMembers(group.id, ['piu:desconhecido']), /contatos aceitos/);
+  assert.throws(() => a.addGroupMembers('bia', [caio.id]), /inválid|desconhecid/i);
+  a.addGroupMembers(group.id, [caio.id]);
+  await until(() => c.listConversations().some(r => r.contact.id === group.id), 'Caio entrou no grupo');
+  assert.deepEqual(a.groupInviteCandidates(group.id), []);
+  await until(() => b.listConversations().some(r => r.contact.id === group.id), 'Bia no grupo');
+  b.leaveGroup(group.id);
+  assert.equal(b.listConversations().some(r => r.contact.id === group.id), false);
+  assert.deepEqual(b.getMessages(group.id), []);
+  assert.throws(() => b.leaveGroup(bia.id), /inválid|desconhecid/i);
 });

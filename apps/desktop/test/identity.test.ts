@@ -30,3 +30,14 @@ test('frase: normaliza espaços e maiúsculas; frase errada é recusada com mens
   assert.throws(() => identityFromPhrase('legal winner thank year wave sausage worth useful legal winner thank zebra'.split(' ')), /frase/i);
   assert.throws(() => identityFromPhrase(['so', 'tres', 'palavras']), /12 palavras/i);
 });
+
+test('endereço da carteira: o MESMO que o celular deriva da frase (vetor conferido com @polkadot)', async () => {
+  const { DEV_MNEMONIC, DEV_ADDR_57 } = await import('../../mobile/src/lib/__tests__/walletFixture');
+  const { walletAddressFromPhrase } = await import('../../mobile/src/lib/walletKey');
+  const words = DEV_MNEMONIC.split(' ');
+  const k = identityFromPhrase(words);
+  assert.equal(k.walletAddress, DEV_ADDR_57);
+  assert.equal(k.walletAddress, walletAddressFromPhrase(words));
+  // Frase com maiúsculas e espaços extras dá o mesmo endereço (normalização igual à do celular).
+  assert.equal(identityFromPhrase(words.map(w => ` ${w.toUpperCase()} `)).walletAddress, DEV_ADDR_57);
+});

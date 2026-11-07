@@ -16,11 +16,11 @@ async function until(cond: () => boolean, what: string, ms = 8000) {
   }
 }
 
-interface Log { groups: { contact: ContactInfo; change: string }[]; groupMessages: { contact: ContactInfo; sender: string; text: string }[]; messages: { from: ContactInfo; text: string; isNew: boolean; route?: Route }[]; status: { msgId: string; status: string; route?: Route }[] }
+interface Log { alerts: { title: string; sev: string; community: string; level: string | null }[]; groups: { contact: ContactInfo; change: string }[]; groupMessages: { contact: ContactInfo; sender: string; text: string }[]; messages: { from: ContactInfo; text: string; isNew: boolean; route?: Route }[]; status: { msgId: string; status: string; route?: Route }[] }
 
 const cleanup: (() => Promise<unknown>)[] = [];
 async function person(name: string, peers: string[], state?: string) {
-  const log: Log = { messages: [], status: [], groups: [], groupMessages: [] };
+  const log: Log = { messages: [], status: [], groups: [], groupMessages: [], alerts: [] };
   const { keys, phrase } = createIdentity();
   const lan = new LnnpLanTransport({ node: keys.node, listen: '127.0.0.1', port: 0, discoveryPort: null, broadcast: [], peers, beaconMs: 150, handshakeTimeoutMs: 2000 });
   const mesh = new MeshNode({
@@ -30,6 +30,7 @@ async function person(name: string, peers: string[], state?: string) {
       status: (msgId, status, route) => log.status.push({ msgId, status, route }),
       groupChanged: (contact, change) => log.groups.push({ contact, change }),
       groupMessage: (contact, m, sender) => log.groupMessages.push({ contact, sender, text: m.text }),
+      communityAlert: (a, notice) => log.alerts.push({ title: a.title, sev: a.sev, community: a.contactId, level: notice?.level ?? null }),
     },
   });
   await mesh.start(100);
@@ -148,4 +149,22 @@ test('grupos e canais nativos: distribuição cifrada, mensagens, permissões e 
   assert.throws(() => A.mesh.sendText('group:invalido', 'x'), /desconhecido/);
   const restored = new MeshNode({ keys: identityFromPhrase(A.phrase), transports: [], relay: false, displayName: 'Ana', state: A.mesh.export(), events: {} });
   assert.deepEqual(restored.listGroups().map(g => g.id).sort(), [group.id, ch.id].sort());
+});
+
+test('alerta da comunidade chega ao computador: Grave vira aviso crítico, com o id da conversa da comunidade', async t => {
+  t.after(closeAll);
+  const B = await person('Bia', []);
+  const A = await person('Ana', [`127.0.0.1:${B.lan.port}`]);
+  await until(() => A.lan.linkCount === 1 && B.lan.linkCount === 1, 'enlace');
+  const bia = A.mesh.addContactByCard(B.mesh.myCard('public').card);
+  A.mesh.sendText(bia.id, 'oi');
+  await until(() => B.log.messages.length === 1, 'pedido');
+  B.mesh.sendText(A.mesh.ids.publicId, 'olá');
+  await until(() => A.log.messages.length === 1, 'resposta');
+  const com = A.mesh.createGroup({ kind: 'community', name: 'Bairro', via: 'public', memberIds: [bia.id] });
+  await until(() => B.mesh.listGroups().some(g => g.id === com.id), 'comunidade distribuída');
+  A.mesh.messenger.publishAlert(com.id.replace(/^group:/, ''), { cat: 'agua', sev: 'grave', title: 'Rio subindo', text: 'Saiam da beira do rio.', area: 'Centro', durSec: 3600 });
+  await until(() => B.log.alerts.length > 0, 'alerta recebido');
+  assert.deepEqual(B.log.alerts[0], { title: 'Rio subindo', sev: 'grave', community: com.id, level: 'critical' });
+  assert.equal(A.log.alerts.length, 0, 'o meu próprio alerta não me avisa');
 });
