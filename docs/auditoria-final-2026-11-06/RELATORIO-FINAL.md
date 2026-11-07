@@ -131,9 +131,9 @@ Instalação:
 
 - CI da `main` verde em todos os produtos.
 - Versões publicadas:
-  - Android 0.1.1 e 0.1.2 (Latest);
+  - Android 0.1.1, 0.1.2 e 0.1.3 (Latest);
   - Desktop 0.1.0 e 0.1.1;
-  - Provider 0.1.1 e 0.1.2 (menus em 11 idiomas);
+  - Provider 0.1.1, 0.1.2 (menus em 11 idiomas) e 0.1.3;
   - Piu Node 0.1.0 (`.ipk` para OpenWrt e `.deb` para Debian/Ubuntu/Raspberry Pi OS).
 - Rascunho antigo do Provider 0.1.0: feito com código anterior, preservado e sem publicar.
 - O site lê os downloads de `releases.json`, gerado por `sync-release.mjs`, que confere cada SHA-256 com o `SHA256SUMS.txt`.
@@ -168,10 +168,10 @@ Instalação:
   - sem certificados (decisão).
 - **Provider** (piu-node, painel, Provider Desktop, OpenWrt):
   - I; gateway e painel testados ponta a ponta;
-  - Provider Desktop 0.1.2 publicado;
+  - Provider Desktop 0.1.3 publicado (versão no menu Ajuda e aviso de nova versão);
   - Piu Node 0.1.0 publicado (`.ipk` e `.deb`); LoRa por USB experimental;
   - broadcast UDP 8423 validado com o endereço da sub-rede (num roteador de verdade, a confirmar).
 - **Mobile:**
   - I no código (603 testes);
-  - APK 0.1.2 publicado;
+  - APK 0.1.3 publicado (versão visível e aviso de nova versão);
   - teste no aparelho pendente (P).
