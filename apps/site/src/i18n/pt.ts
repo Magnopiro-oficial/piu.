@@ -104,7 +104,7 @@ export const pt = {
     lead: 'Envie e receba LUNES com a chave só no seu aparelho: a transação é assinada no celular e enviada à Mainnet. Em breve ela também poderá viajar pela malha, sem internet, até um aparelho que a publique. Mensagens nunca vão para a blockchain.',
     rewards: [
       { k: 'BOAS-VINDAS', v: '10', title: 'Para quem instala', desc: 'Liberado depois de 7 dias de uso real e confirmação por um contato. Um aparelho, um bônus.' },
-      { k: 'DISTRIBUIÇÃO', v: '25', title: 'Por pessoa que você trouxer', desc: 'Para quem passa o app de celular para celular, quando o convidado fica ativo. Até 20 por mês.' },
+      { k: 'DISTRIBUIÇÃO', v: '25', title: 'Uma vez, por pessoa que você trouxer', desc: 'Pagamento único por convite, quando a pessoa que recebeu o app de você fica ativa. Não se repete todo mês. Até 20 convidados por mês.' },
     ],
     note: 'Programa ainda não lançado: nenhum bônus é pago hoje. Valores ilustrativos. Orçamento, limites e critérios dependem do modelo econômico da Lunes Network. Só indicação direta, sem ganhos em níveis.',
   },

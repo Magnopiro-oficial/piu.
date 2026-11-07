@@ -15,7 +15,7 @@
 |---|---|---|---|
 | **Créditos de rede** | quem retransmite mensagens de terceiros | parcela de um orçamento por época (seção 3) | fundo de recompensas da rede |
 | **Bônus de boas-vindas** | pessoa nova | **10 LUNES** [decidir], liberados após 7 dias de uso | fundo de crescimento |
-| **Distribuição por convite** | quem convidou | **25 LUNES** [decidir] por pessoa ativa 7 dias | fundo de crescimento |
+| **Distribuição por convite** | quem convidou | **25 LUNES** [decidir], pagamento único por pessoa ativa 7 dias (não é mensal) | fundo de crescimento |
 | **Convite pago (Por perto)** | quem recebe o pedido de conversa | 1, 3, 5 ou 10 LUNES, escolhido por quem recebe | carteira de quem convida (não é emissão) |
 
 Os valores 10 e 25 são os do design. Eles devem ser confirmados ou ajustados de acordo com o preço do LUNES e com o tamanho dos fundos.
@@ -91,7 +91,7 @@ São as maiores portas para **Sybil** (criar pessoas falsas para receber bônus)
 | Confirmada pessoalmente por pelo menos 1 contato (código de segurança) | sim | sim |
 | 7 dias de uso com tráfego real (mensagens trocadas com 3 ou mais contatos distintos) | sim | sim |
 | Instalação confirmada por 2 nós independentes do convidador | não | sim |
-| Teto por convidador | não se aplica | **20 por mês e 100 no total** [decidir] |
+| Teto por convidador | não se aplica | **20 convidados por mês e 100 no total** [decidir] |
 | Fundo | fundo de crescimento com teto mensal [decidir] | o mesmo |
 
 Quando o fundo de crescimento do mês acaba, novos bônus ficam "reservados" e são pagos no mês seguinte, por ordem. Isso evita prometer o que não existe. Um convidador com muitos convidados reprovados (por exemplo, mais de 30%) perde o direito a novas distribuições [decidir].

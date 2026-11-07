@@ -99,7 +99,7 @@ export const en: Dict = {
     lead: 'Send and receive LUNES with the key only on your device: the transaction is signed on the phone and sent to the Mainnet. Soon it will also be able to travel through the mesh, without internet, to a device that publishes it. Messages never go on the blockchain.',
     rewards: [
       { k: 'WELCOME', v: '10', title: 'For new users', desc: 'Released after 7 days of real use and confirmation by a contact. One device, one bonus.' },
-      { k: 'DISTRIBUTION', v: '25', title: 'Per person you bring in', desc: 'For whoever passes the app phone to phone, once the new user becomes active. Up to 20 per month.' },
+      { k: 'DISTRIBUTION', v: '25', title: 'Once, per person you bring in', desc: 'A one-time payment per invite, once the person who got the app from you becomes active. It does not repeat monthly. Up to 20 invites per month.' },
     ],
     note: 'Program not launched yet: no bonus is paid today. Illustrative amounts. Budget, limits and criteria depend on the Lunes Network economic model. Direct referrals only, no multi-level earnings.',
   },
