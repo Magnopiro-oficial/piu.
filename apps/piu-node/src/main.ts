@@ -1,12 +1,15 @@
 import { createHash } from 'node:crypto';
 import { loadConfig } from './config.js';
+import { pairingCodeOutput } from './security/codeDisplay.js';
 import { type NodeServer, RESTART_EXIT_CODE, startNode } from './server.js';
 
 const config = loadConfig();
 
-/** O código só aparece aqui, no console/tela do próprio equipamento. Nunca vai para a rede nem para o log. */
-const show = (reason: string, code: string) =>
-  process.stdout.write(`\n  ${reason}\n  Código de pareamento: ${code.slice(0, 4)} ${code.slice(4)}  (vale 10 min, uso único)\n\n`);
+/**
+ * O código só aparece no console/tela do próprio equipamento, nunca na rede. Sem terminal (serviço),
+ * o stdout vira log persistente: aí o código vai para `<dados>/pairing-code` (0600) e o log diz onde.
+ */
+const show = pairingCodeOutput({ tty: !!process.stdout.isTTY, dataDir: config.dataDir, write: s => process.stdout.write(s) });
 
 // Parar o serviço (systemd, Ctrl+C) ou reiniciar pelo painel: grava as mensagens guardadas e o
 // histórico antes de sair. No reinício, sai com RESTART_EXIT_CODE: o supervisor (procd com respawn,

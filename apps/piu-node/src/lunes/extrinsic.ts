@@ -22,6 +22,13 @@ export const BALANCES_PALLET = 4;
 export const TRANSFER_KEEP_ALIVE = 3;
 /** Era padrão: 64 blocos (~6,4 min), como em apps/settlement. */
 export const DEFAULT_ERA_PERIOD = 64;
+/**
+ * `period: 0` = era IMORTAL (1 byte `0x00`; o bloco da era é a gênese). Só para a transação levada pela
+ * malha (docs/carteira/transacoes-pela-malha.md): a Lunes guarda só os últimos 2400 hashes de bloco
+ * (`System.BlockHash`, lido ao vivo em 2026-11-06), então uma era mortal vale no máximo ~4 h, pouco
+ * para um gateway alcançar. A imortal vale até o nonce ser usado ou o runtime mudar (spec/tx version).
+ */
+export const IMMORTAL_PERIOD = 0;
 
 const U128_MAX = (1n << 128n) - 1n;
 const toHex = (b: Uint8Array) => '0x' + Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
@@ -82,6 +89,7 @@ export function mortalEra(currentBlock: number, period: number = DEFAULT_ERA_PER
 
 /** Decodifica os 2 bytes de uma era mortal. */
 export function decodeEra(b: Uint8Array): { period: number; phase: number } {
+  if (b.length >= 1 && b[0] === 0) return { period: IMMORTAL_PERIOD, phase: 0 };
   if (b.length < 2) throw new Error('Era curta demais.');
   const enc = b[0]! | (b[1]! << 8);
   const period = 2 ** ((enc & 15) + 1);
@@ -119,16 +127,20 @@ export interface SigningContext {
   nonce: number;
   /** Gorjeta em planck (padrão 0). */
   tip?: bigint;
-  /** Blocos de validade (padrão 64). */
+  /** Blocos de validade (padrão 64). `IMMORTAL_PERIOD` (0): era imortal, com `blockHash` = gênese. */
   period?: number;
 }
 
 /** `extra` = era ‖ compact(nonce) ‖ compact(tip). (RestrictAssetMint e as demais extensões não têm bytes.) */
-export const signedExtra = (ctx: SigningContext) => cat(mortalEra(ctx.blockNumber, ctx.period ?? DEFAULT_ERA_PERIOD), compact(ctx.nonce), compact(ctx.tip ?? 0n));
+export const signedExtra = (ctx: SigningContext) =>
+  cat(ctx.period === IMMORTAL_PERIOD ? Uint8Array.of(0) : mortalEra(ctx.blockNumber, ctx.period ?? DEFAULT_ERA_PERIOD), compact(ctx.nonce), compact(ctx.tip ?? 0n));
 
 /** `additional` = u32 specVersion ‖ u32 transactionVersion ‖ gênese ‖ hash do bloco da era. */
-export const additionalSigned = (ctx: SigningContext) =>
-  cat(u32le(ctx.specVersion), u32le(ctx.transactionVersion), hash32(ctx.genesisHash, 'da gênese'), hash32(ctx.blockHash, 'do bloco'));
+export function additionalSigned(ctx: SigningContext): Uint8Array {
+  // Na era imortal o runtime confere contra o hash do bloco 0: qualquer outro daria BadProof.
+  if (ctx.period === IMMORTAL_PERIOD && ctx.blockHash.toLowerCase() !== ctx.genesisHash.toLowerCase()) throw new Error('Era imortal exige o hash da gênese como bloco da era.');
+  return cat(u32le(ctx.specVersion), u32le(ctx.transactionVersion), hash32(ctx.genesisHash, 'da gênese'), hash32(ctx.blockHash, 'do bloco'));
+}
 
 /** Bytes que se assinam: call ‖ extra ‖ additional, ou o blake2b-256 disso se passar de 256 bytes. */
 export function signingPayload(call: Uint8Array, ctx: SigningContext): Uint8Array {
@@ -156,7 +168,7 @@ export interface SignedTransfer {
   hash: string;
   length: number;
   era: { period: number; phase: number };
-  /** Último bloco em que o nó ainda aceita (depois disso: reassinar com nonce/bloco novos). */
+  /** Último bloco em que o nó ainda aceita (depois disso: reassinar com nonce/bloco novos). Imortal: `Number.MAX_SAFE_INTEGER`. */
   validUntil: number;
 }
 
@@ -180,6 +192,28 @@ export function buildTransferKeepAlive(key: WalletKey, o: { dest: Uint8Array | s
   const era = decodeEra(extra);
   return {
     call, payload, signature, extrinsic, hex: toHex(extrinsic), hash: toHex(blake2b(extrinsic, { dkLen: 32 })), length: extrinsic.length, era,
-    validUntil: o.ctx.blockNumber + era.period,
+    validUntil: era.period === IMMORTAL_PERIOD ? Number.MAX_SAFE_INTEGER : o.ctx.blockNumber + era.period,
   };
+}
+
+/**
+ * Lê um extrinsic v4 assinado (sr25519) que seja exatamente uma `transfer_keep_alive` (o que a carteira
+ * do Piu monta). O gateway usa antes de gastar uma consulta à Mainnet com o que chegou pela malha.
+ * Não confere a assinatura (quem confere é o runtime, com o contexto que só ele tem). `null` se não for.
+ */
+export function decodeSignedTransfer(xt: Uint8Array): { signer: Uint8Array; era: { period: number; phase: number }; nonce: bigint; tip: bigint; dest: Uint8Array; value: bigint } | null {
+  try {
+    const prefix = decodeCompact(xt);
+    if (Number(prefix.value) + prefix.length !== xt.length) return null;
+    const body = xt.subarray(prefix.length);
+    if (body.length < 100 || body[0] !== 0x84 || body[1] !== 0x00 || body[34] !== 0x01) return null;
+    let o = 99;
+    const era = decodeEra(body.subarray(o));
+    o += era.period === IMMORTAL_PERIOD ? 1 : 2;
+    const nonce = decodeCompact(body, o); o += nonce.length;
+    const tip = decodeCompact(body, o); o += tip.length;
+    const call = decodeTransferKeepAlive(body.subarray(o));
+    if (!call) return null;
+    return { signer: body.slice(2, 34), era, nonce: nonce.value, tip: tip.value, dest: call.dest, value: call.value };
+  } catch { return null; }
 }

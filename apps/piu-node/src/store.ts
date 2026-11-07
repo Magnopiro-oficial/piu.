@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
-import { chmodSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, renameSync } from 'node:fs';
 import { join } from 'node:path';
+import { writeFileAtomic } from './fsutil.js';
 import type { LunesTransfer } from './lunes/signing.js';
 import type { CertJson } from './relay/operator-frames.js';
 
@@ -54,6 +55,12 @@ export interface Phone { id: string; operatorId: string; name: string; secret: s
 /** Transferência esperando a aprovação no celular (5 min, uso único). */
 export interface PendingTx { id: string; operatorId: string; phoneId: string; amount: number; to: string; request: string; expiresAt: number }
 
+/**
+ * Gateway da carga pela malha (painel → Gateway): ligado e a caixa HTTPS do validador para as
+ * evidências. Ajuste do nó (vale para o equipamento), mudado só pelo dono com step-up.
+ */
+export interface GatewaySettings { enabled: boolean; inboxUrl: string | null; at: number }
+
 /** Endereço Lunes (SS58) da carteira de provider do operador, configurado no painel. Só leitura do saldo. */
 export interface LunesAddress { address: string; at: number }
 
@@ -61,7 +68,9 @@ interface State { operators: Operator[]; sessions: Session[]; devices: Device[];
   /** Vizinhos fixos do enlace LNNP adicionados pelo painel (`host:porta`), somados aos de `PIU_LNNP_PEERS`. */
   relayPeers: string[]; lunes: Record<string, LunesAddress>;
   /** Pedidos de transferência na Mainnet assinados no celular (src/lunes/signing.ts), com o estado de cada um. */
-  lunesTransfers: LunesTransfer[] }
+  lunesTransfers: LunesTransfer[];
+  /** Gateway da carga pela malha, como o dono deixou no painel. Ausente: o que a configuração (env) diz. */
+  gateway?: GatewaySettings }
 
 const empty = (): State => ({ operators: [], sessions: [], devices: [], wallets: {}, settings: {}, phones: [], pendingTx: [], claims: [], relayPeers: [], lunes: {}, lunesTransfers: [] });
 
@@ -89,21 +98,48 @@ function dropLegacyDemo(s: State): boolean {
   return changed;
 }
 
+/** `touchSession` grava no disco no máximo uma vez por este intervalo por sessão (em memória, sempre). */
+const TOUCH_SAVE_MS = 60_000;
+
 /**
  * Estado do nó num arquivo JSON com permissão 0600 (só o usuário do serviço lê).
- * Gravação atômica (arquivo temporário + rename). Tokens de sessão ficam só como hash SHA-256.
+ * Gravação atômica com fsync (fsutil.ts). Tokens de sessão ficam só como hash SHA-256.
  * Ids são UUIDs aleatórios: nada de id incremental exposto na API.
+ * Arquivo ilegível nunca vira estado vazio (quem pareasse primeiro viraria dono e o acompanhamento
+ * das transferências na Mainnet sumiria): é guardado de lado e o nó não sobe. A cada subida com o
+ * arquivo bom, uma cópia vai para `state.json.bak`, que é o que se restaura.
  */
+/** Lê o estado; se não der, guarda o arquivo de lado (nunca sobrescreve) e para com o motivo. */
+function load(file: string): State {
+  let raw: string;
+  try { raw = readFileSync(file, 'utf8'); } catch (e) { throw new Error(`state.json ilegível (${(e as NodeJS.ErrnoException).code ?? 'erro de leitura'}): ${file}`); }
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('não é um objeto');
+    writeFileAtomic(`${file}.bak`, raw);
+    return { ...empty(), ...(parsed as Partial<State>) };
+  } catch {
+    const aside = `${file}.corrompido-${Date.now()}`;
+    renameSync(file, aside);
+    throw new Error(
+      `state.json corrompido; o arquivo foi guardado em ${aside}. O nó não sobe com estado vazio (o dono e as transferências acompanhadas se perderiam). ` +
+      `Restaure a cópia ${file}.bak como ${file} (ou o seu backup) e suba de novo.`,
+    );
+  }
+}
+
 export class Store {
   private s: State;
   private file: string | null;
+  /** Última vez que `touchSession` gravou cada sessão (hash do token), só em memória. */
+  private touchSavedAt = new Map<string, number>();
 
   constructor(dataDir: string | null) {
     this.file = dataDir ? join(dataDir, 'state.json') : null;
     if (this.file && dataDir) {
       mkdirSync(dataDir, { recursive: true, mode: 0o700 });
       chmodSync(dataDir, 0o700);
-      try { this.s = { ...empty(), ...JSON.parse(readFileSync(this.file, 'utf8')) }; } catch { this.s = empty(); }
+      this.s = existsSync(this.file) ? load(this.file) : empty();
       if (dropLegacyDemo(this.s)) this.save();
     } else {
       this.s = empty();
@@ -111,10 +147,7 @@ export class Store {
   }
 
   private save() {
-    if (!this.file) return;
-    const tmp = this.file + '.tmp';
-    writeFileSync(tmp, JSON.stringify(this.s), { mode: 0o600 });
-    renameSync(tmp, this.file);
+    if (this.file) writeFileAtomic(this.file, JSON.stringify(this.s));
   }
 
   addOperator(name: string, now: number): Operator {
@@ -133,8 +166,16 @@ export class Store {
 
   addSession(sess: Session) { this.s.sessions.push(sess); this.save(); }
   sessionByHash(hash: string) { return this.s.sessions.find(x => x.tokenHash === hash) ?? null; }
-  touchSession(hash: string, now: number) { const x = this.sessionByHash(hash); if (x) { x.lastSeen = now; this.save(); } }
-  removeSession(hash: string) { this.s.sessions = this.s.sessions.filter(x => x.tokenHash !== hash); this.save(); }
+  touchSession(hash: string, now: number) {
+    const x = this.sessionByHash(hash);
+    if (!x) return;
+    // Cada requisição autenticada atualiza a inatividade; o disco (flash de roteador) só a cada minuto.
+    if (!this.touchSavedAt.has(hash)) this.touchSavedAt.set(hash, x.lastSeen); // o que está no disco
+    const persist = now - this.touchSavedAt.get(hash)! >= TOUCH_SAVE_MS;
+    x.lastSeen = now;
+    if (persist) { this.touchSavedAt.set(hash, now); this.save(); }
+  }
+  removeSession(hash: string) { this.touchSavedAt.delete(hash); this.s.sessions = this.s.sessions.filter(x => x.tokenHash !== hash); this.save(); }
   sessionsOf(operatorId: string) { return this.s.sessions.filter(x => x.operatorId === operatorId); }
   /** Encerra todas as sessões do operador menos `keepHash`. Devolve quantas encerrou. */
   removeOtherSessions(operatorId: string, keepHash: string) {
@@ -172,6 +213,16 @@ export class Store {
   /** Dono do equipamento (o primeiro operador pareado). */
   owner() { return this.s.operators[0] ?? null; }
 
+  /** Gateway como o dono deixou no painel; sem ajuste salvo, `fallback` (o da configuração do nó). */
+  gatewaySettings(fallback: { enabled: boolean; inboxUrl: string | null }): GatewaySettings {
+    const g = this.s.gateway;
+    return g && typeof g.enabled === 'boolean' ? { enabled: g.enabled, inboxUrl: typeof g.inboxUrl === 'string' ? g.inboxUrl : null, at: Number(g.at) || 0 } : { ...fallback, at: 0 };
+  }
+  setGatewaySettings(v: { enabled: boolean; inboxUrl: string | null }, now: number): GatewaySettings {
+    this.s.gateway = { enabled: v.enabled, inboxUrl: v.inboxUrl, at: now };
+    this.save();
+    return { ...this.s.gateway };
+  }
   relayPeers() { return [...this.s.relayPeers]; }
   addRelayPeer(address: string) { if (!this.s.relayPeers.includes(address)) { this.s.relayPeers.push(address); this.save(); } }
   removeRelayPeer(address: string) { const before = this.s.relayPeers.length; this.s.relayPeers = this.s.relayPeers.filter(a => a !== address); if (this.s.relayPeers.length !== before) this.save(); return before !== this.s.relayPeers.length; }

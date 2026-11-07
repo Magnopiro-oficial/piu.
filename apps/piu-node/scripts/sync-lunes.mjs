@@ -10,6 +10,8 @@
 // - walletKey: só `verifyWalletSignature` (sr25519) na conferência; a derivação da chave existe no
 //   arquivo porque é cópia fiel, mas nenhuma rota a chama (os testes usam para simular o celular).
 // - lunesHistory (+ walletCore, que ela importa): histórico do endereço no indexador público.
+// - carryGateway: papel de gateway (transações assinadas que chegam pela malha → Mainnet; pacotes selados
+//   → caixa do validador), docs/carteira/transacoes-pela-malha.md. Usa protocol/carry (sync-protocol.mjs).
 // Uso: node scripts/sync-lunes.mjs          → atualiza a cópia
 //      node scripts/sync-lunes.mjs --check  → só confere (código 1 se estiver diferente)
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -22,8 +24,9 @@ export const DST = join(here, '../src/lunes');
 /** Nada de react-native nesses módulos. */
 export const I18N_SRC = join(here, '../../mobile/src/i18n');
 export const I18N_DST = join(here, '../src/i18n');
-export const I18N_FILES = ['core', 'pt-BR'];
-export const FILES = ['xxhash', 'ss58', 'lunesRpc', 'walletKey', 'extrinsic', 'walletCore', 'lunesHistory'];
+// pt-BR do app junta dicionários de subpastas (Piu 11 "modo nó" e Piu 13 "Pontos"): vêm junto.
+export const I18N_FILES = ['core', 'pt-BR', 'piu11/pt-BR', 'pontos/pt-BR'];
+export const FILES = ['xxhash', 'ss58', 'lunesRpc', 'walletKey', 'extrinsic', 'walletCore', 'lunesHistory', 'carryGateway'];
 
 /**
  * Ajustes de import (o comportamento é idêntico): o tipo `IconName` vem da UI do app, que não existe
@@ -35,6 +38,7 @@ const IMPORT_PATCHES = {
   walletCore: [["from '../i18n/core';", "from '../i18n/core.js';"], ["import type { IconName } from '../ui/Icon';", "type IconName = string; // no app: import type { IconName } from '../ui/Icon'"]],
   lunesHistory: [["import type { IconName } from '../ui/Icon';", "type IconName = string; // no app: import type { IconName } from '../ui/Icon'"]],
   walletKey: [["from '../protocol/phrase';", "from '../protocol/phrase.js';"]],
+  carryGateway: [["from '../protocol/carry';", "from '../protocol/carry.js';"], ["from '../protocol/keys';", "from '../protocol/keys.js';"]],
 };
 
 export function generate(name) {
@@ -50,7 +54,8 @@ export function generate(name) {
 /** Núcleo puro de textos usado por walletCore; sem hooks React nem módulos Expo. */
 export function generateI18n(name) {
   const src = readFileSync(join(I18N_SRC, `${name}.ts`), 'utf8');
-  const body = src.replace(/(from\s+'\.\/[A-Za-z0-9-]+)'/g, "$1.js'");
+  // Imports relativos ganham `.js` (ESM do Node), inclusive os de subpasta (`./piu11/pt-BR`).
+  const body = src.replace(/(from\s+'\.\/[A-Za-z0-9/-]+)'/g, "$1.js'");
   return `// GERADO por scripts/sync-lunes.mjs a partir de apps/mobile/src/i18n/${name}.ts. Não edite aqui.\n${body}`;
 }
 
@@ -79,7 +84,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     if (cur === out) continue;
     stale++;
     if (check) console.error(`Desatualizado: src/i18n/${f}.ts`);
-    else writeFileSync(path, out);
+    else { mkdirSync(dirname(path), { recursive: true }); writeFileSync(path, out); }
   }
   if (check && stale) process.exit(1);
   console.log(check ? 'Cliente da Lunes em dia.' : `Cliente da Lunes sincronizado (${stale} arquivo(s) atualizado(s)).`);

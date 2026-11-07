@@ -22,6 +22,7 @@ import { join } from 'node:path';
 import { writeFileAtomic } from './fsutil.js';
 import { toHex, utf8 } from './protocol/bytes.js';
 import type { KeyPair } from './protocol/keys.js';
+import { dayOfSec, type EndorsementJson, type EndorsementRevocationJson, makeEndorsement, makeEndorsementRevocation } from './protocol/phoneNode.js';
 import {
   type CertJson, type DevicePolicy, fingerprint, type ListJson, listFromJson, listToJson, makeCert, makeDevicePolicy, makeRevocationList, makeRotation,
   type OperatorCert, operatorKeyPair, type PolicyLimits, type RevocationList, type RotationStep, unhex,
@@ -43,7 +44,9 @@ interface FileShape { v: 1; keys: Record<string, KeyRecord> }
 
 export const MIN_BACKUP_PASSWORD = 10;
 export const BACKUP_FILENAME = 'piu-operador.backup';
-const DEFAULT_N = 1 << 16, MIN_N = 1 << 14, MAX_N = 1 << 20;
+// N máximo 2^17 (128·N·r = 128 MiB com r = 8): um backup forjado com N alto não derruba um roteador
+// de 256 MiB por falta de memória. O nó gera 2^16, então os backups existentes continuam abrindo.
+const DEFAULT_N = 1 << 16, MIN_N = 1 << 14, MAX_N = 1 << 17;
 const MAX_BACKUP_BYTES = 256 * 1024;
 
 export class OperatorKeyError extends Error {
@@ -65,7 +68,7 @@ const unb64 = (s: string) => Uint8Array.from(Buffer.from(s, 'base64url'));
 interface BackupHeader { piu: 'operator-backup'; v: 1; kdf: { alg: 'scrypt'; N: number; r: number; p: number; salt: string }; aead: 'xchacha20poly1305'; nonce: string }
 const headerAd = (h: BackupHeader) => utf8(['piu/operator-backup', h.v, h.kdf.alg, h.kdf.N, h.kdf.r, h.kdf.p, h.kdf.salt, h.aead, h.nonce].join('|'));
 const deriveKey = (password: string, h: BackupHeader) =>
-  scryptAsync(utf8(password.normalize('NFKC')), unb64(h.kdf.salt), { N: h.kdf.N, r: h.kdf.r, p: h.kdf.p, dkLen: 32, maxmem: 2 ** 31, asyncTick: 25 });
+  scryptAsync(utf8(password.normalize('NFKC')), unb64(h.kdf.salt), { N: h.kdf.N, r: h.kdf.r, p: h.kdf.p, dkLen: 32, maxmem: 256 * 1024 * 1024, asyncTick: 25 });
 
 export class OperatorVault {
   private file: string | null;
@@ -130,6 +133,22 @@ export class OperatorVault {
   /** Certificado da identidade técnica de um equipamento, assinado pela chave atual. */
   certify(operatorId: string, nodePk: Uint8Array, now: number): OperatorCert {
     return makeCert(this.ensure(operatorId, now), nodePk, Math.floor(now / 1000), this.chain(operatorId));
+  }
+
+  /**
+   * Aval a um celular (docs/economia/no-celular.md): assinado pela chave de operador ATUAL, sobre a
+   * chave de operador do celular e o dia UTC. Vai no arquivo de registro (relay/registration.ts).
+   */
+  endorsePhone(operatorId: string, phonePk: Uint8Array, now: number, o: { inPerson?: boolean } = {}): EndorsementJson {
+    if (phonePk.length !== 32) throw new Error('Chave de celular inválida.');
+    // `inPerson`: o operador afirma ter conferido a pessoa pessoalmente (opcional para a semente; o validador não exige de operador admitido).
+    return makeEndorsement(this.ensure(operatorId, now), phonePk, dayOfSec(Math.floor(now / 1000)), { inPerson: o.inPerson === true });
+  }
+
+  /** Retira um aval dado a um celular (vale quando o validador vê; vai no arquivo de registro). */
+  unendorsePhone(operatorId: string, phonePk: Uint8Array, now: number): EndorsementRevocationJson {
+    if (phonePk.length !== 32) throw new Error('Chave de celular inválida.');
+    return makeEndorsementRevocation(this.ensure(operatorId, now), phonePk, Math.floor(now / 1000));
   }
 
   revocation(operatorId: string): RevocationList | null {

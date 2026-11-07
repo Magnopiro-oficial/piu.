@@ -14,8 +14,11 @@ export const DST = join(here, '../src/protocol');
 /**
  * Só o que o nó usa: rotear, recibos, fragmentos e o LNNP. Nada de sessões nem catraca. `phrase` entra
  * só porque src/lunes/walletKey.ts (cópia) importa `isValidPhrase`; o nó nunca gera nem guarda frase.
+ * `phoneNode`: o operador do piu-node avaliza celulares (docs/economia/no-celular.md) com o mesmo
+ * formato de aval que o app e o validador usam. `carry`: o piu-node é o gateway principal da carga pela
+ * malha (docs/carteira/transacoes-pela-malha.md).
  */
-export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'router', 'fragment', 'lnnp', 'phrase'];
+export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'router', 'fragment', 'lnnp', 'phrase', 'phoneNode', 'carry'];
 
 /**
  * Ajustes só de tipo (o comportamento é idêntico) para compilar com `noUncheckedIndexedAccess`,

@@ -25,6 +25,11 @@ export interface NodeServer {
   packages: Manifest[];
   /** Gera um código de pareamento novo (10 min, uso único). Só para a tela local do equipamento. */
   issueCode: () => string;
+  /**
+   * Sessão para o navegador embutido do app desktop, sem código (o token vai no cookie
+   * `__Host-piu_session`; nunca passa pelo JavaScript da página). Não vale como step-up.
+   */
+  localSession: (name: string, label: string) => { token: string; csrf: string };
   /** Motor de retransmissão LNNP (`null` se desligado por `PIU_LNNP=0` ou se não conseguiu subir). */
   relay: RelayHandle | null;
   close: () => Promise<void>;
@@ -88,11 +93,20 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
 
   // Retransmissão: um erro aqui (porta ocupada, por exemplo) não derruba o painel; o operador vê no log.
   let relay: RelayHandle | null = null;
+  const gatewayDefault = { enabled: config.lnnp?.gateway !== false, inboxUrl: config.lnnp?.inboxUrl ?? null };
   if (config.lnnp?.enabled) {
     try {
       relay = await startRelay(loadNodeKey(config.dataDir), config.lnnp, store.nodeSettings(), {
         log: o.log, historyFile: join(config.dataDir, 'lnnp', 'relay-history.json'), storeFile: join(config.dataDir, 'lnnp', 'relay-store.bin'),
         trustFile: join(config.dataDir, 'lnnp', 'operator-trust.json'),
+        // Gateway da carga pela malha (PIU_GATEWAY): usa os mesmos endereços da Lunes do painel. Ligado e a
+        // caixa do validador são lidos do estado do nó a cada uso: o dono muda pelo painel sem reiniciar
+        // (sem ajuste salvo, valem PIU_GATEWAY e PIU_VALIDATOR_INBOX).
+        gateway: {
+          ...(config.lunesEndpoints ? { endpoints: config.lunesEndpoints } : {}),
+          enabled: () => store.gatewaySettings(gatewayDefault).enabled,
+          inboxUrl: () => store.gatewaySettings(gatewayDefault).inboxUrl,
+        },
       });
     } catch (e) {
       o.log?.(`LNNP: motor de retransmissão não subiu (${e instanceof Error ? e.message : String(e)})`);
@@ -127,5 +141,6 @@ export async function startNode(config: Config, o: StartOptions = {}): Promise<N
   const port = typeof addr === 'object' && addr ? addr.port : config.port;
   const host = config.allowedHosts.find(h => !h.includes(':')) ?? 'localhost';
   return { app, url: `https://${host}:${port}`, port, cert: t.cert, fingerprint: t.fingerprint, packages, issueCode, relay,
+    localSession: (name, label) => { const { token, csrf } = app.piuLocalSession(name, label); return { token, csrf }; },
     close: async () => { lunesSigner.stop(); await relay?.close(); await app.close(); } };
 }

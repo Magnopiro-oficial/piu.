@@ -12,9 +12,10 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 
 export const cookieOptions = { httpOnly: true, secure: true, sameSite: 'strict' as const, path: '/', maxAge: ABSOLUTE_MS / 1000 };
 
-export function createSession(store: Store, operatorId: string, now: number, label = 'Navegador'): { token: string; session: Session } {
+/** `stepUp`: a sessão já nasce autenticada há pouco (pareamento com código). Sem código, nasce sem. */
+export function createSession(store: Store, operatorId: string, now: number, label = 'Navegador', stepUp = true): { token: string; session: Session } {
   const token = randomBytes(32).toString('base64url');
-  const session: Session = { tokenHash: sha(token), operatorId, csrf: randomBytes(32).toString('base64url'), createdAt: now, lastSeen: now, authAt: now, id: randomUUID(), label };
+  const session: Session = { tokenHash: sha(token), operatorId, csrf: randomBytes(32).toString('base64url'), createdAt: now, lastSeen: now, authAt: stepUp ? now : 0, id: randomUUID(), label };
   store.pruneSessions(s => alive(s, now));
   store.addSession(session);
   return { token, session };

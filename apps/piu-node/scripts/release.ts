@@ -6,13 +6,21 @@
  */
 import { createHash, createPrivateKey, generateKeyPairSync, sign } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { signedPayload } from '../src/packages.js';
 
 const [cmd, ...args] = process.argv.slice(2);
 
 if (cmd === 'keygen') {
-  const dir = args[0] ?? 'release-keys';
+  // A privada nunca nasce dentro do repositório (um `git add .` a publicaria): a pasta é obrigatória e fora dele.
+  const dir = args[0];
+  const repo = resolve(fileURLToPath(new URL('../../..', import.meta.url)));
+  const rel = dir ? relative(repo, resolve(dir)) : '';
+  if (!dir || !rel.startsWith('..')) {
+    console.error('uso: keygen <pasta FORA do repositório> (ex.: ~/cofre/piu-release-keys)');
+    process.exit(2);
+  }
   mkdirSync(dir, { recursive: true, mode: 0o700 });
   const { privateKey, publicKey } = generateKeyPairSync('ed25519');
   writeFileSync(join(dir, 'release-private.pem'), privateKey.export({ type: 'pkcs8', format: 'pem' }), { mode: 0o600 });

@@ -7,7 +7,10 @@
  * (INF-011). A única chave é a técnica do nó (`deriveNodeKey`), que assina o handshake e os recibos.
  */
 import { toHex } from '../protocol/bytes.js';
-import { envelopeId, parseHeader } from '../protocol/envelope.js';
+import { envelopeId, MsgType, openDirect, parseHeader } from '../protocol/envelope.js';
+import { CarryAdmission } from './carryAdmission.js';
+import { CarryKind, carryOf, type CarryReceipt, GATEWAY_INBOX_IDENTITY, GATEWAY_TX_IDENTITY, gatewayKindOf, type OpenedCarry, sealCarryReceipt } from '../protocol/carry.js';
+import type { PublicIdentity } from '../protocol/keys.js';
 import { fragment, Reassembler } from '../protocol/fragment.js';
 import type { Identity, KeyPair } from '../protocol/keys.js';
 import {
@@ -67,6 +70,13 @@ export interface EngineOptions {
   onOperatorChange?: (s: OperatorTrustState) => void;
   /** Intervalo do resumo assinado mandado aos vizinhos do mesmo operador (ms). Padrão: 30 s. */
   reportMs?: number;
+  /**
+   * Papel de gateway (docs/carteira/transacoes-pela-malha.md): `roles()` diz agora se este nó pega as
+   * transações (com rota até a Lunes) e os pacotes (com a caixa do validador configurada); `onCarry`
+   * recebe cada carga aberta (relay/gateway.ts entrega e responde com `sendCarryReceipt`). Ausente ou
+   * papel desligado: as cargas passam como envelopes de terceiros.
+   */
+  gateway?: { roles: () => { tx: boolean; inbox: boolean }; onCarry: (c: OpenedCarry) => void };
 }
 
 /**
@@ -116,7 +126,14 @@ export interface Counters {
 }
 
 const GiB = 1024 ** 3;
+/** Recibos de outros nós guardados (FIFO). Os deste nó têm buffer próprio: nunca saem por causa destes. */
 const RECEIPT_LOG = 1000;
+/** Recibos assinados por este nó (evidência de pagamento do operador) guardados até a exportação. */
+const OWN_RECEIPT_LOG = 10_000;
+/** Recibos de terceiros aceitos por enlace por minuto (o resto é recusado e contado). */
+const RECEIPTS_PER_LINK_MIN = 600;
+/** Vizinhos lembrados em "visto por último" (os mais antigos saem). */
+const MAX_LAST_SEEN = 4096;
 /** Ajustes e resumos guardados (um por equipamento): mais do que isto, os mais antigos saem. */
 const MAX_DEVICES = 256;
 const REPORT_MS = 30_000;
@@ -136,8 +153,15 @@ export class RelayEngine {
   readonly tag: Uint8Array;
   readonly replay = new ReplayGuard();
   readonly counters: Counters = { received: 0, stored: 0, forwarded: 0, delivered: 0, duplicates: 0, rejected: 0, relayOff: 0, full: 0, expired: 0, receipts: 0, receiptsReceived: 0, handshakesOk: 0, handshakesFailed: 0, revokedRefused: 0 };
-  /** Recibos mais recentes (deste nó e recebidos), para entregar ao validador quando houver rota. */
-  readonly receiptLog: RelayReceipt[] = [];
+  /**
+   * Recibos guardados para entregar ao validador quando houver rota, em dois buffers (M-01 da auditoria
+   * 2026-11-06): os assinados por este nó e os recebidos de vizinhos. Um vizinho que manda recibos
+   * autoassinados só gira o buffer de terceiros; os próprios ficam até `OWN_RECEIPT_LOG`.
+   */
+  private ownReceipts: RelayReceipt[] = [];
+  private foreignReceipts: RelayReceipt[] = [];
+  /** Recibos de terceiros por enlace na janela de um minuto. */
+  private receiptRate = new Map<string, { start: number; n: number }>();
   private links = new Map<string, LinkPort>();
   private reassembly = new Map<string, Reassembler>();
   private settings: Settings['limits'] & { media: boolean } = { bw: 50, sto: 8, hours: 'always', media: true };
@@ -179,7 +203,16 @@ export class RelayEngine {
     this.startedAt = this.now();
     this.log = o.log ?? (() => {});
     this.allow = o.allow ? new Set(o.allow.map(x => x.toLowerCase())) : null;
-    this.router = new Router({ node: o.node, identities: o.identities ?? [], relay: o.relay });
+    this.router = new Router({
+      node: o.node, identities: o.identities ?? [], relay: o.relay,
+      // Só abre carga para gateway com o papel ligado (e só com a chave do tipo dela).
+      openExtra: (bytes, h, now) => {
+        const kind = gatewayKindOf(h), roles = o.gateway?.roles();
+        if (kind === null || !roles) return null;
+        if (kind === CarryKind.Tx) return roles.tx ? openDirect(bytes, GATEWAY_TX_IDENTITY, now) : null;
+        return roles.inbox ? openDirect(bytes, GATEWAY_INBOX_IDENTITY, now) : null;
+      },
+    });
     this.reportMs = o.reportMs ?? REPORT_MS;
     this.applySettings(null);
   }
@@ -256,6 +289,16 @@ export class RelayEngine {
   }
 
   get linkCount() { return this.links.size; }
+
+  /**
+   * Enlace mais novo que `pick` aceita, sem contar os do mesmo operador: no teto de enlaces, é o que
+   * sai para um vizinho fixo entrar (lan.ts, M-04 da auditoria 2026-11-06).
+   */
+  newestLink(pick: (l: LinkPort) => boolean): LinkPort | null {
+    let out: LinkPort | null = null;
+    for (const l of this.links.values()) if (!this.sameOperator.has(l.id) && pick(l) && (!out || l.since >= out.since)) out = l;
+    return out;
+  }
   hasPeer(peerId: string) { for (const l of this.links.values()) if (l.session.peerId === peerId) return true; return false; }
 
   /** Enlace aberto com o vizinho agora (chave completa e desde quando), ou `null`. */
@@ -292,7 +335,7 @@ export class RelayEngine {
     }
     this.counters.handshakesOk++;
     this.links.set(link.id, link);
-    this.lastSeen.set(link.session.peerId, this.now());
+    this.seen(link.session.peerId);
     this.log(`LNNP: vizinho ${link.session.peerId} conectado (${link.address}, v${link.session.version})`);
     this.flush(link);
     this.syncOperator(link);
@@ -305,8 +348,16 @@ export class RelayEngine {
     this.links.delete(id);
     this.reassembly.delete(id);
     this.sameOperator.delete(id);
-    this.lastSeen.set(l.session.peerId, this.now());
+    this.receiptRate.delete(id);
+    this.seen(l.session.peerId);
     this.log(`LNNP: vizinho ${l.session.peerId} desconectado`);
+  }
+
+  /** "Visto por último", com tamanho fixo: reinsere no fim e tira os mais antigos (B-03 da auditoria). */
+  private seen(peerId: string) {
+    this.lastSeen.delete(peerId);
+    this.lastSeen.set(peerId, this.now());
+    while (this.lastSeen.size > MAX_LAST_SEEN) this.lastSeen.delete(this.lastSeen.keys().next().value!);
   }
 
   handshakeFailed(reason: string) {
@@ -329,6 +380,7 @@ export class RelayEngine {
         break;
       }
       case FrameType.RelayReceipt: {
+        if (!this.receiptAllowed(linkId)) { this.counters.rejected++; break; }
         try {
           const rc = decodeReceipt(f.body);
           if (verifyRelayReceipt(rc)) { this.counters.receiptsReceived++; this.keepReceipt(rc); } else this.counters.rejected++;
@@ -352,8 +404,21 @@ export class RelayEngine {
     try { bulk = parseHeader(bytes).bulk; } catch { /* o roteador recusa e conta abaixo */ }
     // Política do operador: sem mídia de terceiros (o roteador ainda deixaria passar).
     if (bulk && !this.settings.media && !this.o.identities?.length) { this.counters.rejected++; return; }
-    this.count(this.router.ingest(bytes, link.session.peerId, this.sec()));
+    // Cargas para gateway: teto próprio por vizinho (identidade e endereço; reconectar não renova), porque
+    // cada uma custa a um gateway uma consulta à Mainnet (auditoria final, M-N1).
+    if (gatewayKindOf(bytes) !== null && !this.carryLimit.take(link, this.sec())) { this.counters.rejected++; return; }
+    const r = this.router.ingest(bytes, link.session.peerId, this.sec());
+    if (r.status === 'delivered' && r.message.type === MsgType.Carry) {
+      const c = carryOf(r.message, bytes);
+      if (c && this.o.gateway) { try { this.o.gateway.onCarry(c); } catch (e) { this.log(`gateway: carga não tratada (${e instanceof Error ? e.message : e})`); } }
+    }
+    this.count(r);
   }
+
+  private carryLimit = new CarryAdmission();
+
+  /** Recibo do gateway para a identidade descartável de quem mandou a carga (sai como envelope deste nó). */
+  sendCarryReceipt(to: PublicIdentity, rc: CarryReceipt) { this.send(sealCarryReceipt(to, rc, this.sec()).bytes); }
 
   /** Envelope criado aqui (nó com identidade local, ou API local). Sai mesmo com a retransmissão desligada. */
   send(bytes: Uint8Array): IngestResult {
@@ -419,14 +484,29 @@ export class RelayEngine {
   sendReceipts(linkId: string) {
     const l = this.links.get(linkId);
     if (!l || !(l.session.negotiated.features & Feature.RelayReceipts)) return 0;
-    for (const r of this.receiptLog) l.send(l.session.seal(FrameType.RelayReceipt, encodeReceipt(r)));
-    return this.receiptLog.length;
+    const all = this.receiptLog;
+    for (const r of all) l.send(l.session.seal(FrameType.RelayReceipt, encodeReceipt(r)));
+    return all.length;
   }
+
+  /** Recibos guardados: os deste nó e, depois, os de terceiros (cópia; ver `keepReceipt`). */
+  get receiptLog(): RelayReceipt[] { return [...this.ownReceipts, ...this.foreignReceipts]; }
 
   private keepReceipt(r: RelayReceipt) {
     this.changes++;
-    this.receiptLog.push(r);
-    if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
+    const own = samePk(r.nodePk, this.node.pk);
+    const list = own ? this.ownReceipts : this.foreignReceipts;
+    const cap = own ? OWN_RECEIPT_LOG : RECEIPT_LOG;
+    list.push(r);
+    if (list.length > cap) list.splice(0, list.length - cap);
+  }
+
+  /** Mais um recibo de terceiro por este enlace cabe na janela de um minuto? */
+  private receiptAllowed(linkId: string) {
+    const now = this.now();
+    let w = this.receiptRate.get(linkId);
+    if (!w || now - w.start >= 60_000) { w = { start: now, n: 0 }; this.receiptRate.set(linkId, w); }
+    return ++w.n <= RECEIPTS_PER_LINK_MIN;
   }
 
   private announceCaps() {
@@ -702,8 +782,7 @@ export class RelayEngine {
     this.router.importSeen(s.seen, now);
     const envelopes = this.router.importStored(s.envelopes, now);
     let receipts = 0;
-    for (const r of s.receipts) if (verifyRelayReceipt(r)) { this.receiptLog.push(r); receipts++; }
-    if (this.receiptLog.length > RECEIPT_LOG) this.receiptLog.splice(0, this.receiptLog.length - RECEIPT_LOG);
+    for (const r of s.receipts) if (verifyRelayReceipt(r)) { this.keepReceipt(r); receipts++; }
     this.restored = { envelopes, seen: this.router.stats().seen, receipts };
     return this.restored;
   }
@@ -715,11 +794,10 @@ export class RelayEngine {
    * por este nó. Sem id de envelope, segredo de entrega nem chave de quem assinou.
    */
   receiptsView(limit = 20) {
-    const me = toHex(this.node.pk);
-    const own = this.receiptLog.filter(r => toHex(r.nodePk) === me).length;
+    const all = this.receiptLog.sort((a, b) => a.at - b.at);
     return {
-      kept: this.receiptLog.length, keptOwn: own, max: RECEIPT_LOG,
-      recent: this.receiptLog.slice(-limit).reverse().map(r => ({ at: r.at * 1000, own: toHex(r.nodePk) === me })),
+      kept: all.length, keptOwn: this.ownReceipts.length, max: OWN_RECEIPT_LOG + RECEIPT_LOG,
+      recent: all.slice(-limit).reverse().map(r => ({ at: r.at * 1000, own: samePk(r.nodePk, this.node.pk) })),
     };
   }
 

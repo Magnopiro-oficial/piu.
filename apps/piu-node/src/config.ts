@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
+import { inboxUrlProblem } from './relay/inboxUrl.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
 export interface Config {
@@ -49,6 +50,15 @@ export interface LnnpConfig {
   persistMs?: number;
   /** Portas seriais (rádio LoRa ou cabo USB): `PIU_SERIAL`. */
   serial?: { kind: 'lora' | 'usb'; path: string; baud: number }[];
+  /**
+   * Gateway da carga pela malha (docs/carteira/transacoes-pela-malha.md): `PIU_GATEWAY` (padrão ligado;
+   * só age com rota até a Lunes). `inboxUrl`: caixa HTTPS do validador para os pacotes de evidências
+   * (`PIU_VALIDATOR_INBOX`, padrão nenhuma: o nó não pega pacotes).
+   * São só o padrão: o dono muda os dois pelo painel (`PUT /api/gateway`, com step-up), gravados no
+   * estado do nó (`state.json` → `gateway`) e lidos sem reiniciar. `PIU_GATEWAY=0` desliga de vez (o painel não liga).
+   */
+  gateway?: boolean;
+  inboxUrl?: string | null;
   /** Rádio LoRa: parâmetros (para o tempo no ar), ocupação do canal, maior envelope e anúncio. */
   lora?: { sf: number; bwKHz: number; cr: number; dutyPercent: number; maxEnvelope: number; beaconMs: number };
 }
@@ -61,6 +71,10 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
   const allow = list(env.PIU_LNNP_ALLOW).map(x => x.toLowerCase());
   if (allow.some(x => !/^[0-9a-f]{64}$/.test(x))) throw new Error('PIU_LNNP_ALLOW: use chaves de nó em hex (64 caracteres), separadas por vírgula.');
   const serial = list(env.PIU_SERIAL).map(parseSerialSpec);
+  const inboxUrl = env.PIU_VALIDATOR_INBOX?.trim() || null;
+  // As mesmas regras do painel (https://, host público, sem credenciais): auditoria final, B-N1.
+  const inboxErr = inboxUrl ? inboxUrlProblem(inboxUrl) : null;
+  if (inboxErr) throw new Error(`PIU_VALIDATOR_INBOX: ${inboxErr} (use um endereço https://).`);
   const num = (name: string, def: number, ok: (n: number) => boolean) => {
     const v = env[name]; if (v === undefined || v === '') return def;
     const n = Number(v); if (!ok(n)) throw new Error(`${name}: valor inválido (${v}).`); return n;
@@ -75,6 +89,7 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
   };
   return {
     serial, lora,
+    gateway: flag(env.PIU_GATEWAY, true), inboxUrl,
     enabled: flag(env.PIU_LNNP, true),
     relay: flag(env.PIU_LNNP_RELAY, true),
     listen: env.PIU_LNNP_LISTEN ?? '0.0.0.0',

@@ -424,3 +424,21 @@ test('celular que aprova: pareamento com código, transferência só com a aprov
   assert.equal((await t.req('POST', `/api/wallet/transfer/${tx2.pending.id}/approve`, { cookie: a.cookie, csrf: a.csrf, body: { approval: approvalCode(secret, tx2.pending.request) } })).statusCode, 404);
   t.cleanup();
 });
+
+test('auditoria final B-N4: co-operador não reserva antes do dono a identidade técnica de um equipamento', async () => {
+  const t = await setup();
+  const owner = await t.pair('dono');
+  const co = await t.pair('colega', '10.0.0.3');
+  const pk = 'ab'.repeat(32);
+  const dev = (name: string) => ({ name, cls: 'Home Node', family: 'minipc', nodePk: pk });
+  const first = await t.req('POST', '/api/devices', { ...co, body: dev('do colega') });
+  assert.equal(first.statusCode, 201, first.body);
+  const won = await t.req('POST', '/api/devices', { ...owner, body: dev('do dono') });
+  assert.equal(won.statusCode, 201, won.body);
+  assert.equal((won.json() as { nodeId?: string }).nodeId, pk.slice(0, 16));
+  const coView = (await t.req('GET', '/api/devices', co)).json() as { name: string; nodeId?: string }[];
+  assert.equal(coView.find(d => d.name === 'do colega')!.nodeId, undefined, 'o registro do co-operador perdeu a identidade');
+  // O contrário continua recusado: co-operador não toma a identidade do dono.
+  assert.equal((await t.req('POST', '/api/devices', { ...co, body: dev('de novo') })).statusCode, 409);
+  t.cleanup();
+});

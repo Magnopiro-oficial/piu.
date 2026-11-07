@@ -36,12 +36,24 @@ export interface LanOptions {
   /** Rodada do motor (horário, limpeza, envio pendente). */
   tickMs?: number;
   handshakeTimeoutMs?: number;
-  /** Conexões em handshake ao mesmo tempo (as demais são recusadas). */
+  /** Conexões que ENTRAM em handshake ao mesmo tempo (as demais são recusadas). As que este nó abre têm vagas próprias. */
   maxPending?: number;
+  /** Handshakes de entrada pendentes por IP de origem. */
+  maxPendingPerIp?: number;
   maxLinks?: number;
 }
 
 const HANDSHAKE_MAX = 4096;
+/**
+ * Descoberta (auditoria 2026-11-06, A-02): o anúncio UDP não é autenticado, então quem forja anúncios
+ * escolhe para onde este nó disca. Tetos: discagens de descoberta abertas ao mesmo tempo, uma por IP
+ * por período de anúncio, espera crescente depois de falha e um mapa de IPs com tamanho fixo.
+ */
+const MAX_DISCOVERY_DIALS = 8;
+const MAX_DISCOVERY_IPS = 1024;
+const MAX_DISCOVERY_BACKOFF_MS = 5 * 60_000;
+/** Handshakes que este nó abre (vizinhos fixos e descoberta) ao mesmo tempo. */
+const MAX_PENDING_OUT = 16;
 /** Vizinhos fixos adicionados pelo painel (além dos de `PIU_LNNP_PEERS`). */
 export const MAX_RUNTIME_PEERS = 32;
 
@@ -128,8 +140,16 @@ class Deframer {
   }
 }
 
-function writeFrame(sock: Socket, bytes: Uint8Array) {
+/**
+ * Teto do que fica esperando para sair num enlace. Um vizinho que termina o handshake e para de ler
+ * (janela TCP zero) faria tudo o que o motor repassa acumular no heap (no OpenWrt são 48 MiB): acima do
+ * teto o enlace é fechado (auditoria final, B-N2).
+ */
+export const MAX_WRITE_BUFFER = 2 * 1024 * 1024;
+
+export function writeFrame(sock: Socket, bytes: Uint8Array) {
   if (sock.destroyed) return;
+  if (sock.writableLength + bytes.length > MAX_WRITE_BUFFER) { sock.destroy(); return; }
   const h = Buffer.alloc(4);
   h.writeUInt32BE(bytes.length);
   sock.write(Buffer.concat([h, bytes]));
@@ -140,7 +160,13 @@ export class LanAdapter {
   private udp: UdpSocket | null = null;
   private timers: NodeJS.Timeout[] = [];
   private sockets = new Set<Socket>();
-  private pending = 0;
+  /** Handshakes em curso: os que entram e os que este nó abriu, com vagas separadas (M-04). */
+  private pendingIn = 0;
+  private pendingOut = 0;
+  /** Handshakes de entrada em curso por IP de origem. */
+  private pendingPerIp = new Map<string, number>();
+  /** Descoberta por IP: quando pode discar de novo e quantas falhas seguidas (A-02). */
+  private discovery = new Map<string, { next: number; fails: number }>();
   private seq = 0;
   /** Vizinhos fixos/descobertos em conexão ou conectados por este nó (chave host:porta). */
   private outbound = new Map<string, Socket>();
@@ -273,12 +299,33 @@ export class LanAdapter {
     if (b.maxVersion < LNNP_MIN_VERSION || b.minVersion > LNNP_VERSION) return; // sem versão comum
     if (compareBytes(this.engine.tag, b.tag) > 0) return;               // o outro (etiqueta menor) conecta
     if (this.engine.hasPeerTag(b.tag)) return;
-    this.dial(`${address}:${b.port}`);
+    const target = `${address}:${b.port}`;
+    if (this.outbound.has(target) || this.hasPeerAddress(target)) return;
+    if (this.engine.linkCount >= (this.o.maxLinks ?? 64)) return;
+    // Uma discagem por IP por período (com espera maior depois de falha) e um teto global.
+    const now = Date.now();
+    const d = this.discovery.get(address);
+    if (d && now < d.next) return;
+    if (this.discoveryDials() >= MAX_DISCOVERY_DIALS) return;
+    this.discovery.delete(address); // reinsere no fim: o mapa sai pelo mais antigo
+    this.discovery.set(address, { next: now + this.o.beaconMs, fails: d?.fails ?? 0 });
+    while (this.discovery.size > MAX_DISCOVERY_IPS) this.discovery.delete(this.discovery.keys().next().value!);
+    this.dial(target, ok => {
+      const x = this.discovery.get(address);
+      if (!x) return;
+      if (ok) { x.fails = 0; return; }
+      x.fails = Math.min(x.fails + 1, 16);
+      x.next = Date.now() + Math.min(this.o.beaconMs * 2 ** (x.fails + 1), MAX_DISCOVERY_BACKOFF_MS);
+    });
   }
+
+  /** Discagens abertas pela descoberta (não por vizinho fixo) neste momento. */
+  private discoveryDials() { let n = 0; for (const k of this.outbound.keys()) if (!this.hasPeerAddress(k)) n++; return n; }
 
   private dialPeers() { for (const p of this.fixedPeers()) this.dial(p.address); }
 
-  private dial(target: string) {
+  /** `done`: avisado uma vez, com `true` se o enlace chegou a abrir (usado pelo backoff da descoberta). */
+  private dial(target: string, done?: (ok: boolean) => void) {
     if (this.stopped || this.outbound.has(target)) return;
     const known = this.peerOf.get(target);
     if (known && this.engine.hasPeer(known)) return;
@@ -294,19 +341,35 @@ export class LanAdapter {
     // Sem resposta ao SYN (endereço que não existe na rede): desiste no mesmo prazo do handshake.
     const timer = setTimeout(() => { this.noteError(target, 'sem resposta (tempo esgotado)'); sock.destroy(); }, this.o.handshakeTimeoutMs ?? 5000);
     timer.unref();
-    let connected = false;
-    sock.once('close', () => { clearTimeout(timer); if (this.outbound.get(target) === sock) this.outbound.delete(target); });
-    sock.once('connect', () => { connected = true; clearTimeout(timer); this.handle(sock, false, target); });
+    let connected = false, opened = false;
+    sock.once('close', () => { clearTimeout(timer); if (this.outbound.get(target) === sock) this.outbound.delete(target); done?.(opened); });
+    sock.once('connect', () => { connected = true; clearTimeout(timer); this.handle(sock, false, target, () => { opened = true; }); });
     sock.on('error', (e: NodeJS.ErrnoException) => { if (!connected) this.noteError(target, connectError(e)); });
   }
 
-  private handle(sock: Socket, inbound: boolean, address: string) {
+  private handle(sock: Socket, inbound: boolean, address: string, onOpen?: () => void) {
     if (this.stopped) { sock.destroy(); return; }
     this.sockets.add(sock);
     sock.once('close', () => this.sockets.delete(sock));
     sock.on('error', () => {});
-    if (this.pending >= (this.o.maxPending ?? 16)) { writeFrame(sock, errorFrame(LnnpErrorCode.Busy, 'Ocupado.')); sock.end(); return; }
-    this.pending++;
+    // Vagas separadas (M-04): quem entra e não completa o handshake não ocupa as vagas das conexões
+    // que este nó abre para os vizinhos dele; e cada IP de origem tem um teto próprio.
+    const ip = sock.remoteAddress ?? '';
+    const busy = inbound
+      ? this.pendingIn >= (this.o.maxPending ?? 16) || (this.pendingPerIp.get(ip) ?? 0) >= (this.o.maxPendingPerIp ?? 4)
+      : this.pendingOut >= MAX_PENDING_OUT;
+    if (busy) { writeFrame(sock, errorFrame(LnnpErrorCode.Busy, 'Ocupado.')); sock.end(); return; }
+    let pendingHeld = true;
+    if (inbound) { this.pendingIn++; this.pendingPerIp.set(ip, (this.pendingPerIp.get(ip) ?? 0) + 1); } else this.pendingOut++;
+    /** Libera a vaga de handshake (uma vez só). */
+    const release = () => {
+      if (!pendingHeld) return;
+      pendingHeld = false;
+      if (!inbound) { this.pendingOut--; return; }
+      this.pendingIn--;
+      const n = (this.pendingPerIp.get(ip) ?? 1) - 1;
+      if (n > 0) this.pendingPerIp.set(ip, n); else this.pendingPerIp.delete(ip);
+    };
     sock.setNoDelay(true);
     sock.setKeepAlive(true, 30_000);
 
@@ -314,11 +377,10 @@ export class LanAdapter {
     const reader = new Deframer();
     let state: 'hello' | 'auth' | 'open' | 'closed' = 'hello';
     let link: LinkPort | null = null;
-    const endPending = () => { if (state === 'hello' || state === 'auth') this.pending--; };
     let attached = false;
     const fail = (reason: string) => {
       if (state === 'closed') return;
-      endPending();
+      release();
       if (!inbound) this.noteError(address, `handshake recusado: ${reason}`);
       if (!link) this.engine.handshakeFailed(reason);
       state = 'closed';
@@ -337,13 +399,24 @@ export class LanAdapter {
           if (state === 'auth') {
             const session = hs.receiveAuth(frame);
             clearTimeout(timer);
-            this.pending--;
+            release();
             state = 'open';
             reader.max = MAX_FRAME_BYTES + RECORD_OVERHEAD;
-            if (this.engine.linkCount >= (this.o.maxLinks ?? 64)) { writeFrame(sock, session.seal(0x7e)); state = 'closed'; sock.end(); return; }
+            // No teto de enlaces, um vizinho fixo (configuração ou painel) entra no lugar do enlace
+            // anônimo mais novo; os outros são recusados como antes (M-04, contra ocupação por Sybil).
+            if (this.engine.linkCount >= (this.o.maxLinks ?? 64)) {
+              const fixed = !inbound && this.hasPeerAddress(address);
+              const evict = fixed ? this.engine.newestLink(l => l.medium === 'eth' && (l.inbound || !this.hasPeerAddress(l.address))) : null;
+              if (!evict) { writeFrame(sock, session.seal(0x7e)); state = 'closed'; sock.end(); return; }
+              this.engine.detach(evict.id);
+              evict.close();
+            }
             const l: LinkPort = {
               id: `${session.peerId}#${++this.seq}`, session, medium: 'eth', inbound, address, since: Date.now(),
               send: rec => writeFrame(sock, rec), close: () => { state = 'closed'; sock.destroy(); },
+              // O motor só entrega o que cabe no buffer de escrita (metade do teto: o resto do teto fica para
+              // recibos e quadros de controle); o que sobra sai na próxima rodada, quando o vizinho ler.
+              capacity: () => MAX_WRITE_BUFFER / 2 - sock.writableLength,
             };
             link = l;
             if (!inbound) this.peerOf.set(address, session.peerId);
@@ -353,6 +426,7 @@ export class LanAdapter {
             });
             if (!this.engine.attach(l)) { state = 'closed'; sock.end(); return; }
             attached = true;
+            onOpen?.();
             if (!inbound) { const d = this.dialInfo.get(address); if (d) { d.error = null; d.errorAt = null; } }
             continue;
           }

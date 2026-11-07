@@ -28,7 +28,11 @@ export const MAX_ENVELOPE_BYTES = 32 * 1024;
 
 export enum EnvelopeKind { Direct = 1, Group = 2 }
 export enum Priority { Low = 0, Normal = 1, High = 2, Critical = 3 }
-export enum MsgType { Text = 1, DeliveryReceipt = 2, GroupKey = 3, /** Conteúdo de sessão Double Ratchet (ratchet.ts). */ Session = 4 }
+export enum MsgType {
+  Text = 1, DeliveryReceipt = 2, GroupKey = 3, /** Conteúdo de sessão Double Ratchet (ratchet.ts). */ Session = 4,
+  /** Carga para gateway e recibo dela (carry.ts). Versões antigas recusam o tipo ao abrir (e nunca têm a chave). */
+  Carry = 5,
+}
 
 export interface Header {
   version: number; suite: number; kind: EnvelopeKind; bulk: boolean; priority: Priority; hops: number;
@@ -57,11 +61,8 @@ export interface GroupKey { groupId: Uint8Array; version: number; key: Uint8Arra
 
 // ── cabeçalho ───────────────────────────────────────────────
 
-/** Lê e valida o cabeçalho. Relays usam isto sem ter nenhuma chave. */
-export function parseHeader(bytes: Uint8Array): Header {
-  if (bytes.length < HEADER_BYTES) throw new ProtocolError('TRUNCATED', 'Envelope truncado.');
-  if (bytes.length > MAX_ENVELOPE_BYTES) throw new ProtocolError('TOO_LARGE', 'Envelope maior que o limite.');
-  const r = new Reader(bytes);
+/** Campos do cabeçalho, com as validações de versão, suíte, tipo e prioridade. */
+function readHeader(r: Reader): Header {
   const version = r.u8();
   if (version !== PROTOCOL_VERSION) throw new ProtocolError('VERSION', `Versão ${version} não suportada.`);
   const suite = r.u8();
@@ -71,12 +72,29 @@ export function parseHeader(bytes: Uint8Array): Header {
   const flags = r.u8();
   const priority = r.u8();
   if (priority > Priority.Critical) throw new ProtocolError('PRIORITY', 'Prioridade inválida.');
-  const h: Header = {
+  return {
     version, suite, kind, bulk: (flags & 1) === 1, priority, hops: r.u8(), keyVersion: r.u16(), expiresAt: r.u32(),
     dest: r.bytes(16), eph: r.bytes(32), nonce: r.bytes(NONCE_BYTES), ackHash: r.bytes(16), bodyLen: r.u32(),
   };
+}
+
+/** Lê e valida o cabeçalho. Relays usam isto sem ter nenhuma chave. */
+export function parseHeader(bytes: Uint8Array): Header {
+  if (bytes.length < HEADER_BYTES) throw new ProtocolError('TRUNCATED', 'Envelope truncado.');
+  if (bytes.length > MAX_ENVELOPE_BYTES) throw new ProtocolError('TOO_LARGE', 'Envelope maior que o limite.');
+  const r = new Reader(bytes);
+  const h = readHeader(r);
   if (h.bodyLen !== r.remaining) throw new ProtocolError('LENGTH', 'Tamanho do corpo não confere.');
   return h;
+}
+
+/**
+ * Só o cabeçalho (exatamente 104 bytes, sem o corpo): é o que a prova de entrega v2 carrega
+ * (proof.ts). O tamanho do corpo declarado não é conferido aqui (o corpo não vem junto).
+ */
+export function parseAuthHeader(header: Uint8Array): Header {
+  if (header.length !== HEADER_BYTES) throw new ProtocolError('LENGTH', 'Cabeçalho com tamanho errado.');
+  return readHeader(new Reader(header));
 }
 
 function writeHeader(h: Header): Uint8Array {
@@ -85,7 +103,7 @@ function writeHeader(h: Header): Uint8Array {
 }
 
 /** Cabeçalho com os saltos zerados: o que é autenticado (dado associado e assinatura). */
-const authHeader = (bytes: Uint8Array) => { const a = bytes.slice(0, HEADER_BYTES); a[HOP_OFFSET] = 0; return a; };
+export const authHeader = (bytes: Uint8Array) => { const a = bytes.slice(0, HEADER_BYTES); a[HOP_OFFSET] = 0; return a; };
 
 /** Identificador criptográfico (deduplicação, FUN-012): hash do envelope sem o contador de saltos. */
 export function envelopeId(bytes: Uint8Array): string {
@@ -148,7 +166,7 @@ function readInner(plain: Uint8Array, auth: Uint8Array, h: Header, now: number):
     if (!equal(hash(ackSecret).slice(0, 16), h.ackHash)) return null;
     // Anti-replay temporal: não aceitar envio "do futuro" nem mais antigo que o TTL máximo.
     if (sentAt > now + CLOCK_SKEW_SEC || sentAt + MAX_TTL_SEC < h.expiresAt - CLOCK_SKEW_SEC) return null;
-    if (type < MsgType.Text || type > MsgType.Session) return null;
+    if (type < MsgType.Text || type > MsgType.Carry) return null;
     return { type, body: unpadBody(block), sentAt, from, fromId: '', ackSecret };
   } catch {
     return null;

@@ -9,6 +9,7 @@ import { type CertJson, certFromJson, certToJson, type ListJson, listFromJson, l
 import { RelayHistory, SAMPLE_MS } from './history.js';
 import { LanAdapter, type LanOptions, type PeerStatus } from './lan.js';
 import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
+import { createGateway, type GatewayHandle, type GatewayOptions } from './gateway.js';
 import { type Modem, openSerialModem, SerialAdapter, type SerialStats } from './serial.js';
 
 export { type DeviceLimits, inWindow, type LinkPort, RelayEngine, type RelayStats } from './engine.js';
@@ -18,6 +19,7 @@ export { confirmCode } from './confirm.js';
 export { type Modem, SerialAdapter } from './serial.js';
 export { RadioSim } from './radio-sim.js';
 export { dayKey, RelayHistory } from './history.js';
+export { createGateway, type GatewayHandle } from './gateway.js';
 
 /** O que a API precisa do motor: estatísticas e aplicar os limites do operador. */
 export interface RelayHandle {
@@ -53,13 +55,15 @@ export interface RelayHandle {
   /** O endereço veio de `PIU_LNNP_PEERS` (não sai pelo painel)? */
   isConfigPeer(address: string): boolean;
   stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null; peers: PeerStatus[] }; serial: SerialStats[] };
+  /** Gateway da carga pela malha (`null` com `PIU_GATEWAY=0`, ou configuração sem `gateway: true`). */
+  gateway: GatewayHandle | null;
   close(): Promise<void>;
 }
 
 /** Sobe o motor de retransmissão com o adapter LAN. */
 export async function startRelay(
   node: KeyPair, c: LnnpConfig, settings: Settings,
-  extra: Partial<Pick<EngineOptions, 'identities' | 'now' | 'log' | 'reportMs'>> & Partial<Pick<LanOptions, 'tickMs' | 'handshakeTimeoutMs'>> & {
+  extra: Partial<Pick<EngineOptions, 'identities' | 'now' | 'log' | 'reportMs'>> & Partial<Pick<LanOptions, 'tickMs' | 'handshakeTimeoutMs' | 'maxLinks'>> & {
     /** Abre a porta serial (testes: rádio simulado). Padrão: a porta de verdade, por `stty`. */
     openModem?: (path: string, baud: number) => Promise<Modem>;
     /** Arquivo do histórico (`<data>/relay-history.json`). Ausente: só em memória (testes). */
@@ -70,15 +74,20 @@ export async function startRelay(
     persistMs?: number;
     /** O que o nó aprendeu do operador pela malha (`<data>/lnnp/operator-trust.json`). Ausente: só em memória. */
     trustFile?: string | null;
+    /** Gateway: endereços da Lunes, ligado/caixa do validador vindos do painel (funções) e, nos testes, cliente e relógio próprios. */
+    gateway?: Partial<GatewayOptions>;
   } = {},
 ): Promise<RelayHandle> {
   const trustFile = extra.trustFile ?? null;
+  const gateway = c.gateway !== true ? null : createGateway({ inboxUrl: c.inboxUrl ?? null, log: extra.log, ...extra.gateway });
   const engine = new RelayEngine({
     node, relay: c.relay, memoryBytes: c.memoryMB * 1024 ** 2, allow: c.allow, identities: extra.identities, now: extra.now, log: extra.log, reportMs: extra.reportMs,
+    ...(gateway ? { gateway } : {}),
     onOperatorChange: st => { if (trustFile) { try { saveTrust(trustFile, st); } catch (e) { extra.log?.(`LNNP: confiança do operador não gravada (${e instanceof Error ? e.message : e})`); } } },
   });
   if (trustFile) { const st = loadTrust(trustFile, extra.log); if (st) engine.loadOperatorState(st); }
   engine.applySettings(settings);
+  if (gateway) { gateway.attach(engine); void gateway.probe(); }
   // Mensagens guardadas antes do reinício voltam antes de o primeiro vizinho conectar.
   const storeFile = extra.storeFile ?? null;
   const key = storeKey(node);
@@ -97,7 +106,7 @@ export async function startRelay(
   };
   const lan = new LanAdapter(engine, {
     listen: c.listen, port: c.port, discoveryPort: c.discoveryPort, broadcast: c.broadcast, peers: c.peers, beaconMs: c.beaconMs,
-    tickMs: extra.tickMs, handshakeTimeoutMs: extra.handshakeTimeoutMs,
+    tickMs: extra.tickMs, handshakeTimeoutMs: extra.handshakeTimeoutMs, maxLinks: extra.maxLinks,
   });
   const { port, discoveryPort } = await lan.start();
   const serial: SerialAdapter[] = [];
@@ -131,7 +140,7 @@ export async function startRelay(
   const persistTimer = setInterval(persist, extra.persistMs ?? c.persistMs ?? 30_000);
   persistTimer.unref();
   return {
-    engine, lan, serial, port, discoveryPort,
+    engine, lan, serial, port, discoveryPort, gateway,
     applySettings: (s, d) => engine.applySettings(s, d),
     setPaused: p => engine.setPaused(p),
     setOperator: t => { engine.setOperator(t); if (trustFile) { try { saveTrust(trustFile, engine.operatorState()); } catch { /* gravado na próxima mudança */ } } },
@@ -146,7 +155,7 @@ export async function startRelay(
     stats: () => ({ ...engine.stats(), lan: { port, discoveryPort, peers: lan.peerStatus() }, serial: serial.map(a => a.stats()) }),
     // Última rodada ao desligar: o que aconteceu desde a anterior não se perde.
     // e o armazenamento é gravado de novo (o que chegou depois da última gravação também volta).
-    close: async () => { clearInterval(timer); clearInterval(persistTimer); sample(); await Promise.all(serial.map(a => a.stop())); await lan.stop(); persist(); },
+    close: async () => { clearInterval(timer); clearInterval(persistTimer); gateway?.stop(); sample(); await Promise.all(serial.map(a => a.stop())); await lan.stop(); persist(); },
   };
 }
 

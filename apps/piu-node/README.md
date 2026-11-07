@@ -98,7 +98,7 @@ Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retra
 `src/protocol/` é uma **cópia gerada** de `apps/mobile/src/protocol/` (`npm run protocol:sync`), não um import relativo: o piu-node é ESM com `moduleResolution: nodenext` (exige `.js` nos imports, que o app não usa), compila com `noUncheckedIndexedAccess` e precisa rodar sozinho em Linux/OpenWrt, sem o projeto Expo e o `node_modules` dele. O teste `test/protocol-sync.test.ts` falha se a cópia ficar diferente da fonte. O app desktop continua empacotando com esbuild normalmente (as dependências `@noble/*` estão no `package.json` daqui).
 
 ## Como o operador entra
-1. Ao iniciar, o nó mostra **no próprio console/tela** um código de 8 dígitos (vale 10 min, uso único) e a impressão digital SHA-256 do certificado TLS.
+1. Ao iniciar, o nó mostra **no próprio console/tela** um código de 8 dígitos (vale 10 min, uso único) e a impressão digital SHA-256 do certificado TLS. Rodando como serviço (sem terminal: systemd, procd), o código **não vai para o log** (journald/logread guardam histórico e outros usuários leem): fica em `<PIU_NODE_DATA>/pairing-code` (0600), e o log diz só onde ler (`sudo cat …`).
 2. No navegador, a pessoa abre `https://piu-node.local:8420`, confere a impressão digital antes de aceitar o certificado e digita o código.
 3. O nó cria uma sessão: cookie `__Host-piu_session` (`HttpOnly`, `Secure`, `SameSite=Strict`), 30 min de inatividade, 12 h no máximo. O token fica só como hash no servidor.
 
@@ -173,7 +173,7 @@ Sem celular pareado, a transferência continua pedindo só o código novo do equ
 ## Pacotes do instalador
 No ambiente de build da Lunes (nunca no nó):
 ```bash
-npm run release:keygen -- release-keys             # par Ed25519; a privada fica com 0600 (guarde em HSM/cofre)
+npm run release:keygen -- ~/cofre/release-keys     # par Ed25519, pasta FORA do repositório; a privada fica com 0600 (guarde em HSM/cofre)
 npm run release:sign -- release-keys/release-private.pem piu-node-openwrt.ipk piu-node-openwrt 0.4.3
 ```
 Copie o pacote e o `.manifest.json` para `<data>/packages/`. No equipamento novo, antes de instalar:
@@ -210,6 +210,8 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
 | `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
+| `PIU_GATEWAY` | `1` | gateway da carga pela malha (transações dos celulares para a Lunes); `0` desliga de vez, e o painel não liga |
+| `PIU_VALIDATOR_INBOX` | — | caixa do validador para as evidências: só `https://` de um servidor na internet (loopback, rede privada, link-local e `.local` são recusados); o envio não segue redirecionamentos |
 | `PIU_LUNES_ENDPOINTS` | os 4 de produção | endereços WebSocket da Lunes Mainnet para ler o saldo da carteira de provider (`wss://…`, separados por vírgula, na ordem de tentativa) |
 
 Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede local.

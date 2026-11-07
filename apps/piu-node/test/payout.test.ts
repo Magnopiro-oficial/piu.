@@ -11,6 +11,7 @@ import { MsgType, sealDirect } from '../src/protocol/envelope.js';
 import { deriveIdentity, deriveNodeKey, newSeed, toPublic } from '../src/protocol/keys.js';
 import { verifyPayoutClaim } from '../src/protocol/receipts.js';
 import { type RelayHandle, startRelay } from '../src/relay/index.js';
+import { certToJson, makeCert, operatorKeyPair } from '../src/relay/operator-frames.js';
 import { Pairing } from '../src/security/pairing.js';
 import { DEFAULT_SETTINGS, Store } from '../src/store.js';
 
@@ -19,10 +20,14 @@ const SETTLEMENT = join(fileURLToPath(import.meta.url), '../../../settlement');
 async function validator() {
   if (!existsSync(join(SETTLEMENT, 'node_modules/@polkadot/util-crypto'))) return null;
   const v = await import(join(SETTLEMENT, 'src/validator.ts'));
+  const reg = await import(join(SETTLEMENT, 'src/registry.ts'));
+  const proof = await import(join(SETTLEMENT, 'src/protocol/proof.ts'));
   const u = await import(join(SETTLEMENT, 'node_modules/@polkadot/util-crypto/index.js'));
   await u.cryptoWaitReady();
-  return { v, u } as {
+  return { v, reg, proof, u } as {
     v: typeof import('../../settlement/src/validator.js');
+    reg: typeof import('../../settlement/src/registry.js');
+    proof: typeof import('../../settlement/src/protocol/proof.js');
     u: { encodeAddress(pk: Uint8Array, prefix: number): string; decodeAddress(a: string): Uint8Array };
   };
 }
@@ -127,10 +132,24 @@ test('evidências e carteira do lote: exportadas no formato do validador, assina
 
   const s = await validator();
   if (!s) { t.diagnostic('apps/settlement sem dependências: conferência com o validador pulada'); return; }
-  // O validador lê os dois arquivos como vieram: o recibo do nó vale com a prova de entrega do destino.
-  const proof = { v: 1 as const, proofs: [{ envelopeId: B.engine.inbox[0]!.id, ackSecret: toHex(B.engine.inbox[0]!.ackSecret) }] };
-  const ledger = s.v.buildLedger([file, proof], [], Math.floor(Date.now() / 1000));
-  const states = [...ledger.entries()].map(x => x.state);
-  assert.deepEqual(states, ['validado']);
+  // Validador v2 (docs/economia/prova-de-entrega-v2.md): o recibo do nó vale com a prova v2 do
+  // destino (assinada por ele, selada para o validador) e o certificado de operador do nó.
+  const nowSec = Math.floor(Date.now() / 1000);
+  const got = B.engine.inbox[0]!;
+  const seed = newSeed();
+  const proofKey = s.proof.validatorProofKey(seed);
+  const sealed = s.proof.sealDeliveryProof(s.proof.makeDeliveryProof(m.bytes, bob, got.ackSecret, nowSec, proofKey.pk), proofKey.pk);
+  const proofFile = { v: 2 as const, sealedProofs: [{ envelopeId: got.id, sealed: toHex(sealed) }] };
+  const op = operatorKeyPair(newSeed());
+  const regFile = { v: 1 as const, certs: [certToJson(makeCert(op, R.engine.node.pk, nowSec - 60))] };
+  const registry = s.reg.NodeRegistry.build([{ v: 1, operators: [{ pk: toHex(op.pk) }] }], [regFile]);
+  const ledger = s.v.buildLedger([file, proofFile], [], nowSec, { registry, proofKey });
+  assert.deepEqual([...ledger.entries()].map(x => x.state), ['validado']);
+  // A prova v1 (segredo em claro) sozinha não paga mais (auditoria 2026-11-06, C-01).
+  const v1 = { v: 1 as const, proofs: [{ envelopeId: got.id, ackSecret: toHex(got.ackSecret) }] };
+  assert.deepEqual([...s.v.buildLedger([file, v1], [], nowSec, { registry, proofKey }).entries()].map(x => x.state), ['pendente']);
+  // Sem certificado de operador admitido, o nó não é registrado.
+  const none = s.reg.NodeRegistry.build([{ v: 1, operators: [] }], [regFile]);
+  assert.deepEqual([...s.v.buildLedger([file, proofFile], [], nowSec, { registry: none, proofKey }).entries()].map(x => x.reason), ['nó não registrado']);
   for (const c of claims.claims) assert.doesNotThrow(() => s.u.decodeAddress(c.address));
 });

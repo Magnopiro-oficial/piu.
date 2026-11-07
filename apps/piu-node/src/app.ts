@@ -30,6 +30,14 @@ import type { Device, DeviceLimits, Session, Settings, Store } from './store.js'
 
 declare module 'fastify' {
   interface FastifyRequest { piuSession: Session | null }
+  interface FastifyInstance {
+    /**
+     * Sessão aberta pelo próprio processo que embute o nó (app desktop: a janela é a "tela do
+     * equipamento"). Sem código e sem rota HTTP: quem chama grava o token no cookie `__Host-piu_session`
+     * do navegador embutido. Não vale como step-up (provider.md M-01, auditoria 2026-11-06).
+     */
+    piuLocalSession(name: string, label: string): { token: string; csrf: string; operator: { id: string; name: string } };
+  }
 }
 
 export interface AppOptions {
@@ -67,6 +75,12 @@ export interface AppOptions {
     history?(): object;
     /** Recibos guardados para o validador (só horário e se são deste nó). */
     receipts?(): object;
+    /** Gateway da carga pela malha (`null` com PIU_GATEWAY=0). Ligado e caixa vêm do `store` (server.ts). */
+    gateway?: {
+      stats(): { online: boolean; inbox: boolean; queued: number; submitted: number; pool: number; invalid: number; rejected: number; forwarded: number; finalized: number; errors: number };
+      recent(limit?: number): object[];
+      probe(): Promise<boolean>;
+    } | null;
   } | null;
   /** O próprio nó, registrado como equipamento do dono no primeiro pareamento. Ausente: não registra. */
   selfDevice?: { name: string; cls: string };
@@ -100,6 +114,10 @@ const PERMISSIONS = 'camera=(), microphone=(), geolocation=(), payment=(), usb=(
 const UUID = '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
 
 const fail = (reply: FastifyReply, code: number, error: string, extra: Record<string, unknown> = {}) => reply.code(code).send({ error, ...extra });
+
+/** Regras da caixa do validador (https://, host público): src/relay/inboxUrl.ts. */
+export { inboxUrlProblem } from './relay/inboxUrl.js';
+import { inboxUrlProblem } from './relay/inboxUrl.js';
 
 export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   // Impressão digital SHA-256 do certificado TLS (a mesma do console), para o QR de pareamento do celular.
@@ -222,6 +240,23 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
   const strictLimit = (max: number, timeWindow: string) => ({ rateLimit: { max, timeWindow } });
 
   // ── pareamento e sessão ─────────────────────────────────
+  /**
+   * O código prova acesso físico ao equipamento. Com um nome que já existe, a sessão é da mesma conta
+   * (sessão expirada, outro navegador); com um nome novo, cria outro operador. `stepUp: false`: a
+   * sessão nasce sem autenticação recente (operações sensíveis pedem um código).
+   */
+  const openSession = (name: string, label: string, stepUp = true) => {
+    const op = store.operatorByName(name) ?? store.addOperator(name.trim(), now());
+    if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
+    vault.ensure(op.id, now());
+    syncOperator();
+    const { token, session } = createSession(store, op.id, now(), label, stepUp);
+    return { token, csrf: session.csrf, operator: { id: op.id, name: op.name } };
+  };
+  // Só para o processo que embute o nó (sem rota HTTP). Sem step-up: um script hostil na página que
+  // encerre a sessão e recarregue ganha uma sessão nova, mas não as operações sensíveis.
+  app.decorate('piuLocalSession', (name: string, label: string) => openSession(name.slice(0, 40), label, false));
+
   app.post<{ Body: { code: string; name: string } }>('/api/pair', {
     config: strictLimit(5, '10 minutes'),
     schema: { body: { type: 'object', required: ['code', 'name'], additionalProperties: false, properties: { code: { type: 'string', pattern: '^[0-9]{8}$' }, name: { type: 'string', minLength: 1, maxLength: 40 } } } },
@@ -231,15 +266,9 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     if (r === 'locked') { o.onCodeSpent?.('locked'); return fail(reply, 429, 'Código bloqueado depois de várias tentativas. Gere um novo no equipamento.'); }
     if (r !== 'ok') return fail(reply, 401, 'Código inválido ou expirado.');
     o.onCodeSpent?.('used');
-    // O código prova acesso físico ao equipamento. Com um nome que já existe, a sessão é da mesma conta
-    // (sessão expirada, outro navegador); com um nome novo, cria outro operador.
-    const op = store.operatorByName(req.body.name) ?? store.addOperator(req.body.name.trim(), now());
-    if (o.selfDevice) store.ensureSelfDevice(o.selfDevice, now());
-    vault.ensure(op.id, now());
-    syncOperator();
-    const { token, session } = createSession(store, op.id, now(), sessionLabel(req.headers['user-agent']));
+    const { token, operator, csrf } = openSession(req.body.name, sessionLabel(req.headers['user-agent']));
     reply.setCookie(SESSION_COOKIE, token, cookieOptions);
-    return { operator: { id: op.id, name: op.name }, csrf: session.csrf };
+    return { operator, csrf };
   });
 
   /** Reautenticação (step-up) com um código novo do equipamento, para operações sensíveis. */
@@ -347,6 +376,51 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     return reply.code(204).send();
   });
 
+  // ── gateway da carga pela malha (painel → Gateway) ───────
+  /** Padrão sem ajuste salvo: o que a configuração do nó diz (PIU_GATEWAY, PIU_VALIDATOR_INBOX). */
+  const gatewayFallback = () => ({ enabled: o.config.lnnp?.gateway !== false, inboxUrl: o.config.lnnp?.inboxUrl ?? null });
+  /**
+   * Contadores reais do gateway desde que o nó subiu (em memória; reiniciar zera) e as últimas cargas.
+   * `available: false`: o motor LNNP está desligado ou o gateway foi desligado pela configuração
+   * (PIU_GATEWAY=0), que o painel não liga.
+   */
+  app.get('/api/gateway', authed(), async () => {
+    const g = o.relay?.gateway ?? null;
+    const set = store.gatewaySettings(gatewayFallback());
+    if (!g) return { available: false, reason: o.relay ? 'config' : 'relay-off', enabled: false, inboxUrl: set.inboxUrl, changedAt: set.at || null };
+    const s = g.stats();
+    return {
+      available: true, enabled: set.enabled, online: s.online, inboxUrl: set.inboxUrl, inbox: s.inbox, changedAt: set.at || null,
+      startedAt: (o.relay?.stats() as { startedAt?: number } | undefined)?.startedAt ?? null,
+      // Enviadas = aceitas no pool da Lunes (inclusive as que já estavam lá); recusadas = a Lunes ou a
+      // conferência local recusou; na fila = esperando nova tentativa (sem rota ou acima do teto).
+      counters: { sent: s.submitted + s.pool, finalized: s.finalized, refused: s.invalid + s.rejected, queued: s.queued, forwarded: s.forwarded, errors: s.errors },
+      recent: g.recent(20),
+    };
+  });
+  /**
+   * Liga/desliga o gateway e define a caixa do validador (só https://, sem usuário/senha no endereço).
+   * Ajuste do equipamento: só o dono, com step-up (código novo do equipamento), CSRF e mesma origem.
+   */
+  app.put<{ Body: { enabled: boolean; inboxUrl: string | null } }>('/api/gateway', {
+    ...mutate(), config: strictLimit(10, '10 minutes'),
+    schema: { body: { type: 'object', required: ['enabled', 'inboxUrl'], additionalProperties: false, properties: {
+      enabled: { type: 'boolean' }, inboxUrl: { anyOf: [{ type: 'null' }, { type: 'string', minLength: 9, maxLength: 512 }] } } } },
+  }, async (req, reply) => {
+    if (!store.isOwner(req.piuSession!.operatorId)) return fail(reply, 403, 'Só o dono deste equipamento muda o gateway dele.');
+    if (!stepUpOk(req)) return fail(reply, 403, 'Confirme com um código novo do equipamento.', { reauth: true });
+    if (!o.relay?.gateway) return fail(reply, 409, o.relay ? 'O gateway está desligado pela configuração do nó (PIU_GATEWAY=0).' : 'A retransmissão LNNP está desligada neste nó.');
+    let inboxUrl: string | null = null;
+    if (req.body.inboxUrl !== null) {
+      inboxUrl = inboxUrlProblem(req.body.inboxUrl) ? null : req.body.inboxUrl.trim();
+      if (!inboxUrl) return fail(reply, 400, inboxUrlProblem(req.body.inboxUrl)!);
+    }
+    const saved = store.setGatewaySettings({ enabled: req.body.enabled, inboxUrl }, now());
+    // Liga: confere a rota até a Lunes agora (sem esperar a próxima sonda). Desliga: para de pegar carga na hora.
+    void o.relay.gateway.probe().catch(() => {});
+    return { enabled: saved.enabled, inboxUrl: saved.inboxUrl, changedAt: saved.at };
+  });
+
   // ── equipamentos (posse checada em cada ação: anti-IDOR) ─
   /** Campos públicos do equipamento (o nome público `piu.…` só quando existe). */
   const deviceView = ({ id, ownerId, name, cls, status, self, pub, nodePk: pk, cert, limits, parent }: Device) => {
@@ -406,7 +480,11 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     }
     if (pk) {
       if (pk === nodePk) return fail(reply, 409, 'Esta é a identidade técnica do nó que serve o painel, que já é um equipamento seu.');
-      if (store.deviceByNodePk(pk)) return fail(reply, 409, 'Esta identidade técnica já pertence a um equipamento registrado.');
+      const taken = store.deviceByNodePk(pk);
+      // O dono do nó prevalece: um co-operador não "reserva" antes a identidade técnica de um equipamento
+      // vizinho (o registro dele perde a identidade e o certificado; auditoria final, B-N4).
+      if (taken && !(store.isOwner(s.operatorId) && !store.isOwner(taken.ownerId))) return fail(reply, 409, 'Esta identidade técnica já pertence a um equipamento registrado.');
+      if (taken) store.updateDevice(taken.id, { nodePk: undefined, cert: undefined });
       if (vault.revocation(s.operatorId)?.revoked.some(x => toHex(x) === pk)) return fail(reply, 409, 'Esta identidade técnica foi revogada. Reinstale o Piu Node no equipamento para gerar outra.');
     }
     const d = store.addDevice({

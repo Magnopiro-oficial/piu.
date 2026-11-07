@@ -141,6 +141,12 @@ export const blockLabel = (n: number) => `#${String(n).replace(/\B(?=(\d{3})+(?!
 export const endpointHost = (url: string) => url.replace(/^wss?:\/\//, '').replace(/\/.*$/, '');
 
 /** O que a carteira diz sobre a leitura da Mainnet, sem inventar: sem leitura, diz que não há. */
+/**
+ * Linha única sob o saldo no cartão (design: "+ 60,00 a liberar · bônus em validação"): com leitura recente,
+ * a dos créditos a liberar; sem leitura ou com leitura antiga, a do estado da Mainnet (o número não é ao vivo).
+ */
+export const balanceCardLine = (view: Pick<OnchainView, 'has' | 'stale' | 'line'>, release: string) => (!view.has || view.stale ? view.line : release);
+
 export function onchainView(o: { address: string | null; snap: OnchainSnapshot | null; status: OnchainStatus; now: number }, t: Tr = tGlobal): OnchainView {
   if (!o.address) return { pill: t('onchain.pill.noAddress'), pillIcon: 'cloud_off', line: t('onchain.line.noAddress'), has: false, stale: false };
   const snap = o.snap && o.snap.address === o.address ? o.snap : null;
