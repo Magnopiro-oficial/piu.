@@ -59,6 +59,19 @@ const ptBR = {
   'tray.tooltipLocal': 'Piu Provider · nó local',
   'tray.open': 'Abrir painel',
   'tray.quit': 'Sair do Piu Provider',
+  'menu.help': 'Ajuda',
+  'menu.version': 'Versão {version}',
+  'menu.checkUpdates': 'Procurar atualização…',
+  'menu.updateNotify': 'Procurar atualização ao abrir',
+  'update.title': 'Atualização do Piu Provider',
+  'update.latest': 'Você tem a versão mais nova ({version})',
+  'update.available': 'Piu Provider {version} disponível',
+  'update.availableDetail': 'Você está na versão {current}. Abra a página do release no GitHub para baixar a nova versão. Nada é baixado nem instalado automaticamente.',
+  'update.open': 'Abrir página do release',
+  'update.offline': 'Sem internet',
+  'update.offlineDetail': 'Não foi possível falar com o GitHub. Confira a conexão e tente de novo.',
+  'update.github': 'GitHub indisponível',
+  'update.githubDetail': 'O GitHub não respondeu como esperado. Tente de novo mais tarde.',
 };
 export type Key = keyof typeof ptBR;
 type Strings = Record<Key, string>;
@@ -98,6 +111,19 @@ const ptPT: Strings = {
   'tray.tooltipLocal': 'Piu Provider · nó local',
   'tray.open': 'Abrir painel',
   'tray.quit': 'Sair do Piu Provider',
+  'menu.help': 'Ajuda',
+  'menu.version': 'Versão {version}',
+  'menu.checkUpdates': 'Procurar atualização…',
+  'menu.updateNotify': 'Procurar atualização ao abrir',
+  'update.title': 'Atualização do Piu Provider',
+  'update.latest': 'Tem a versão mais recente ({version})',
+  'update.available': 'Piu Provider {version} disponível',
+  'update.availableDetail': 'Está na versão {current}. Abra a página da versão no GitHub para descarregar a nova versão. Nada é descarregado nem instalado automaticamente.',
+  'update.open': 'Abrir página da versão',
+  'update.offline': 'Sem ligação à Internet',
+  'update.offlineDetail': 'Não foi possível contactar o GitHub. Verifique a ligação e tente novamente.',
+  'update.github': 'GitHub indisponível',
+  'update.githubDetail': 'O GitHub não respondeu como esperado. Tente novamente mais tarde.',
 };
 
 const en: Strings = {
@@ -135,6 +161,19 @@ const en: Strings = {
   'tray.tooltipLocal': 'Piu Provider · local node',
   'tray.open': 'Open panel',
   'tray.quit': 'Quit Piu Provider',
+  'menu.help': 'Help',
+  'menu.version': 'Version {version}',
+  'menu.checkUpdates': 'Check for updates…',
+  'menu.updateNotify': 'Check for updates at launch',
+  'update.title': 'Piu Provider update',
+  'update.latest': 'You have the latest version ({version})',
+  'update.available': 'Piu Provider {version} available',
+  'update.availableDetail': 'You are on version {current}. Open the release page on GitHub to download the new version. Nothing is downloaded or installed automatically.',
+  'update.open': 'Open release page',
+  'update.offline': 'No internet connection',
+  'update.offlineDetail': 'Could not reach GitHub. Check your connection and try again.',
+  'update.github': 'GitHub unavailable',
+  'update.githubDetail': 'GitHub did not respond as expected. Try again later.',
 };
 
 const es: Strings = {
@@ -172,6 +211,19 @@ const es: Strings = {
   'tray.tooltipLocal': 'Piu Provider · nodo local',
   'tray.open': 'Abrir panel',
   'tray.quit': 'Salir de Piu Provider',
+  'menu.help': 'Ayuda',
+  'menu.version': 'Versión {version}',
+  'menu.checkUpdates': 'Buscar actualizaciones…',
+  'menu.updateNotify': 'Buscar actualizaciones al abrir',
+  'update.title': 'Actualización de Piu Provider',
+  'update.latest': 'Tienes la versión más reciente ({version})',
+  'update.available': 'Piu Provider {version} disponible',
+  'update.availableDetail': 'Estás en la versión {current}. Abre la página de la versión en GitHub para descargar la nueva. No se descarga ni se instala nada automáticamente.',
+  'update.open': 'Abrir página de la versión',
+  'update.offline': 'Sin conexión a internet',
+  'update.offlineDetail': 'No se pudo conectar con GitHub. Revisa la conexión e inténtalo de nuevo.',
+  'update.github': 'GitHub no disponible',
+  'update.githubDetail': 'GitHub no respondió como se esperaba. Inténtalo de nuevo más tarde.',
 };
 
 const fr: Strings = {
@@ -209,6 +261,19 @@ const fr: Strings = {
   'tray.tooltipLocal': 'Piu Provider · nœud local',
   'tray.open': 'Ouvrir le panneau',
   'tray.quit': 'Quitter Piu Provider',
+  'menu.help': 'Aide',
+  'menu.version': 'Version {version}',
+  'menu.checkUpdates': 'Rechercher des mises à jour…',
+  'menu.updateNotify': 'Rechercher des mises à jour au démarrage',
+  'update.title': 'Mise à jour de Piu Provider',
+  'update.latest': 'Vous avez la version la plus récente ({version})',
+  'update.available': 'Piu Provider {version} disponible',
+  'update.availableDetail': 'Vous utilisez la version {current}. Ouvrez la page de la version sur GitHub pour télécharger la nouvelle. Rien n’est téléchargé ni installé automatiquement.',
+  'update.open': 'Ouvrir la page de la version',
+  'update.offline': 'Pas de connexion Internet',
+  'update.offlineDetail': 'Impossible de joindre GitHub. Vérifiez la connexion et réessayez.',
+  'update.github': 'GitHub indisponible',
+  'update.githubDetail': 'GitHub n’a pas répondu comme prévu. Réessayez plus tard.',
 };
 
 const de: Strings = {
@@ -246,6 +311,19 @@ const de: Strings = {
   'tray.tooltipLocal': 'Piu Provider · lokaler Knoten',
   'tray.open': 'Panel öffnen',
   'tray.quit': 'Piu Provider beenden',
+  'menu.help': 'Hilfe',
+  'menu.version': 'Version {version}',
+  'menu.checkUpdates': 'Nach Updates suchen…',
+  'menu.updateNotify': 'Beim Start nach Updates suchen',
+  'update.title': 'Piu Provider-Update',
+  'update.latest': 'Du hast die neueste Version ({version})',
+  'update.available': 'Piu Provider {version} verfügbar',
+  'update.availableDetail': 'Du verwendest Version {current}. Öffne die Release-Seite auf GitHub, um die neue Version herunterzuladen. Es wird nichts automatisch heruntergeladen oder installiert.',
+  'update.open': 'Release-Seite öffnen',
+  'update.offline': 'Keine Internetverbindung',
+  'update.offlineDetail': 'GitHub ist nicht erreichbar. Prüfe die Verbindung und versuche es erneut.',
+  'update.github': 'GitHub nicht verfügbar',
+  'update.githubDetail': 'GitHub hat nicht wie erwartet geantwortet. Versuche es später erneut.',
 };
 
 const it: Strings = {
@@ -283,6 +361,19 @@ const it: Strings = {
   'tray.tooltipLocal': 'Piu Provider · nodo locale',
   'tray.open': 'Apri pannello',
   'tray.quit': 'Esci da Piu Provider',
+  'menu.help': 'Aiuto',
+  'menu.version': 'Versione {version}',
+  'menu.checkUpdates': 'Cerca aggiornamenti…',
+  'menu.updateNotify': 'Cerca aggiornamenti all’avvio',
+  'update.title': 'Aggiornamento di Piu Provider',
+  'update.latest': 'Hai la versione più recente ({version})',
+  'update.available': 'Piu Provider {version} disponibile',
+  'update.availableDetail': 'Stai usando la versione {current}. Apri la pagina della release su GitHub per scaricare la nuova versione. Niente viene scaricato o installato automaticamente.',
+  'update.open': 'Apri la pagina della release',
+  'update.offline': 'Nessuna connessione a Internet',
+  'update.offlineDetail': 'Impossibile raggiungere GitHub. Controlla la connessione e riprova.',
+  'update.github': 'GitHub non disponibile',
+  'update.githubDetail': 'GitHub non ha risposto come previsto. Riprova più tardi.',
 };
 
 const ja: Strings = {
@@ -320,6 +411,19 @@ const ja: Strings = {
   'tray.tooltipLocal': 'Piu Provider · ローカルノード',
   'tray.open': 'パネルを開く',
   'tray.quit': 'Piu Provider を終了',
+  'menu.help': 'ヘルプ',
+  'menu.version': 'バージョン {version}',
+  'menu.checkUpdates': 'アップデートを確認…',
+  'menu.updateNotify': '起動時にアップデートを確認',
+  'update.title': 'Piu Provider のアップデート',
+  'update.latest': '最新バージョンです（{version}）',
+  'update.available': 'Piu Provider {version} が利用可能です',
+  'update.availableDetail': '現在のバージョンは {current} です。新しいバージョンをダウンロードするには GitHub のリリースページを開いてください。自動でダウンロードやインストールは行いません。',
+  'update.open': 'リリースページを開く',
+  'update.offline': 'インターネットに接続されていません',
+  'update.offlineDetail': 'GitHub に接続できませんでした。接続を確認してもう一度お試しください。',
+  'update.github': 'GitHub を利用できません',
+  'update.githubDetail': 'GitHub から想定外の応答がありました。しばらくしてからもう一度お試しください。',
 };
 
 const zh: Strings = {
@@ -357,6 +461,19 @@ const zh: Strings = {
   'tray.tooltipLocal': 'Piu Provider · 本机节点',
   'tray.open': '打开面板',
   'tray.quit': '退出 Piu Provider',
+  'menu.help': '帮助',
+  'menu.version': '版本 {version}',
+  'menu.checkUpdates': '检查更新…',
+  'menu.updateNotify': '启动时检查更新',
+  'update.title': 'Piu Provider 更新',
+  'update.latest': '你使用的是最新版本（{version}）',
+  'update.available': 'Piu Provider {version} 已发布',
+  'update.availableDetail': '你当前的版本是 {current}。请打开 GitHub 上的发布页面下载新版本。不会自动下载或安装任何内容。',
+  'update.open': '打开发布页面',
+  'update.offline': '没有网络连接',
+  'update.offlineDetail': '无法连接 GitHub。请检查网络连接后重试。',
+  'update.github': 'GitHub 不可用',
+  'update.githubDetail': 'GitHub 的响应不符合预期。请稍后重试。',
 };
 
 const ar: Strings = {
@@ -394,6 +511,19 @@ const ar: Strings = {
   'tray.tooltipLocal': 'Piu Provider · عقدة محلية',
   'tray.open': 'فتح اللوحة',
   'tray.quit': 'الخروج من Piu Provider',
+  'menu.help': 'مساعدة',
+  'menu.version': 'الإصدار {version}',
+  'menu.checkUpdates': 'البحث عن تحديث…',
+  'menu.updateNotify': 'البحث عن تحديث عند الفتح',
+  'update.title': 'تحديث Piu Provider',
+  'update.latest': 'لديك أحدث إصدار ({version})',
+  'update.available': 'Piu Provider {version} متاح',
+  'update.availableDetail': 'أنت تستخدم الإصدار {current}. افتح صفحة الإصدار على GitHub لتنزيل الإصدار الجديد. لا يتم تنزيل أو تثبيت أي شيء تلقائيًا.',
+  'update.open': 'فتح صفحة الإصدار',
+  'update.offline': 'لا يوجد اتصال بالإنترنت',
+  'update.offlineDetail': 'تعذّر الوصول إلى GitHub. تحقّق من الاتصال وحاول مرة أخرى.',
+  'update.github': 'GitHub غير متاح',
+  'update.githubDetail': 'لم يستجب GitHub كما هو متوقع. حاول مرة أخرى لاحقًا.',
 };
 
 const hi: Strings = {
@@ -431,6 +561,19 @@ const hi: Strings = {
   'tray.tooltipLocal': 'Piu Provider · लोकल नोड',
   'tray.open': 'पैनल खोलें',
   'tray.quit': 'Piu Provider बंद करें',
+  'menu.help': 'सहायता',
+  'menu.version': 'संस्करण {version}',
+  'menu.checkUpdates': 'अपडेट खोजें…',
+  'menu.updateNotify': 'खोलते समय अपडेट खोजें',
+  'update.title': 'Piu Provider अपडेट',
+  'update.latest': 'आपके पास सबसे नया संस्करण है ({version})',
+  'update.available': 'Piu Provider {version} उपलब्ध है',
+  'update.availableDetail': 'आप संस्करण {current} इस्तेमाल कर रहे हैं। नया संस्करण डाउनलोड करने के लिए GitHub पर रिलीज़ पेज खोलें। अपने आप कुछ भी डाउनलोड या इंस्टॉल नहीं होता।',
+  'update.open': 'रिलीज़ पेज खोलें',
+  'update.offline': 'इंटरनेट कनेक्शन नहीं है',
+  'update.offlineDetail': 'GitHub से संपर्क नहीं हो सका। कनेक्शन जाँचें और फिर से कोशिश करें।',
+  'update.github': 'GitHub उपलब्ध नहीं है',
+  'update.githubDetail': 'GitHub ने उम्मीद के मुताबिक जवाब नहीं दिया। थोड़ी देर बाद फिर कोशिश करें।',
 };
 
 export const STRINGS: Record<Lang, Strings> = { 'pt-BR': ptBR, 'pt-PT': ptPT, en, es, fr, de, it, ja, zh, ar, hi };

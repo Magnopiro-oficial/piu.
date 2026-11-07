@@ -21,6 +21,7 @@ import { startNode, type NodeServer } from '../../piu-node/src/server';
 import { externalUrl } from './external';
 import { matchLang, translator } from './i18n';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
+import { checkForUpdates, releasePageUrl, shouldAutoCheck, UpdateCheckError } from './update';
 
 const PREFERRED_PORT = 8420;
 const isMac = process.platform === 'darwin';
@@ -236,6 +237,49 @@ async function toggleLan() {
   app.quit();
 }
 
+// ── versão e atualização ──────────────────────────────────
+/**
+ * Procura versão nova do Piu Provider no GitHub (núcleo em update.ts). Só avisa e abre a página do
+ * release (URL validada); nada é baixado nem instalado. Manual: sempre mostra o resultado.
+ * Automática: só aparece se houver versão nova (sem internet ou GitHub fora do ar ficam quietos).
+ */
+let checkingUpdate = false;
+async function checkUpdates(manual: boolean) {
+  if (checkingUpdate) return;
+  checkingUpdate = true;
+  try {
+    const r = await checkForUpdates(app.getVersion());
+    if (r.state === 'available' && r.latest) {
+      const page = r.url ? releasePageUrl(r.url) : null;
+      const { response } = await dialog.showMessageBox(win ?? undefined!, {
+        type: 'info', title: t('update.title'), message: t('update.available', { version: r.latest }),
+        detail: t('update.availableDetail', { current: r.current }),
+        buttons: page ? [t('update.open'), t('close')] : [t('close')], defaultId: 0, cancelId: page ? 1 : 0,
+      });
+      if (page && response === 0) void shell.openExternal(page);
+    } else if (manual) {
+      await dialog.showMessageBox(win ?? undefined!, { type: 'info', title: t('update.title'), message: t('update.latest', { version: r.current }), buttons: [t('close')] });
+    }
+  } catch (err) {
+    if (!manual) return;
+    const offline = err instanceof UpdateCheckError && err.kind === 'offline';
+    await dialog.showMessageBox(win ?? undefined!, {
+      type: 'warning', title: t('update.title'),
+      message: offline ? t('update.offline') : t('update.github'),
+      detail: offline ? t('update.offlineDetail') : t('update.githubDetail'),
+      buttons: [t('close')],
+    });
+  } finally { checkingUpdate = false; }
+}
+
+/** Ao abrir: no máximo 1x por dia e só com "Procurar atualização ao abrir" ligado (padrão). */
+function autoCheckUpdates() {
+  const now = Date.now();
+  if (!shouldAutoCheck(prefs, now)) return;
+  prefs = savePrefs({ ...prefs, lastUpdateCheck: now });
+  setTimeout(() => void checkUpdates(false), 8000).unref();
+}
+
 function buildMenu() {
   const nodeMenu: MenuItemConstructorOptions = {
     label: t('menu.node'),
@@ -249,12 +293,23 @@ function buildMenu() {
       { label: t('menu.dataFolder'), click: () => void shell.openPath(app.getPath('userData')) },
     ],
   };
+  const helpMenu: MenuItemConstructorOptions = {
+    label: t('menu.help'), role: 'help',
+    submenu: [
+      { label: t('menu.version', { version: app.getVersion() }), enabled: false },
+      { label: t('menu.checkUpdates'), click: () => void checkUpdates(true) },
+      { label: t('menu.updateNotify'), type: 'checkbox', checked: prefs.updateNotify, click: (i: Electron.MenuItem) => { prefs = savePrefs({ ...prefs, updateNotify: i.checked }); } },
+      // macOS: "Sobre o Piu Provider" já está no menu do app.
+      ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'about' as const }]),
+    ],
+  };
   const template: MenuItemConstructorOptions[] = [
     ...(isMac ? [{ role: 'appMenu' as const }] : [{ label: t('menu.file'), submenu: [{ label: t('menu.quit'), accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }]),
     { role: 'editMenu' },
     nodeMenu,
     { label: t('menu.view'), submenu: [{ role: 'reload' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
+    helpMenu,
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
@@ -283,6 +338,7 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(async () => {
     t = translator(matchLang([...app.getPreferredSystemLanguages(), app.getLocale()]) ?? 'pt-BR');
     prefs = loadPrefs(app.getPath('userData'));
+    app.setAboutPanelOptions({ applicationName: 'Piu Provider', applicationVersion: app.getVersion(), iconPath: asset('icon.png') });
     hardenSession();
     try {
       await bootNode();
@@ -294,6 +350,7 @@ if (!app.requestSingleInstanceLock()) {
     buildMenu();
     buildTray();
     createWindow();
+    autoCheckUpdates();
     app.on('activate', showWindow);
   });
   app.on('before-quit', () => { quitting = true; });

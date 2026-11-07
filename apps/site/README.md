@@ -21,7 +21,7 @@ npm run preview
 Defina `SITE_URL` (ex.: `SITE_URL=https://exemplo.org npm run build`) para gerar a URL canônica e os `hreflang` absolutos.
 
 ## Downloads (fonte única)
-Todos os links, tamanhos e SHA-256 vêm de `src/lib/releases.json`, gerado por `node scripts/sync-release.mjs` a partir dos releases publicados no GitHub (`--dry-run` só mostra). Release inexistente ou rascunho = "em breve", sem link. Hoje: APK `android-v0.1.0` publicado; `desktop-v0.1.0` não existe; `provider-v0.1.0` é rascunho. O certificado do APK fica em `src/lib/androidRelease.ts`.
+Todos os links, tamanhos e SHA-256 vêm de `src/lib/releases.json`, gerado por `node scripts/sync-release.mjs` a partir dos releases publicados no GitHub (`--dry-run` só mostra). Release inexistente ou rascunho = "em breve", sem link. As versões em uso estão no próprio `releases.json` (campo `tag` de cada produto: `android`, `desktop`, `provider`, `node`); não as repita aqui. O certificado do APK fica em `src/lib/androidRelease.ts`.
 
 ## Publicação
 `.github/workflows/pages-site.yml` publica no **GitHub Pages** a cada mudança na `main`.

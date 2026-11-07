@@ -4,6 +4,7 @@ import { applyLangPref, isLang, isRegion, type LangPref, type Region } from '../
 import type { BackupRecord } from '../lib/backupStatus';
 import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 import { type HoursWindow, normHoursChoice } from '../messaging/hours';
+import { UPDATE_NOTIFY_DEFAULT } from '../lib/updateCore';
 
 /**
  * `find` ("Quem pode me encontrar", identidade pública): `all` = Por perto anuncia e recebe pedidos;
@@ -47,6 +48,8 @@ interface Settings {
   /** Idioma do app (`auto` = o do sistema, se suportado) e Região (formato de número e data). Só neste aparelho. */
   lang: LangPref; setLang: (l: LangPref) => void;
   region: Region; setRegion: (r: Region) => void;
+  /** "Avisar sobre novas versões": com internet, confere o GitHub no máximo 1 vez por dia (ui/UpdateWatch.tsx). Ligado de fábrica, como no Desktop. */
+  updateNotify: boolean; setUpdateNotify: (v: boolean) => void;
 }
 
 const DEFAULT_NOTIFS = Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>;
@@ -75,6 +78,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const [screenSecurity, setScreenSecurity] = usePersisted('set.screenSecurity', true);
   const [lang, setLang] = usePersisted<LangPref>('set.lang', 'auto', v => (v === 'auto' || isLang(v) ? v : 'auto'));
   const [region, setRegion] = usePersisted<Region>('set.region', 'auto', v => (isRegion(v) ? v : 'auto'));
+  const [updateNotify, setUpdateNotify] = usePersisted('set.updateNotify', UPDATE_NOTIFY_DEFAULT);
   // Idioma aplicado antes da primeira renderização dos filhos (sem piscar em pt-BR) e a cada troca.
   useState(() => { applyLangPref(lang, region); return null; });
   useEffect(() => { applyLangPref(lang, region); }, [lang, region]);
@@ -90,8 +94,8 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     dropped: NONE,
     restoreMode, setRestoreMode,
     hideBalance, setHideBalance, screenSecurity, setScreenSecurity,
-    lang, setLang, region, setRegion,
-  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode, hideBalance, setHideBalance, screenSecurity, setScreenSecurity, lang, setLang, region, setRegion]);
+    lang, setLang, region, setRegion, updateNotify, setUpdateNotify,
+  }), [priv, setPrivS, sto, setStoS, batN, setBatS, preview, setPreview, notifs, setNotifs, quiet, setQuiet, discreet, setDiscreet, piuSound, setPiuSound, backupDone, setBackupDone, backupAt, setBackupAt, restoreMode, setRestoreMode, hideBalance, setHideBalance, screenSecurity, setScreenSecurity, lang, setLang, region, setRegion, updateNotify, setUpdateNotify]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

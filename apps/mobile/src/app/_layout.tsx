@@ -24,6 +24,7 @@ import { AppLock } from '../ui/AppLock';
 import { SplashGate } from '../ui/Splash';
 import { SystemPrompts } from '../ui/SystemPrompts';
 import { Toast } from '../ui/Toast';
+import { UpdateWatch } from '../ui/UpdateWatch';
 import { PhoneNodeWatch } from '../ui/PhoneNodeWatch';
 import { PointWatch } from '../ui/point/PointWatch';
 
@@ -105,6 +106,7 @@ function Navigator() {
       <Toast />
       <PhoneNodeWatch />
       <PointWatch />
+      <UpdateWatch />
       <NotificationBridge />
       <SystemPrompts />
       <AppLock />

@@ -6,6 +6,8 @@ import { useT, type Key } from '../../i18n';
 import { confirmDevice } from '../../lib/deviceAuth';
 import { fmtBytes } from '../../lib/networkCore';
 import { hasScreenSecurity } from '../../lib/screenSecurity';
+import { appVersion, canCheckUpdates, openRelease, runUpdateCheck, useUpdateCheck } from '../../lib/update';
+import { outcomeText } from '../../lib/updateCore';
 import { clearReceivedCache, receivedCacheBytes, useStorageUsage } from '../../lib/storageUsage';
 import { previewBytes } from '../../lib/storageCore';
 import { useStats } from '../../state/messaging';
@@ -22,19 +24,19 @@ import { Screen } from '../../ui/Screen';
 import { ActionRow, FootNote, LockedRow, SegRow, SetGroup, ToggleRow } from '../../ui/Settings';
 import { T } from '../../ui/T';
 
-type Page = 'privacy' | 'storage' | 'battery';
-const TITLES: Record<Page, Key> = { privacy: 'profile.row.privacy', storage: 'profile.row.storage', battery: 'profile.row.battery' };
+type Page = 'privacy' | 'storage' | 'battery' | 'about';
+const TITLES: Record<Page, Key> = { privacy: 'profile.row.privacy', storage: 'profile.row.storage', battery: 'profile.row.battery', about: 'update.title' };
 
-/** Ajustes: Privacidade, Armazenamento e Bateria e limites (tudo local). */
+/** Ajustes: Privacidade, Armazenamento, Bateria e limites (tudo local) e Versão e atualizações. */
 export default function SettingsPage() {
   const { page: raw } = useLocalSearchParams<{ page: string }>();
-  const page: Page = raw === 'storage' || raw === 'battery' ? raw : 'privacy';
+  const page: Page = raw === 'storage' || raw === 'battery' || raw === 'about' ? raw : 'privacy';
   const t = useT();
   return (
     <Screen>
       <BackHeader title={t(TITLES[page])} />
       <ScrollView>
-        {page === 'privacy' ? <Privacy /> : page === 'storage' ? <Storage /> : <Battery />}
+        {page === 'privacy' ? <Privacy /> : page === 'storage' ? <Storage /> : page === 'about' ? <About /> : <Battery />}
       </ScrollView>
     </Screen>
   );
@@ -192,6 +194,46 @@ function Battery() {
         <SegRow name={t('battery.disc')} desc={DISC[bat.disc]} value={bat.disc} onChange={disc => setBat({ disc })} options={[['eco', t('storage.quality.eco')], ['normal', t('storage.quality.normal')], ['fast', t('battery.disc.fast')]]} />
       </SetGroup>
       <FootNote icon="smartphone">{t('battery.note')}</FootNote>
+    </>
+  );
+}
+
+/**
+ * Versão do Piu instalada e "Procurar atualização" (lib/update.ts). Sem internet ou com o GitHub fora, diz
+ * isso; com versão nova, só abre a página da versão (não baixa nem instala nada sozinho).
+ */
+function About() {
+  const { c } = useTheme();
+  const t = useT();
+  const { updateNotify, setUpdateNotify } = useSettings();
+  const { outcome, checking } = useUpdateCheck();
+  const version = appVersion();
+  const status = outcome ? outcomeText(outcome, t) : null;
+  const available = outcome?.state === 'available' ? outcome : null;
+  return (
+    <>
+      <View accessible accessibilityLabel={`${t('profile.row.version')}: ${version || t('update.unknown')}. ${t('update.current')}`} style={{ marginHorizontal: 20, padding: 18, borderRadius: 22, backgroundColor: c.bg2, gap: 4 }}>
+        <T size={13.5} color={c.ink2}>{t('profile.row.version')}</T>
+        <T size={32} w={650} ls={-0.04} mono={!!version}>{version || t('update.unknown')}</T>
+        <T size={12.5} color={c.ink2}>{t('update.current')}</T>
+      </View>
+      {canCheckUpdates && (
+        <SetGroup title={t('update.title')}>
+          <ActionRow icon="system_update_alt" name={checking ? t('update.checking') : t('update.check')} onPress={() => { if (!checking) void runUpdateCheck(); }} />
+          {status && (
+            <View accessibilityLiveRegion="polite" style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 16 }}>
+              <Icon name={outcome?.state === 'latest' ? 'check_circle' : outcome?.state === 'available' ? 'system_update_alt' : outcome?.state === 'offline' ? 'cloud_off' : 'error'} size={21} w={300} />
+              <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
+                <T size={15} w={550}>{status.title}</T>
+                <T size={12.5} lh={1.35} color={c.ink2}>{status.body}</T>
+              </View>
+            </View>
+          )}
+          {available && <ActionRow icon="north_east" name={t('update.openPage')} strong onPress={() => { void openRelease(available.url); }} />}
+          {Platform.OS === 'android' && <ToggleRow name={t('update.notify')} desc={t('update.notify.desc')} on={updateNotify} onChange={() => setUpdateNotify(!updateNotify)} />}
+        </SetGroup>
+      )}
+      {canCheckUpdates && <FootNote icon="info">{t('update.note')}</FootNote>}
     </>
   );
 }

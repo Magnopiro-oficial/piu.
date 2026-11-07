@@ -7,9 +7,13 @@ export interface Prefs {
   lan: boolean;
   /** Já avisou que fechar a janela mantém o nó ligado na bandeja. */
   trayHintShown: boolean;
+  /** Procurar versão nova ao abrir (no máximo 1x por dia) e avisar. Ligado por padrão, como no Piu Desktop. */
+  updateNotify: boolean;
+  /** Quando foi a última checagem automática (ms desde 1970; 0 = nunca). */
+  lastUpdateCheck: number;
 }
 
-const DEFAULTS: Prefs = { lan: false, trayHintShown: false };
+const DEFAULTS: Prefs = { lan: false, trayHintShown: false, updateNotify: true, lastUpdateCheck: 0 };
 let file = '';
 
 export function loadPrefs(dir: string): Prefs {
@@ -17,7 +21,13 @@ export function loadPrefs(dir: string): Prefs {
   file = join(dir, 'desktop.json');
   try {
     const j = JSON.parse(readFileSync(file, 'utf8')) as Partial<Prefs>;
-    return { lan: j.lan === true, trayHintShown: j.trayHintShown === true };
+    const last = j.lastUpdateCheck;
+    return {
+      lan: j.lan === true,
+      trayHintShown: j.trayHintShown === true,
+      updateNotify: j.updateNotify !== false,
+      lastUpdateCheck: typeof last === 'number' && Number.isSafeInteger(last) && last > 0 ? last : 0,
+    };
   } catch {
     return { ...DEFAULTS };
   }

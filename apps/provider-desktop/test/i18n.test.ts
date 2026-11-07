@@ -35,6 +35,18 @@ test('paridade: todo idioma tem as chaves e variáveis do pt-BR, sem texto vazio
   }
 });
 
+test('versão e atualização: chaves presentes e interpolação', () => {
+  const keys = ['menu.help', 'menu.version', 'menu.checkUpdates', 'menu.updateNotify', 'update.title', 'update.latest',
+    'update.available', 'update.availableDetail', 'update.open', 'update.offline', 'update.offlineDetail', 'update.github', 'update.githubDetail'];
+  for (const lang of LANGS) for (const k of keys) assert.ok(k in STRINGS[lang], `${lang}.${k}`);
+  for (const lang of LANGS) {
+    const tr = translator(lang);
+    assert.match(tr('update.latest', { version: '0.1.2' }), /0\.1\.2/);
+    assert.match(tr('update.available', { version: '0.1.3' }), /Piu Provider.*0\.1\.3|0\.1\.3.*Piu Provider/);
+    assert.match(tr('menu.version', { version: '0.1.2' }), /0\.1\.2/);
+  }
+});
+
 test('translator: interpola {var}, idioma desconhecido cai no pt-BR', () => {
   const en = translator('en');
   assert.equal(en('menu.node'), 'Node');

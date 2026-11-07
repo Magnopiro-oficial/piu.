@@ -10,6 +10,7 @@ import { handleOf, initialsOf } from '../../lib/text';
 import { fingerprintOf, useKeys } from '../../state/keys';
 import { useResetApp } from '../../state/reset';
 import { backupLabel } from '../../lib/backupStatus';
+import { appVersion } from '../../lib/update';
 import { useSettings } from '../../state/settings';
 import { useStore } from '../../state/store';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -59,6 +60,7 @@ export default function Profile() {
     ['router', t('profile.row.provider'), '', () => router.push('/provider')],
     ['key', t('profile.row.backup'), backupLabel(backupAt, backupDone), () => router.push('/backup')],
     ['person_add', t('profile.row.invite'), '', () => router.push('/invite'), true],
+    ['info', t('profile.row.version'), appVersion() || t('update.unknown'), () => router.push('/settings/about')],
     ['restart_alt', t('profile.row.welcome'), '', () => router.push('/welcome' as Href)],
     ['delete', t('profile.row.wipe'), '', () => setDel(true), true],
   ];
@@ -108,7 +110,7 @@ export default function Profile() {
             {rows.map(([icon, name, value, go, strong]) => <ActionRow key={name} icon={icon} name={name} value={value} onPress={go} strong={strong} />)}
           </SetGroup>
         </View>
-        <T size={11.5} mono color={c.ink2} align="center" style={{ marginTop: 16, marginHorizontal: 24 }}>{t('profile.footer')}</T>
+        <T size={11.5} mono color={c.ink2} align="center" style={{ marginTop: 16, marginHorizontal: 24 }}>{t('profile.footer', { version: appVersion() || '—' })}</T>
       </ScrollView>
 
       {del && (
