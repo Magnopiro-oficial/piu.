@@ -3,7 +3,7 @@
     "name": "Piu",
     "slug": "piu",
     "scheme": "piu",
-    "version": "0.1.2",
+    "version": "0.1.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
       }
     },
     "android": {
-      "versionCode": 3,
+      "versionCode": 4,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
