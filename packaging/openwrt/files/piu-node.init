@@ -1,7 +1,7 @@
 #!/bin/sh /etc/rc.common
 # piu-node: painel do provider (HTTPS) e retransmissão LNNP v1, supervisionado pelo procd.
 # Configuração: /etc/config/piu-node (UCI). Cada opção vira uma variável de ambiente do piu-node
-# (tabela em piu_env_map, logo abaixo). Logs e código de pareamento: logread -e piu-node
+# (tabela em piu_env_map, logo abaixo). Logs: logread -e piu-node; código de pareamento: cat /etc/piu-node/pairing-code
 
 USE_PROCD=1
 START=95
@@ -37,6 +37,11 @@ piu_env_map() {
 	piu_env list lnnp   allow           PIU_LNNP_ALLOW
 	piu_env opt  lnnp   memory_mb       PIU_LNNP_MEMORY_MB
 	piu_env opt  lnnp   beacon_ms       PIU_LNNP_BEACON_MS
+	piu_env opt  lnnp   sample_ms       PIU_RELAY_SAMPLE_MS
+	piu_env opt  lnnp   persist_ms      PIU_RELAY_PERSIST_MS
+	# Gateway da carga pela malha (seção `gateway`): liga/desliga e a caixa HTTPS do validador.
+	piu_env bool gateway enabled        PIU_GATEWAY
+	piu_env opt  gateway inbox          PIU_VALIDATOR_INBOX
 	# Adaptador serial/LoRa (seção `serial`, comentada em /etc/config/piu-node).
 	piu_env opt  serial device          PIU_SERIAL
 	piu_env opt  serial lora_sf         PIU_LORA_SF
@@ -44,6 +49,7 @@ piu_env_map() {
 	piu_env opt  serial lora_cr         PIU_LORA_CR
 	piu_env opt  serial lora_duty       PIU_LORA_DUTY
 	piu_env opt  serial max_envelope    PIU_LORA_MAX_ENVELOPE
+	piu_env opt  serial beacon_ms       PIU_LORA_BEACON_MS
 	# Leitura da Lunes Mainnet (seção `lunes`). Sem `endpoint`: os 4 de produção.
 	piu_env list lunes  endpoint        PIU_LUNES_ENDPOINTS
 }
@@ -127,8 +133,15 @@ start_service() {
 
 	# Estado, certificado TLS e identidade do nó LNNP: só o usuário do serviço lê (0700).
 	# O chown roda a cada início porque o uid pode mudar ao reinstalar (uid dinâmico).
+	# A pasta é do usuário do serviço: um link simbólico plantado nela (ex.: -> /etc/shadow) não pode
+	# levar o chown do root a outro arquivo. Pasta que é link: recusa; -h muda o dono do próprio link
+	# e a recursão não entra em links (auditoria final 06/11/2026, M-N2).
+	if [ -L "$data" ]; then
+		piu_log "a pasta de dados '$data' é um link simbólico: aponte piu-node.main.data para a pasta real"
+		return 1
+	fi
 	mkdir -p "$data" || return 1
-	chown -R "$user" "$data"
+	chown -hR "$user" "$data"
 	chmod 0700 "$data"
 
 	# Nomes aceitos no Host (anti DNS rebinding). Com lan_host, o IP da interface lan entra
@@ -158,7 +171,7 @@ start_service() {
 	procd_set_param no_new_privs 1
 	procd_set_param respawn
 	procd_set_param term_timeout 10
-	# O código de pareamento sai no stdout: com log_stdout=1 ele vai para o logread.
+	# Com log_stdout=1 o stdout vai para o logread (o código de pareamento não: fica em pairing-code).
 	procd_set_param stdout "$log_stdout"
 	procd_set_param stderr 1
 	procd_set_param file /etc/config/piu-node

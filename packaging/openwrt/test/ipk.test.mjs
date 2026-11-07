@@ -4,6 +4,7 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
+import { gunzipSync } from 'node:zlib';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { request } from 'node:https';
 import { createServer } from 'node:net';
@@ -61,12 +62,27 @@ describe('formato do .ipk (opkg do OpenWrt 23.05/24.10)', () => {
     assert.equal(sha(build()), sha(ipk));
   });
 
+  // Lê os cabeçalhos ustar direto dos bytes (uid, gid, mtime em octal): não depende do fuso horário da
+  // máquina nem do formato de listagem do tar (GNU mostra 2026-01-01, o bsdtar do macOS "Dec 31 2025"
+  // em UTC−3).
   test('tudo pertence a 0:0 e tem a data de SOURCE_DATE_EPOCH', () => {
+    const oct = (b, off, len) => parseInt(b.subarray(off, off + len).toString('latin1').replace(/\0.*$/s, '').trim() || '0', 8);
     for (const f of ['data.tar.gz', 'control.tar.gz']) {
-      for (const line of tarList(join(outer, f))) {
-        assert.match(line, / 0\/0 /, line);
-        assert.match(line, / 2026-01-01 /, line);
+      const tar = gunzipSync(readFileSync(join(outer, f)));
+      let n = 0;
+      for (let off = 0; off + 512 <= tar.length;) {
+        const h = tar.subarray(off, off + 512);
+        if (h.every(x => x === 0)) break;
+        const name = h.subarray(0, 100).toString('latin1').replace(/\0.*$/s, '');
+        assert.equal(oct(h, 108, 8), 0, `${f}:${name} uid`);
+        assert.equal(oct(h, 116, 8), 0, `${f}:${name} gid`);
+        assert.equal(oct(h, 136, 12), Number(EPOCH), `${f}:${name} mtime`);
+        const size = oct(h, 124, 12);
+        off += 512 + Math.ceil(size / 512) * 512;
+        n++;
       }
+      assert.ok(n > 0, f);
+      assert.equal(n, tarList(join(outer, f)).length, `${f}: todas as entradas conferidas`);
     }
   });
 });
@@ -235,10 +251,24 @@ describe('init script procd e config UCI', () => {
       PIU_LNNP_BROADCAST: '255.255.255.255',
       PIU_LNNP_MEMORY_MB: '16',
       PIU_LNNP_BEACON_MS: '5000',
+      PIU_GATEWAY: '1',
     });
     assert.ok(existsSync(data));
     assert.equal(statSync(data).mode & 0o777, 0o700);
-    assert.match(r.out, new RegExp(`^chown\\t-R\\tpiu-node\\t${data}$`, 'm'));
+    assert.match(r.out, new RegExp(`^chown\\t-hR\\tpiu-node\\t${data}$`, 'm'));
+  });
+
+  test('pasta de dados que é link simbólico: não inicia (o chown do root não segue o link); caixa do validador vira PIU_VALIDATOR_INBOX', () => {
+    const real = join(tmp, 'alvo-de-root');
+    mkdirSync(real);
+    const link = join(tmp, 'data-link');
+    execFileSync('ln', ['-s', real, link]);
+    const r = startService({ config: withData(shipped(), link) });
+    assert.equal(r.rc, 'rc=1');
+    assert.doesNotMatch(r.out, /^chown/m);
+    const gw = startService({ config: withData(shipped(), join(tmp, 'data-gw')).replace("#option inbox 'https://…'", "option inbox 'https://validador.example/caixa'").replace("config gateway 'gateway'\n\t# PIU_GATEWAY: 0 desliga de vez (o painel não liga).\n\toption enabled '1'", "config gateway 'gateway'\n\t# PIU_GATEWAY: 0 desliga de vez (o painel não liga).\n\toption enabled '0'") });
+    assert.equal(gw.env.PIU_VALIDATOR_INBOX, 'https://validador.example/caixa');
+    assert.equal(gw.env.PIU_GATEWAY, '0');
   });
 
   test('listas, booleanos, LoRa descomentado e opções vazias', () => {
@@ -282,7 +312,8 @@ describe('init script procd e config UCI', () => {
   test('toda variável lida pelo piu-node tem opção UCI, e toda opção UCI é usada', () => {
     const text = readFileSync(init(), 'utf8');
     const mapped = new Set([...text.matchAll(/\b(PIU_[A-Z_]+)\b/g)].map(m => m[1]));
-    const read = new Set([...readFileSync(join(repo, 'apps', 'piu-node', 'src', 'config.ts'), 'utf8').matchAll(/env\.(PIU_[A-Z_]+)/g)].map(m => m[1]));
+    // Lidas como env.PIU_X e pelo ajudante num('PIU_X', …).
+    const read = new Set([...readFileSync(join(repo, 'apps', 'piu-node', 'src', 'config.ts'), 'utf8').matchAll(/(?:env\.|num\(')(PIU_[A-Z_]+)/g)].map(m => m[1]));
     assert.ok(read.size > 10);
     for (const v of read) assert.ok(mapped.has(v), `variável sem mapeamento UCI: ${v}`);
     for (const v of ['PIU_SERIAL', 'PIU_LORA_SF', 'PIU_LORA_BW_KHZ', 'PIU_LORA_CR', 'PIU_LORA_DUTY', 'PIU_LORA_MAX_ENVELOPE']) assert.ok(mapped.has(v), v);
@@ -340,11 +371,14 @@ describe('o bundle empacotado sobe', () => {
     proc.stdout.on('data', c => (out += c));
     proc.stderr.on('data', c => (out += c));
     const deadline = Date.now() + 20_000;
-    while (!/Código de pareamento: \d{4} \d{4}/.test(out)) {
+    // Sem terminal o código não sai no log: vai para <dados>/pairing-code (0600).
+    while (!/Código de pareamento em \S+pairing-code/.test(out)) {
       assert.ok(proc.exitCode === null, `o nó saiu:\n${out}`);
       assert.ok(Date.now() < deadline, `o nó não subiu em 20 s:\n${out}`);
       await new Promise(r => setTimeout(r, 100));
     }
+    assert.doesNotMatch(out, /Código de pareamento: \d{4} \d{4}/, 'o código não pode aparecer no log');
+    assert.match(readFileSync(join(data, 'pairing-code'), 'utf8'), /^\d{8}\n$/);
     assert.match(out, new RegExp(`painel em https://localhost:${port}`));
     assert.match(out, /Retransmissão LNNP v1: enlace TCP \d+, descoberta UDP desligada/);
 

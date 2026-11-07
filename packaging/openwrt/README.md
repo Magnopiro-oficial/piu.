@@ -68,7 +68,8 @@ opkg install /tmp/piu-node_0.1.0-1_all.ipk
 O serviço sobe sozinho. Para entrar no painel:
 
 ```bash
-logread -e piu-node | grep -A1 -E 'Código de pareamento|SHA-256'
+cat /etc/piu-node/pairing-code             # código de pareamento (só root e o usuário do serviço leem)
+logread -e piu-node | grep -A1 'SHA-256'    # impressão digital do certificado
 ```
 
 Abra `https://<IP do roteador>:8420` (o IP da interface `lan` entra sozinho na lista de nomes aceitos), confira a impressão digital do certificado e digite o código. O código vale 10 min; para um novo, `/etc/init.d/piu-node restart`.
@@ -125,7 +126,7 @@ O stdout e o stderr do processo vão para o syslog pelo procd (`log_stdout`). O 
   - `/srv` fica na mesma flash (overlay) que `/etc`, não existe por padrão no OpenWrt e **não** entra no backup do `sysupgrade`; `/etc/piu-node` entra (via `keep.d`).
   - Custo em flash: o estado (`state.json`, poucos KB) é regravado a cada requisição autenticada da API e a cada mudança de configuração, então há escritas pequenas enquanto o painel está aberto; com o painel fechado, quase nenhuma. Os envelopes ficam em RAM. Em uso intenso, aponte `main.data` para um pendrive.
 - **Firewall**: nada é aberto pelo pacote. Na config padrão do OpenWrt a zona `lan` aceita entrada e a `wan` recusa, então 8420/TCP, 8422/TCP e 8423/UDP já ficam acessíveis só pela rede local. Não abra essas portas na `wan`.
-- **Código de pareamento no `logread`**: no equipamento sem tela, o "console" é o log. Quem lê o syslog (root por SSH, ou o administrador no LuCI) vê o código, o que equivale a ter acesso ao equipamento. Se o roteador manda o log para outro servidor (`system.@system[0].log_ip`), o código sai do equipamento: desligue o log remoto enquanto pareia.
+- **Código de pareamento fora do `logread`**: sem terminal, o nó grava o código em `/etc/piu-node/pairing-code` (0600, do usuário `piu-node`) e o log diz só onde ler. Assim ele não vai para o log remoto (`system.@system[0].log_ip`) nem para quem só lê o syslog.
 - **Certificado TLS**: gerado no primeiro início com os nomes de `PIU_NODE_HOSTS` (inclusive o IP da `lan`). Se o IP mudar, apague `/etc/piu-node/tls` e reinicie (a impressão digital muda).
 
 ## Feed/SDK do OpenWrt (Makefile)
