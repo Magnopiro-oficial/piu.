@@ -42,8 +42,7 @@ Mais os ajustes de 07/11: convite, regra única de limites, Desktop 0.1.1, pági
 
 - **#9 Revisão de design do celular.** As telas renderizam sem erro, mas a comparação pixel a pixel com `design/handoff` não foi refeita.
 - **#31 APK 0.1.1.** Está assinado (certificado `595bdc6a…`), conferido (versão 0.1.1, código 2, sem RECORD_AUDIO, SYSTEM_ALERT_WINDOW nem c2dm) e publicado. Falta o teste no A31, porque a depuração sem fio estava desligada.
-  - O APK 0.1.1 ainda oferece até 4 GB e 30 dias no Ponto Piu.
-  - A correção da regra única entra no próximo APK (0.1.2), que precisa da senha da chave.
+  - O APK 0.1.2 (07/11, código 3, mesmo certificado) traz a regra única do Ponto Piu, a tela "Conectar ao computador" em 11 idiomas e os textos sem prometer LUNES. Também falta o teste no A31.
 
 ## 4. Não implementado (N)
 
@@ -132,7 +131,7 @@ Instalação:
 
 - CI da `main` verde em todos os produtos.
 - Versões publicadas:
-  - Android 0.1.1 (Latest);
+  - Android 0.1.1 e 0.1.2 (Latest);
   - Desktop 0.1.0 e 0.1.1;
   - Provider 0.1.1 e 0.1.2 (menus em 11 idiomas);
   - Piu Node 0.1.0 (`.ipk` para OpenWrt e `.deb` para Debian/Ubuntu/Raspberry Pi OS).
@@ -147,14 +146,12 @@ Instalação:
 | Chave do validador (`VALIDATOR_PROOF_PK`) e caixa do validador | Provas e evidências não são enviadas; tela diz "Validador ainda não configurado" |
 | Chave GPG das versões | Atualizador do Desktop diz "verificação indisponível" e só abre a página da versão |
 | Certificados Apple/Windows | Decisão de 06/11: lançar sem. Mac: botão direito → Abrir. Windows: SmartScreen → Executar assim mesmo |
-| Senha da chave do APK | Só o dono gera o APK 0.1.2 com a regra única |
 
 ## 12. Próximos passos
 
 1. Ligar a depuração sem fio no A31 (mesma rede do Mac), instalar o APK e fazer o teste real (mobile.md §5).
-2. Gerar o APK 0.1.2 com a regra única do Ponto Piu e publicar.
-3. Gerar a chave GPG das versões e assinar o `SHA256SUMS.txt`.
-4. Definir o endereço da caução e a chave do validador quando a Lunes abrir o programa.
+2. Gerar a chave GPG das versões e assinar o `SHA256SUMS.txt`.
+3. Definir o endereço da caução e a chave do validador quando a Lunes abrir o programa.
 
 ## Resumo por produto
 
@@ -176,5 +173,5 @@ Instalação:
   - broadcast UDP 8423 validado com o endereço da sub-rede (num roteador de verdade, a confirmar).
 - **Mobile:**
   - I no código (603 testes);
-  - APK 0.1.1 publicado;
-  - teste no aparelho e APK 0.1.2 pendentes (P).
+  - APK 0.1.2 publicado;
+  - teste no aparelho pendente (P).
