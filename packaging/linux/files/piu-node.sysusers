@@ -1,0 +1,4 @@
+# Usuário do serviço piu-node (sysusers.d(5)): sem login, casa na pasta de dados.
+u piu-node - "Piu node" /var/lib/piu-node /usr/sbin/nologin
+# Portas seriais do rádio LoRa / cabo USB.
+m piu-node dialout

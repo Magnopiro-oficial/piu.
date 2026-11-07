@@ -5,6 +5,7 @@
 // Números marcados com "≈" ou "estimativa" são estimativas, não medições do projeto.
 import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_SHA256, ANDROID_SIZE, ANDROID_URL, ANDROID_VERSION } from '../lib/androidRelease';
 import { DESKTOP, PROVIDER } from '../lib/desktopRelease';
+import { NODE_DEB, NODE_IPK, type NodeFile } from '../lib/nodeRelease';
 
 export type Status = 'on' | 'test' | 'soon';
 type B = 0 | 1;
@@ -66,6 +67,11 @@ const dl = (r: typeof DESKTOP, os: 'mac' | 'linux' | 'win' | 'mac-x64-dmg', t: s
   const f = os === 'mac-x64-dmg' ? r.files.find(x => x.id === os) : r.mainFile(os);
   return { t, s: f ? `${f.file}${f.size ? ` · ${f.size}` : ''}` : '', url: f?.url ?? '' };
 };
+/** Pacote do Piu Node (releases.json, produto node): url vazia = "em breve". */
+const nodeDl = (f: NodeFile, t: string): Dl => ({ t, s: `${f.file}${f.size ? ` · ${f.size}` : ''}`, url: f.url });
+const IPK = NODE_IPK.file;
+const IPK_VER = IPK.replace(/^piu-node_|_all\.ipk$/g, '');
+const DEB = NODE_DEB.file;
 const ANATEL_ATO = 'https://informacoes.anatel.gov.br/legislacao/atos-de-certificacao-de-produtos/2017/1139-ato-14448';
 const ANATEL_RES = 'https://informacoes.anatel.gov.br/legislacao/resolucoes/2017/936-resolucao-680';
 const ANATEL_14158 = 'https://informacoes.anatel.gov.br/legislacao/atos-de-certificacao-de-produtos/2025/2070-ato-14158';
@@ -227,22 +233,29 @@ export const ajudaPt: AjudaDict = {
     // ───────────── Equipamentos ─────────────
     { id: 'openwrt', cat: 'gear', icon: 'router', k: 'test', t: 'Montar um Piu Node no roteador OpenWrt', sum: 'Um roteador ligado 24 horas guarda e repassa mensagens cifradas para quem está na rede local.', time: '30 min', lvl: 'Médio',
       needs: ['Roteador com OpenWrt 24.10 (o 23.05 instala mas não inicia; o 25.12 usa .apk)', 'Arquitetura x86_64, aarch64 ou arm com FPU, onde o pacote node exista', '128 MB de RAM no mínimo (256 MB é confortável) e flash folgada', 'Um computador com SSH na rede do roteador'],
-      warn: 'O pacote .ipk ainda não está em Baixar neste site. Hoje ele sai do CI do projeto (artifact piu-node-openwrt-ipk) ou é gerado a partir do código. A instalação num roteador de verdade ainda está “a confirmar”.',
+      warn: NODE_IPK.url
+        ? 'O pacote .ipk está no release do GitHub (link no passo 2), com SHA-256. A instalação num roteador de verdade ainda está “a confirmar”.'
+        : 'O pacote .ipk ainda não foi publicado: o link do passo 2 fica “em breve” até o release sair. Enquanto isso, gere a partir do código. A instalação num roteador de verdade ainda está “a confirmar”.',
       steps: [
         { t: 'Confira se o roteador serve', d: 'No painel do roteador (LuCI), em Status → Visão geral, veja a versão do firmware e a arquitetura. Pelo SSH, confira também se existe o pacote node na versão 20.19 ou mais nova.',
           tech: ['Pelo terminal (SSH)', 'ssh root@192.168.1.1', 'ubus call system board', 'free -m', 'opkg update && opkg info node', '# precisa de node >= 20.19 (OpenWrt 24.10 tem 20.20)'],
           s: { f: 'w', t: 'Status', u: '192.168.1.1', i: [['row', 'memory', 'Versão do firmware', 'OpenWrt 24.10', 1], ['row', 'developer_board', 'Arquitetura', 'ex.: aarch64'], ['row', 'storage', 'Memória', 'ex.: 256 MB']] } },
-        { t: 'Pegue o pacote', d: 'O arquivo é piu-node_0.1.0-1_all.ipk (cerca de 6,1 MiB, serve para qualquer arquitetura com node). Baixe o artifact do CI no GitHub (precisa de login) ou gere a partir do código, na pasta packaging/openwrt.',
-          tech: ['Gerar o pacote (computador com Node 20.19+)', 'cd packaging/openwrt', 'npm run deps && npm run build:panel', 'npm ci && npm run build', '# sai em dist/piu-node_0.1.0-1_all.ipk'] },
+        { t: 'Pegue o pacote', d: NODE_IPK.url
+            ? `Baixe ${IPK} (serve para qualquer arquitetura com node) e confira o SHA-256 com o SHA256SUMS.txt do mesmo release.`
+            : `O arquivo é ${IPK} (cerca de 6 MiB, serve para qualquer arquitetura com node). Até o release sair, gere a partir do código, na pasta packaging/openwrt, ou baixe o artifact piu-node-openwrt-ipk do CI no GitHub (precisa de login).`,
+          dl: [nodeDl(NODE_IPK, 'Pacote para OpenWrt (.ipk)')],
+          tech: NODE_IPK.url
+            ? ['Conferir o download', `sha256sum -c --ignore-missing SHA256SUMS.txt   # ${IPK}: OK`]
+            : ['Gerar o pacote (computador com Node 20.19+)', 'cd packaging/openwrt', 'npm run deps && npm run build:panel', 'npm ci && npm run build', `# sai em dist/${IPK}`] },
         { t: 'Envie e instale', d: 'Copie o arquivo para o /tmp do roteador e instale pelo SSH. O serviço sobe sozinho, com um usuário sem privilégios. O pacote não abre nada no firewall nem mexe na rede do roteador.',
           warn: 'Não desligue o roteador da tomada durante a instalação.',
-          tech: ['Pelo terminal', 'scp -O piu-node_0.1.0-1_all.ipk root@192.168.1.1:/tmp/', 'ssh root@192.168.1.1', 'opkg update', 'opkg install node', 'node -v   # precisa ser >= 20.19', 'opkg install /tmp/piu-node_0.1.0-1_all.ipk'],
-          s: { f: 't', t: 'Terminal', i: [['term', ['$ opkg install /tmp/piu-node_0.1.0-1_all.ipk', 'Installing piu-node (0.1.0-1) to root...', 'Configuring piu-node.']]] } },
+          tech: ['Pelo terminal', `scp -O ${IPK} root@192.168.1.1:/tmp/`, 'ssh root@192.168.1.1', 'opkg update', 'opkg install node', 'node -v   # precisa ser >= 20.19', `opkg install /tmp/${IPK}`],
+          s: { f: 't', t: 'Terminal', i: [['term', [`$ opkg install /tmp/${IPK}`, `Installing piu-node (${IPK_VER}) to root...`, 'Configuring piu-node.']]] } },
         { t: 'Leia o código de pareamento', d: 'O código tem 8 dígitos, vale 10 minutos e é de uso único. Ele não vai para o log: fica num arquivo que só o root lê. Anote também a impressão digital do certificado.',
           tech: ['No roteador', 'cat /etc/piu-node/pairing-code', "logread -e piu-node | grep -A1 'SHA-256'", '# código vencido? gere outro:', '/etc/init.d/piu-node restart'],
           s: { f: 't', t: 'Terminal', i: [['term', ['$ cat /etc/piu-node/pairing-code', '········']]] } },
         { t: 'Abra o painel e pareie o navegador', d: 'No navegador, abra https:// com o IP do roteador e a porta 8420 (por exemplo https://192.168.1.1:8420). O navegador avisa do certificado próprio: compare a impressão digital antes de aceitar. Em “Parear este navegador”, digite o “Código do equipamento” e “Seu nome” e toque em Parear.',
-          tip: 'piu-node.local só abre se algo anunciar esse nome na rede (o OpenWrt não faz isso por padrão). Use o IP.',
+          tip: 'O pacote não anuncia nenhum nome na rede (piu-node.local não abre). Use o IP da lan: ele entra sozinho na lista de nomes aceitos e no certificado.',
           s: { f: 'w', t: 'Parear este navegador', u: '192.168.1.1:8420', i: [['field', 'Código do equipamento', '········', 1], ['field', 'Seu nome', 'Seu nome'], ['btn', 'Parear', 1]] } },
         { t: 'Escolha o que ele empresta', d: 'Em Configurações, escolha banda (20, 50 ou 100 Mbps), armazenamento e horário (sempre, 22h–7h ou 8h–18h). No OpenWrt, as mensagens guardadas ficam na memória e o teto vem em 16 MiB (opção memory_mb).',
           tech: ['Ajustes pelo UCI', "uci set piu-node.lnnp.memory_mb='32'", "uci add_list piu-node.lnnp.peer='192.168.1.20:8422'   # vizinho fixo (opcional)", 'uci commit piu-node   # o serviço reinicia sozinho'],
@@ -254,7 +267,7 @@ export const ajudaPt: AjudaDict = {
       fim: 'Seu roteador é um Piu Node. Ele conversa com outros Piu Nodes, com o Piu Desktop e com celulares no mesmo Wi-Fi.' },
 
     { id: 'linux', cat: 'gear', icon: 'developer_board', k: 'on', t: 'Piu Node no computador ou no Raspberry Pi', sum: 'Um computador ligado em casa vira nó da rede. No Mac, no Windows e no Linux x86_64 há um app pronto.', time: '15 min', lvl: 'Médio',
-      needs: ['Computador ligado na tomada e na rede de casa', 'App Piu Provider: macOS, Windows 10/11 64 bits ou Linux x86_64', 'Raspberry Pi ou outro Linux: Node.js 20.19 ou mais novo e git (sem pacote pronto ainda)'],
+      needs: ['Computador ligado na tomada e na rede de casa', 'App Piu Provider: macOS, Windows 10/11 64 bits ou Linux x86_64', 'Raspberry Pi ou outro Linux com systemd: Node.js 20.19 ou mais novo (o Debian 13 traz o 20.19; no Debian 12 e no Ubuntu 24.04, instale o Node.js 22 da NodeSource antes)'],
       steps: [
         { t: 'Baixe o Piu Provider', d: `O Piu Provider ${PROVIDER.version} roda o Piu Node dentro do app e mostra o painel. Escolha o arquivo do seu sistema.`,
           dl: [dl(PROVIDER, 'mac', 'macOS · Apple Silicon'), dl(PROVIDER, 'mac-x64-dmg', 'macOS · Intel'), dl(PROVIDER, 'win', 'Windows 10 e 11 · 64 bits'), dl(PROVIDER, 'linux', 'Linux · AppImage x86_64')],
@@ -262,16 +275,23 @@ export const ajudaPt: AjudaDict = {
         { t: 'Abra: ele pareia sozinho', d: 'Ao abrir, o app sobe o nó, abre o painel e entra com o nome do usuário do computador. A retransmissão começa na rede local (enlace TCP 8422 e descoberta UDP 8423). O painel fica só neste computador.',
           tip: 'Para abrir o painel de outro aparelho da rede, ligue “Nó → Permitir acesso pela rede local” e use “Nó → Mostrar código de pareamento…”.',
           s: { f: 'w', t: 'Piu Provider', i: [['row', 'dashboard', 'Visão geral', '', 1], ['row', 'router', 'Equipamentos', ''], ['row', 'hub', 'Malha', ''], ['row', 'settings', 'Configurações', '']] } },
-        { t: 'No Raspberry Pi: rode a partir do código', d: 'Ainda não há .deb nem imagem pronta para cartão SD. Com Node.js 20.19+ instalado (o Node do Debian 12 é antigo), compile o painel e o nó e rode. Inclua o IP do Raspberry na lista de nomes aceitos.',
-          tech: ['No Raspberry Pi (Linux)', `git clone ${REPO}.git piu`, 'cd piu/apps/provider-panel && npm ci && npm run build', 'cd ../piu-node && npm ci && npm run build', 'PIU_NODE_HOSTS=localhost,127.0.0.1,192.168.1.50 PIU_NODE_DATA=$HOME/.piu-node node dist/main.js', '# troque 192.168.1.50 pelo IP do Raspberry'],
-          s: { f: 't', t: 'Terminal', i: [['term', ['$ node dist/main.js', 'código de pareamento: ········ (vale 10 min)', 'certificado SHA-256: …']]] } },
-        { t: 'Pareie o navegador', d: 'Rodando no terminal, o código de 8 dígitos aparece na tela. Abra https://<IP>:8420, confira a impressão digital do certificado, digite o “Código do equipamento” e “Seu nome” e toque em Parear.',
-          warn: 'Sem supervisor (systemd), o nó para se você fechar o terminal ou reiniciar pelo painel. Como serviço, o código vai para <PIU_NODE_DATA>/pairing-code em vez do log.',
+        { t: 'No Raspberry Pi ou outro Linux: instale o .deb', d: NODE_DEB.url
+            ? `O ${DEB} instala o Piu Node como serviço do systemd, com usuário próprio (piu-node) e dados em /var/lib/piu-node. Serve para qualquer arquitetura (é JavaScript): o apt confere se o Node.js do sistema é 20.19 ou mais novo.`
+            : 'O pacote .deb ainda não foi publicado (o link fica “em breve”). Dá para gerar o mesmo pacote a partir do código, no próprio Raspberry, e instalar: ele vira serviço do systemd, com usuário próprio (piu-node) e dados em /var/lib/piu-node.',
+          dl: [nodeDl(NODE_DEB, 'Debian, Ubuntu e Raspberry Pi OS (.deb)')],
+          tech: NODE_DEB.url
+            ? ['No Raspberry Pi (Linux)', 'node -v   # precisa ser >= 20.19', `sudo apt install ./${DEB}`, 'systemctl status piu-node', '# ajustes: /etc/default/piu-node, depois sudo systemctl restart piu-node']
+            : ['Gerar e instalar a partir do código (no Raspberry, com Node 20.19+ e git)', `git clone ${REPO}.git piu`, 'cd piu/packaging/linux', 'npm run deps && npm run build:panel && npm run build', `sudo apt install ./dist/${DEB}`, 'systemctl status piu-node'],
+          tip: 'Sem systemd? Rode direto do código: npm ci && npm run build em apps/provider-panel e em apps/piu-node, depois PIU_NODE_HOSTS=localhost,127.0.0.1,<IP do Raspberry> PIU_NODE_DATA=$HOME/.piu-node node dist/main.js.',
+          s: { f: 't', t: 'Terminal', i: [['term', [`$ sudo apt install ./${DEB}`, 'Creating user \'piu-node\' (Piu node) …', 'piu-node: painel em https://<IP deste computador>:8420 · código: sudo cat /var/lib/piu-node/pairing-code']]] } },
+        { t: 'Pareie o navegador', d: 'Como serviço, o código de 8 dígitos fica em /var/lib/piu-node/pairing-code, que só o root e o usuário do serviço leem (rodando no terminal, ele aparece na tela). Abra https://<IP>:8420, confira a impressão digital do certificado, digite o “Código do equipamento” e “Seu nome” e toque em Parear.',
+          tech: ['No Raspberry Pi', 'sudo cat /var/lib/piu-node/pairing-code', "journalctl -u piu-node | grep -A1 'SHA-256'", '# código vencido? gere outro:', 'sudo systemctl restart piu-node'],
+          warn: 'Rodando no terminal, sem o systemd, o nó para se você fechar o terminal ou reiniciar pelo painel.',
           s: { f: 'w', t: 'Parear este navegador', u: '192.168.1.50:8420', i: [['field', 'Código do equipamento', '········', 1], ['field', 'Seu nome', 'Seu nome'], ['btn', 'Parear', 1]] } },
         { t: 'Confira se está funcionando', d: 'No painel, Visão geral e Malha mostram os vizinhos encontrados, o que foi guardado e repassado e os recibos. Os números são reais, contados pelo nó.',
           s: { f: 'w', t: 'Malha', u: 'localhost:8420', i: [['row', 'hub', 'Vizinhos', ''], ['row', 'inventory_2', 'Guardados', ''], ['row', 'receipt_long', 'Recibos', '']] } },
       ],
-      tech: ['Referência', 'painel: https://localhost:8420 (ou outra porta livre, no app)', 'enlace LNNP: 8422/TCP · descoberta: 8423/UDP · libere só na rede local', 'config: variáveis PIU_* (apps/piu-node/README.md)', 'serviço systemd: use Restart=on-failure (reinício pelo painel sai com código 75)'],
+      tech: ['Referência', 'painel: https://localhost:8420 (ou outra porta livre, no app)', 'enlace LNNP: 8422/TCP · descoberta: 8423/UDP · libere só na rede local', 'pacote .deb: config /etc/default/piu-node · dados /var/lib/piu-node · logs journalctl -u piu-node', 'remover: sudo apt remove piu-node (os dados ficam) · sudo apt purge piu-node (apaga /var/lib/piu-node)', 'variáveis PIU_*: apps/piu-node/README.md · do código como serviço: Restart=on-failure (reinício pelo painel sai com 75)'],
       fim: 'Seu computador é um Piu Node. Deixe ligado: quanto mais tempo online, mais ele ajuda.' },
 
     { id: 'lora', cat: 'gear', icon: 'settings_input_antenna', k: 'test', t: 'Ligar um rádio LoRa ao Piu Node', sum: 'Mensagens curtas por quilômetros, com um rádio LoRa no USB do nó. Experimental.', time: '45 min', lvl: 'Avançado',
@@ -284,13 +304,13 @@ export const ajudaPt: AjudaDict = {
           tech: ['Limites (Ato Anatel 14.448/2017, Anexo I, item 10)', '# 902–907,5 e 915–928 MHz', '# digital: até 1 W de pico · salto de frequência: 1 W com 35+ canais, 0,25 W com menos', '# antena > 6 dBi: −1 dB de potência por dB acima de 6 dBi'] },
         { t: 'Coloque a antena antes de ligar', d: 'Rosqueie a antena no rádio e só depois ligue no USB. Leve a antena para o lugar mais alto possível, longe de paredes de concreto.',
           warn: 'Transmitir sem antena pode queimar o rádio.' },
-        { t: 'Ligue no USB e ache a porta', d: 'Conecte o rádio ao USB do nó e veja qual porta apareceu. No OpenWrt, o usuário do serviço já está no grupo dialout; no Linux, inclua o seu.',
+        { t: 'Ligue no USB e ache a porta', d: 'Conecte o rádio ao USB do nó e veja qual porta apareceu. No OpenWrt e no pacote .deb, o usuário do serviço (piu-node) já está no grupo dialout; rodando do código, inclua o seu.',
           tech: ['Pelo terminal', 'ls /dev/ttyUSB* /dev/ttyACM*', '# Linux: sudo usermod -aG dialout $USER'] },
         { t: 'Diga ao Piu Node onde está o rádio', d: 'O formato é lora:<porta>@<velocidade>. SF, banda e taxa de código precisam ser iguais aos do firmware (padrão do Piu: SF 9, 125 kHz, 4/5). O nó limita a ocupação do canal a 10% por hora.',
-          tech: ['No OpenWrt (UCI)', 'uci set piu-node.serial=serial', "uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", "uci set piu-node.serial.lora_sf='9'", "uci set piu-node.serial.lora_bw_khz='125'", "uci set piu-node.serial.lora_cr='5'", 'uci commit piu-node', '# no Linux: PIU_SERIAL=lora:/dev/ttyUSB0@115200 PIU_LORA_SF=9 node dist/main.js'],
+          tech: ['No OpenWrt (UCI)', 'uci set piu-node.serial=serial', "uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", "uci set piu-node.serial.lora_sf='9'", "uci set piu-node.serial.lora_bw_khz='125'", "uci set piu-node.serial.lora_cr='5'", 'uci commit piu-node', '# Linux (.deb): PIU_SERIAL=lora:/dev/ttyUSB0@115200 e PIU_LORA_SF=9 em /etc/default/piu-node', '# depois: sudo systemctl restart piu-node'],
           s: { f: 't', t: 'Terminal', i: [['term', ["$ uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", '$ uci commit piu-node', '$ logread -e piu-node']]] } },
         { t: 'Confira no log', d: 'Se a porta não abrir (rádio desligado, porta errada), o nó continua pela rede local e o log diz o que não abriu. Os contadores da porta (pacotes, repetições, tempo no ar, ocupação do canal) saem na API /api/relay do painel.',
-          tech: ['Logs', 'logread -f -e piu-node   # OpenWrt', '# Linux: a saída do próprio terminal'] },
+          tech: ['Logs', 'logread -f -e piu-node   # OpenWrt', 'journalctl -u piu-node -f   # Linux (.deb)'] },
         { t: 'Saiba o que passa pelo rádio', d: 'Só mensagens pequenas: envelopes de até 1536 bytes, em pacotes de 255 bytes, com confirmação e repetição. Fotos, vídeos e arquivos nunca vão pelo rádio: seguem por outro meio quando houver.' },
       ],
       fim: 'Seu nó agora também fala por rádio. Conte o que deu certo e o que não deu: é assim que o LoRa sai do teste.' },
@@ -353,8 +373,8 @@ export const ajudaPt: AjudaDict = {
         { t: 'Instale no alto, mas nem tanto', d: 'Entre 4 e 8 metros (estimativa). Muito alto, o celular até recebe a antena, mas a antena não ouve o celular de volta: celular tem pouca potência.', tip: 'Setoriais costumam ficar inclinadas de 5° a 10° para baixo.' },
         { t: 'Crie uma rede só para o Piu', d: 'Uma rede aberta, separada da rede da casa e sem saída para a internet. Dentro dela, o isolamento de clientes fica DESLIGADO: os celulares precisam se enxergar para trocar mensagens. Os comandos são do próprio OpenWrt (guia oficial de rede de visitante), não do Piu.',
           tech: ['OpenWrt 24.10 (UCI)', "uci set network.piu_dev=device", "uci set network.piu_dev.type='bridge'", "uci set network.piu_dev.name='br-piu'", "uci set network.piu=interface", "uci set network.piu.proto='static'", "uci set network.piu.device='br-piu'", "uci set network.piu.ipaddr='192.168.50.1/24'", "uci set wireless.piu=wifi-iface", "uci set wireless.piu.device='radio0'", "uci set wireless.piu.mode='ap'", "uci set wireless.piu.network='piu'", "uci set wireless.piu.ssid='piu.praca'", "uci set wireless.piu.encryption='none'", "uci set wireless.piu.isolate='0'", "uci set dhcp.piu=dhcp", "uci set dhcp.piu.interface='piu'", "uci set dhcp.piu.start='100'", "uci set dhcp.piu.limit='150'", "uci set dhcp.piu.leasetime='2h'", "uci set firewall.piu=zone", "uci set firewall.piu.name='piu'", "uci set firewall.piu.network='piu'", "uci set firewall.piu.input='REJECT'", "uci set firewall.piu.output='ACCEPT'", "uci set firewall.piu.forward='REJECT'", "uci set firewall.piu_dhcp=rule", "uci set firewall.piu_dhcp.name='Allow-DHCP-Piu'", "uci set firewall.piu_dhcp.src='piu'", "uci set firewall.piu_dhcp.proto='udp'", "uci set firewall.piu_dhcp.dest_port='67'", "uci set firewall.piu_dhcp.target='ACCEPT'", 'uci commit', 'service network restart && service firewall restart', '# sem "forwarding" para a wan: a rede do Piu não sai para a internet'] },
-        { t: 'Se o roteador também for Piu Node', d: 'Instale o Piu Node (guia “Montar um Piu Node no roteador OpenWrt”) e libere as portas do Piu só na rede piu. A descoberta por broadcast na rede nova ainda está “a confirmar”: se os celulares não acharem o nó, informe o broadcast da rede.',
-          tech: ['Portas do Piu na zona piu', "uci set firewall.piu_lnnp=rule", "uci set firewall.piu_lnnp.name='Allow-Piu-LNNP'", "uci set firewall.piu_lnnp.src='piu'", "uci set firewall.piu_lnnp.proto='tcp'", "uci set firewall.piu_lnnp.dest_port='8422'", "uci set firewall.piu_lnnp.target='ACCEPT'", "uci set firewall.piu_disc=rule", "uci set firewall.piu_disc.name='Allow-Piu-Discovery'", "uci set firewall.piu_disc.src='piu'", "uci set firewall.piu_disc.proto='udp'", "uci set firewall.piu_disc.dest_port='8423'", "uci set firewall.piu_disc.target='ACCEPT'", 'uci commit firewall && service firewall restart', "uci add_list piu-node.lnnp.broadcast='192.168.50.255'   # a confirmar", 'uci commit piu-node'] },
+        { t: 'Se o roteador também for Piu Node', d: 'Instale o Piu Node (guia “Montar um Piu Node no roteador OpenWrt”) e libere as portas do Piu só na rede piu. Acrescente o broadcast da rede piu (192.168.50.255) à lista do anúncio: o broadcast da sub-rede sai pela interface certa mesmo num aparelho com duas redes. Em teste no Linux, com Piu Nodes em contêineres, o broadcast da sub-rede formou o enlace (inclusive com um nó em duas redes); 255.255.255.255 não formou nem entre dois nós numa rede só. Num roteador de verdade, ainda “a confirmar”.',
+          tech: ['Portas do Piu na zona piu', "uci set firewall.piu_lnnp=rule", "uci set firewall.piu_lnnp.name='Allow-Piu-LNNP'", "uci set firewall.piu_lnnp.src='piu'", "uci set firewall.piu_lnnp.proto='tcp'", "uci set firewall.piu_lnnp.dest_port='8422'", "uci set firewall.piu_lnnp.target='ACCEPT'", "uci set firewall.piu_disc=rule", "uci set firewall.piu_disc.name='Allow-Piu-Discovery'", "uci set firewall.piu_disc.src='piu'", "uci set firewall.piu_disc.proto='udp'", "uci set firewall.piu_disc.dest_port='8423'", "uci set firewall.piu_disc.target='ACCEPT'", 'uci commit firewall && service firewall restart', "uci add_list piu-node.lnnp.broadcast='192.168.50.255'   # broadcast da rede piu", 'uci commit piu-node'] },
         { t: 'Confira a potência', d: 'Ajuste o país e a potência no próprio roteador, considerando o ganho da antena e a perda do cabo (guia “Antes de montar”).',
           tech: ['OpenWrt', "uci set wireless.radio0.country='BR'", "uci set wireless.radio0.txpower='20'   # dBm; reduza se a antena passar de 6 dBi", 'uci commit wireless && wifi reload'] },
         { t: 'Teste com o Piu', d: 'Conecte um celular à rede piu.praca e rode o teste do Ponto Piu (Rede → Criar ponto Piu → “Testar esta rede”). “Aparelhos se enxergam” precisa passar. Ande pela praça: onde o sinal cair muito, considere um segundo ponto.',
@@ -421,8 +441,8 @@ export const ajudaPt: AjudaDict = {
         { t: 'A rede Wi-Fi Direct não abre para passar o app', d: 'Ligue o Wi-Fi do seu celular (não precisa estar conectado a nenhuma rede) e permita “dispositivos por perto” (ou localização, no Android 12 e antes). Se o Wi-Fi estiver ocupado com outra conexão direta, espere alguns segundos ou envie por Bluetooth.' },
         { t: 'O celular gasta bateria demais', d: 'Na aba Rede, ligue “Só retransmitir carregando” e suba “Parar abaixo de”. Em Perfil → Bateria e limites, diminua o tráfego de terceiros por dia ou escolha o horário 22h–7h.' },
         { t: 'O teste do Ponto Piu deu vermelho ou amarelo', d: 'Vermelho: visitantes veriam os aparelhos da casa. Use uma rede de visitante, separada, ou “Criar a rede neste celular”. Amarelo por isolamento: no roteador, desligue “isolar clientes” na rede de visitante e teste de novo.' },
-        { t: 'O painel do Piu Node não abre', d: 'Use https:// e a porta 8420 com o IP do aparelho (piu-node.local só abre se algo anunciar o nome). Erro 421: o nome ou IP não está na lista aceita (PIU_NODE_HOSTS, ou main.host no OpenWrt). No OpenWrt, veja /etc/init.d/piu-node status e logread -e piu-node: com Node antigo, o serviço não inicia e o log diz a versão.' },
-        { t: 'O código de pareamento não funciona', d: 'Ele vale 10 minutos e é de uso único; 5 erros apagam o código. No OpenWrt, gere outro com /etc/init.d/piu-node restart e leia em /etc/piu-node/pairing-code. No Piu Provider: Nó → Mostrar código de pareamento.' },
+        { t: 'O painel do Piu Node não abre', d: 'Use https:// e a porta 8420 com o IP do aparelho (o Piu Node não anuncia nome na rede). Erro 421: o nome ou IP não está na lista aceita (PIU_NODE_HOSTS, ou main.host no OpenWrt). No OpenWrt, veja /etc/init.d/piu-node status e logread -e piu-node: com Node antigo, o serviço não inicia e o log diz a versão. No Linux (.deb): systemctl status piu-node e journalctl -u piu-node.' },
+        { t: 'O código de pareamento não funciona', d: 'Ele vale 10 minutos e é de uso único; 5 erros apagam o código. No OpenWrt, gere outro com /etc/init.d/piu-node restart e leia em /etc/piu-node/pairing-code. No Linux (.deb): sudo systemctl restart piu-node e sudo cat /var/lib/piu-node/pairing-code. No Piu Provider: Nó → Mostrar código de pareamento.' },
         { t: 'O celular não lê o QR do computador', d: 'Os dois precisam estar no mesmo Wi-Fi. Aumente o brilho da tela e aproxime o celular. O QR muda a cada 30 segundos: se demorar, espere o próximo.' },
         { t: 'O Mac ou o Windows não deixam abrir', d: 'Mac (macOS 15 ou mais novo): Ajustes do Sistema → Privacidade e Segurança → Abrir mesmo assim. macOS 14 ou anterior: botão direito no app → Abrir. Windows: no aviso do SmartScreen, Mais informações → Executar assim mesmo.' },
         { t: 'Perdi o celular', d: 'Instale o Piu em outro celular e recupere com as 12 palavras (“Restaurar de outro aparelho” → “Com a frase de 12 palavras”). Num aparelho que ficou com você, Perfil → Aparelhos → “Revogar aparelho perdido” → “Segure para revogar”. Se o celular perdido pode estar com outra pessoa, crie também uma identidade nova.' },

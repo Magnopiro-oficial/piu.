@@ -1,0 +1,8 @@
+#!/bin/sh
+# prerm do piu-node: para o serviço antes de remover (na atualização, o postinst reinicia).
+set -e
+
+if [ "$1" = remove ] && [ -d /run/systemd/system ]; then
+	systemctl stop piu-node.service >/dev/null 2>&1 || true
+fi
+exit 0

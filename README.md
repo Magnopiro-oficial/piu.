@@ -82,6 +82,7 @@ Each folder is an independent project with its own `package.json`, README and CI
 | [`apps/settlement`](apps/settlement) | Receipt validator and settlement on the Lunes Network |
 | [`apps/site`](apps/site) | Project website in PT and EN (Astro) |
 | [`packaging/openwrt`](packaging/openwrt) | `.ipk` package to run `piu-node` on OpenWrt routers |
+| [`packaging/linux`](packaging/linux) | `.deb` package (systemd service) to run `piu-node` on Debian, Ubuntu and Raspberry Pi OS |
 | [`docs/lnnp`](docs/lnnp/especificacao-v1.md) | Network protocol specification (LNNP v1) |
 | [`docs/seguranca`](docs/seguranca) | Internal security audit and package for an independent audit |
 | [`design/`](design) · [`design/brand/`](design/brand) | Design prototypes and brand identity (icon, mark, favicons) |

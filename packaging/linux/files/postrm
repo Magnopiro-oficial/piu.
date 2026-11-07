@@ -1,0 +1,18 @@
+#!/bin/sh
+# postrm do piu-node. remove: desliga do boot; /var/lib/piu-node (identidade do nó, certificado,
+# operadores pareados) fica. purge: apaga também /var/lib/piu-node. O usuário piu-node fica (como
+# manda a política do Debian para usuários de sistema).
+set -e
+
+case "$1" in
+	remove | purge)
+		if command -v systemctl >/dev/null 2>&1; then
+			systemctl disable piu-node.service >/dev/null 2>&1 || true
+			if [ -d /run/systemd/system ]; then systemctl daemon-reload >/dev/null 2>&1 || true; fi
+		fi
+		;;
+esac
+if [ "$1" = purge ]; then
+	rm -rf /var/lib/piu-node
+fi
+exit 0

@@ -1,0 +1,65 @@
+# piu-node: painel do provider (HTTPS, porta 8420) e retransmissão LNNP v1 (TCP 8422, UDP 8423).
+# Configuração: /etc/default/piu-node (variáveis PIU_*). Dados: /var/lib/piu-node (0700).
+# Código de pareamento: sudo cat /var/lib/piu-node/pairing-code · Logs: journalctl -u piu-node
+# Ajustes locais sem editar este arquivo: sudo systemctl edit piu-node
+
+[Unit]
+Description=Piu node (painel do provider e retransmissão LNNP v1)
+Documentation=https://github.com/Magnopiro-oficial/piu./tree/main/packaging/linux
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+User=piu-node
+Group=piu-node
+# Rádio LoRa / cabo USB (PIU_SERIAL, experimental): as portas /dev/ttyUSB* e /dev/ttyACM* são do grupo dialout.
+SupplementaryGroups=dialout
+Environment=PIU_NODE_DATA=/var/lib/piu-node PIU_NODE_PANEL=/usr/share/piu-node/panel
+EnvironmentFile=-/etc/default/piu-node
+ExecStart=/usr/lib/piu-node/piu-node-start
+# Reinício pelo painel sai com 75 (EX_TEMPFAIL): on-failure sobe de novo. 78 (EX_CONFIG) é
+# configuração errada, como Node.js antigo: não adianta reiniciar em laço.
+Restart=on-failure
+RestartSec=3
+RestartPreventExitStatus=78
+TimeoutStopSec=15
+
+# Estado, certificado TLS, identidade do nó e o código de pareamento (0600): só este usuário lê.
+StateDirectory=piu-node
+StateDirectoryMode=0700
+UMask=0077
+
+# Endurecimento. Sem MemoryDenyWriteExecute: o JIT do V8 precisa de memória gravável e executável.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+# Sem PrivateDevices (esconderia as portas seriais): só ttyUSB/ttyACM, além de /dev/null e afins.
+DevicePolicy=closed
+DeviceAllow=char-ttyUSB rw
+DeviceAllow=char-ttyACM rw
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+# AF_NETLINK: lista de interfaces (os.networkInterfaces e hostname -I).
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+KeyringMode=private
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @mount @debug @cpu-emulation @obsolete @raw-io @reboot @swap @module
+SystemCallErrorNumber=EPERM
+
+[Install]
+WantedBy=multi-user.target

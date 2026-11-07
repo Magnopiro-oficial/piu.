@@ -8,7 +8,8 @@
     "panel": "node scripts/embed-panel.mjs",
     "dev": "npm run panel && astro dev",
     "build": "npm run panel && astro check && astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "test": "node --test scripts/*.test.mjs"
   },
   "dependencies": {
     "@astrojs/react": "^7.1.2",

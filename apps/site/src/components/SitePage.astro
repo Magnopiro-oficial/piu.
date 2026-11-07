@@ -6,6 +6,7 @@ import DesktopDemo from './DesktopDemo';
 import { url } from '../lib/url';
 import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SHA256, groupHex } from '../lib/androidRelease';
 import { DESKTOP, DESKTOP_OSES, DESKTOP_SIG_URL, PROVIDER, RELEASE_KEY_FILE, RELEASE_KEY_FPR, fmtFpr, shortSha, type DesktopOs } from '../lib/desktopRelease';
+import { NODE_DEB, NODE_IPK, NODE_PUBLISHED, NODE_RELEASE_URL, NODE_SUMS_URL } from '../lib/nodeRelease';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
@@ -25,6 +26,7 @@ const DEFAULT_OS: DesktopOs = 'mac';
 const d = t.desktop;
 const dlNote = (file: string, tip: string) => `${d.started}${file}. ${tip}`;
 const pa = t.provider.app;
+const pn = t.provider.node;
 // Assinatura GPG só com chave criada E arquivo .asc publicado no release.
 const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
 ---
@@ -243,6 +245,34 @@ const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
             ))}
           </div>
         )}
+      </div>
+
+      <!-- Piu Node (.ipk do OpenWrt e .deb do Linux/Raspberry Pi): arquivos do release node-v<versão> (releases.json); sem release, "em breve". -->
+      <div class="prov-app rv" id="provider-node">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap">
+          <div class="col" style="gap:6px;min-width:0;flex:1 1 280px">
+            <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span class="ic w250" style="font-size:28px" aria-hidden="true">router</span><h3 style="margin:0;font-size:20px;font-weight:650;letter-spacing:-0.02em">{pn.title}</h3>{!NODE_PUBLISHED && <span class="tag">{pn.soon}</span>}</div>
+            <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{NODE_PUBLISHED ? pn.desc : `${pn.desc} ${pn.soonNote}`}</div>
+          </div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            {NODE_PUBLISHED && <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href={NODE_RELEASE_URL} target="_blank" rel="noopener">{pn.release}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_outward</span></a>}
+            <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href={url(`${t.ajuda.path}openwrt/`)}>{pn.guide}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_forward</span></a>
+          </div>
+        </div>
+        <div class="dl-files">
+          {[NODE_IPK, NODE_DEB].map((f, i) => (
+            <div class="dl-file" style={`--d:${(i * 0.06).toFixed(2)}s`}>
+              <div class="col" style="gap:3px;min-width:0">
+                <div style="font-size:15.5px;font-weight:600">{pn.files[f.id] ?? f.file}</div>
+                <div class="mono">{f.file}{f.size ? ` · ${f.size}` : ''}{f.sha256 ? ` · SHA-256 ${shortSha(f.sha256)}` : ''}</div>
+              </div>
+              {f.url
+                ? <a class="pill pill-line" href={f.url} rel="noopener" data-note={dlNote(f.file, pn.tips[f.id] ?? d.tip)}><span class="ic" style="font-size:17px" aria-hidden="true">download</span>{d.dl}</a>
+                : <span class="tag" style="justify-self:start">{pn.soon}</span>}
+            </div>
+          ))}
+        </div>
+        {NODE_SUMS_URL && <div class="mono" style="font-size:12.5px;color:var(--ink2)"><a href={NODE_SUMS_URL} target="_blank" rel="noopener">SHA256SUMS.txt</a></div>}
       </div>
     </section>
 

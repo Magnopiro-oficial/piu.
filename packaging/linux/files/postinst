@@ -1,0 +1,30 @@
+#!/bin/sh
+# postinst do piu-node: cria o usuário do serviço, a pasta de dados e liga o serviço.
+set -e
+
+if [ "$1" = configure ]; then
+	if command -v systemd-sysusers >/dev/null 2>&1; then
+		systemd-sysusers /usr/lib/sysusers.d/piu-node.conf
+	elif ! getent passwd piu-node >/dev/null; then
+		useradd --system --user-group --home-dir /var/lib/piu-node --no-create-home \
+			--shell /usr/sbin/nologin --comment "Piu node" piu-node
+		if getent group dialout >/dev/null; then usermod -a -G dialout piu-node; fi
+	fi
+	# A unidade também cria (StateDirectory); aqui para o código de pareamento ter onde ficar já no 1º início.
+	install -d -m 0700 -o piu-node -g piu-node /var/lib/piu-node
+
+	if command -v systemctl >/dev/null 2>&1; then
+		# Primeira instalação ($2 vazio): liga no boot. Atualização: respeita quem desligou.
+		if [ -z "$2" ]; then systemctl enable piu-node.service >/dev/null 2>&1 || true; fi
+		if [ -d /run/systemd/system ]; then
+			systemctl daemon-reload >/dev/null 2>&1 || true
+			if [ -z "$2" ]; then
+				systemctl start piu-node.service || echo "piu-node: o serviço não subiu; veja journalctl -u piu-node" >&2
+			else
+				systemctl try-restart piu-node.service || true
+			fi
+		fi
+	fi
+	echo "piu-node: painel em https://<IP deste computador>:8420 · código: sudo cat /var/lib/piu-node/pairing-code"
+fi
+exit 0

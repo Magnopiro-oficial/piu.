@@ -1,0 +1,184 @@
+# Release do Piu Node (apps/piu-node empacotado):
+#   - piu-node_<versão>-<rev>_all.ipk   OpenWrt 24.10 (opkg), packaging/openwrt
+#   - piu-node_<versão>-<rev>_all.deb   Debian 13, Ubuntu e Raspberry Pi OS (systemd), packaging/linux
+# Os dois são "all": o mesmo bundle JS, sem addon nativo; o Node.js do sistema é que é por arquitetura.
+# Gera também SHA256SUMS.txt e, com tag, um GitHub Release em RASCUNHO (o dono revisa e publica).
+#
+# Como disparar
+#   - Tag:     git tag node-v0.1.0 && git push origin node-v0.1.0
+#   - Manual:  Actions → "Release · Piu Node" → Run workflow → version (ex.: 0.1.0).
+#              Sem `tag`, só artefatos do run (30 dias). Com `tag` (já existente no remoto), também
+#              cria/atualiza o release em rascunho dessa tag.
+# A versão precisa ser a de apps/piu-node/package.json (= PKG_VERSION do Makefile do OpenWrt; o teste
+# do .ipk confere): o workflow não muda versão, só empacota o que está no commit.
+# Depois de publicar o rascunho: cd apps/site && node scripts/sync-release.mjs --node node-v<versão>
+#
+# Sem action de terceiros além de checkout/setup-node/upload-artifact (as mesmas dos outros workflows,
+# fixadas por SHA). O release é criado com `gh`, num job à parte, o único com permissão de escrita.
+
+name: Release · Piu Node
+
+on:
+  push:
+    tags: ['node-v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Versão (semver, sem prefixo; ex.: 0.1.0) = apps/piu-node/package.json"
+        required: true
+        type: string
+      tag:
+        description: "Tag existente para anexar o release em rascunho (ex.: node-v0.1.0). Vazio = só artefatos"
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-node-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: .ipk e .deb
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      version: ${{ steps.p.outputs.version }}
+      tag: ${{ steps.p.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            packaging/openwrt/package-lock.json
+            apps/piu-node/package-lock.json
+            apps/provider-panel/package-lock.json
+
+      - name: Parâmetros (versão e tag)
+        id: p
+        env:
+          EVENT: ${{ github.event_name }}
+          REF_NAME: ${{ github.ref_name }}
+          IN_VERSION: ${{ inputs.version }}
+          IN_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          if [[ "$EVENT" == "push" ]]; then
+            tag="$REF_NAME"
+            version="${tag#node-v}"
+          else
+            tag="$IN_TAG"
+            version="$IN_VERSION"
+            if [[ -n "$tag" && "$tag" != "node-v$version" ]]; then
+              echo "::error::A tag deve ser node-v$version (recebido: $tag)"; exit 1
+            fi
+          fi
+          if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Versão inválida: '$version' (esperado X.Y.Z)"; exit 1
+          fi
+          current="$(node -p "require('./apps/piu-node/package.json').version")"
+          if [[ "$version" != "$current" ]]; then
+            echo "::error::apps/piu-node/package.json está em $current, não em $version. Suba a versão (e PKG_VERSION do Makefile do OpenWrt) num commit antes da tag."; exit 1
+          fi
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "versão=$version tag=${tag:-<nenhuma>}"
+
+      - name: Dependências (piu-node, painel e empacotador)
+        working-directory: packaging/openwrt
+        run: npm run deps && npm ci
+
+      - name: Auditoria do piu-node empacotado (falha em alto/crítico)
+        run: npm --prefix apps/piu-node audit --omit=dev --audit-level=high
+
+      - name: Painel
+        working-directory: packaging/openwrt
+        run: npm run build:panel
+
+      # Data dos arquivos dentro dos pacotes = data do commit: o mesmo commit gera os mesmos bytes.
+      - name: Gerar o .ipk e testar
+        working-directory: packaging/openwrt
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          npm run build
+          npm test
+
+      - name: Gerar o .deb e testar (com dpkg-deb do runner)
+        working-directory: packaging/linux
+        run: |
+          set -euo pipefail
+          export SOURCE_DATE_EPOCH="$(git log -1 --format=%ct)"
+          npm run build
+          npm test
+          dpkg-deb --info dist/*.deb
+
+      - name: Coletar e SHA256SUMS.txt
+        run: |
+          set -euo pipefail
+          mkdir -p _out
+          cp packaging/openwrt/dist/*.ipk packaging/linux/dist/*.deb _out/
+          cd _out
+          sha256sum -- * > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: piu-node-${{ steps.p.outputs.version }}-packages
+          path: _out/*
+          if-no-files-found: error
+          retention-days: 30
+
+  release:
+    name: Release em rascunho (${{ needs.build.outputs.tag }})
+    if: needs.build.outputs.tag != ''
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write   # criar o release em rascunho
+      actions: read     # baixar os artefatos deste run com `gh run download`
+    steps:
+      - name: Baixar artefatos do run (gh, sem action de terceiros)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          gh run download "$GITHUB_RUN_ID" --dir _dl_raw
+          mkdir -p _dl
+          find _dl_raw -type f -exec mv -t _dl/ {} +
+          ls -la _dl
+          (cd _dl && sha256sum -c SHA256SUMS.txt)
+
+      - name: Criar/atualizar release em RASCUNHO
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ needs.build.outputs.tag }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          set -euo pipefail
+          notes="Piu Node ${VERSION} (${TAG}): o nó de referência do Piu como serviço.
+
+          - OpenWrt 24.10: \`opkg install node\` e depois \`opkg install ./piu-node_*_all.ipk\` (passo a passo: packaging/openwrt/README.md).
+          - Debian 13, Ubuntu e Raspberry Pi OS (systemd, Node.js 20.19+): \`sudo apt install ./piu-node_*_all.deb\` (passo a passo: packaging/linux/README.md).
+          - Os dois pacotes são \"all\" (JavaScript): servem para qualquer arquitetura com Node.js 20.19 ou mais novo.
+          - Rádio LoRa por USB: experimental (testado com rádio simulado, ainda não com placa).
+
+          Confira o SHA-256 em \`SHA256SUMS.txt\`."
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            echo "Release $TAG já existe: enviando arquivos (--clobber)"
+            gh release upload "$TAG" _dl/* --clobber
+          else
+            gh release create "$TAG" _dl/* --draft --verify-tag --title "Piu Node ${VERSION}" --notes "$notes"
+          fi
+          echo "::notice::Release em rascunho criado/atualizado: $TAG (publicar manualmente)"

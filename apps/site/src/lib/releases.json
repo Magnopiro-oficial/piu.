@@ -125,5 +125,12 @@
         "sha256": "2535d6ae9af1bee4bed00ecef506a0b7c4a355b61e8d6de1e6453897aa17ed29"
       }
     }
+  },
+  "node": {
+    "tag": "node-v0.1.0",
+    "version": "0.1.0",
+    "published": false,
+    "publishedAt": null,
+    "assets": {}
   }
 }

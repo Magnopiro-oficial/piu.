@@ -74,7 +74,7 @@ logread -e piu-node | grep -A1 'SHA-256'    # impressão digital do certificado
 
 Abra `https://<IP do roteador>:8420` (o IP da interface `lan` entra sozinho na lista de nomes aceitos), confira a impressão digital do certificado e digite o código. O código vale 10 min; para um novo, `/etc/init.d/piu-node restart`.
 
-`piu-node.local` só resolve se algo anunciar o nome por mDNS na rede (o OpenWrt não faz isso por padrão): **a confirmar** com o `umdns` instalado.
+O pacote não anuncia nenhum nome por mDNS, e `piu-node.local` saiu da lista padrão de nomes aceitos: use o IP. (O `umdns` do OpenWrt, quando instalado, anuncia o nome do próprio roteador, não `piu-node.local`; não foi testado com o pacote.)
 
 Remover: `opkg remove piu-node`. A pasta `/etc/piu-node` (identidade do nó, certificado, operadores pareados) fica; apague à mão se quiser começar do zero.
 
@@ -93,7 +93,7 @@ uci commit piu-node        # o procd reinicia o serviço (reload trigger)
 | `main.user` | usuário do processo | `piu-node` |
 | `main.data` | `PIU_NODE_DATA` | `/etc/piu-node` |
 | `main.port`, `main.listen` | `PIU_NODE_PORT`, `PIU_NODE_LISTEN` | `8420`, `0.0.0.0` |
-| `main.host` (lista) + `main.lan_host` | `PIU_NODE_HOSTS` | `piu-node.local`, `localhost`, `127.0.0.1` + IP da `lan` |
+| `main.host` (lista) + `main.lan_host` | `PIU_NODE_HOSTS` | `localhost`, `127.0.0.1` + IP da `lan` |
 | `main.release_pubkey` | `PIU_RELEASE_PUBKEY` | (comentada) |
 | `main.heap_mb`, `main.node_args` | opções do `node` | `48`, `--max-semi-space-size=1` |
 | `main.log_stdout` | stdout para o `logread` | `1` |
@@ -101,11 +101,15 @@ uci commit piu-node        # o procd reinicia o serviço (reload trigger)
 | `lnnp.listen`, `lnnp.port`, `lnnp.discovery_port` | `PIU_LNNP_LISTEN`, `PIU_LNNP_PORT`, `PIU_LNNP_DISCOVERY_PORT` | `0.0.0.0`, `8422`, `8423` |
 | `lnnp.broadcast`, `lnnp.peer`, `lnnp.allow` (listas) | `PIU_LNNP_BROADCAST`, `PIU_LNNP_PEERS`, `PIU_LNNP_ALLOW` | `255.255.255.255`, —, — |
 | `lnnp.memory_mb`, `lnnp.beacon_ms` | `PIU_LNNP_MEMORY_MB`, `PIU_LNNP_BEACON_MS` | `16`, `5000` |
-| `serial.device` | `PIU_SERIAL` | (seção comentada) |
+| `serial.device` (lista) | `PIU_SERIAL` (`lora:/dev/ttyUSB0@115200`; experimental) | (seção comentada) |
 | `lunes.endpoint` (lista) | `PIU_LUNES_ENDPOINTS` | os 4 de produção (seção comentada) |
 | `serial.lora_sf`, `serial.lora_bw_khz`, `serial.lora_cr`, `serial.lora_duty`, `serial.max_envelope` | `PIU_LORA_SF`, `PIU_LORA_BW_KHZ`, `PIU_LORA_CR`, `PIU_LORA_DUTY`, `PIU_LORA_MAX_ENVELOPE` | (seção comentada) |
 
-Listas aceitam `list` do UCI ou uma `option` com valores separados por vírgula. Para uma variável nova: uma linha em `piu_env_map` no `files/piu-node.init` e a opção comentada em `files/piu-node.config`; o teste confere que toda variável lida em `apps/piu-node/src/config.ts` tem opção UCI e que toda opção da config é usada pelo init.
+Listas aceitam `list` do UCI ou uma `option` com valores separados por vírgula.
+
+Descoberta: com mais de uma rede no roteador (ex.: `lan` e uma rede só do Piu), acrescente o broadcast de cada sub-rede a `lnnp.broadcast` (ex.: `uci add_list piu-node.lnnp.broadcast='192.168.50.255'`). O broadcast da sub-rede sai pela interface certa; em teste com contêineres Linux, o anúncio para `255.255.255.255` não formou enlace e o da sub-rede formou (`docs/ajuda/ANALISE.md`, §3 item 7). Num roteador de verdade, a confirmar.
+
+Rádio LoRa (seção `serial`, experimental): `option device 'lora:/dev/ttyUSB0@115200'` (o formato do `PIU_SERIAL`; o teste compila o `parseSerialSpec` do piu-node e confere o exemplo da config). Várias portas: uma `list device` por porta. Para uma variável nova: uma linha em `piu_env_map` no `files/piu-node.init` e a opção comentada em `files/piu-node.config`; o teste confere que toda variável lida em `apps/piu-node/src/config.ts` tem opção UCI e que toda opção da config é usada pelo init.
 
 No Node 20 o init acrescenta `--experimental-websocket` (a leitura da Lunes Mainnet usa WebSocket); no Node 22 ele já vem ligado.
 

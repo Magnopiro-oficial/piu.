@@ -6,9 +6,9 @@ export const REPO = 'https://github.com/Magnopiro-oficial/piu.';
 
 export interface ReleaseAsset { name: string; url: string; size: number; sha256: string }
 export interface Release { tag: string; version: string; published: boolean; publishedAt: string | null; assets: Record<string, ReleaseAsset> }
-export type Product = 'android' | 'desktop' | 'provider';
+export type Product = 'android' | 'desktop' | 'provider' | 'node';
 
-const TAG = /^(android|desktop|provider)-v(\d+\.\d+\.\d+)$/;
+const TAG = /^(android|desktop|provider|node)-v(\d+\.\d+\.\d+)$/;
 
 function check(product: Product): Release {
   const r = (data as unknown as Record<Product, Release>)[product];

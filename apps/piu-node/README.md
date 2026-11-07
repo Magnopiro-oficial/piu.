@@ -9,7 +9,7 @@ Nó de referência do provider para Linux (INF-006): um Home Node ou Gateway Loc
 npm ci
 npm test            # segurança (ataques simulados), retransmissão LAN, rádio LoRa simulado, cabo USB e sincronia do protocolo
 npm run typecheck
-npm run dev         # https://piu-node.local:8420 (painel em ../provider-panel/dist); LNNP em TCP 8422 e UDP 8423
+npm run dev         # https://localhost:8420 (painel em ../provider-panel/dist); LNNP em TCP 8422 e UDP 8423
 ```
 
 ## Retransmissão (LNNP v1, adapter LAN)
@@ -99,7 +99,7 @@ Estatísticas reais, sem conteúdo, destino nem chave secreta: `relaying` (retra
 
 ## Como o operador entra
 1. Ao iniciar, o nó mostra **no próprio console/tela** um código de 8 dígitos (vale 10 min, uso único) e a impressão digital SHA-256 do certificado TLS. Rodando como serviço (sem terminal: systemd, procd), o código **não vai para o log** (journald/logread guardam histórico e outros usuários leem): fica em `<PIU_NODE_DATA>/pairing-code` (0600), e o log diz só onde ler (`sudo cat …`).
-2. No navegador, a pessoa abre `https://piu-node.local:8420`, confere a impressão digital antes de aceitar o certificado e digita o código.
+2. No navegador, a pessoa abre `https://<IP do nó>:8420` (o nó não anuncia nome por mDNS; `piu-node.local` só abre se a rede resolver esse nome), confere a impressão digital antes de aceitar o certificado e digita o código.
 3. O nó cria uma sessão: cookie `__Host-piu_session` (`HttpOnly`, `Secure`, `SameSite=Strict`), 30 min de inatividade, 12 h no máximo. O token fica só como hash no servidor.
 
 Parear de novo com o **mesmo nome** (sessão expirada, outro navegador) volta à mesma conta, com os mesmos equipamentos; um nome novo cria outro operador.
@@ -187,7 +187,7 @@ Só instale com `OK:` e código de saída 0.
 |---|---|---|
 | `PIU_NODE_PORT` | `8420` | porta HTTPS |
 | `PIU_NODE_LISTEN` | `0.0.0.0` | endereço de escuta |
-| `PIU_NODE_HOSTS` | `piu-node.local,localhost,127.0.0.1` | nomes aceitos no `Host` (inclua o IP do nó na rede, se usar) |
+| `PIU_NODE_HOSTS` | `piu-node.local,localhost,127.0.0.1` | nomes aceitos no `Host` (inclua o IP do nó na rede, se usar). Os pacotes trocam o padrão: o `.ipk` usa `localhost,127.0.0.1` + IP da `lan`; o `.deb`, `localhost,127.0.0.1,<nome>.local` + IPs do computador |
 | `PIU_NODE_DATA` | `./data` | estado, TLS e pacotes |
 | `PIU_NODE_PANEL` | `../provider-panel/dist` | build do painel |
 | `PIU_RELEASE_PUBKEY` | — | chave pública de release (SPKI DER em base64). Sem ela, nenhum pacote é oferecido |
@@ -196,7 +196,7 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LNNP_LISTEN` | `0.0.0.0` | endereço de escuta do enlace e da descoberta |
 | `PIU_LNNP_PORT` | `8422` | porta TCP do enlace LNNP |
 | `PIU_LNNP_DISCOVERY_PORT` | `8423` | porta UDP do anúncio; `off` desliga a descoberta |
-| `PIU_LNNP_BROADCAST` | `255.255.255.255` | destinos do anúncio (ex.: `192.168.0.255`, ou `host:porta`), separados por vírgula |
+| `PIU_LNNP_BROADCAST` | `255.255.255.255` | destinos do anúncio (ex.: `192.168.0.255`, ou `host:porta`), separados por vírgula. O nó não calcula o broadcast sozinho: manda para cada item da lista. Com mais de uma rede, ponha o broadcast de cada sub-rede (teste: `test/lan-broadcast.test.ts`) |
 | `PIU_LNNP_PEERS` | — | vizinhos fixos `host:porta`, separados por vírgula |
 | `PIU_LNNP_ALLOW` | — | só aceita estes nós (chave do nó em hex, 64 caracteres); vazio aceita qualquer nó LNNP |
 | `PIU_LNNP_MEMORY_MB` | `256` | teto de memória para envelopes guardados |
@@ -221,6 +221,6 @@ Abra no firewall do equipamento a porta TCP 8422 e a UDP 8423 só para a rede lo
 - Ligar a carteira à liquidação real (item 7: pagar os lotes na Mainnet) e os recibos ao validador; o saldo on-chain da carteira de provider já é lido (`GET /api/wallet/lunes`), mas o saldo do nó (`GET /api/wallet`) só muda com transferências e créditos locais.
 - Histórico por dia dos outros equipamentos do operador (hoje chega só o último resumo assinado, com contadores desde que cada um ligou).
 - Envelopes guardados direto em disco, além do teto de memória `PIU_LNNP_MEMORY_MB` (hoje o disco serve ao reinício; o teto em uso continua sendo o da memória).
-- Adapters além da LAN (BLE, LoRa por USB) usando o mesmo `RelayEngine.attach`.
+- Adapters além da LAN e da porta serial (BLE) usando o mesmo `RelayEngine.attach`. O LoRa por USB já existe em modo experimental (seção "Rádio LoRa e cabo USB"); falta o teste com placa real e firmwares que esperam a configuração do rádio vinda do computador (RNode).
 - Enviar os recibos ao validador pela malha quando houver rota (`RelayEngine.sendReceipts`); hoje o operador baixa as evidências no painel e leva ao validador.
 - Revogação na rede inteira (chave da Lunes) e certificação de equipamentos por pareamento real no assistente (hoje o vínculo é com um vizinho LNNP escolhido pelo operador).

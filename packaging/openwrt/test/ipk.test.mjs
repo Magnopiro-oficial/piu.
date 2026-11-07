@@ -240,7 +240,7 @@ describe('init script procd e config UCI', () => {
     assert.deepEqual(r.env, {
       PIU_NODE_DATA: data,
       PIU_NODE_PANEL: '/usr/share/piu-node/panel',
-      PIU_NODE_HOSTS: 'piu-node.local,localhost,127.0.0.1,192.168.1.1',
+      PIU_NODE_HOSTS: 'localhost,127.0.0.1,192.168.1.1',
       PIU_NODE_PORT: '8420',
       PIU_NODE_LISTEN: '0.0.0.0',
       PIU_LNNP: '1',
@@ -289,11 +289,35 @@ describe('init script procd e config UCI', () => {
     assert.equal(r.env.PIU_LNNP_RELAY, '0');
     assert.equal(r.env.PIU_LNNP_PEERS, '192.168.1.20:8422,10.0.0.2:8422');
     assert.equal(r.env.PIU_LNNP_BROADCAST, '192.168.1.255,10.0.0.255');
-    assert.equal(r.env.PIU_NODE_HOSTS, 'piu-node.local,localhost,127.0.0.1');
-    assert.equal(r.env.PIU_SERIAL, '/dev/ttyUSB0');
+    assert.equal(r.env.PIU_NODE_HOSTS, 'localhost,127.0.0.1');
+    assert.equal(r.env.PIU_SERIAL, 'lora:/dev/ttyUSB0@115200');
     assert.equal(r.env.PIU_LORA_SF, '9');
     assert.ok(!('PIU_LORA_CR' in r.env), 'opção vazia não define a variável');
     assert.ok(!('PIU_LNNP_ALLOW' in r.env));
+  });
+
+  // O exemplo da seção serial precisa passar no parser de verdade do piu-node (src/relay/serial.ts),
+  // não numa cópia da regex: compila só parseSerialSpec com o esbuild e chama.
+  test('exemplo LoRa da config: aceito pelo parseSerialSpec do piu-node; várias portas viram lista', async () => {
+    const { build: esbuild } = await import('esbuild');
+    const out = join(tmp, 'serial-spec.mjs');
+    await esbuild({ stdin: { contents: `export { parseSerialSpec } from ${JSON.stringify(join(repo, 'apps', 'piu-node', 'src', 'relay', 'serial.ts'))};`, resolveDir: repo, loader: 'ts' }, outfile: out, bundle: true, platform: 'node', format: 'esm', logLevel: 'silent' });
+    const { parseSerialSpec } = await import(out);
+    const text = shipped();
+    assert.doesNotMatch(text, /quando o piu-node suportar/i, 'comentário desatualizado: o piu-node já lê PIU_SERIAL');
+    const device = /^#\toption device '([^']+)'$/m.exec(text)?.[1];
+    assert.ok(device, 'exemplo de device na seção serial comentada');
+    assert.deepEqual(parseSerialSpec(device), { kind: 'lora', path: '/dev/ttyUSB0', baud: 115200 });
+    const cfg = withData(text, join(tmp, 'data-serial')).replace(/^#(config serial)/m, '$1')
+      .replace(`#\toption device '${device}'`, `\tlist device '${device}'\n\tlist device 'usb:/dev/ttyACM0@115200'`);
+    const r = startService({ config: cfg });
+    assert.equal(r.rc, 'rc=0');
+    assert.equal(r.env.PIU_SERIAL, `${device},usb:/dev/ttyACM0@115200`);
+    assert.deepEqual(r.env.PIU_SERIAL.split(',').map(s => parseSerialSpec(s).kind), ['lora', 'usb']);
+  });
+
+  test('piu-node.local não é nome padrão (nada o anuncia no OpenWrt); o IP da lan entra sozinho', () => {
+    assert.doesNotMatch(shipped(), /^\s*list host 'piu-node\.local'/m);
   });
 
   test('Node.js antigo (18 do 23.05, 20 antes do 20.19) ou desligado: não inicia; 20.20 do 24.10 inicia', () => {

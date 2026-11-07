@@ -42,8 +42,8 @@ piu_env_map() {
 	# Gateway da carga pela malha (seção `gateway`): liga/desliga e a caixa HTTPS do validador.
 	piu_env bool gateway enabled        PIU_GATEWAY
 	piu_env opt  gateway inbox          PIU_VALIDATOR_INBOX
-	# Adaptador serial/LoRa (seção `serial`, comentada em /etc/config/piu-node).
-	piu_env opt  serial device          PIU_SERIAL
+	# Rádio LoRa / cabo USB (seção `serial`, comentada em /etc/config/piu-node; experimental).
+	piu_env list serial device          PIU_SERIAL
 	piu_env opt  serial lora_sf         PIU_LORA_SF
 	piu_env opt  serial lora_bw_khz     PIU_LORA_BW_KHZ
 	piu_env opt  serial lora_cr         PIU_LORA_CR

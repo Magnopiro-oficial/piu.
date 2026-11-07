@@ -1,11 +1,11 @@
-name: CI · pacote OpenWrt
+name: CI · pacotes OpenWrt e Linux
 
 on:
   push:
     branches: [main]
-    paths: ['packaging/openwrt/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
+    paths: ['packaging/openwrt/**', 'packaging/linux/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
   pull_request:
-    paths: ['packaging/openwrt/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
+    paths: ['packaging/openwrt/**', 'packaging/linux/**', 'apps/piu-node/**', 'apps/provider-panel/**', '.github/workflows/ci-openwrt.yml']
 
 # Menor privilégio: o token do GitHub só lê o código.
 permissions:
@@ -49,10 +49,21 @@ jobs:
         run: npm run build
       - name: Testes do pacote (estrutura, init/UCI e o bundle servindo o painel)
         run: npm test
+      # .deb (packaging/linux): o mesmo bundle, unidade systemd e lançador; com o dpkg-deb do runner.
+      - name: Gerar e testar o .deb
+        working-directory: packaging/linux
+        run: npm run build && npm test && dpkg-deb --info dist/*.deb
       - if: matrix.node == '22'
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: piu-node-openwrt-ipk
           path: packaging/openwrt/dist/*.ipk
+          if-no-files-found: error
+          retention-days: 30
+      - if: matrix.node == '22'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: piu-node-linux-deb
+          path: packaging/linux/dist/*.deb
           if-no-files-found: error
           retention-days: 30

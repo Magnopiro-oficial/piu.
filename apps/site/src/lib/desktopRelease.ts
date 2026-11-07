@@ -50,7 +50,7 @@ export interface DesktopRelease {
   mainFile: (os: DesktopOs) => DesktopFile | undefined;
 }
 
-function load(product: Exclude<Product, 'android'>, namePrefix: string): DesktopRelease {
+function load(product: Exclude<Product, 'android' | 'node'>, namePrefix: string): DesktopRelease {
   const r = release(product);
   const files: DesktopFile[] = LAYOUT
     .map(l => {

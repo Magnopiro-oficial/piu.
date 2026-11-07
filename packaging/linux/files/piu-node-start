@@ -1,0 +1,54 @@
+#!/bin/sh
+# Sobe o piu-node com o Node.js do sistema (chamado pela unidade systemd piu-node.service).
+# - confere a versão do Node.js (>= 20.19, o mínimo das bibliotecas); antiga: sai com 78 (EX_CONFIG),
+#   que a unidade não reinicia em laço;
+# - no Node 20, liga --experimental-websocket (a leitura da Lunes Mainnet usa WebSocket);
+# - sem PIU_NODE_HOSTS, aceita localhost, 127.0.0.1, <nome>.local e os IPs do computador.
+set -eu
+
+NODE_BIN="${PIU_NODE_BIN:-/usr/bin/node}"
+PROG="${PIU_NODE_PROG:-/usr/lib/piu-node/piu-node.mjs}"
+MIN_MAJOR=20
+MIN_MINOR=19
+
+die() {
+	echo "piu-node: $*" >&2
+	exit 78
+}
+
+[ -x "$NODE_BIN" ] || die "Node.js não encontrado em $NODE_BIN (instale o pacote nodejs >= $MIN_MAJOR.$MIN_MINOR)"
+v="$("$NODE_BIN" -v 2>/dev/null || true)"
+major="${v#v}"
+minor="${major#*.}"
+major="${major%%.*}"
+minor="${minor%%.*}"
+case "$major$minor" in
+	'' | *[!0-9]*) die "versão do Node.js ilegível: '$v'" ;;
+esac
+if [ "$major" -lt "$MIN_MAJOR" ] || { [ "$major" -eq "$MIN_MAJOR" ] && [ "$minor" -lt "$MIN_MINOR" ]; }; then
+	die "precisa do Node.js $MIN_MAJOR.$MIN_MINOR ou mais novo; instalado: $v"
+fi
+
+ws=
+[ "$major" -eq 20 ] && ws=--experimental-websocket
+
+if [ -z "${PIU_NODE_HOSTS:-}" ]; then
+	hosts="localhost,127.0.0.1"
+	name="$(hostname 2>/dev/null || true)"
+	case "$name" in
+		'' | localhost | *[!A-Za-z0-9-]*) ;;
+		*) hosts="$hosts,$(echo "$name" | tr 'A-Z' 'a-z').local" ;;
+	esac
+	for ip in $(hostname -I 2>/dev/null || true); do
+		case "$ip" in
+			*:*) ;; # IPv6: o painel aceita, mas o Host precisa de colchetes; configure à mão se usar
+			*) hosts="$hosts,$ip" ;;
+		esac
+	done
+	PIU_NODE_HOSTS="$hosts"
+	export PIU_NODE_HOSTS
+fi
+
+# PIU_NODE_ARGS sem aspas de propósito: cada palavra é um argumento do node.
+# shellcheck disable=SC2086
+exec "$NODE_BIN" $ws ${PIU_NODE_ARGS:-} "$PROG"

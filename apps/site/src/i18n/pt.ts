@@ -1,6 +1,7 @@
 // Textos do site em português (idioma padrão). en.ts segue o mesmo formato.
 import { ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SIZE, ANDROID_URL } from '../lib/androidRelease';
 import { DESKTOP_PUBLISHED } from '../lib/desktopRelease';
+import { NODE_DEB, NODE_IPK, NODE_PUBLISHED, NODE_RELEASE_URL } from '../lib/nodeRelease';
 import { ajudaPt } from './ajuda.pt';
 import { redePt } from './rede.pt';
 
@@ -83,7 +84,7 @@ export const pt = {
       { icon: 'wifi', title: 'Roteador comum', desc: 'Sem instalar nada: vira Ponto de Acesso de um nó seu, com nome piu.alguma-coisa.', ex: 'qualquer roteador ou repetidor', tag: 'sem instalação' },
     ],
     panelTitle: 'Painel do provider, direto no seu equipamento',
-    panelSub: 'Abre na rede local, em piu-node.local. Funciona sem internet.',
+    panelSub: 'Abre na rede local, pelo IP do equipamento (porta 8420). Funciona sem internet.',
     panelCta: 'Ver o painel',
     panelFrame: 'Demonstração do painel do provider',
     // Piu Provider para computador (apps/provider-desktop): arquivos de releases.json (provider-v<versão>).
@@ -96,6 +97,20 @@ export const pt = {
       files: {
         'mac-arm64-dmg': 'macOS · Apple Silicon', 'mac-x64-dmg': 'macOS · Intel', 'mac-arm64-zip': 'macOS · Apple Silicon · .zip', 'mac-x64-zip': 'macOS · Intel · .zip',
         'linux-appimage': 'Linux · AppImage', 'linux-deb': 'Linux · .deb', 'win-x64-exe': 'Windows · 64 bits',
+      } as Record<string, string>,
+    },
+    // Piu Node (roteador OpenWrt, Linux e Raspberry Pi): arquivos de releases.json (node-v<versão>).
+    node: {
+      title: 'Piu Node para roteador e Raspberry Pi',
+      desc: 'O mesmo nó, como serviço: .ipk para roteadores OpenWrt 24.10 e .deb para Debian, Ubuntu e Raspberry Pi OS (precisa do Node.js 20.19 ou mais novo).',
+      soon: 'Em breve',
+      soonNote: 'Os pacotes ainda não foram publicados. Quando saírem, aparecem aqui com tamanho e SHA-256. Até lá, o guia mostra como gerar a partir do código.',
+      release: 'Release no GitHub',
+      guide: 'Guia passo a passo',
+      files: { ipk: 'OpenWrt · .ipk', deb: 'Debian, Ubuntu e Raspberry Pi OS · .deb' } as Record<string, string>,
+      tips: {
+        ipk: 'Copie para o roteador e instale com opkg install (guia “Montar um Piu Node no roteador OpenWrt”).',
+        deb: 'Instale com sudo apt install ./ e o nome do arquivo (guia “Piu Node no computador ou no Raspberry Pi”).',
       } as Record<string, string>,
     },
   },
@@ -119,8 +134,11 @@ export const pt = {
         note: ANDROID_PUBLISHED ? `Baixando ${ANDROID_FILE} (${ANDROID_SIZE}). Ao abrir o arquivo, o Android pede para permitir a instalação deste app: permita e instale.` : 'O APK ainda não foi publicado. Enquanto isso, receba de alguém que já tem o Piu.' },
       { id: 'friend', icon: 'phonelink_ring', title: 'De um amigo', desc: 'Sem internet e sem loja: quem já tem o Piu envia o app direto para o seu celular.', cta: 'Como receber', primary: false, href: '',
         note: 'Peça para quem já tem o Piu abrir Convidar → “Está longe ou ainda não tem” e escolher Bluetooth ou Wi-Fi Direct. O app chega sem internet.' },
-      { id: 'node', icon: 'router', title: 'Piu Node', desc: 'Para roteadores OpenWrt, Linux, Raspberry Pi e mini-PCs. Torne-se provider.', cta: 'Em breve', primary: false, href: '',
-        note: 'Os pacotes (.ipk para OpenWrt, .deb para Linux e Raspberry Pi) ainda não foram publicados. Quando saírem, cada um virá com o SHA-256 para conferir.' },
+      { id: 'node', icon: 'router', title: 'Piu Node', desc: 'Para roteadores OpenWrt, Linux, Raspberry Pi e mini-PCs. Torne-se provider.', cta: NODE_PUBLISHED ? 'Ver os pacotes' : 'Em breve', primary: false,
+        href: NODE_PUBLISHED ? NODE_RELEASE_URL : '',
+        note: NODE_PUBLISHED
+          ? `Pacotes no release do GitHub: ${[NODE_IPK, NODE_DEB].filter(f => f.url).map(f => `${f.file} (${f.size})`).join(' e ')}, com o SHA256SUMS.txt para conferir.`
+          : 'Os pacotes (.ipk para OpenWrt, .deb para Linux e Raspberry Pi) ainda não foram publicados. Quando saírem, cada um virá com o SHA-256 para conferir.' },
     ],
     source: { title: 'Código aberto', desc: 'Todo o Piu é software livre (AGPL-3.0): app, Piu Node, painel e protocolo. Confira, audite, faça um fork ou contribua.', cta: 'Ver no GitHub' },
     // Rótulos da faixa de assinatura; os hashes vêm de src/lib/androidRelease.ts.

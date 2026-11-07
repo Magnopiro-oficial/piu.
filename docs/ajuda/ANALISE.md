@@ -82,12 +82,12 @@ Formato: **id** · título · estado no site. "Protótipo dizia" lista só o que
 **openwrt** · Montar um Piu Node no roteador OpenWrt · EM TESTE
 - Conferido: `packaging/openwrt/README.md:3` (128 MB+), `:23–25` (23.05 não inicia; 24.10 recomendado; 25.12 usa `.apk`), `:32` (arquiteturas com FPU), `:35` (128 MB mínimo, 256 confortável); `files/piu-node.init:35–52` (UCI → `PIU_*`) e `:149–168` (`main.host` → `PIU_NODE_HOSTS`); `files/piu-node.config:42–49` (`broadcast`, `peer`, `memory_mb` 16); `apps/piu-node/src/config.ts:109–110` (porta 8420, hosts padrão); painel "Parear este navegador" (`apps/provider-panel/src/i18n/pt-BR.ts:227`) e "Acesso a este painel" → "Parear celular" (`:163`).
 - Protótipo dizia: OpenWrt 23.05+; "Baixar → Piu Node" neste site; `piu-node_0.4.2_aarch64.ipk`; upload por Sistema → Software; "o pacote confere a própria assinatura"; `http://piu-node.local:8420`; `piu-node pair`; "Ajustes → Provider → Adicionar equipamento"; malha 802.11s.
-- Mudou: 24.10; pacote real `piu-node_0.1.0-1_all.ipk` (só artifact do CI ou build); instalação por `scp -O` + `opkg`; código de pareamento em `/etc/piu-node/pairing-code`; painel em `https://<IP>:8420` com conferência da impressão digital; caminho real do celular; saíram assinatura do pacote, `piu-node pair` e 802.11s (não existem).
+- Mudou: 24.10; pacote real `piu-node_0.1.0-1_all.ipk` (link de `releases.json`, produto `node`; “em breve” até o release `node-v0.1.0` sair; até lá, artifact do CI ou build); instalação por `scp -O` + `opkg`; código de pareamento em `/etc/piu-node/pairing-code`; painel em `https://<IP>:8420` com conferência da impressão digital; caminho real do celular; saíram assinatura do pacote, `piu-node pair` e 802.11s (não existem).
 
-**linux** · Piu Node no computador ou no Raspberry Pi · JÁ FUNCIONA (Piu Provider); Raspberry Pi só a partir do código
+**linux** · Piu Node no computador ou no Raspberry Pi · JÁ FUNCIONA (Piu Provider); Raspberry Pi pelo `.deb` (`packaging/linux`), “em breve” nos downloads até o release
 - Conferido: `releases.json` (`provider` 0.1.1: mac arm64/x64, win, AppImage, deb, SHA256SUMS); menu "Nó → Permitir acesso pela rede local" (`apps/provider-desktop/src/main.ts:6`); `apps/piu-node/src/config.ts` (variáveis `PIU_*`).
 - Protótipo dizia: imagem `piu-node-0.4.2-rpi.img.xz`, `.deb` arm64/amd64, `/etc/piu-node/config.toml`, `journalctl -u piu-node`, `piu-node status`, `piu-node pair`.
-- Mudou: **nada disso existe**. O guia oferece o Piu Provider e, no Raspberry Pi, rodar a partir do código (Node 20.19+). O menu do Provider só existe em PT; o guia EN avisa.
+- Mudou: imagem, `config.toml` e subcomandos `piu-node …` **não existem**. Agora há `.deb` (`all`, systemd, `/etc/default/piu-node`, `journalctl -u piu-node`): o guia oferece o Piu Provider e, no Raspberry Pi, o `.deb` (publicado: link; antes disso: gerar o `.deb` a partir do código e instalar). O menu do Provider só existe em PT; o guia EN avisa.
 
 **lora** · Ligar um rádio LoRa ao Piu Node · EM TESTE
 - Conferido: `apps/piu-node/src/config.ts:51,73` (`PIU_SERIAL`, formato `lora:<porta>@<baud>`), `:83` (SF 9), `:86` (ciclo 10%), `:87` (envelope 1536); modem KISS em `apps/piu-node/README.md:26–29`; UCI `serial.*` lido por `piu-node.init:45–52`.
@@ -138,15 +138,28 @@ Todos com a caixa "Estimativas" e fontes da Anatel (seção 5).
 ## 3. O que depende de engenharia
 
 1. **Programa de caução do modo nó:** publicar o `BOND_ADDRESS` (`phoneNodeCore.ts:44`) e decidir as recompensas (`:64`). Até lá, o guia diz que o programa não abriu.
-2. **`.ipk` do OpenWrt nos downloads:** publicar o pacote num release e incluí-lo em `releases.json`; hoje é só artifact do CI. Falta validar num roteador real (RAM com o Node do feed, arquiteturas).
+2. **`.ipk` do OpenWrt nos downloads:** RESOLVIDO no código, falta publicar.
+   - Workflow `.github/workflows/release-node.yml` (tag `node-v*` ou `workflow_dispatch` com `version`/`tag`): gera o `.ipk` e o `.deb`, roda os testes dos dois, `SHA256SUMS.txt` e cria o release em RASCUNHO com `gh` (job à parte, o único com `contents: write`; sem action de terceiros nova). A versão tem de ser a de `apps/piu-node/package.json`.
+   - Site: produto `node` em `apps/site/scripts/release-products.mjs` (testado em `release-products.test.mjs` com os nomes que os empacotadores geram e com os já publicados) e em `releases.json` (gerado por `node scripts/sync-release.mjs --node node-v0.1.0`: “não existe no GitHub → em breve”). A home mostra o bloco “Piu Node para roteador e Raspberry Pi” na seção do provider e o cartão de Baixar; o guia OpenWrt tem o link no passo 2. Sem release: “em breve”, sem link.
+   - Ainda falta: validar num roteador real (RAM com o Node do feed, arquiteturas).
 3. **LoRa:**
-   - teste com placa real;
-   - tela de rádio no painel, que hoje é só UCI/variáveis;
-   - corrigir `packaging/openwrt/files/piu-node.config:66–70`. O exemplo usa `option device '/dev/ttyUSB0'`, mas o parser exige `lora:/dev/ttyUSB0@115200`, e o comentário "Descomente quando o piu-node suportar" está desatualizado.
-4. **`piu-node.local`:** anunciar por mDNS no OpenWrt, ou deixar de citar o nome como padrão.
-5. **Raspberry Pi / Linux headless:** não há `.deb` do piu-node, unidade systemd nem imagem. O guia ensina a rodar a partir do código.
+   - `packaging/openwrt/files/piu-node.config`: RESOLVIDO. O exemplo é `option device 'lora:/dev/ttyUSB0@115200'`, a seção diz EXPERIMENTAL (o piu-node já lê `PIU_SERIAL`: `src/relay/index.ts`, `serial.ts`), e `serial.device` virou lista no init (várias portas). Provado em `packaging/openwrt/test/ipk.test.mjs`: o teste compila o `parseSerialSpec` do próprio piu-node (esbuild) e passa nele o valor do exemplo e o `PIU_SERIAL` montado pelo init.
+   - `apps/piu-node/README.md` (“Próximos passos”): RESOLVIDO; o LoRa por USB não aparece mais como futuro.
+   - Ainda falta: teste com placa real; tela de rádio no painel (hoje é só UCI/variáveis).
+4. **`piu-node.local`:** RESOLVIDO deixando de citar. Nada no OpenWrt anuncia esse nome (o `umdns`, quando instalado, anuncia o nome do roteador), então `piu-node.local` saiu da lista padrão de `main.host` e os guias/site mandam usar o IP (que o init já põe na lista e no certificado). Provado no teste do `.ipk` (`PIU_NODE_HOSTS` padrão = `localhost,127.0.0.1,<IP da lan>`). No `.deb`, o lançador aceita `<nome>.local`, que só abre se o sistema anunciar (o Raspberry Pi OS anuncia com o `avahi-daemon`).
+5. **Raspberry Pi / Linux headless:** RESOLVIDO no código, falta publicar. `packaging/linux` gera `piu-node_0.1.0-1_all.deb`:
+   - `all` porque é o mesmo bundle JS do `.ipk`, sem addon nativo; `Depends: nodejs (>= 20.19)`.
+   - Unidade systemd endurecida (usuário `piu-node` pelo `sysusers.d`, no grupo `dialout`; `NoNewPrivileges`, `ProtectSystem=strict`, `ProtectHome`, `PrivateTmp`, sem capacidades, filtro de syscalls; sem `MemoryDenyWriteExecute` por causa do JIT); dados em `/var/lib/piu-node` (0700); código em `/var/lib/piu-node/pairing-code` (0600).
+   - Gerado sem `dpkg-deb` (`lib/deb.mjs`), reprodutível. `npm test` (16 testes: ar/tar do sistema, control, md5sums, unidade, lançador, bundle subindo com o código em arquivo 0600).
+   - Instalado de verdade num Debian 13 amd64 com systemd como PID 1 (`packaging/linux/test/docker-e2e.sh`): `apt` resolve o `nodejs` 20.19.2 do Debian, serviço ativo como `piu-node`, painel 200, código 0600 fora do journal, `systemd-analyze security` 1.6 OK, `remove` mantém e `purge` apaga os dados. `lintian`: só avisos de `systemctl` nos scripts e dois erros de forma (sem e-mail do mantenedor, sem changelog), porque o projeto não tem e-mail publicado para pôr ali.
+   - arm64 (Raspberry Pi 64 bits) em Debian 13 EMULADO (qemu no x86): o `apt` instala com o `nodejs` 20.19.2 arm64 e cria o usuário; o bundle roda em aarch64 como `piu-node` (painel 200, código 0600). A unidade, porém, não subiu sob a emulação (`Result: resources`, antes de executar o programa, mesmo sem o filtro de syscalls), e o mesmo `.deb` sobe no amd64 nativo. Causa provável: o systemd sob qemu-user; falta conferir num Raspberry de verdade.
+   - Ainda falta: imagem para cartão SD; Debian 12/Ubuntu 24.04 precisam do Node da NodeSource (o do sistema é 18).
 6. **Tela "Conectar ao computador" do celular sem tradução:** `apps/mobile/src/app/link-desktop.tsx` tem os textos fixos em PT. O mesmo vale para o menu "Nó" do Piu Provider (`apps/provider-desktop/src/main.ts:6`).
-7. **Broadcast em redes novas (guia ant-wifi):** confirmar se a descoberta UDP 8423 funciona com `broadcast` da sub-rede.
+7. **Broadcast em redes novas (guia ant-wifi):** CONFIRMADO fora do roteador.
+   - Como o piu-node escolhe: não escolhe. `PIU_LNNP_BROADCAST` (UCI `lnnp.broadcast`) é uma lista fixa, padrão `255.255.255.255`; a cada anúncio, o nó manda um UDP para cada item (`src/relay/lan.ts`, `beacon()`), com o socket em `0.0.0.0` e `SO_BROADCAST`. Não há cálculo automático do broadcast da sub-rede.
+   - Teste automático novo (`apps/piu-node/test/lan-broadcast.test.ts`): dois nós em `0.0.0.0`, na MESMA porta UDP, anunciando para o broadcast da interface real (no Mac: `192.168.1.255`), sem vizinhos fixos: abrem um enlace só. Passa.
+   - Duas instâncias do bundle, só com `PIU_LNNP_*`, em contêineres Linux (rede Docker): uma com duas redes (10.91.0.0/24 e 10.92.0.0/24) e outra só na 10.92. Com `PIU_LNNP_BROADCAST=10.92.0.255`: “vizinho … conectado” nos dois. Com `255.255.255.255`: nenhum enlace, nem entre dois nós numa rede só. Um teste de UDP cru mostrou o mesmo: o broadcast de cada sub-rede chegou só a ela; `255.255.255.255` não chegou a nenhum vizinho.
+   - Conclusão para o guia: acrescentar o broadcast da rede nova (`192.168.50.255`) à lista. Feito no guia ant-wifi, no `/etc/default/piu-node` e no README do OpenWrt. Num roteador OpenWrt de verdade, ainda a confirmar (o 255.255.255.255 falhar na bridge do Docker não prova que falha no roteador).
 8. **Carteira pela malha:** está em teste; hoje o envio exige internet.
 
 ## 4. Inconsistências encontradas
@@ -157,7 +170,7 @@ Todos com a caixa "Estimativas" e fontes da Anatel (seção 5).
 - **Página "A rede" × notas do release.** A página marca Pontos Piu como "A CAMINHO" e diz que a LAN do celular está "a caminho", enquanto as notas dizem que estão no 0.1.1. Não alterei: o texto da rede segue o design e `docs/rede`, que está em edição.
 - **Texto do provider no app.** O `provIntro` do app móvel (`apps/mobile/src/i18n/pt-BR.ts:1461` em diante) promete LUNES por entrega, com as recompensas desligadas.
 - **`docs/economia/no-celular.md:98`** diz `minEndorsements` (2); a tabela do mesmo arquivo (`:127`) e o código (`phoneNodeCore.ts:47`) dizem 3.
-- **`apps/piu-node/README.md:224`** ("Próximos passos") ainda lista o LoRa por USB como futuro, mas ele já existe em modo experimental (`README.md:26–29`).
+- ~~**`apps/piu-node/README.md:224`** ("Próximos passos") ainda lista o LoRa por USB como futuro~~ RESOLVIDO: o item diz que o LoRa por USB já existe em modo experimental e o que falta (placa real, RNode).
 
 ## 5. Anatel (fontes)
 

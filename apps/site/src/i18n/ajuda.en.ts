@@ -3,6 +3,7 @@
 // apps/provider-panel). Where an app screen exists only in Portuguese, the guide says so.
 import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_SHA256, ANDROID_SIZE, ANDROID_URL, ANDROID_VERSION } from '../lib/androidRelease';
 import { DESKTOP, PROVIDER } from '../lib/desktopRelease';
+import { NODE_DEB, NODE_IPK, type NodeFile } from '../lib/nodeRelease';
 import type { AjudaDict, Dl } from './ajuda.pt';
 
 const REPO = 'https://github.com/Magnopiro-oficial/piu.';
@@ -12,6 +13,10 @@ const dl = (r: typeof DESKTOP, os: 'mac' | 'linux' | 'win' | 'mac-x64-dmg', t: s
   const f = os === 'mac-x64-dmg' ? r.files.find(x => x.id === os) : r.mainFile(os);
   return { t, s: f ? `${f.file}${f.size ? ` · ${f.size}` : ''}` : '', url: f?.url ?? '' };
 };
+const nodeDl = (f: NodeFile, t: string): Dl => ({ t, s: `${f.file}${f.size ? ` · ${f.size}` : ''}`, url: f.url });
+const IPK = NODE_IPK.file;
+const IPK_VER = IPK.replace(/^piu-node_|_all\.ipk$/g, '');
+const DEB = NODE_DEB.file;
 const ANATEL_SRC: [string, string][] = [
   ['Anatel · Act no. 14,448/2017 (technical requirements for restricted-radiation equipment, Annex I, items 10 and 11)', 'https://informacoes.anatel.gov.br/legislacao/atos-de-certificacao-de-produtos/2017/1139-ato-14448'],
   ['Anatel · Act no. 14,158/2025 (amends Act 14,448; mandatory since 2026-04-06)', 'https://informacoes.anatel.gov.br/legislacao/atos-de-certificacao-de-produtos/2025/2070-ato-14158'],
@@ -170,22 +175,29 @@ export const ajudaEn: AjudaDict = {
     // ───────────── Equipment ─────────────
     { id: 'openwrt', cat: 'gear', icon: 'router', k: 'test', t: 'Set up a Piu Node on an OpenWrt router', sum: 'A router that’s on 24/7 stores and passes on encrypted messages for people on the local network.', time: '30 min', lvl: 'Medium',
       needs: ['A router with OpenWrt 24.10 (23.05 installs but won’t start; 25.12 uses .apk)', 'x86_64, aarch64 or arm with FPU, where the node package exists', 'At least 128 MB of RAM (256 MB is comfortable) and spare flash', 'A computer with SSH on the router’s network'],
-      warn: 'The .ipk package isn’t under Download on this website yet. Today it comes from the project’s CI (artifact piu-node-openwrt-ipk) or is built from source. Installing on a real router is still “to be confirmed”.',
+      warn: NODE_IPK.url
+        ? 'The .ipk package is on the GitHub release (link in step 2), with SHA-256. Installing on a real router is still “to be confirmed”.'
+        : 'The .ipk package hasn’t been published yet: the link in step 2 says “coming soon” until the release is out. Meanwhile, build it from source. Installing on a real router is still “to be confirmed”.',
       steps: [
         { t: 'Check the router fits', d: 'In the router panel (LuCI), under Status → Overview, check the firmware version and architecture. Over SSH, also check that the node package exists in version 20.19 or newer.',
           tech: ['From the terminal (SSH)', 'ssh root@192.168.1.1', 'ubus call system board', 'free -m', 'opkg update && opkg info node', '# needs node >= 20.19 (OpenWrt 24.10 ships 20.20)'],
           s: { f: 'w', t: 'Status', u: '192.168.1.1', i: [['row', 'memory', 'Firmware version', 'OpenWrt 24.10', 1], ['row', 'developer_board', 'Architecture', 'e.g. aarch64'], ['row', 'storage', 'Memory', 'e.g. 256 MB']] } },
-        { t: 'Get the package', d: 'The file is piu-node_0.1.0-1_all.ipk (about 6.1 MiB, works on any architecture with node). Download the CI artifact on GitHub (needs a login) or build it from source, in packaging/openwrt.',
-          tech: ['Build the package (computer with Node 20.19+)', 'cd packaging/openwrt', 'npm run deps && npm run build:panel', 'npm ci && npm run build', '# output: dist/piu-node_0.1.0-1_all.ipk'] },
+        { t: 'Get the package', d: NODE_IPK.url
+            ? `Download ${IPK} (works on any architecture with node) and check its SHA-256 against SHA256SUMS.txt from the same release.`
+            : `The file is ${IPK} (about 6 MiB, works on any architecture with node). Until the release is out, build it from source in packaging/openwrt, or download the piu-node-openwrt-ipk CI artifact on GitHub (needs a login).`,
+          dl: [nodeDl(NODE_IPK, 'Package for OpenWrt (.ipk)')],
+          tech: NODE_IPK.url
+            ? ['Check the download', `sha256sum -c --ignore-missing SHA256SUMS.txt   # ${IPK}: OK`]
+            : ['Build the package (computer with Node 20.19+)', 'cd packaging/openwrt', 'npm run deps && npm run build:panel', 'npm ci && npm run build', `# output: dist/${IPK}`] },
         { t: 'Upload and install', d: 'Copy the file to the router’s /tmp and install over SSH. The service starts on its own, with an unprivileged user. The package opens nothing in the firewall and doesn’t touch the router’s network.',
           warn: 'Don’t unplug the router during installation.',
-          tech: ['From the terminal', 'scp -O piu-node_0.1.0-1_all.ipk root@192.168.1.1:/tmp/', 'ssh root@192.168.1.1', 'opkg update', 'opkg install node', 'node -v   # must be >= 20.19', 'opkg install /tmp/piu-node_0.1.0-1_all.ipk'],
-          s: { f: 't', t: 'Terminal', i: [['term', ['$ opkg install /tmp/piu-node_0.1.0-1_all.ipk', 'Installing piu-node (0.1.0-1) to root...', 'Configuring piu-node.']]] } },
+          tech: ['From the terminal', `scp -O ${IPK} root@192.168.1.1:/tmp/`, 'ssh root@192.168.1.1', 'opkg update', 'opkg install node', 'node -v   # must be >= 20.19', `opkg install /tmp/${IPK}`],
+          s: { f: 't', t: 'Terminal', i: [['term', [`$ opkg install /tmp/${IPK}`, `Installing piu-node (${IPK_VER}) to root...`, 'Configuring piu-node.']]] } },
         { t: 'Read the pairing code', d: 'The code has 8 digits, lasts 10 minutes and works once. It doesn’t go to the log: it’s in a file only root can read. Also note the certificate fingerprint.',
           tech: ['On the router', 'cat /etc/piu-node/pairing-code', "logread -e piu-node | grep -A1 'SHA-256'", '# code expired? get a new one:', '/etc/init.d/piu-node restart'],
           s: { f: 't', t: 'Terminal', i: [['term', ['$ cat /etc/piu-node/pairing-code', '········']]] } },
         { t: 'Open the panel and pair the browser', d: 'In the browser, open https:// with the router’s IP and port 8420 (for example https://192.168.1.1:8420). The browser warns about the self-made certificate: compare the fingerprint before accepting. In “Pair this browser”, type the “Device code” and “Your name” and tap Pair.',
-          tip: 'piu-node.local only opens if something announces that name on the network (OpenWrt doesn’t by default). Use the IP.',
+          tip: 'The package doesn’t announce any name on the network (piu-node.local won’t open). Use the lan IP: it’s added to the accepted names and to the certificate automatically.',
           s: { f: 'w', t: 'Pair this browser', u: '192.168.1.1:8420', i: [['field', 'Device code', '········', 1], ['field', 'Your name', 'Your name'], ['btn', 'Pair', 1]] } },
         { t: 'Choose what it lends', d: 'In Settings, pick bandwidth (20, 50 or 100 Mbps), storage and schedule (always, 22h–7h or 8h–18h). On OpenWrt, stored messages live in memory and the cap is 16 MiB (option memory_mb).',
           tech: ['Settings through UCI', "uci set piu-node.lnnp.memory_mb='32'", "uci add_list piu-node.lnnp.peer='192.168.1.20:8422'   # fixed neighbor (optional)", 'uci commit piu-node   # the service restarts by itself'],
@@ -197,7 +209,7 @@ export const ajudaEn: AjudaDict = {
       fim: 'Your router is a Piu Node. It talks to other Piu Nodes, to Piu Desktop and to phones on the same Wi-Fi.' },
 
     { id: 'linux', cat: 'gear', icon: 'developer_board', k: 'on', t: 'Piu Node on a computer or Raspberry Pi', sum: 'A computer on at home becomes a network node. On Mac, Windows and Linux x86_64 there’s a ready-made app.', time: '15 min', lvl: 'Medium',
-      needs: ['A computer plugged in and on the home network', 'Piu Provider app: macOS, Windows 10/11 64-bit or Linux x86_64', 'Raspberry Pi or other Linux: Node.js 20.19 or newer and git (no ready package yet)'],
+      needs: ['A computer plugged in and on the home network', 'Piu Provider app: macOS, Windows 10/11 64-bit or Linux x86_64', 'Raspberry Pi or other Linux with systemd: Node.js 20.19 or newer (Debian 13 ships 20.19; on Debian 12 and Ubuntu 24.04, install Node.js 22 from NodeSource first)'],
       steps: [
         { t: 'Download Piu Provider', d: `Piu Provider ${PROVIDER.version} runs the Piu Node inside the app and shows the panel. Pick the file for your system.`,
           dl: [dl(PROVIDER, 'mac', 'macOS · Apple Silicon'), dl(PROVIDER, 'mac-x64-dmg', 'macOS · Intel'), dl(PROVIDER, 'win', 'Windows 10 and 11 · 64-bit'), dl(PROVIDER, 'linux', 'Linux · AppImage x86_64')],
@@ -205,16 +217,23 @@ export const ajudaEn: AjudaDict = {
         { t: 'Open it: it pairs itself', d: 'On opening, the app starts the node, opens the panel and signs in with the computer’s user name. Relaying starts on the local network (TCP link 8422 and UDP discovery 8423). The panel stays on this computer only.',
           tip: 'To open the panel from another device on the network, turn on “Node → Allow access from the local network” and use “Node → Show pairing code…”. (These menus are in Portuguese for now: “Nó → Permitir acesso pela rede local” and “Mostrar código de pareamento…”.)',
           s: { f: 'w', t: 'Piu Provider', i: [['row', 'dashboard', 'Overview', '', 1], ['row', 'router', 'Devices', ''], ['row', 'hub', 'Mesh', ''], ['row', 'settings', 'Settings', '']] } },
-        { t: 'On Raspberry Pi: run from source', d: 'There is no .deb or SD card image yet. With Node.js 20.19+ installed (Debian 12’s Node is too old), build the panel and the node and run it. Add the Raspberry’s IP to the list of accepted names.',
-          tech: ['On the Raspberry Pi (Linux)', `git clone ${REPO}.git piu`, 'cd piu/apps/provider-panel && npm ci && npm run build', 'cd ../piu-node && npm ci && npm run build', 'PIU_NODE_HOSTS=localhost,127.0.0.1,192.168.1.50 PIU_NODE_DATA=$HOME/.piu-node node dist/main.js', '# replace 192.168.1.50 with the Raspberry’s IP'],
-          s: { f: 't', t: 'Terminal', i: [['term', ['$ node dist/main.js', 'pairing code: ········ (valid 10 min)', 'certificate SHA-256: …']]] } },
-        { t: 'Pair the browser', d: 'Running in the terminal, the 8-digit code shows on screen. Open https://<IP>:8420, check the certificate fingerprint, type the “Device code” and “Your name” and tap Pair.',
-          warn: 'Without a supervisor (systemd), the node stops if you close the terminal or restart from the panel. As a service, the code goes to <PIU_NODE_DATA>/pairing-code instead of the log.',
+        { t: 'On Raspberry Pi or other Linux: install the .deb', d: NODE_DEB.url
+            ? `${DEB} installs the Piu Node as a systemd service, with its own user (piu-node) and data in /var/lib/piu-node. It works on any architecture (it’s JavaScript): apt checks that the system Node.js is 20.19 or newer.`
+            : 'The .deb package hasn’t been published yet (the link says “coming soon”). You can build the same package from source on the Raspberry itself and install it: it becomes a systemd service, with its own user (piu-node) and data in /var/lib/piu-node.',
+          dl: [nodeDl(NODE_DEB, 'Debian, Ubuntu and Raspberry Pi OS (.deb)')],
+          tech: NODE_DEB.url
+            ? ['On the Raspberry Pi (Linux)', 'node -v   # must be >= 20.19', `sudo apt install ./${DEB}`, 'systemctl status piu-node', '# settings: /etc/default/piu-node, then sudo systemctl restart piu-node']
+            : ['Build and install from source (on the Raspberry, with Node 20.19+ and git)', `git clone ${REPO}.git piu`, 'cd piu/packaging/linux', 'npm run deps && npm run build:panel && npm run build', `sudo apt install ./dist/${DEB}`, 'systemctl status piu-node'],
+          tip: 'No systemd? Run straight from source: npm ci && npm run build in apps/provider-panel and in apps/piu-node, then PIU_NODE_HOSTS=localhost,127.0.0.1,<Raspberry IP> PIU_NODE_DATA=$HOME/.piu-node node dist/main.js.',
+          s: { f: 't', t: 'Terminal', i: [['term', [`$ sudo apt install ./${DEB}`, 'Creating user \'piu-node\' (Piu node) …', 'piu-node: painel em https://<IP deste computador>:8420 · código: sudo cat /var/lib/piu-node/pairing-code']]] } },
+        { t: 'Pair the browser', d: 'As a service, the 8-digit code is in /var/lib/piu-node/pairing-code, readable only by root and the service user (running in the terminal, it shows on screen). Open https://<IP>:8420, check the certificate fingerprint, type the “Device code” and “Your name” and tap Pair.',
+          tech: ['On the Raspberry Pi', 'sudo cat /var/lib/piu-node/pairing-code', "journalctl -u piu-node | grep -A1 'SHA-256'", '# code expired? get a new one:', 'sudo systemctl restart piu-node'],
+          warn: 'Running in the terminal, without systemd, the node stops if you close the terminal or restart from the panel.',
           s: { f: 'w', t: 'Pair this browser', u: '192.168.1.50:8420', i: [['field', 'Device code', '········', 1], ['field', 'Your name', 'Your name'], ['btn', 'Pair', 1]] } },
         { t: 'Check it’s working', d: 'In the panel, Overview and Mesh show the neighbors found, what was stored and passed on, and receipts. The numbers are real, counted by the node.',
           s: { f: 'w', t: 'Mesh', u: 'localhost:8420', i: [['row', 'hub', 'Neighbors', ''], ['row', 'inventory_2', 'Stored', ''], ['row', 'receipt_long', 'Receipts', '']] } },
       ],
-      tech: ['Reference', 'panel: https://localhost:8420 (or another free port, in the app)', 'LNNP link: 8422/TCP · discovery: 8423/UDP · allow on the local network only', 'config: PIU_* variables (apps/piu-node/README.md)', 'systemd service: use Restart=on-failure (restart from the panel exits with code 75)'],
+      tech: ['Reference', 'panel: https://localhost:8420 (or another free port, in the app)', 'LNNP link: 8422/TCP · discovery: 8423/UDP · allow on the local network only', '.deb package: config /etc/default/piu-node · data /var/lib/piu-node · logs journalctl -u piu-node', 'remove: sudo apt remove piu-node (data stays) · sudo apt purge piu-node (deletes /var/lib/piu-node)', 'PIU_* variables: apps/piu-node/README.md · from source as a service: Restart=on-failure (restart from the panel exits with 75)'],
       fim: 'Your computer is a Piu Node. Leave it on: the longer it’s online, the more it helps.' },
 
     { id: 'lora', cat: 'gear', icon: 'settings_input_antenna', k: 'test', t: 'Add a LoRa radio to the Piu Node', sum: 'Short messages over kilometers, with a LoRa radio on the node’s USB. Experimental.', time: '45 min', lvl: 'Advanced',
@@ -227,13 +246,13 @@ export const ajudaEn: AjudaDict = {
           tech: ['Limits (Anatel Act 14,448/2017, Annex I, item 10)', '# 902–907.5 and 915–928 MHz', '# digital: up to 1 W peak · frequency hopping: 1 W with 35+ channels, 0.25 W with fewer', '# antenna > 6 dBi: −1 dB of power per dB above 6 dBi'] },
         { t: 'Attach the antenna before powering on', d: 'Screw the antenna onto the radio and only then plug it into USB. Take the antenna as high as possible, away from concrete walls.',
           warn: 'Transmitting without an antenna can burn the radio.' },
-        { t: 'Plug into USB and find the port', d: 'Connect the radio to the node’s USB and see which port showed up. On OpenWrt, the service user is already in the dialout group; on Linux, add yours.',
+        { t: 'Plug into USB and find the port', d: 'Connect the radio to the node’s USB and see which port showed up. On OpenWrt and with the .deb package, the service user (piu-node) is already in the dialout group; running from source, add yours.',
           tech: ['From the terminal', 'ls /dev/ttyUSB* /dev/ttyACM*', '# Linux: sudo usermod -aG dialout $USER'] },
         { t: 'Tell the Piu Node where the radio is', d: 'The format is lora:<port>@<speed>. SF, bandwidth and coding rate must match the firmware (Piu’s default: SF 9, 125 kHz, 4/5). The node caps channel use at 10% per hour.',
-          tech: ['On OpenWrt (UCI)', 'uci set piu-node.serial=serial', "uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", "uci set piu-node.serial.lora_sf='9'", "uci set piu-node.serial.lora_bw_khz='125'", "uci set piu-node.serial.lora_cr='5'", 'uci commit piu-node', '# on Linux: PIU_SERIAL=lora:/dev/ttyUSB0@115200 PIU_LORA_SF=9 node dist/main.js'],
+          tech: ['On OpenWrt (UCI)', 'uci set piu-node.serial=serial', "uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", "uci set piu-node.serial.lora_sf='9'", "uci set piu-node.serial.lora_bw_khz='125'", "uci set piu-node.serial.lora_cr='5'", 'uci commit piu-node', '# Linux (.deb): PIU_SERIAL=lora:/dev/ttyUSB0@115200 and PIU_LORA_SF=9 in /etc/default/piu-node', '# then: sudo systemctl restart piu-node'],
           s: { f: 't', t: 'Terminal', i: [['term', ["$ uci set piu-node.serial.device='lora:/dev/ttyUSB0@115200'", '$ uci commit piu-node', '$ logread -e piu-node']]] } },
         { t: 'Check the log', d: 'If the port doesn’t open (radio off, wrong port), the node keeps going over the local network and the log says what didn’t open. The port counters (packets, retries, airtime, channel use) are in the panel’s /api/relay API.',
-          tech: ['Logs', 'logread -f -e piu-node   # OpenWrt', '# Linux: the terminal output itself'] },
+          tech: ['Logs', 'logread -f -e piu-node   # OpenWrt', 'journalctl -u piu-node -f   # Linux (.deb)'] },
         { t: 'Know what goes over the radio', d: 'Only small messages: envelopes up to 1536 bytes, in 255-byte packets, with acknowledgment and retries. Photos, videos and files never go over the radio: they take another path when there is one.' },
       ],
       fim: 'Your node now also talks over radio. Tell us what worked and what didn’t: that’s how LoRa leaves testing.' },
@@ -296,8 +315,8 @@ export const ajudaEn: AjudaDict = {
         { t: 'Mount it high, but not too high', d: 'Between 4 and 8 meters (estimate). Too high, the phone may hear the antenna, but the antenna won’t hear the phone back: phones have little power.', tip: 'Sector antennas are usually tilted 5° to 10° down.' },
         { t: 'Create a network just for Piu', d: 'An open network, separate from the home network and with no way out to the internet. Inside it, client isolation stays OFF: phones need to see each other to exchange messages. The commands are OpenWrt’s own (official guest network guide), not Piu’s.',
           tech: ['OpenWrt 24.10 (UCI)', "uci set network.piu_dev=device", "uci set network.piu_dev.type='bridge'", "uci set network.piu_dev.name='br-piu'", "uci set network.piu=interface", "uci set network.piu.proto='static'", "uci set network.piu.device='br-piu'", "uci set network.piu.ipaddr='192.168.50.1/24'", "uci set wireless.piu=wifi-iface", "uci set wireless.piu.device='radio0'", "uci set wireless.piu.mode='ap'", "uci set wireless.piu.network='piu'", "uci set wireless.piu.ssid='piu.square'", "uci set wireless.piu.encryption='none'", "uci set wireless.piu.isolate='0'", "uci set dhcp.piu=dhcp", "uci set dhcp.piu.interface='piu'", "uci set dhcp.piu.start='100'", "uci set dhcp.piu.limit='150'", "uci set dhcp.piu.leasetime='2h'", "uci set firewall.piu=zone", "uci set firewall.piu.name='piu'", "uci set firewall.piu.network='piu'", "uci set firewall.piu.input='REJECT'", "uci set firewall.piu.output='ACCEPT'", "uci set firewall.piu.forward='REJECT'", "uci set firewall.piu_dhcp=rule", "uci set firewall.piu_dhcp.name='Allow-DHCP-Piu'", "uci set firewall.piu_dhcp.src='piu'", "uci set firewall.piu_dhcp.proto='udp'", "uci set firewall.piu_dhcp.dest_port='67'", "uci set firewall.piu_dhcp.target='ACCEPT'", 'uci commit', 'service network restart && service firewall restart', '# no "forwarding" to wan: the Piu network doesn’t reach the internet'] },
-        { t: 'If the router is also a Piu Node', d: 'Install the Piu Node (guide “Set up a Piu Node on an OpenWrt router”) and allow Piu’s ports on the piu network only. Broadcast discovery on the new network is still “to be confirmed”: if phones don’t find the node, set the network’s broadcast address.',
-          tech: ['Piu ports on the piu zone', "uci set firewall.piu_lnnp=rule", "uci set firewall.piu_lnnp.name='Allow-Piu-LNNP'", "uci set firewall.piu_lnnp.src='piu'", "uci set firewall.piu_lnnp.proto='tcp'", "uci set firewall.piu_lnnp.dest_port='8422'", "uci set firewall.piu_lnnp.target='ACCEPT'", "uci set firewall.piu_disc=rule", "uci set firewall.piu_disc.name='Allow-Piu-Discovery'", "uci set firewall.piu_disc.src='piu'", "uci set firewall.piu_disc.proto='udp'", "uci set firewall.piu_disc.dest_port='8423'", "uci set firewall.piu_disc.target='ACCEPT'", 'uci commit firewall && service firewall restart', "uci add_list piu-node.lnnp.broadcast='192.168.50.255'   # to be confirmed", 'uci commit piu-node'] },
+        { t: 'If the router is also a Piu Node', d: 'Install the Piu Node (guide “Set up a Piu Node on an OpenWrt router”) and allow Piu’s ports on the piu network only. Add the piu network’s broadcast (192.168.50.255) to the announcement list: a subnet broadcast leaves through the right interface even on a device with two networks. In a Linux test with Piu Nodes in containers, the subnet broadcast formed the link (including with one node on two networks); 255.255.255.255 didn’t, not even between two nodes on a single network. On a real router it’s still “to be confirmed”.',
+          tech: ['Piu ports on the piu zone', "uci set firewall.piu_lnnp=rule", "uci set firewall.piu_lnnp.name='Allow-Piu-LNNP'", "uci set firewall.piu_lnnp.src='piu'", "uci set firewall.piu_lnnp.proto='tcp'", "uci set firewall.piu_lnnp.dest_port='8422'", "uci set firewall.piu_lnnp.target='ACCEPT'", "uci set firewall.piu_disc=rule", "uci set firewall.piu_disc.name='Allow-Piu-Discovery'", "uci set firewall.piu_disc.src='piu'", "uci set firewall.piu_disc.proto='udp'", "uci set firewall.piu_disc.dest_port='8423'", "uci set firewall.piu_disc.target='ACCEPT'", 'uci commit firewall && service firewall restart', "uci add_list piu-node.lnnp.broadcast='192.168.50.255'   # the piu network’s broadcast", 'uci commit piu-node'] },
         { t: 'Check the power', d: 'Set the country and power on the router itself, taking the antenna gain and cable loss into account (guide “Before you build”).',
           tech: ['OpenWrt', "uci set wireless.radio0.country='BR'", "uci set wireless.radio0.txpower='20'   # dBm; lower it if the antenna is above 6 dBi", 'uci commit wireless && wifi reload'] },
         { t: 'Test with Piu', d: 'Connect a phone to the piu.square network and run the Piu Point test (Network → Create Piu point → “Test this network”). “Devices can see each other” must pass. Walk around the square: where the signal drops a lot, consider a second point.',
@@ -364,8 +383,8 @@ export const ajudaEn: AjudaDict = {
         { t: 'The Wi-Fi Direct network won’t open to pass the app', d: 'Turn on your phone’s Wi-Fi (it doesn’t need to be connected to any network) and allow “nearby devices” (or location, on Android 12 and earlier). If Wi-Fi is busy with another direct connection, wait a few seconds or send over Bluetooth.' },
         { t: 'The phone drains too much battery', d: 'In the Network tab, turn on “Relay only while charging” and raise “Stop below”. In Profile → Battery and limits, lower the third-party traffic per day or pick the 22h–7h schedule.' },
         { t: 'The Piu Point test came out red or yellow', d: 'Red: visitors would see the home devices. Use a separate guest network, or “Create the network on this phone”. Yellow because of isolation: on the router, turn off “isolate clients” on the guest network and test again.' },
-        { t: 'The Piu Node panel won’t open', d: 'Use https:// and port 8420 with the device’s IP (piu-node.local only opens if something announces the name). Error 421: the name or IP isn’t in the accepted list (PIU_NODE_HOSTS, or main.host on OpenWrt). On OpenWrt, check /etc/init.d/piu-node status and logread -e piu-node: with an old Node, the service won’t start and the log says the version.' },
-        { t: 'The pairing code doesn’t work', d: 'It lasts 10 minutes and works once; 5 mistakes erase the code. On OpenWrt, get a new one with /etc/init.d/piu-node restart and read it in /etc/piu-node/pairing-code. In Piu Provider: Node → Show pairing code.' },
+        { t: 'The Piu Node panel won’t open', d: 'Use https:// and port 8420 with the device’s IP (the Piu Node doesn’t announce a name on the network). Error 421: the name or IP isn’t in the accepted list (PIU_NODE_HOSTS, or main.host on OpenWrt). On OpenWrt, check /etc/init.d/piu-node status and logread -e piu-node: with an old Node, the service won’t start and the log says the version. On Linux (.deb): systemctl status piu-node and journalctl -u piu-node.' },
+        { t: 'The pairing code doesn’t work', d: 'It lasts 10 minutes and works once; 5 mistakes erase the code. On OpenWrt, get a new one with /etc/init.d/piu-node restart and read it in /etc/piu-node/pairing-code. On Linux (.deb): sudo systemctl restart piu-node and sudo cat /var/lib/piu-node/pairing-code. In Piu Provider: Node → Show pairing code.' },
         { t: 'The phone won’t read the computer’s QR', d: 'Both must be on the same Wi-Fi. Turn up the screen brightness and bring the phone closer. The QR changes every 30 seconds: if it takes too long, wait for the next one.' },
         { t: 'Mac or Windows won’t let me open it', d: 'Mac (macOS 15 or newer): System Settings → Privacy & Security → Open Anyway. macOS 14 or earlier: right-click the app → Open. Windows: on the SmartScreen warning, More info → Run anyway.' },
         { t: 'I lost my phone', d: 'Install Piu on another phone and recover with the 12 words (“Restore from another device” → “With the 12-word phrase”). On a device you still have, Profile → Devices → “Revoke lost device” → “Hold to revoke”. If the lost phone may be with someone else, also create a new identity.' },

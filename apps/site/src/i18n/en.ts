@@ -1,5 +1,6 @@
 import { ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SIZE, ANDROID_URL } from '../lib/androidRelease';
 import { DESKTOP_PUBLISHED } from '../lib/desktopRelease';
+import { NODE_DEB, NODE_IPK, NODE_PUBLISHED, NODE_RELEASE_URL } from '../lib/nodeRelease';
 import type { Dict } from './pt';
 import { ajudaEn } from './ajuda.en';
 import { redeEn } from './rede.en';
@@ -79,7 +80,7 @@ export const en: Dict = {
       { icon: 'wifi', title: 'Regular router', desc: 'Nothing to install: it becomes an Access Point for one of your nodes, named piu.something.', ex: 'any router or repeater', tag: 'no install' },
     ],
     panelTitle: 'Provider dashboard, served by your own device',
-    panelSub: 'Opens on your local network at piu-node.local. Works without internet.',
+    panelSub: 'Opens on your local network at the device’s IP (port 8420). Works without internet.',
     panelCta: 'See the dashboard',
     panelFrame: 'Provider dashboard demo',
     app: {
@@ -91,6 +92,19 @@ export const en: Dict = {
       files: {
         'mac-arm64-dmg': 'macOS · Apple Silicon', 'mac-x64-dmg': 'macOS · Intel', 'mac-arm64-zip': 'macOS · Apple Silicon · .zip', 'mac-x64-zip': 'macOS · Intel · .zip',
         'linux-appimage': 'Linux · AppImage', 'linux-deb': 'Linux · .deb', 'win-x64-exe': 'Windows · 64-bit',
+      },
+    },
+    node: {
+      title: 'Piu Node for routers and Raspberry Pi',
+      desc: 'The same node, as a service: .ipk for OpenWrt 24.10 routers and .deb for Debian, Ubuntu and Raspberry Pi OS (needs Node.js 20.19 or newer).',
+      soon: 'Coming soon',
+      soonNote: 'The packages have not been published yet. When they are, they show up here with size and SHA-256. Until then, the guide shows how to build from source.',
+      release: 'Release on GitHub',
+      guide: 'Step-by-step guide',
+      files: { ipk: 'OpenWrt · .ipk', deb: 'Debian, Ubuntu and Raspberry Pi OS · .deb' },
+      tips: {
+        ipk: 'Copy it to the router and install with opkg install (guide “Set up a Piu Node on an OpenWrt router”).',
+        deb: 'Install with sudo apt install ./ plus the file name (guide “Piu Node on a computer or Raspberry Pi”).',
       },
     },
   },
@@ -114,8 +128,11 @@ export const en: Dict = {
         note: ANDROID_PUBLISHED ? `Downloading ${ANDROID_FILE} (${ANDROID_SIZE}). When you open the file, Android asks you to allow installing this app: allow it and install.` : 'The APK has not been published yet. Meanwhile, get it from someone who already has Piu.' },
       { id: 'friend', icon: 'phonelink_ring', title: 'From a friend', desc: 'No internet, no store: anyone with Piu sends the app straight to your phone.', cta: 'How to receive', primary: false, href: '',
         note: 'Ask someone who has Piu to open Invite → “Far away or doesn’t have it yet” and pick Bluetooth or Wi-Fi Direct. The app arrives with no internet.' },
-      { id: 'node', icon: 'router', title: 'Piu Node', desc: 'For OpenWrt routers, Linux, Raspberry Pi and mini-PCs. Become a provider.', cta: 'Coming soon', primary: false, href: '',
-        note: 'The packages (.ipk for OpenWrt, .deb for Linux and Raspberry Pi) are not published yet. Each one will ship with its SHA-256 to check.' },
+      { id: 'node', icon: 'router', title: 'Piu Node', desc: 'For OpenWrt routers, Linux, Raspberry Pi and mini-PCs. Become a provider.', cta: NODE_PUBLISHED ? 'See the packages' : 'Coming soon', primary: false,
+        href: NODE_PUBLISHED ? NODE_RELEASE_URL : '',
+        note: NODE_PUBLISHED
+          ? `Packages on the GitHub release: ${[NODE_IPK, NODE_DEB].filter(f => f.url).map(f => `${f.file} (${f.size})`).join(' and ')}, with SHA256SUMS.txt to check.`
+          : 'The packages (.ipk for OpenWrt, .deb for Linux and Raspberry Pi) are not published yet. Each one will ship with its SHA-256 to check.' },
     ],
     source: { title: 'Open source', desc: 'All of Piu is free software (AGPL-3.0): app, Piu Node, panel and protocol. Check it, audit it, fork it or contribute.', cta: 'View on GitHub' },
     signature: ['App certificate (SHA-256)', 'SHA-256'],

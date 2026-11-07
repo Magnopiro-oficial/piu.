@@ -1,0 +1,18 @@
+{
+  "name": "piu-node-linux",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pacote .deb do piu-node para Debian, Ubuntu e Raspberry Pi OS: o mesmo bundle JS do .ipk, unidade systemd endurecida e /etc/default/piu-node",
+  "license": "AGPL-3.0-only",
+  "type": "module",
+  "engines": {
+    "node": ">=20.19"
+  },
+  "debRevision": "1",
+  "scripts": {
+    "deps": "npm --prefix ../openwrt run deps && npm --prefix ../openwrt ci",
+    "build:panel": "npm --prefix ../openwrt run build:panel",
+    "build": "node build-deb.mjs",
+    "test": "node --test test/*.test.mjs"
+  }
+}

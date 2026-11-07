@@ -1,0 +1,54 @@
+# piu-node: variáveis lidas pelo serviço (systemd, EnvironmentFile). Depois de mudar:
+#   sudo systemctl restart piu-node
+# Linha comentada = vale o padrão do piu-node. Lista completa: apps/piu-node/README.md (Configuração).
+# PIU_NODE_DATA e PIU_NODE_PANEL vêm da unidade (/var/lib/piu-node e /usr/share/piu-node/panel).
+
+# Nomes aceitos no cabeçalho Host (proteção contra DNS rebinding), separados por vírgula.
+# Vazio: localhost, 127.0.0.1, <nome do computador>.local e os IPs do computador na hora de subir
+# (hostname -I). <nome>.local só abre se o sistema anunciar por mDNS (o avahi-daemon do Raspberry Pi OS faz).
+#PIU_NODE_HOSTS=localhost,127.0.0.1,192.168.1.50
+
+# Painel HTTPS
+#PIU_NODE_PORT=8420
+#PIU_NODE_LISTEN=0.0.0.0
+
+# Opções extras do node, separadas por espaço (ex.: teto do heap num Raspberry Pi de 512 MB).
+#PIU_NODE_ARGS=--max-old-space-size=192
+
+# Retransmissão LNNP v1
+#PIU_LNNP=1
+#PIU_LNNP_RELAY=1
+#PIU_LNNP_LISTEN=0.0.0.0
+#PIU_LNNP_PORT=8422
+# Porta UDP do anúncio; off desliga a descoberta.
+#PIU_LNNP_DISCOVERY_PORT=8423
+# Destinos do anúncio. Com mais de uma rede no aparelho, use o broadcast de cada sub-rede
+# (ex.: 192.168.1.255,192.168.50.255): 255.255.255.255 sai por uma interface só.
+#PIU_LNNP_BROADCAST=255.255.255.255
+#PIU_LNNP_PEERS=192.168.1.20:8422
+#PIU_LNNP_ALLOW=
+#PIU_LNNP_MEMORY_MB=256
+#PIU_LNNP_BEACON_MS=5000
+# Amostras do histórico e gravação das mensagens guardadas (ms)
+#PIU_RELAY_SAMPLE_MS=300000
+#PIU_RELAY_PERSIST_MS=30000
+
+# Rádio LoRa ou cabo USB (EXPERIMENTAL: testado com rádio simulado e pseudo-terminais, não com placa real).
+# tipo:caminho@velocidade, tipo lora ou usb, várias portas separadas por vírgula.
+#PIU_SERIAL=lora:/dev/ttyUSB0@115200
+#PIU_LORA_SF=9
+#PIU_LORA_BW_KHZ=125
+#PIU_LORA_CR=5
+#PIU_LORA_DUTY=10
+#PIU_LORA_MAX_ENVELOPE=1536
+#PIU_LORA_BEACON_MS=30000
+
+# Gateway da carga pela malha e caixa HTTPS do validador
+#PIU_GATEWAY=1
+#PIU_VALIDATOR_INBOX=
+
+# Chave pública de release (SPKI DER em base64). Vazia: nenhum pacote do instalador é oferecido.
+#PIU_RELEASE_PUBKEY=
+
+# Lunes Mainnet (só leitura do saldo). Vazio: os 4 endereços de produção.
+#PIU_LUNES_ENDPOINTS=

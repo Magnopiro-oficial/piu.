@@ -3,9 +3,9 @@ name: CI · Site
 on:
   push:
     branches: [main]
-    paths: ['apps/site/**', 'apps/provider-panel/**', '.github/workflows/ci-site.yml']
+    paths: ['apps/site/**', 'apps/provider-panel/**', 'apps/piu-node/package.json', 'packaging/openwrt/Makefile', 'packaging/linux/package.json', '.github/workflows/ci-site.yml']
   pull_request:
-    paths: ['apps/site/**', 'apps/provider-panel/**', '.github/workflows/ci-site.yml']
+    paths: ['apps/site/**', 'apps/provider-panel/**', 'apps/piu-node/package.json', 'packaging/openwrt/Makefile', 'packaging/linux/package.json', '.github/workflows/ci-site.yml']
 
 # Menor privilégio: o token do GitHub só lê o código.
 permissions:
@@ -39,5 +39,7 @@ jobs:
       - name: Auditoria de dependências (falha em alto/crítico)
         run: npm audit --omit=dev --audit-level=high
       # O site embute o build do painel, por isso também roda quando apps/provider-panel muda.
+      - name: Testes do sync-release (arquivos reconhecidos em cada release)
+        run: npm test
       - name: Checagem, build do painel embutido e build do site
         run: npm run build

@@ -4,6 +4,7 @@
 //
 //   node scripts/sync-release.mjs                     # relê as tags que já estão em releases.json
 //   node scripts/sync-release.mjs --android android-v0.1.1 --desktop desktop-v0.1.0 --provider provider-v0.1.0
+//   node scripts/sync-release.mjs --node node-v0.1.0    # piu-node: .ipk (OpenWrt) e .deb (Debian/Raspberry Pi)
 //   node scripts/sync-release.mjs --dry-run           # só mostra, não grava
 //
 // Regras: rascunho (draft) ou tag inexistente = "não publicado" (o site mostra "em breve", sem link).
@@ -13,37 +14,12 @@
 import { execFileSync } from 'node:child_process';
 import { readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { assetId, PRODUCTS, SUMS, tagVersion } from './release-products.mjs';
 
 const GH_REPO = 'Magnopiro-oficial/piu.';
 const REPO = `https://github.com/${GH_REPO}`;
 const OUT = fileURLToPath(new URL('../src/lib/releases.json', import.meta.url));
 
-// Mesmos ids de src/lib/desktopRelease.ts (nomes do electron-builder: <produto>-<versão>-<os>-<arch>.<ext>).
-const DESKTOP_SUFFIX = {
-  'mac-arm64-dmg': '-mac-arm64.dmg',
-  'mac-x64-dmg': '-mac-x64.dmg',
-  'mac-arm64-zip': '-mac-arm64.zip',
-  'mac-x64-zip': '-mac-x64.zip',
-  'linux-appimage': '-linux-x86_64.AppImage',
-  'linux-deb': '-linux-amd64.deb',
-  'win-x64-exe': '-win-x64.exe',
-};
-// O GitHub troca espaço por ponto no nome do arquivo ("Piu Provider" → "Piu.Provider").
-const PRODUCTS = {
-  android: { prefix: /^android-v(\d+\.\d+\.\d+)$/, names: v => ({ apk: new RegExp(`^Piu-${esc(v)}\\.apk$`) }) },
-  desktop: { prefix: /^desktop-v(\d+\.\d+\.\d+)$/, names: v => desktopNames(`Piu-${esc(v)}`) },
-  provider: { prefix: /^provider-v(\d+\.\d+\.\d+)$/, names: v => desktopNames(`Piu[-.]Provider-${esc(v)}`) },
-};
-const SUMS = 'SHA256SUMS.txt';
-
-function esc(s) { return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'); }
-function desktopNames(head) {
-  const out = {};
-  for (const [id, suf] of Object.entries(DESKTOP_SUFFIX)) out[id] = new RegExp(`^${head}${esc(suf)}$`);
-  out.sums = new RegExp(`^${esc(SUMS)}$`);
-  out.sig = new RegExp(`^${esc(SUMS)}\\.asc$`);
-  return out;
-}
 const fail = msg => { console.error(`sync-release: ${msg}`); process.exit(1); };
 
 function parseArgs(argv) {
@@ -52,7 +28,7 @@ function parseArgs(argv) {
     const k = argv[i];
     if (k === '--dry-run') a.dry = true;
     else if (k.startsWith('--') && k.slice(2) in PRODUCTS) { const v = argv[++i]; if (!v) fail(`${k} precisa de uma tag`); a.tags[k.slice(2)] = v; }
-    else fail(`argumento desconhecido: ${k} (use --android, --desktop, --provider <tag> e --dry-run)`);
+    else fail(`argumento desconhecido: ${k} (use --android, --desktop, --provider, --node <tag> e --dry-run)`);
   }
   return a;
 }
@@ -67,9 +43,8 @@ function gh(args) {
 }
 
 function sync(product, tag) {
-  const m = PRODUCTS[product].prefix.exec(tag);
-  if (!m) fail(`tag "${tag}" não tem o formato ${product}-vX.Y.Z`);
-  const version = m[1];
+  const version = tagVersion(product, tag);
+  if (!version) fail(`tag "${tag}" não tem o formato ${product}-vX.Y.Z`);
   const empty = { tag, version, published: false, publishedAt: null, assets: {} };
   const raw = gh(['release', 'view', tag, '-R', GH_REPO, '--json', 'tagName,isDraft,publishedAt,assets']);
   if (raw === null) { console.log(`${product}: ${tag} não existe no GitHub → em breve`); return empty; }
@@ -81,7 +56,7 @@ function sync(product, tag) {
   const assets = {};
   const base = `${REPO}/releases/download/${tag}/`;
   for (const a of rel.assets) {
-    const id = Object.keys(want).find(k => want[k].test(a.name));
+    const id = assetId(product, version, a.name);
     if (!id) continue;
     if (assets[id]) fail(`${product}: dois arquivos para "${id}" (${assets[id].name} e ${a.name})`);
     if (a.state !== 'uploaded') fail(`${product}: ${a.name} ainda não terminou de subir (state=${a.state})`);
