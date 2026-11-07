@@ -1,0 +1,47 @@
+name: CI · Dependências
+
+# Barra a volta de versões com alerta de segurança já corrigido (scripts/lockfile-advisories.mjs) em
+# qualquer lockfile do monorepo. Roda também toda segunda, para pegar alerta novo no npm audit.
+on:
+  push:
+    branches: [main]
+    paths: ['**/package.json', '**/package-lock.json', 'scripts/lockfile-advisories*', '.github/workflows/ci-deps.yml']
+  pull_request:
+    paths: ['**/package.json', '**/package-lock.json', 'scripts/lockfile-advisories*', '.github/workflows/ci-deps.yml']
+  schedule:
+    - cron: '17 9 * * 1'
+
+# Menor privilégio: o token do GitHub só lê o código (nada de escrita no repositório).
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-deps-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  locks:
+    name: Lockfiles sem alertas
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+      - name: Testes do verificador
+        run: node --test scripts/lockfile-advisories.test.mjs
+      - name: Alertas já corrigidos não voltam
+        run: node scripts/lockfile-advisories.mjs
+      # Só lê o lockfile (sem instalar nada). Inclui dependências de desenvolvimento: é o que o Dependabot conta.
+      - name: npm audit de cada app (falha em moderado ou mais)
+        run: |
+          set -euo pipefail
+          fail=0
+          for d in apps/mobile apps/desktop apps/provider-desktop apps/provider-panel apps/piu-node apps/settlement apps/site packaging/openwrt; do
+            echo "::group::$d"
+            (cd "$d" && npm audit --package-lock-only --audit-level=moderate) || fail=1
+            echo "::endgroup::"
+          done
+          exit "$fail"
