@@ -32,6 +32,8 @@ electronFuses:
   enableNodeCliInspectArguments: false
   enableEmbeddedAsarIntegrityValidation: true
   onlyLoadAppFromAsar: true
+  # file:// sem privilégios extras: a janela abre piu-app://app/ (auditoria 2026-11-06 B-04).
+  grantFileProtocolExtraPrivileges: false
 mac:
   target:
     - target: dmg

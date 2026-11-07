@@ -270,7 +270,7 @@ export const DEFAULT_PREFS: Prefs = {
   // Mesmos padrões do celular (state/settings.tsx e data/settings.ts).
   notifGroups: true, notifChannels: true, notifWallet: true, notifAlerts: true, badge: true, dnd: false,
   readReceipts: true, typing: true, find: 'all', randomDelay: false, pad: true,
-  lockOnSuspend: false, lockAfter: 'never', relayBandwidth: '5', relayRetention: '48', tempDefault: 'off', relayStorage: '500', updateNotify: false,
+  lockOnSuspend: false, lockAfter: 'never', relayBandwidth: '5', relayRetention: '48', tempDefault: 'off', relayStorage: '500', updateNotify: true,
   openAtLogin: false, tray: false, lang: 'auto', region: 'auto', spellcheck: true,
 };
 

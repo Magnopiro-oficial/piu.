@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, rendererOriginOf,
+  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, rendererFileFor, rendererMime, rendererOriginOf,
 } from '../src/main/security';
+import { join } from 'node:path';
 
 test('M-05: switches de depuração no app empacotado são detectados (--remote-debugging-port, --inspect, --js-flags…)', () => {
   const exe = '/Applications/Piu.app/Contents/MacOS/Piu';
@@ -34,6 +35,28 @@ test('B-06: origem do renderer termina em "/" (pasta irmã com o mesmo prefixo n
   assert.equal(isRendererUrl('file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer-evil/index.html', origin), false);
   assert.equal(isRendererUrl('file:///Applications/Piu.app/Contents/Resources/app.asar/dist/renderer', origin), false);
   assert.equal(isRendererUrl('https://example.com/', origin), false);
+});
+
+test('B-04: interface servida por piu-app://app/ (sem privilégios extras do file://), só de dentro da pasta', () => {
+  const dir = '/Applications/Piu.app/Contents/Resources/app.asar/dist/renderer';
+  assert.equal(RENDERER_ORIGIN, 'piu-app://app/');
+  assert.equal(rendererFileFor('piu-app://app/index.html', dir), join(dir, 'index.html'));
+  assert.equal(rendererFileFor('piu-app://app/', dir), join(dir, 'index.html'));
+  assert.equal(rendererFileFor('piu-app://app/assets/index-abc.js?x=1#y', dir), join(dir, 'assets/index-abc.js'));
+  assert.equal(rendererFileFor('piu-app://app/assets/a%20b.woff2', dir), join(dir, 'assets/a b.woff2'));
+  assert.equal(rendererFileFor('piu-app://app/../../../etc/passwd', dir), join(dir, 'etc/passwd'), 'a URL normaliza ".." antes: fica na pasta');
+  assert.equal(rendererFileFor('piu-app://app/%2e%2e/%2e%2e/etc/passwd', dir), join(dir, 'etc/passwd'), '"%2e%2e" também é normalizado pela URL');
+  assert.equal(rendererFileFor('piu-app://app/assets/%2e%2e%2f..%2fx', dir), null);
+  assert.equal(rendererFileFor('piu-app://app/a%00b', dir), null);
+  assert.equal(rendererFileFor('piu-app://outro/index.html', dir), null);
+  assert.equal(rendererFileFor('piu-app://u:p@app/index.html', dir), null);
+  assert.equal(rendererFileFor('file:///etc/passwd', dir), null);
+  assert.equal(rendererFileFor('nada', dir), null);
+  assert.equal(rendererMime('/x/assets/index-abc.js'), 'text/javascript; charset=utf-8');
+  assert.equal(rendererMime('/x/a.WOFF2'), 'font/woff2');
+  assert.equal(rendererMime('/x/sem-tipo'), 'application/octet-stream');
+  assert.equal(isRendererUrl('piu-app://app/index.html', RENDERER_ORIGIN), true);
+  assert.equal(isRendererUrl('piu-app://app.evil/index.html', RENDERER_ORIGIN), false);
 });
 
 test('B-02: links externos só para a allowlist (https, origem exata)', () => {

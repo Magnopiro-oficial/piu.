@@ -2,6 +2,7 @@
  * Regras de segurança do processo principal como funções puras (sem Electron), testadas em
  * test/security.test.ts. O main.ts só liga estas decisões às APIs do Electron.
  */
+import { extname, resolve, sep } from 'node:path';
 import { tm } from './i18n';
 
 /**
@@ -29,6 +30,36 @@ export function forbiddenDebugSwitches(argv: readonly string[], platform: string
   if (hasSwitch) for (const s of FORBIDDEN_SWITCHES) { try { if (hasSwitch(s)) found.add(s); } catch { /* sem a API */ } }
   return [...found];
 }
+
+/**
+ * Esquema próprio da interface (B-04): a janela abre `piu-app://app/index.html` em vez de file://, e o fuse
+ * GrantFileProtocolExtraPrivileges fica desligado. O main.ts registra o esquema como padrão e seguro e
+ * responde só com arquivos de dentro de `dist/renderer` (`rendererFileFor`).
+ */
+export const RENDERER_SCHEME = 'piu-app';
+export const RENDERER_ORIGIN = `${RENDERER_SCHEME}://app/`;
+
+/** Arquivo de `dir` pedido por uma URL `piu-app://app/…`, ou null (outro host, credenciais, NUL ou fora da pasta). */
+export function rendererFileFor(url: string, dir: string): string | null {
+  let u: URL;
+  try { u = new URL(url); } catch { return null; }
+  if (u.protocol !== `${RENDERER_SCHEME}:` || u.host !== 'app' || u.username || u.password) return null;
+  let rel: string;
+  try { rel = decodeURIComponent(u.pathname); } catch { return null; }
+  if (rel.includes('\0')) return null;
+  rel = rel.replace(/^\/+/, '') || 'index.html';
+  const root = resolve(dir);
+  const full = resolve(root, rel);
+  return full.startsWith(root + sep) ? full : null;
+}
+
+const MIME: Record<string, string> = {
+  '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8',
+  '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.json': 'application/json',
+  '.woff2': 'font/woff2', '.woff': 'font/woff', '.ttf': 'font/ttf', '.webp': 'image/webp', '.jpg': 'image/jpeg',
+};
+/** Tipo do arquivo da interface pela extensão (módulos ES exigem text/javascript). */
+export const rendererMime = (file: string) => MIME[extname(file).toLowerCase()] ?? 'application/octet-stream';
 
 /** Origem do renderer: a pasta `dist/renderer` como URL file:// TERMINADA em "/" (B-06). */
 export const rendererOriginOf = (dirHref: string) => (dirHref.endsWith('/') ? dirHref : `${dirHref}/`);

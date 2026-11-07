@@ -1,21 +1,21 @@
 /**
  * Piu Desktop: processo principal.
- * - Janela única com renderer React (Vite) carregado por file://, em sandbox, com contextIsolation,
+ * - Janela única com renderer React (Vite) carregado por piu-app://app/ (não file://), em sandbox, com contextIsolation,
  *   sem nodeIntegration e CSP estrita (só recursos do próprio app; nada de rede no renderer).
  * - O núcleo (core.ts) roda aqui: frase no cofre do sistema, estado cifrado, nó LNNP na rede local.
  * - IPC: um canal `piu` (invoke) com os métodos de `PiuApi`; eventos em `piu:<evento>`. Só o quadro
  *   principal da janela do Piu, com URL do próprio renderer, pode chamar (security.ts).
  */
-import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, type MenuItemConstructorOptions, type MessageBoxOptions, nativeImage, nativeTheme, Notification, powerMonitor, safeStorage, session, shell, systemPreferences, Tray } from 'electron';
+import { app, BrowserWindow, clipboard, ClipboardItem, dialog, ipcMain, Menu, type MenuItemConstructorOptions, type MessageBoxOptions, nativeImage, nativeTheme, Notification, powerMonitor, protocol, safeStorage, session, shell, systemPreferences, Tray } from 'electron';
 import { spawn } from 'node:child_process';
 import { homedir, hostname } from 'node:os';
-import { writeFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PiuCore } from './core';
 import { eventAllowed, methodAllowed } from './lockGate';
 import { sanitizePrefsPatch } from './prefs';
-import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, rendererOriginOf } from './security';
+import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
 import { isSecretScreen, screenSecurityFor, type SecretScreen } from '../shared/screenSecurity';
 import { alertText, type AlertNoticeLevel, type AlertSummary, badgeCount, notifKindOf, shouldNotify, shouldNotifyAlert } from '../shared/notifyPolicy';
 import type { AppLockState, ContactInfo, PiuEventName, Prefs, TempMode } from '../shared/types';
@@ -55,16 +55,27 @@ let quitting = false;
 
 const rendererDir = () => join(__dirname, 'renderer');
 // Com a barra final (B-06): `.../renderer-qualquer/` não passa por `.../renderer`.
-const rendererOrigin = () => rendererOriginOf(pathToFileURL(rendererDir()).href);
+const rendererOrigin = () => RENDERER_ORIGIN;
 const asset = (name: string) => join(app.isPackaged ? process.resourcesPath : join(__dirname, '..'), 'assets', name);
 
 // ── segurança da janela ───────────────────────────────────
+const RENDERER_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
+// Antes do app ficar pronto: piu-app é padrão (URLs relativas, origem própria) e seguro (módulos ES, fontes).
+protocol.registerSchemesAsPrivileged([{ scheme: RENDERER_SCHEME, privileges: { standard: true, secure: true } }]);
 function hardenSession() {
   const ses = session.defaultSession;
   // Nenhuma permissão do navegador, exceto copiar texto e notificações.
   ses.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'clipboard-sanitized-write' || permission === 'notifications'));
   ses.setPermissionCheckHandler((_wc, permission) => permission === 'clipboard-sanitized-write' || permission === 'notifications');
-  // O renderer só carrega o próprio app (file:// dentro de dist/renderer). Nada de internet nele.
+  // Interface por piu-app://app/ (B-04): só arquivos de dentro de dist/renderer, com a CSP no próprio cabeçalho.
+  protocol.handle(RENDERER_SCHEME, async req => {
+    const file = rendererFileFor(req.url, rendererDir());
+    if (!file) return new Response(null, { status: 404 });
+    let body: Buffer;
+    try { body = await readFile(file); } catch { return new Response(null, { status: 404 }); }
+    return new Response(new Uint8Array(body), { status: 200, headers: { 'Content-Type': rendererMime(file), 'Content-Security-Policy': RENDERER_CSP, 'X-Content-Type-Options': 'nosniff' } });
+  });
+  // O renderer só carrega o próprio app (piu-app://app/). Nada de internet nele.
   ses.webRequest.onBeforeRequest((details, cb) => {
     const u = details.url;
     cb({ cancel: !(isRendererUrl(u, rendererOrigin()) || u.startsWith('devtools://') || u.startsWith('blob:') || u.startsWith('data:')) });
@@ -75,7 +86,7 @@ function hardenSession() {
   try { ses.setSpellCheckerDictionaryDownloadURL(pathToFileURL(join(app.getPath('temp'), 'piu-sem-dicionarios')).href + '/'); } catch { /* versão sem a API */ }
   // CSP estrita, também no modo de desenvolvimento (o Vite gera scripts e CSS em arquivos).
   ses.webRequest.onHeadersReceived((details, cb) => {
-    cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': ["default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'"] } });
+    cb({ responseHeaders: { ...details.responseHeaders, 'Content-Security-Policy': [RENDERER_CSP] } });
   });
 }
 
@@ -116,7 +127,7 @@ function createWindow() {
   // Com o ícone na barra de menus/bandeja, fechar a janela só a esconde: o nó continua recebendo.
   win.on('close', e => { if (!quitting && tray && core?.prefs().tray) { e.preventDefault(); win?.hide(); } });
   win.on('closed', () => { win = null; });
-  void win.loadFile(join(rendererDir(), 'index.html'));
+  void win.loadURL(`${RENDERER_ORIGIN}index.html`);
 }
 
 /**
@@ -359,7 +370,14 @@ function registerIpc() {
       return 'saved';
     },
     suggestWords: (p: string) => core.suggestWords(String(p)),
-    eraseAll: () => core.eraseAll(),
+    eraseAll: async () => {
+      // Confirmação nativa no processo principal: um renderer comprometido não apaga tudo sozinho.
+      const o: MessageBoxOptions = { type: 'warning', buttons: [tm('common.cancel'), tm('main.erase.confirm')], defaultId: 0, cancelId: 0, noLink: true,
+        title: tm('main.erase.title'), message: tm('main.erase.message'), detail: tm('main.erase.detail') };
+      const ok = (win ? await dialog.showMessageBox(win, o) : await dialog.showMessageBox(o)).response === 1;
+      if (!ok) throw new Error(tm('main.erase.refused'));
+      return core.eraseAll();
+    },
     myCard: (kind: 'public' | 'anon', fresh?: boolean) => core.myCard(kind, !!fresh),
     addContactByCard: (text: string) => core.addContactByCard(String(text)),
     listConversations: () => core.listConversations(),
