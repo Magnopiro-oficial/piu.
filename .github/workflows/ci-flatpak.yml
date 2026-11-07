@@ -3,7 +3,6 @@ name: CI · Flatpak
 # Monta o Flatpak do Piu Desktop (packaging/flatpak) como o Flathub monta e roda o linter do Flathub.
 on:
   push:
-    branches: [main]
     paths: ['packaging/flatpak/**', '.github/workflows/ci-flatpak.yml']
   pull_request:
     paths: ['packaging/flatpak/**', '.github/workflows/ci-flatpak.yml']
