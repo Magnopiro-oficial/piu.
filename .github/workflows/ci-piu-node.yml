@@ -3,9 +3,9 @@ name: CI · piu-node
 on:
   push:
     branches: [main]
-    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', '.github/workflows/ci-piu-node.yml']
+    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', 'apps/settlement/**', '.github/workflows/ci-piu-node.yml']
   pull_request:
-    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', '.github/workflows/ci-piu-node.yml']
+    paths: ['apps/piu-node/**', 'apps/mobile/src/lib/xxhash.ts', 'apps/mobile/src/lib/ss58.ts', 'apps/mobile/src/lib/lunesRpc.ts', 'apps/settlement/**', '.github/workflows/ci-piu-node.yml']
 
 # Menor privilégio: o token do GitHub só lê o código.
 permissions:
@@ -35,8 +35,13 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
           cache: npm
-          cache-dependency-path: apps/piu-node/package-lock.json
+          cache-dependency-path: |
+            apps/piu-node/package-lock.json
+            apps/settlement/package-lock.json
       - run: npm ci
+      # Os testes do registro v2 conferem com o validador de verdade (apps/settlement).
+      - name: Dependências do settlement (testes de integração)
+        run: npm --prefix ../settlement ci --ignore-scripts
       - name: Auditoria de dependências (falha em alto/crítico)
         run: npm audit --omit=dev --audit-level=high
       - name: Typecheck

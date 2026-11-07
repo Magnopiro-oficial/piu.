@@ -237,6 +237,11 @@ jobs:
           OUT_DIR: ${{ inputs.output_dir }}
         run: |
           set -euo pipefail
+          # Secret ausente chega como variável VAZIA; o electron-builder trata CSC_LINK="" como caminho
+          # (a pasta atual) e quebra no Mac com "not a file". Vazia = não definida.
+          for v in CSC_LINK CSC_KEY_PASSWORD CSC_NAME WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; do
+            [[ -n "${!v:-}" ]] || unset "$v"
+          done
           # Windows no contêiner com Wine: o HOME (/github/home) não pertence ao usuário do contêiner e
           # o Wine se recusa a criar a configuração lá; usa um prefixo próprio.
           # Além disso, o Wine traduz o caminho para o formato do Windows, que ignora o ponto no fim do

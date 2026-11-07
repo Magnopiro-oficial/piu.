@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { test } from 'node:test';
 
@@ -66,8 +66,12 @@ test('build.gradle já gerado pela versão antiga do plugin ganha a guarda (preb
   assert.equal(addReleaseSigning(up), up);
 });
 
-test('o build.gradle do repositório já tem a guarda', () => {
-  const real = readFileSync(new URL('../../../android/app/build.gradle', import.meta.url), 'utf8');
+// android/ não é versionado (sai do prebuild): no CI estes conferem só o que existe.
+const GRADLE_FILE = new URL('../../../android/app/build.gradle', import.meta.url);
+const NO_ANDROID = !existsSync(GRADLE_FILE) && 'android/ não gerado (rode o prebuild)';
+
+test('o build.gradle gerado já tem a guarda', { skip: NO_ANDROID }, () => {
+  const real = readFileSync(GRADLE_FILE, 'utf8');
   assert.equal(addReleaseSigning(real), real, 'aplicar o plugin não muda nada');
   assert.ok(real.includes(GUARD));
 });
@@ -87,10 +91,11 @@ test('formato inesperado: falha alto em vez de gerar um APK assinado com a chave
 // volta o versionCode para 1 e o Android recusa instalar o APK novo por cima do 0.1.1.
 test('versão: app.json (version + android.versionCode) igual ao android/app/build.gradle e ao package.json', () => {
   const app = JSON.parse(readFileSync(new URL('../../../app.json', import.meta.url), 'utf8')).expo;
-  const gradle = readFileSync(new URL('../../../android/app/build.gradle', import.meta.url), 'utf8');
   const pkg = JSON.parse(readFileSync(new URL('../../../package.json', import.meta.url), 'utf8'));
   assert.ok(Number.isInteger(app.android?.versionCode), 'app.json sem android.versionCode');
+  assert.equal(pkg.version, app.version);
+  if (NO_ANDROID) return;
+  const gradle = readFileSync(GRADLE_FILE, 'utf8');
   assert.match(gradle, new RegExp(`versionCode ${app.android.versionCode}\\b`));
   assert.match(gradle, new RegExp(`versionName "${app.version.replace(/\./g, '\\.')}"`));
-  assert.equal(pkg.version, app.version);
 });
