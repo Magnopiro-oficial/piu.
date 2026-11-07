@@ -45,7 +45,7 @@ export const redePt: RedeDict = {
   title: 'Piu · como a rede funciona',
   description: 'Como uma mensagem do Piu viaja de aparelho em aparelho, sem internet e sem servidor central, passo a passo.',
   navLabel: 'Seções da página',
-  nav: [['camadas', 'Camadas'], ['mensagem', 'A viagem'], ['relay', 'No caminho'], ['dinheiro', 'LUNES'], ['pontos', 'Pontos Piu'], ['recompensas', 'Recompensas']],
+  nav: [['camadas', 'Camadas'], ['mensagem', 'A viagem'], ['relay', 'No caminho'], ['caminho', 'O meio certo'], ['dinheiro', 'LUNES'], ['pontos', 'Pontos Piu'], ['computador', 'Celular + computador'], ['recompensas', 'Recompensas']],
   status: { on: 'JÁ FUNCIONA', test: 'EM TESTE', soon: 'A CAMINHO' },
   hero: {
     kicker: 'COMO A REDE PIU FUNCIONA',
@@ -73,7 +73,7 @@ export const redePt: RedeDict = {
     items: [
       { icon: 'smartphone', t: 'Direto', sub: 'Celular com celular', d: 'Os celulares conversam entre si pelo Bluetooth e pelo Wi-Fi Direct, como um walkie-talkie digital. Não precisa de nenhuma antena nem roteador.', k: 'on', nodes: [['smartphone', 'Ana'], ['smartphone', 'Vizinho'], ['smartphone', 'Bruno']] },
       { icon: 'wifi', t: 'Rede local', sub: 'Qualquer Wi-Fi, mesmo sem internet', d: 'Num Wi-Fi de casa, escola ou trabalho, os aparelhos Piu se acham e trocam mensagens pelo roteador. A internet pode estar desligada. Já funciona no computador e no Piu Node; no celular, está a caminho.', k: 'on', nodes: [['smartphone', 'Celular'], ['router', 'Roteador comum'], ['computer', 'Piu Desktop']] },
-      { icon: 'storefront', t: 'Pontos Piu', sub: 'Lugares que fortalecem a rede', d: 'Um roteador ou um celular parado num lugar movimentado vira ponto de encontro. O ponto guardião guarda as mensagens trancadas até o destinatário passar por ali.', k: 'soon', nodes: [['smartphone', 'Visitante'], ['storefront', 'Ponto'], ['inventory_2', 'Guardião']] },
+      { icon: 'storefront', t: 'Pontos Piu', sub: 'Lugares que fortalecem a rede', d: 'Um roteador ou um celular parado num lugar movimentado vira ponto de encontro. O ponto guardião guarda as mensagens trancadas até o destinatário passar por ali.', k: 'test', nodes: [['smartphone', 'Visitante'], ['storefront', 'Ponto'], ['inventory_2', 'Guardião']] },
       { icon: 'settings_input_antenna', t: 'Espinha dorsal', sub: 'Longas distâncias', d: 'Rádios LoRa levam mensagens curtas por quilômetros. E pessoas em movimento carregam mensagens de um bairro a outro, guardando até encontrar o próximo aparelho. A malha entre roteadores está a caminho.', k: 'on', nodes: [['settings_input_antenna', 'Rádio LoRa'], ['directions_walk', 'Pessoas em movimento'], ['settings_input_antenna', 'Rádio LoRa']] },
       { icon: 'public', t: 'Gateways', sub: 'A internet como atalho', d: 'Um aparelho com internet poderá publicar na rede Lunes as transferências de quem está sem conexão. A lógica já existe e está em teste, mas ainda não chegou ao app. É um atalho opcional, nunca obrigatório.', k: 'test', nodes: [['smartphone', 'Sem internet'], ['cell_tower', 'Gateway'], ['public', 'Lunes']] },
     ],

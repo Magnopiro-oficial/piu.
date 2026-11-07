@@ -1,0 +1,446 @@
+---
+// Central de Ajuda: índice (/ajuda/, /en/help/) e um guia por página (/ajuda/<guia>/, /en/help/<guide>/).
+// Fonte visual: design/handoff/design/PiuAjuda.dc.html. O protótipo usava rotas por hash (#ajuda/guia/n);
+// aqui cada guia é uma página estática e cada passo tem âncora própria (#passo-N / #step-N).
+// Conteúdo: src/i18n/ajuda.{pt,en}.ts; conferência em docs/ajuda/ANALISE.md.
+// Interatividade (busca, "marcar como feito", copiar) no <script> do fim: módulo do Astro, sem script inline (CSP).
+import Base from '../layouts/Base.astro';
+import type { Dict } from '../i18n/pt';
+import type { Guide } from '../i18n/ajuda.pt';
+import AjudaScreen from './AjudaScreen.astro';
+import { url } from '../lib/url';
+import '../styles/ajuda.css';
+
+interface Props { t: Dict; alt: Dict; guide?: string }
+const { t, alt, guide: gid } = Astro.props;
+const a = t.ajuda;
+const U = a.ui;
+const isPt = t.lang.startsWith('pt');
+const home = url(t.path);
+const anchor = isPt ? 'passo-' : 'step-';
+const gHref = (id: string, n?: number) => url(`${a.path}${id}/`) + (n ? `#${anchor}${n}` : '');
+const g: Guide | undefined = gid ? a.guides.find(x => x.id === gid) : undefined;
+if (gid && !g) throw new Error(`guia desconhecido: ${gid}`);
+const meta = g
+  ? { lang: t.lang, path: `${a.path}${g.id}/`, title: `${g.t} · ${a.title}`, description: g.sum }
+  : { lang: t.lang, path: a.path, title: a.title, description: a.description };
+const altMeta = g
+  ? { lang: alt.lang, path: `${alt.ajuda.path}${g.id}/`, title: alt.ajuda.title, description: alt.ajuda.description }
+  : { lang: alt.lang, path: alt.ajuda.path, title: alt.ajuda.title, description: alt.ajuda.description };
+const altHref = url(altMeta.path);
+const link = (href: string) => (href.startsWith('#') ? `${home}${href}` : url(href));
+
+const TIER: Record<string, number> = { 'Fácil': 1, Easy: 1, Amador: 1, Hobbyist: 1, 'Médio': 2, Medium: 2, 'Intermediário': 2, Intermediate: 2, 'Avançado': 3, Advanced: 3, Profissional: 3, Professional: 3 };
+const tier = (l: string) => TIER[l] ?? 1;
+const catName = (id: string) => a.cats.find(c => c.id === id)?.t ?? '';
+const label = (s: string) => s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
+
+// Busca (só no índice): texto normalizado sem acento, no mesmo critério do protótipo.
+const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const index = g ? [] : a.guides.flatMap(x => [
+  { h: gHref(x.id), i: x.icon, t: x.t, s: `${catName(x.cat)} · ${x.time}`, x: norm(`${x.t} ${x.sum}`) },
+  ...x.steps.map((st, i) => ({
+    h: gHref(x.id, i + 1), i: 'subdirectory_arrow_right', t: st.t,
+    s: `${label(x.kind === 'prob' ? U.problem : U.step)} ${i + 1} ${U.inGuide} “${x.t}”`,
+    x: norm(`${st.t} ${st.d} ${st.tip ?? ''} ${st.warn ?? ''} ${(st.tech ?? []).join(' ')}`),
+  })),
+]);
+const searchUi = { results: U.results, result: U.result, doneCount: U.doneCount };
+
+// Guia: próximo da lista (circular, como no protótipo).
+const gi = g ? a.guides.indexOf(g) : -1;
+const next = g ? a.guides[(gi + 1) % a.guides.length] : undefined;
+const prob = g?.kind === 'prob';
+const techLines = (arr: string[]) => arr.slice(1);
+const guideUi = { copied: U.copied, linkCopied: U.linkCopied };
+---
+<Base t={meta} alt={altMeta}>
+  <header class="nav">
+    <div class="wrap nav-in">
+      <a href={home} class="logo" style="font-size:30px" aria-label="Piu">piu<span>.</span></a>
+      <nav class="nav-links" aria-label={U.nav}>
+        <a href={`${home}#como`}>{t.nav.how}</a><a href={url(t.rede.path)}>{t.nav.network}</a><a href={`${home}#privacidade`}>{t.nav.privacy}</a><a href={`${home}#provider`}>{t.nav.provider}</a><a href={`${home}#lunes`}>{t.nav.lunes}</a><a href={`${home}#desktop`}>{t.nav.desktop}</a><a href={`${home}#faq`}>{t.nav.faq}</a><a href={url(a.path)} class="aj-nav-cur" aria-current={g ? 'true' : 'page'}>{t.nav.help}</a>
+      </nav>
+      <div class="lang" role="group" aria-label={t.nav.langLabel}>
+        {isPt ? <span aria-current="true" lang="pt-BR">PT</span> : <a href={altHref} lang="pt-BR" hreflang="pt-BR">PT</a>}
+        {isPt ? <a href={altHref} lang="en" hreflang="en">EN</a> : <span aria-current="true" lang="en">EN</span>}
+      </div>
+      <button type="button" class="icon-btn" data-theme-toggle>
+        <span class="ic only-light" style="font-size:19px" aria-hidden="true">dark_mode</span>
+        <span class="ic only-dark" style="font-size:19px" aria-hidden="true">light_mode</span>
+        <span class="sr-only only-light">{t.nav.themeDark}</span>
+        <span class="sr-only only-dark">{t.nav.themeLight}</span>
+      </button>
+      <a href={`${home}#baixar`} class="pill pill-ink" style="height:40px;padding:0 18px;font-size:14px;flex:none">{t.nav.download}</a>
+    </div>
+  </header>
+
+  {!g && (
+    <main data-aj-index data-ui={JSON.stringify(searchUi)}>
+      <div class="aj-hero">
+        <div class="aj-hero-in">
+          <div class="aj-kick aj-mono aj-up"><span class="aj-ic" style="font-size:16px" aria-hidden="true">support</span>{U.kicker}</div>
+          <h1 class="aj-h1">{U.h1}</h1>
+          <p class="aj-sub">{U.sub}</p>
+          <div class="aj-search" data-aj-searchbox hidden>
+            <span class="aj-ic" aria-hidden="true">search</span>
+            <input type="search" data-aj-q placeholder={U.search} aria-label={U.searchLabel} autocomplete="off" enterkeyhint="search" aria-controls="aj-results" />
+            <button type="button" class="aj-clear" data-aj-clear hidden>{U.clear}</button>
+          </div>
+          <noscript><p class="aj-nojs">{U.noJs}</p></noscript>
+          <div class="aj-pop">
+            <span>{U.popular}</span>
+            {a.popular.map(id => a.guides.find(x => x.id === id)).filter((x): x is Guide => !!x).map(x => (
+              <a href={gHref(x.id)} class="aj-chip"><span class="aj-ic" aria-hidden="true">{x.icon}</span>{x.t}</a>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      <div class="aj-res" id="aj-results" data-aj-results data-index={JSON.stringify(index)} hidden>
+        <div class="aj-mono" data-aj-count role="status" aria-live="polite"></div>
+        <ul data-aj-list></ul>
+        <p class="aj-none" data-aj-none hidden>{U.none}</p>
+      </div>
+
+      <div class="aj-body" data-aj-cats>
+        {a.cats.map((c, ci) => (
+          <section class="aj-cat aj-up" aria-labelledby={`cat-${c.id}`}>
+            <div class="aj-cat-h">
+              <span class="aj-mono">{String(ci + 1).padStart(2, '0')}</span>
+              <h2 id={`cat-${c.id}`}>{c.t}</h2>
+              <p>{c.d}</p>
+            </div>
+            <div class="aj-grid">
+              {a.guides.filter(x => x.cat === c.id).map(x => (
+                <a href={gHref(x.id)} class="aj-card" data-aj-card={x.id} data-total={x.steps.length}>
+                  <div class="aj-card-top">
+                    <span class="aj-ic aj-badge-ic" aria-hidden="true">{x.icon}</span>
+                    <span class="aj-lvl"><span class="aj-bars" aria-hidden="true">{[1, 2, 3].map(n => <span class={n <= tier(x.lvl) ? 'on' : ''}></span>)}</span>{x.lvl}</span>
+                  </div>
+                  <span class="aj-status"><span class={`aj-dot ${x.k}`} aria-hidden="true"></span><span class="sr-only">{U.statusLabel}: </span>{a.status[x.k]}</span>
+                  <span class="aj-card-t">{x.t}</span>
+                  <span class="aj-card-s">{x.sum}</span>
+                  <span class="aj-card-f">
+                    <span class="aj-meta"><span class="aj-ic" aria-hidden="true">schedule</span>{x.time}</span>
+                    <span data-aj-donetxt>{x.steps.length} {U.steps}</span>
+                  </span>
+                  <span class="aj-bar" aria-hidden="true"><div data-aj-pct></div></span>
+                </a>
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    </main>
+  )}
+
+  {g && (
+    <main class="aj-guide" data-aj-guide={g.id} data-anchor={anchor} data-ui={JSON.stringify(guideUi)}>
+      <div class="aj-crumb">
+        <a href={url(a.path)}><span class="aj-ic" aria-hidden="true">arrow_back</span>{U.back}</a>
+        <span style="color:var(--ink3)" aria-hidden="true">/</span><span>{catName(g.cat)}</span>
+      </div>
+
+      <div class="aj-head aj-up">
+        <span class="aj-ic aj-head-ic" aria-hidden="true">{g.icon}</span>
+        <div class="aj-head-tx">
+          <h1>{g.t}</h1>
+          <p>{g.sum}</p>
+          <div class="aj-tags">
+            <span class="aj-tag"><span class={`aj-dot ${g.k}`} aria-hidden="true"></span><span class="sr-only">{U.statusLabel}: </span>{a.status[g.k]}</span>
+            {g.time !== '—' && <span class="aj-tag"><span class="aj-ic" aria-hidden="true">schedule</span>{g.time}</span>}
+            <span class="aj-tag"><span class="aj-bars" aria-hidden="true">{[1, 2, 3].map(n => <span class={n <= tier(g.lvl) ? 'on' : ''}></span>)}</span>{g.lvl}</span>
+            <span class="aj-tag"><span class="aj-ic" aria-hidden="true">format_list_numbered</span>{g.steps.length} {U.steps}</span>
+          </div>
+        </div>
+      </div>
+
+      {g.warn && <div class="aj-box" role="note"><span class="aj-ic" aria-hidden="true">warning</span><p><b>{U.warn}:</b> {g.warn}</p></div>}
+      {g.est && (
+        <div class="aj-box aj-soft" role="note">
+          <span class="aj-ic" aria-hidden="true">straighten</span>
+          <div>
+            <p><b>{U.estTitle}:</b> {U.est}</p>
+            {g.src && (
+              <>
+                <p style="margin-top:10px"><b>{U.sources}:</b></p>
+                <ul class="aj-src">{g.src.map(([l, h]) => <li><a href={h} target="_blank" rel="noopener">{l}</a></li>)}</ul>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      <div class="aj-layout">
+        <aside class="aj-aside">
+          <nav class="aj-prog" aria-label={U.progress}>
+            <div class="aj-prog-h"><span class="aj-mono">{U.progress.toUpperCase()}</span><b data-aj-progtxt>0/{g.steps.length}</b></div>
+            <div class="aj-bar" aria-hidden="true"><div data-aj-pct></div></div>
+            <ol class="aj-idx">
+              {g.steps.map((st, i) => (
+                <li><a href={`#${anchor}${i + 1}`} data-aj-idx={i + 1}><span class="aj-ic" aria-hidden="true">radio_button_unchecked</span><span>{st.t}</span></a></li>
+              ))}
+            </ol>
+            <button type="button" class="aj-reset" data-aj-reset hidden><span class="aj-ic" aria-hidden="true">restart_alt</span>{U.reset}</button>
+          </nav>
+          {g.needs.length > 0 && (
+            <div class="aj-needs">
+              <div class="aj-mono">{U.before.toUpperCase()}</div>
+              <ul>{g.needs.map(nd => <li><span class="aj-ic" aria-hidden="true">check_small</span><span>{nd}</span></li>)}</ul>
+            </div>
+          )}
+        </aside>
+
+        <div class="aj-steps">
+          {g.steps.map((st, i) => {
+            const n = i + 1;
+            const stepLabel = `${prob ? U.problem : U.step} ${n} ${U.of} ${g.steps.length}`;
+            return (
+              <article id={`${anchor}${n}`} class={`aj-step${st.s ? ' has-scr' : ''}`} data-aj-step={n} aria-labelledby={`${anchor}${n}-t`}>
+                <div class="aj-step-tx">
+                  <div class="aj-step-h">
+                    <span class="aj-num" aria-hidden="true"><span class="n">{n}</span><span class="aj-ic">check</span></span>
+                    <span class="aj-mono"><a href={`#${anchor}${n}`} title={U.anchor}>{stepLabel}</a></span>
+                    <button type="button" class="aj-btn icon" data-aj-link={n} aria-label={U.link} title={U.link} hidden><span class="aj-ic" aria-hidden="true">link</span></button>
+                    <button type="button" class="aj-btn" data-aj-done={n} aria-pressed="false" hidden>
+                      <span class="aj-ic off-txt" aria-hidden="true">radio_button_unchecked</span><span class="aj-ic on-txt" aria-hidden="true">check_circle</span>
+                      <span class="off-txt">{prob ? U.markSolved : U.mark}</span><span class="on-txt">{prob ? U.solved : U.done}</span>
+                    </button>
+                  </div>
+                  <h2 id={`${anchor}${n}-t`}>{st.t}</h2>
+                  <p class="aj-step-d">{st.d}</p>
+                  {st.dl && st.dl.length > 0 && (
+                    <div class="aj-dls">
+                      {st.dl.map(d => (
+                        <div class="aj-dl">
+                          <span class="aj-dl-tx"><b>{d.t}</b><span>{d.s || U.soonDl}</span></span>
+                          {d.url
+                            ? <a href={d.url} class="pill pill-ink" rel="noopener"><span class="ic" style="font-size:18px" aria-hidden="true">download</span>{t.nav.download}</a>
+                            : <span class="pill" aria-disabled="true">{U.soonDl}</span>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {st.tip && <div class="aj-note"><span class="aj-ic" aria-hidden="true">lightbulb</span><p><b>{U.tip}:</b> {st.tip}</p></div>}
+                  {st.warn && <div class="aj-note warn"><span class="aj-ic" aria-hidden="true">warning</span><p><b>{U.warn}:</b> {st.warn}</p></div>}
+                  {st.tech && (
+                    <details class="aj-tech">
+                      <summary><span class="aj-ic" aria-hidden="true">terminal</span><span>{U.tech} · {st.tech[0]}</span><span class="aj-ic chev" aria-hidden="true">expand_more</span></summary>
+                      <div class="aj-code">
+                        <button type="button" class="aj-copy" data-aj-copy hidden><span class="aj-ic" aria-hidden="true">content_copy</span><span>{U.copy}</span></button>
+                        <pre>{techLines(st.tech).map(l => <span class={l.startsWith('#') ? 'c' : ''}>{l}{'\n'}</span>)}</pre>
+                      </div>
+                    </details>
+                  )}
+                </div>
+                {st.s && <AjudaScreen s={st.s} caption={U.illus} />}
+              </article>
+            );
+          })}
+
+          {g.tech && (
+            <div class="aj-gtech">
+              <details class="aj-tech">
+                <summary><span class="aj-ic" aria-hidden="true">terminal</span><span>{U.tech} · {g.tech[0]}</span><span class="aj-ic chev" aria-hidden="true">expand_more</span></summary>
+                <div class="aj-code">
+                  <button type="button" class="aj-copy" data-aj-copy hidden><span class="aj-ic" aria-hidden="true">content_copy</span><span>{U.copy}</span></button>
+                  <pre>{techLines(g.tech).map(l => <span class={l.startsWith('#') ? 'c' : ''}>{l}{'\n'}</span>)}</pre>
+                </div>
+              </details>
+            </div>
+          )}
+
+          <div class="aj-end">
+            <div class="aj-mono"><span class="aj-ic" style="font-size:18px" aria-hidden="true">task_alt</span>{U.finish.toUpperCase()}</div>
+            <div class="aj-end-t">{g.fim}</div>
+            <div class="aj-end-a">
+              {next && <a href={gHref(next.id)}><span class="aj-ic" aria-hidden="true">{next.icon}</span>{U.next}: {next.t}</a>}
+              {g.id !== 'troubleshoot' && <a href={gHref('troubleshoot')}><span class="aj-ic" aria-hidden="true">build</span>{U.stuck} {U.stuckLink}</a>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </main>
+  )}
+
+  <footer style="border-top:1px solid var(--line)">
+    <div class="wrap" style="padding-top:48px;padding-bottom:56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px">
+      <div class="col" style="gap:10px">
+        <a href={home} class="logo" style="font-size:40px" aria-label="Piu">piu<span>.</span></a>
+        <div style="font-size:13.5px;color:var(--ink2);line-height:1.5;max-width:260px">{t.footer.tagline}</div>
+      </div>
+      {t.footer.cols.map(col => (
+        <nav class="col" style="gap:10px" aria-label={col.t}>
+          <div class="kicker">{col.t}</div>
+          {col.links.map(([l, href]) => <a href={link(href)} style="font-size:14.5px">{l}</a>)}
+        </nav>
+      ))}
+    </div>
+    <div class="wrap mono" style="padding-bottom:40px;font-size:12px;color:var(--ink2)">{t.footer.legal}</div>
+  </footer>
+  <div class="aj-toast" data-aj-toast role="status" aria-live="polite" hidden></div>
+</Base>
+
+<script>
+  // Tema (mesma chave do resto do site).
+  document.querySelector('[data-theme-toggle]')?.addEventListener('click', () => {
+    const root = document.documentElement;
+    const next = root.dataset.piuTheme === 'dark' ? 'light' : 'dark';
+    root.dataset.piuTheme = next;
+    try { localStorage.setItem('piu-theme', next); } catch { /* modo privado */ }
+  });
+  const nav = document.querySelector<HTMLElement>('.nav');
+  if (nav) {
+    const onScroll = () => nav.classList.toggle('scrolled', scrollY > 8);
+    addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+  }
+
+  // Passos feitos: { guia: [n, …] } no próprio navegador (mesma chave do protótipo). Nada sai do aparelho.
+  const KEY = 'piu-ajuda-feito';
+  type Done = Record<string, number[]>;
+  const load = (): Done => {
+    try { const v = JSON.parse(localStorage.getItem(KEY) || '{}'); return v && typeof v === 'object' ? v : {}; } catch { return {}; }
+  };
+  const save = (d: Done) => { try { localStorage.setItem(KEY, JSON.stringify(d)); } catch { /* modo privado */ } };
+  const doneOf = (d: Done, id: string) => (Array.isArray(d[id]) ? d[id].filter(n => Number.isInteger(n)) : []);
+
+  const toastEl = document.querySelector<HTMLElement>('[data-aj-toast]');
+  let toastT: number | undefined;
+  const toast = (msg: string) => {
+    if (!toastEl) return;
+    toastEl.textContent = msg; toastEl.hidden = false;
+    clearTimeout(toastT); toastT = window.setTimeout(() => { toastEl.hidden = true; }, 1800);
+  };
+  const copyText = async (txt: string) => {
+    try { await navigator.clipboard.writeText(txt); return true; } catch { return false; }
+  };
+
+  // ── índice: busca e progresso dos cartões ──
+  const idx = document.querySelector<HTMLElement>('[data-aj-index]');
+  if (idx) {
+    const ui = JSON.parse(idx.dataset.ui || '{}') as { results: string; result: string; doneCount: string };
+    const done = load();
+    for (const card of idx.querySelectorAll<HTMLElement>('[data-aj-card]')) {
+      const id = card.dataset.ajCard || '';
+      const total = Number(card.dataset.total) || 1;
+      const d = Math.min(doneOf(done, id).length, total);
+      const txt = card.querySelector<HTMLElement>('[data-aj-donetxt]');
+      const pct = card.querySelector<HTMLElement>('[data-aj-pct]');
+      if (d && txt) txt.textContent = `${d}/${total} ${ui.doneCount}`;
+      if (pct) pct.style.width = `${Math.round((d / total) * 100)}%`;
+    }
+
+    const box = idx.querySelector<HTMLElement>('[data-aj-searchbox]');
+    const q = idx.querySelector<HTMLInputElement>('[data-aj-q]');
+    const clear = idx.querySelector<HTMLButtonElement>('[data-aj-clear]');
+    const res = idx.querySelector<HTMLElement>('[data-aj-results]');
+    const list = idx.querySelector<HTMLElement>('[data-aj-list]');
+    const count = idx.querySelector<HTMLElement>('[data-aj-count]');
+    const none = idx.querySelector<HTMLElement>('[data-aj-none]');
+    const cats = idx.querySelector<HTMLElement>('[data-aj-cats]');
+    if (box && q && clear && res && list && count && none && cats) {
+      box.hidden = false;
+      type Entry = { h: string; i: string; t: string; s: string; x: string };
+      const data = JSON.parse(res.dataset.index || '[]') as Entry[];
+      const norm = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const el = (tag: string, cls?: string, text?: string) => {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+      };
+      const run = () => {
+        const term = norm(q.value.trim());
+        clear.hidden = !term;
+        res.hidden = !term;
+        cats.hidden = !!term;
+        if (!term) { list.replaceChildren(); return; }
+        const hits = data.filter(e => e.x.includes(term));
+        count.textContent = `${hits.length} ${(hits.length === 1 ? ui.result : ui.results).toUpperCase()}`;
+        none.hidden = hits.length > 0;
+        list.replaceChildren(...hits.slice(0, 40).map(e => {
+          const li = el('li');
+          const a = el('a') as HTMLAnchorElement;
+          a.href = e.h;
+          const ic = el('span', 'aj-ic aj-res-ic', e.i); ic.setAttribute('aria-hidden', 'true');
+          const tx = el('span', 'aj-res-t');
+          tx.append(el('b', '', e.t), el('span', '', e.s));
+          const ar = el('span', 'aj-ic', 'arrow_forward'); ar.setAttribute('aria-hidden', 'true'); ar.style.color = 'var(--ink2)';
+          a.append(ic, tx, ar);
+          li.append(a);
+          return li;
+        }));
+      };
+      q.addEventListener('input', run);
+      q.addEventListener('keydown', e => { if (e.key === 'Escape') { q.value = ''; run(); } });
+      clear.addEventListener('click', () => { q.value = ''; run(); q.focus(); });
+      if (q.value) run();
+    }
+  }
+
+  // ── guia: marcar passo, progresso, copiar comando e link do passo ──
+  const gEl = document.querySelector<HTMLElement>('[data-aj-guide]');
+  if (gEl) {
+    const id = gEl.dataset.ajGuide || '';
+    const anchor = gEl.dataset.anchor || 'passo-';
+    const ui = JSON.parse(gEl.dataset.ui || '{}') as { copied: string; linkCopied: string };
+    const steps = [...gEl.querySelectorAll<HTMLElement>('[data-aj-step]')];
+    const total = steps.length;
+    const progTxt = gEl.querySelector<HTMLElement>('[data-aj-progtxt]');
+    const pct = gEl.querySelector<HTMLElement>('[data-aj-pct]');
+    const reset = gEl.querySelector<HTMLButtonElement>('[data-aj-reset]');
+    const paint = () => {
+      const d = doneOf(load(), id);
+      for (const st of steps) {
+        const n = Number(st.dataset.ajStep);
+        const on = d.includes(n);
+        st.classList.toggle('is-done', on);
+        st.querySelector('[data-aj-done]')?.setAttribute('aria-pressed', String(on));
+        const ix = gEl.querySelector<HTMLElement>(`[data-aj-idx="${n}"]`);
+        if (ix) { ix.classList.toggle('is-done', on); const ic = ix.querySelector('.aj-ic'); if (ic) ic.textContent = on ? 'check_circle' : 'radio_button_unchecked'; }
+      }
+      const c = steps.filter(st => d.includes(Number(st.dataset.ajStep))).length;
+      if (progTxt) progTxt.textContent = `${c}/${total}`;
+      if (pct) pct.style.width = `${Math.round((c / total) * 100)}%`;
+      if (reset) reset.hidden = c === 0;
+    };
+    for (const b of gEl.querySelectorAll<HTMLButtonElement>('[data-aj-done]')) {
+      b.hidden = false;
+      b.addEventListener('click', () => {
+        const n = Number(b.dataset.ajDone);
+        const all = load();
+        const cur = doneOf(all, id);
+        all[id] = cur.includes(n) ? cur.filter(x => x !== n) : [...cur, n];
+        save(all); paint();
+      });
+    }
+    reset?.addEventListener('click', () => { const all = load(); all[id] = []; save(all); paint(); });
+    for (const b of gEl.querySelectorAll<HTMLButtonElement>('[data-aj-link]')) {
+      b.hidden = false;
+      b.addEventListener('click', async () => {
+        const u = `${location.origin}${location.pathname}#${anchor}${b.dataset.ajLink}`;
+        history.replaceState(null, '', `#${anchor}${b.dataset.ajLink}`);
+        // Sem permissão de área de transferência: mostra o endereço para copiar à mão.
+        toast((await copyText(u)) ? ui.linkCopied : u);
+      });
+    }
+    // Copiar: leva só os comandos (linhas que começam com # são comentários e ficam de fora).
+    for (const b of gEl.querySelectorAll<HTMLButtonElement>('[data-aj-copy]')) {
+      b.hidden = false;
+      const lbl = b.querySelector('span:last-child');
+      const ic = b.querySelector('.aj-ic');
+      const orig = lbl?.textContent || '';
+      b.addEventListener('click', async () => {
+        const pre = b.parentElement?.querySelector('pre');
+        const lines = (pre?.textContent || '').split('\n').filter(l => l && !l.startsWith('#'));
+        if (!(await copyText(lines.join('\n')))) return;
+        if (lbl) lbl.textContent = ui.copied;
+        if (ic) ic.textContent = 'check';
+        setTimeout(() => { if (lbl) lbl.textContent = orig; if (ic) ic.textContent = 'content_copy'; }, 1800);
+      });
+    }
+    paint();
+  }
+</script>

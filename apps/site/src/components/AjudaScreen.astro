@@ -1,0 +1,92 @@
+---
+// Mini tela ilustrativa de um passo (celular, janela ou terminal). Mesmo desenho de PiuAjuda.dc.html.
+// É ilustração: os nomes vêm do app; valores são exemplos neutros (a legenda avisa).
+import type { Scr } from '../i18n/ajuda.pt';
+
+interface Props { s: Scr; caption: string }
+const { s, caption } = Astro.props;
+const isP = s.f === 'p';
+const isT = s.f === 't';
+const hasUrl = !!s.u;
+---
+<figure class="aj-stage" style="margin:0">
+  <div class={`aj-scr ${s.f}`} aria-hidden="true">
+    {isP && (
+      <>
+        <div class="aj-sb"><span>9:41</span><span class="isl"></span><span style="display:flex;gap:3px"><span class="aj-ic">signal_cellular_alt</span><span class="aj-ic">battery_full</span></span></div>
+        {s.t && <div class="aj-ttl"><span class="aj-ic">arrow_back</span><span>{s.t}</span></div>}
+      </>
+    )}
+    {!isP && (
+      <div class="aj-wbar">
+        <span class="aj-dots"><i></i><i></i><i></i></span>
+        {hasUrl ? <span class="aj-url"><span class="aj-ic">lock</span>{s.u}</span> : <span class="aj-wt">{s.t}</span>}
+      </div>
+    )}
+    <div class="aj-sbody">
+      {!isP && !isT && hasUrl && s.t && <div class="aj-wtitle">{s.t}</div>}
+      {s.i.map(it => {
+        const k = it[0];
+        let hl = false;
+        let r = '18px';
+        if (k === 'row' || k === 'tog') hl = !!it[4];
+        if (k === 'btn' || k === 'hold') { hl = !!it[2]; r = k === 'btn' ? '25px' : '28px'; }
+        if (k === 'field') { hl = !!it[3]; r = '16px'; }
+        if (k === 'seg') hl = !!it[4];
+        return (
+          <div class="aj-it">
+            {hl && <div class="aj-hl" style={`border-radius:${r}`}></div>}
+            {it[0] === 'row' && (
+              <div class={`aj-row${it[4] ? ' aj-ring' : ''}`}>
+                <span class="aj-ic">{it[1]}</span>
+                <span class="aj-rt"><b>{it[2]}</b>{it[3] && <span>{it[3]}</span>}</span>
+                {it[5] ? <span class="aj-ic chev">chevron_right</span> : null}
+              </div>
+            )}
+            {it[0] === 'tog' && (
+              <div class={`aj-row${it[4] ? ' aj-ring' : ''}`}>
+                <span class="aj-rt"><b>{it[1]}</b>{it[2] && <span>{it[2]}</span>}</span>
+                <span class={`aj-tog${it[3] ? ' on' : ''}`}></span>
+              </div>
+            )}
+            {it[0] === 'btn' && <div class="aj-sbtn">{it[1]}</div>}
+            {it[0] === 'ghost' && <div class="aj-ghost">{it[1]}</div>}
+            {it[0] === 'hold' && <div class="aj-hold"><span class="aj-ic" style="font-size:19px">touch_app</span><span>{it[1]}</span></div>}
+            {it[0] === 'qr' && <div class="aj-qr"><div><span class="aj-ic">qr_code_2</span></div>{it[1] && <span>{it[1]}</span>}</div>}
+            {it[0] === 'words' && (() => {
+              const ws = it[1];
+              const n12 = ws.length > 6;
+              const sel = it[2];
+              return <div class={`aj-words${n12 ? ' n12' : ''}`}>{ws.map((w, i) => <span class={sel === i ? 'sel' : ''}>{n12 && <i>{i + 1}</i>}{w}</span>)}</div>;
+            })()}
+            {it[0] === 'note' && <div class="aj-snote"><span class="aj-ic">{it[1]}</span><span>{it[2]}</span></div>}
+            {it[0] === 'big' && <div class="aj-big"><span class="aj-ic">{it[1]}</span><b>{it[2]}</b>{it[3] && <span>{it[3]}</span>}</div>}
+            {it[0] === 'prog' && <div class="aj-sprog"><div><span>{it[1]}</span><span>{it[2]}</span></div><div class="aj-bar"><div style={`width:${it[2]}`}></div></div></div>}
+            {it[0] === 'term' && (
+              <div class="aj-term">
+                {it[1].map(l => l.startsWith('$ ') ? <div><span class="p">$</span><span class="i">{l.slice(2)}</span></div> : <div><span class="p">&nbsp;</span><span class="o">{l}</span></div>)}
+              </div>
+            )}
+            {it[0] === 'field' && <div class={`aj-field${it[3] ? ' on' : ''}`}><span>{it[1]}</span><div>{it[2]}</div></div>}
+            {it[0] === 'sys' && (
+              <div class="aj-sys">
+                <span class="logo-sq">piu</span><b>{it[1]}</b><span>{it[2]}</span>
+                <div class="aj-sys-a"><span>{it[3][0]}</span><span>{it[3][1]}</span></div>
+              </div>
+            )}
+            {it[0] === 'code' && <div class="aj-scode">{it[1]}</div>}
+            {it[0] === 'text' && <div class="aj-stext">{it[1]}</div>}
+            {it[0] === 'kick' && <div class="aj-skick">{it[1]}</div>}
+            {it[0] === 'seg' && (
+              <div class={`aj-seg${it[4] ? ' aj-ring' : ''}`}>
+                <b>{it[1]}</b>
+                <div>{it[2].map((o, i) => <span class={i === it[3] ? 'sel' : ''}>{o}</span>)}</div>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  </div>
+  <figcaption>{caption}</figcaption>
+</figure>

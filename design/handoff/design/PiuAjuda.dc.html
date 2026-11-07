@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<style>
+@keyframes ajPing{0%{transform:scale(1);opacity:.55}45%{transform:scale(1.08);opacity:0}100%{transform:scale(1.08);opacity:0}}
+@keyframes ajUp{from{transform:translateY(14px);opacity:0}to{transform:none;opacity:1}}
+</style>
+</helmet>
+<div style="font-family:Geist,system-ui,sans-serif;color:var(--ink);">
+
+  <sc-if value="{{ loading }}" hint-placeholder-val="{{ false }}"><div style="min-height:80vh;"></div></sc-if>
+
+  <sc-if value="{{ isIndex }}" hint-placeholder-val="{{ true }}">
+    <div style="border-bottom:1px solid var(--line);background-image:radial-gradient(var(--dot) 1.2px, transparent 1.4px);background-size:20px 20px;">
+      <div style="max-width:1200px;margin:0 auto;padding:80px 24px 60px;display:flex;flex-direction:column;gap:22px;">
+        <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">support</span>{{ ui.kicker }}</div>
+        <h1 style="margin:0;font-size:clamp(44px,6.4vw,80px);font-weight:700;letter-spacing:-0.055em;line-height:.96;text-wrap:balance;max-width:900px;">{{ ui.h1 }}</h1>
+        <p style="margin:0;font-size:18px;line-height:1.55;color:var(--ink2);max-width:640px;text-wrap:pretty;">{{ ui.sub }}</p>
+        <div style="position:relative;max-width:680px;width:100%;margin-top:8px;">
+          <span style="position:absolute;left:22px;top:50%;transform:translateY(-50%);font-family:'Material Symbols Rounded';font-size:24px;line-height:1;color:var(--ink2);pointer-events:none;">search</span>
+          <input value="{{ q }}" onChange="{{ setQ }}" placeholder="{{ ui.search }}" style="width:100%;height:64px;border:none;border-radius:32px;padding:0 120px 0 58px;background:var(--bg);color:var(--ink);font:500 17px Geist,system-ui,sans-serif;box-shadow:0 0 0 1px var(--line2) inset,0 18px 40px -28px rgba(0,0,0,.35);outline:none;" style-focus="box-shadow:0 0 0 2px var(--ink) inset,0 18px 40px -28px rgba(0,0,0,.35);">
+          <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+            <button onClick="{{ clearQ }}" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);height:44px;padding:0 16px;border:none;border-radius:22px;background:var(--bg2);color:var(--ink);font:600 14px Geist;cursor:pointer;">{{ ui.clear }}</button>
+          </sc-if>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          <span style="font-size:13.5px;color:var(--ink2);margin-right:4px;">{{ ui.popular }}</span>
+          <sc-for list="{{ popular }}" as="p" hint-placeholder-count="4">
+            <a href="{{ p.href }}" style="height:36px;padding:0 14px;border-radius:18px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;gap:7px;font-size:13.5px;font-weight:550;" style-hover="background:var(--bg2);opacity:1;"><span style="font-family:'Material Symbols Rounded';font-size:17px;line-height:1;">{{ p.icon }}</span>{{ p.t }}</a>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <sc-if value="{{ hasQuery }}" hint-placeholder-val="{{ false }}">
+      <div style="max-width:1200px;margin:0 auto;padding:40px 24px 120px;display:flex;flex-direction:column;gap:14px;">
+        <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ resLabel }}</div>
+        <div style="display:flex;flex-direction:column;border-top:1px solid var(--line);">
+          <sc-for list="{{ results }}" as="r" hint-placeholder-count="4">
+            <a href="{{ r.href }}" style="display:flex;align-items:center;gap:16px;padding:18px 4px;border-bottom:1px solid var(--line);" style-hover="background:var(--bg2);opacity:1;">
+              <span style="width:44px;height:44px;border-radius:14px;background:var(--bg2);display:flex;align-items:center;justify-content:center;flex:none;font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">{{ r.icon }}</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:3px;"><span style="font-size:17px;font-weight:650;letter-spacing:-0.01em;">{{ r.t }}</span><span style="font-size:14px;color:var(--ink2);">{{ r.sub }}</span></span>
+              <span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;color:var(--ink2);">arrow_forward</span>
+            </a>
+          </sc-for>
+        </div>
+        <sc-if value="{{ noResults }}" hint-placeholder-val="{{ false }}">
+          <div style="padding:40px 0;font-size:17px;color:var(--ink2);">{{ ui.none }}</div>
+        </sc-if>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ noQuery }}" hint-placeholder-val="{{ true }}">
+      <div style="max-width:1200px;margin:0 auto;padding:64px 24px 120px;display:flex;flex-direction:column;gap:72px;">
+        <sc-for list="{{ cats }}" as="c" hint-placeholder-count="5">
+          <section style="display:flex;flex-direction:column;gap:22px;animation:ajUp .5s cubic-bezier(.2,.85,.3,1) both;">
+            <div style="display:flex;align-items:baseline;gap:16px;flex-wrap:wrap;">
+              <span style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ c.n }}</span>
+              <h2 style="margin:0;font-size:clamp(28px,3.4vw,40px);font-weight:700;letter-spacing:-0.045em;line-height:1.02;">{{ c.t }}</h2>
+              <span style="font-size:15px;color:var(--ink2);">{{ c.d }}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,270px),1fr));gap:12px;">
+              <sc-for list="{{ c.guides }}" as="g" hint-placeholder-count="3">
+                <a href="{{ g.href }}" style="padding:24px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:14px;min-height:232px;transition:background .2s;" style-hover="background:var(--bg2);opacity:1;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;">
+                    <span style="width:48px;height:48px;border-radius:16px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:25px;line-height:1;font-variation-settings:'wght' 300;">{{ g.icon }}</span>
+                    <span style="display:flex;align-items:center;gap:8px;font:500 11.5px 'Geist Mono',monospace;color:var(--ink2);">
+                      <span style="display:flex;gap:3px;align-items:flex-end;"><sc-for list="{{ g.bars }}" as="b" hint-placeholder-count="3"><span style="width:5px;height:{{ b.h }};border-radius:2px;background:{{ b.bg }};"></span></sc-for></span>
+                      {{ g.lvl }}
+                    </span>
+                  </div>
+                  <div style="font-size:19px;font-weight:650;letter-spacing:-0.02em;line-height:1.2;text-wrap:balance;">{{ g.t }}</div>
+                  <div style="font-size:14.5px;line-height:1.5;color:var(--ink2);text-wrap:pretty;">{{ g.sum }}</div>
+                  <div style="flex:1;"></div>
+                  <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;font:500 12px 'Geist Mono',monospace;color:var(--ink2);">
+                    <span style="display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">schedule</span>{{ g.time }}</span>
+                    <span>{{ g.doneTxt }}</span>
+                  </div>
+                  <div style="height:4px;border-radius:2px;background:var(--bg3);overflow:hidden;"><div style="width:{{ g.pct }};height:100%;background:var(--ink);border-radius:2px;transition:width .4s;"></div></div>
+                </a>
+              </sc-for>
+            </div>
+          </section>
+        </sc-for>
+      </div>
+    </sc-if>
+  </sc-if>
+
+  <sc-if value="{{ isGuide }}" hint-placeholder-val="{{ false }}">
+    <div style="max-width:1200px;margin:0 auto;padding:36px 24px 120px;display:flex;flex-direction:column;gap:40px;">
+      <div style="display:flex;align-items:center;gap:8px;font-size:14px;color:var(--ink2);flex-wrap:wrap;">
+        <a href="{{ homeHref }}" style="display:flex;align-items:center;gap:6px;color:var(--ink);font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">arrow_back</span>{{ ui.back }}</a>
+        <span style="color:var(--ink3);">/</span><span>{{ g.cat }}</span>
+      </div>
+
+      <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;animation:ajUp .5s cubic-bezier(.2,.85,.3,1) both;">
+        <span style="width:72px;height:72px;border-radius:24px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;flex:none;font-family:'Material Symbols Rounded';font-size:36px;line-height:1;font-variation-settings:'wght' 300;">{{ g.icon }}</span>
+        <div style="flex:1 1 420px;display:flex;flex-direction:column;gap:14px;min-width:0;">
+          <h1 style="margin:0;font-size:clamp(34px,4.8vw,60px);font-weight:700;letter-spacing:-0.05em;line-height:1;text-wrap:balance;">{{ g.t }}</h1>
+          <p style="margin:0;font-size:18px;line-height:1.5;color:var(--ink2);max-width:720px;text-wrap:pretty;">{{ g.sum }}</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <span style="height:32px;padding:0 12px;border-radius:16px;background:var(--bg2);display:flex;align-items:center;gap:6px;font:500 12px 'Geist Mono',monospace;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">schedule</span>{{ g.time }}</span>
+            <span style="height:32px;padding:0 12px;border-radius:16px;background:var(--bg2);display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;"><span style="display:flex;gap:3px;align-items:flex-end;"><sc-for list="{{ g.bars }}" as="b" hint-placeholder-count="3"><span style="width:5px;height:{{ b.h }};border-radius:2px;background:{{ b.bg }};"></span></sc-for></span>{{ g.lvl }}</span>
+            <span style="height:32px;padding:0 12px;border-radius:16px;background:var(--bg2);display:flex;align-items:center;gap:6px;font:500 12px 'Geist Mono',monospace;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">format_list_numbered</span>{{ g.nSteps }}</span>
+          </div>
+        </div>
+      </div>
+
+      <sc-if value="{{ g.hasWarn }}" hint-placeholder-val="{{ false }}">
+        <div style="display:flex;gap:12px;padding:18px 20px;border-radius:20px;box-shadow:0 0 0 1.5px var(--ink) inset;font-size:15px;line-height:1.5;"><span style="font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">warning</span><span><b>{{ ui.warn }}:</b> {{ g.warn }}</span></div>
+      </sc-if>
+
+      <div style="display:flex;gap:40px;align-items:flex-start;flex-wrap:wrap;">
+        <aside style="flex:1 1 260px;max-width:340px;position:sticky;top:96px;display:flex;flex-direction:column;gap:14px;">
+          <div style="padding:22px;border-radius:24px;background:var(--bg2);display:flex;flex-direction:column;gap:12px;">
+            <div style="display:flex;justify-content:space-between;align-items:baseline;gap:8px;"><span style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ g.progLabel }}</span><span style="font-size:22px;font-weight:700;letter-spacing:-0.03em;">{{ g.progTxt }}</span></div>
+            <div style="height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="width:{{ g.pct }};height:100%;background:var(--ink);border-radius:3px;transition:width .4s;"></div></div>
+            <div style="display:flex;flex-direction:column;margin-top:6px;">
+              <sc-for list="{{ g.index }}" as="x" hint-placeholder-count="5">
+                <a href="{{ x.href }}" style="display:flex;gap:10px;align-items:flex-start;padding:8px 0;font-size:14px;line-height:1.35;color:{{ x.fg }};"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;flex:none;">{{ x.icon }}</span><span>{{ x.t }}</span></a>
+              </sc-for>
+            </div>
+            <sc-if value="{{ g.hasProg }}" hint-placeholder-val="{{ false }}">
+              <button onClick="{{ g.reset }}" style="align-self:flex-start;height:34px;padding:0 12px;border:none;border-radius:17px;background:transparent;box-shadow:0 0 0 1px var(--line2) inset;color:var(--ink2);font:500 13px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;">restart_alt</span>{{ ui.reset }}</button>
+            </sc-if>
+          </div>
+          <sc-if value="{{ g.hasNeeds }}" hint-placeholder-val="{{ true }}">
+            <div style="padding:22px;border-radius:24px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:12px;">
+              <div style="font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ ui.beforeUp }}</div>
+              <sc-for list="{{ g.needs }}" as="nd" hint-placeholder-count="3">
+                <div style="display:flex;gap:10px;font-size:14.5px;line-height:1.45;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1.2;flex:none;">check_small</span><span style="text-wrap:pretty;">{{ nd.t }}</span></div>
+              </sc-for>
+            </div>
+          </sc-if>
+        </aside>
+
+        <div style="flex:999 1 560px;min-width:0;display:flex;flex-direction:column;gap:16px;">
+          <sc-for list="{{ g.steps }}" as="st" hint-placeholder-count="4">
+            <div id="{{ st.id }}" style="scroll-margin-top:96px;padding:clamp(20px,3vw,32px);border-radius:28px;background:{{ st.cardBg }};box-shadow:0 0 0 1px var(--line2) inset;display:grid;grid-template-columns:{{ st.cols }};gap:28px;align-items:start;transition:background .3s;">
+              <div style="display:flex;flex-direction:column;gap:14px;min-width:0;">
+                <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+                  <sc-if value="{{ st.isDone }}" hint-placeholder-val="{{ false }}"><span style="width:40px;height:40px;border-radius:20px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;flex:none;font-family:'Material Symbols Rounded';font-size:22px;line-height:1;">check</span></sc-if>
+                  <sc-if value="{{ st.notDone }}" hint-placeholder-val="{{ true }}"><span style="width:40px;height:40px;border-radius:20px;box-shadow:0 0 0 1.5px var(--ink) inset;display:flex;align-items:center;justify-content:center;flex:none;font:650 16px Geist;">{{ st.n }}</span></sc-if>
+                  <span style="flex:1;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);">{{ st.label }}</span>
+                  <button onClick="{{ st.toggleDone }}" style="height:36px;padding:0 14px 0 10px;border:none;border-radius:18px;background:{{ st.doneBg }};color:{{ st.doneFg }};box-shadow:0 0 0 1px var(--line2) inset;font:600 13px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;transition:background .2s,color .2s;"><span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">{{ st.doneIcon }}</span>{{ st.doneLabel }}</button>
+                </div>
+                <h3 style="margin:0;font-size:clamp(22px,2.4vw,28px);font-weight:700;letter-spacing:-0.035em;line-height:1.1;text-wrap:balance;">{{ st.t }}</h3>
+                <p style="margin:0;font-size:16.5px;line-height:1.6;color:var(--ink2);text-wrap:pretty;max-width:620px;">{{ st.d }}</p>
+                <sc-if value="{{ st.hasTip }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:12px;padding:14px 16px;border-radius:18px;background:var(--bg2);font-size:14.5px;line-height:1.5;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1.1;flex:none;">lightbulb</span><span style="text-wrap:pretty;"><b>{{ ui.tip }}:</b> {{ st.tip }}</span></div>
+                </sc-if>
+                <sc-if value="{{ st.hasWarn }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;gap:12px;padding:14px 16px;border-radius:18px;box-shadow:0 0 0 1.5px var(--ink) inset;font-size:14.5px;line-height:1.5;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1.1;flex:none;">warning</span><span style="text-wrap:pretty;"><b>{{ ui.warn }}:</b> {{ st.warn }}</span></div>
+                </sc-if>
+                <sc-if value="{{ st.hasTech }}" hint-placeholder-val="{{ false }}">
+                  <div style="display:flex;flex-direction:column;gap:10px;">
+                    <button onClick="{{ st.toggleTech }}" style="align-self:flex-start;height:36px;padding:0 12px 0 10px;border:none;border-radius:18px;background:transparent;box-shadow:0 0 0 1px var(--line2) inset;color:var(--ink);font:600 13px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">terminal</span>{{ ui.tech }} · {{ st.techT }}<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;transform:rotate({{ st.techRot }});transition:transform .2s;">expand_more</span></button>
+                    <sc-if value="{{ st.techOpen }}" hint-placeholder-val="{{ false }}">
+                      <div style="position:relative;padding:16px 18px;border-radius:18px;background:#0c0c0c;color:#f4f4f2;font:400 13px/1.7 'Geist Mono',monospace;overflow-x:auto;animation:ajUp .25s both;">
+                        <button onClick="{{ st.copy }}" style="position:absolute;top:10px;right:10px;height:30px;padding:0 10px;border:none;border-radius:15px;background:rgba(255,255,255,.12);color:#f4f4f2;font:500 12px Geist;cursor:pointer;display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">{{ st.copyIcon }}</span>{{ st.copyLabel }}</button>
+                        <sc-for list="{{ st.lines }}" as="ln" hint-placeholder-count="3">
+                          <div style="white-space:pre;padding-right:84px;color:{{ ln.c }};">{{ ln.l }}</div>
+                        </sc-for>
+                      </div>
+                    </sc-if>
+                  </div>
+                </sc-if>
+              </div>
+
+              <sc-if value="{{ st.hasScr }}" hint-placeholder-val="{{ false }}">
+                <div style="display:flex;justify-content:center;align-items:center;padding:24px 16px;border-radius:22px;background:var(--bg2);min-width:0;">
+                  <div style="width:{{ st.scr.w }};max-width:100%;min-height:{{ st.scr.minH }};border-radius:{{ st.scr.radius }};background:{{ st.scr.bg }};color:{{ st.scr.fg }};box-shadow:{{ st.scr.shadow }};padding:{{ st.scr.pad }};display:flex;flex-direction:column;gap:9px;overflow:hidden;">
+                    <sc-if value="{{ st.scr.isPhone }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;justify-content:space-between;align-items:center;padding:4px 8px 0;font:600 11px Geist;"><span>9:41</span><span style="width:56px;height:14px;border-radius:7px;background:var(--ink);"></span><span style="display:flex;gap:3px;font-family:'Material Symbols Rounded';font-size:13px;line-height:1;"><span>signal_cellular_alt</span><span>battery_full</span></span></div>
+                      <sc-if value="{{ st.scr.hasTitle }}" hint-placeholder-val="{{ true }}">
+                        <div style="display:flex;align-items:center;gap:8px;padding:6px 2px 4px;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">arrow_back</span><span style="font-size:15px;font-weight:650;letter-spacing:-0.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ st.scr.title }}</span></div>
+                      </sc-if>
+                    </sc-if>
+                    <sc-if value="{{ st.scr.isWin }}" hint-placeholder-val="{{ false }}">
+                      <div style="display:flex;align-items:center;gap:10px;height:38px;padding:0 12px;background:{{ st.scr.barBg }};border-bottom:1px solid {{ st.scr.barLine }};">
+                        <span style="display:flex;gap:6px;"><span style="width:10px;height:10px;border-radius:5px;background:{{ st.scr.dot }};"></span><span style="width:10px;height:10px;border-radius:5px;background:{{ st.scr.dot }};"></span><span style="width:10px;height:10px;border-radius:5px;background:{{ st.scr.dot }};"></span></span>
+                        <sc-if value="{{ st.scr.hasUrl }}" hint-placeholder-val="{{ false }}"><span style="flex:1;min-width:0;height:24px;padding:0 10px;border-radius:12px;background:{{ st.scr.urlBg }};display:flex;align-items:center;gap:5px;font:500 11px 'Geist Mono',monospace;white-space:nowrap;overflow:hidden;"><span style="font-family:'Material Symbols Rounded';font-size:13px;line-height:1;">lock</span>{{ st.scr.url }}</span></sc-if>
+                        <sc-if value="{{ st.scr.noUrl }}" hint-placeholder-val="{{ true }}"><span style="flex:1;text-align:center;font-size:12px;font-weight:600;padding-right:40px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ st.scr.title }}</span></sc-if>
+                      </div>
+                    </sc-if>
+                    <div style="display:flex;flex-direction:column;gap:9px;padding:{{ st.scr.bodyPad }};flex:1;">
+                      <sc-if value="{{ st.scr.winTitle }}" hint-placeholder-val="{{ false }}"><div style="font-size:16px;font-weight:700;letter-spacing:-0.02em;padding:2px 2px 4px;">{{ st.scr.title }}</div></sc-if>
+                      <sc-for list="{{ st.scr.items }}" as="it" hint-placeholder-count="3">
+                        <div style="position:relative;margin-top:{{ it.mt }};">
+                          <sc-if value="{{ it.hl }}" hint-placeholder-val="{{ false }}"><div style="position:absolute;inset:-4px;border-radius:{{ it.r }};border:2px solid currentColor;animation:ajPing 2.4s ease-out infinite;pointer-events:none;"></div></sc-if>
+
+                          <sc-if value="{{ it.isRow }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--bg2);box-shadow:{{ it.ring }};">
+                              <span style="font-family:'Material Symbols Rounded';font-size:19px;line-height:1;flex:none;font-variation-settings:'wght' 350;">{{ it.icon }}</span>
+                              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;"><span style="font-size:12.5px;font-weight:620;line-height:1.25;">{{ it.t }}</span><sc-if value="{{ it.hasS }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;color:var(--ink2);line-height:1.3;">{{ it.s }}</span></sc-if></span>
+                              <sc-if value="{{ it.chev }}" hint-placeholder-val="{{ false }}"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;color:var(--ink2);">chevron_right</span></sc-if>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isTog }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:14px;background:var(--bg2);box-shadow:{{ it.ring }};">
+                              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px;"><span style="font-size:12.5px;font-weight:620;line-height:1.25;">{{ it.t }}</span><sc-if value="{{ it.hasS }}" hint-placeholder-val="{{ true }}"><span style="font-size:11px;color:var(--ink2);">{{ it.s }}</span></sc-if></span>
+                              <span style="position:relative;width:34px;height:20px;border-radius:10px;background:{{ it.togBg }};flex:none;"><span style="position:absolute;top:2px;left:{{ it.knobL }};width:16px;height:16px;border-radius:8px;background:{{ it.knobBg }};box-shadow:0 1px 2px rgba(0,0,0,.25);"></span></span>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isBtn }}" hint-placeholder-val="{{ false }}">
+                            <div style="height:42px;border-radius:21px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:650;padding:0 14px;text-align:center;">{{ it.t }}</div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isGhost }}" hint-placeholder-val="{{ false }}">
+                            <div style="height:40px;border-radius:20px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:600;">{{ it.t }}</div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isHold }}" hint-placeholder-val="{{ false }}">
+                            <div style="position:relative;height:48px;border-radius:24px;background:var(--ink);color:var(--invink);overflow:hidden;display:flex;align-items:center;justify-content:center;gap:8px;font-size:13px;font-weight:650;">
+                              <span style="position:absolute;left:0;top:0;bottom:0;width:58%;background:var(--invink);opacity:.2;"></span>
+                              <span style="position:relative;font-family:'Material Symbols Rounded';font-size:19px;line-height:1;">touch_app</span><span style="position:relative;">{{ it.t }}</span>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isQr }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;flex-direction:column;align-items:center;gap:8px;padding:6px 0;">
+                              <div style="width:148px;height:148px;border-radius:18px;background:#ffffff;color:#0c0c0c;box-shadow:0 0 0 1px rgba(0,0,0,.08);display:flex;align-items:center;justify-content:center;"><span style="font-family:'Material Symbols Rounded';font-size:128px;line-height:1;font-variation-settings:'wght' 500;">qr_code_2</span></div>
+                              <sc-if value="{{ it.hasT }}" hint-placeholder-val="{{ true }}"><span style="font:500 11px 'Geist Mono',monospace;opacity:.75;">{{ it.t }}</span></sc-if>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isWords }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:grid;grid-template-columns:{{ it.cols }};gap:6px;">
+                              <sc-for list="{{ it.words }}" as="w" hint-placeholder-count="4">
+                                <span style="height:32px;border-radius:10px;background:{{ w.bg }};color:{{ w.fg }};display:flex;align-items:center;gap:5px;padding:0 8px;font-size:12px;font-weight:600;justify-content:{{ w.jc }};"><sc-if value="{{ w.hasN }}" hint-placeholder-val="{{ false }}"><span style="font:500 9.5px 'Geist Mono',monospace;opacity:.55;">{{ w.n }}</span></sc-if>{{ w.w }}</span>
+                              </sc-for>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isNote }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;gap:8px;padding:10px 12px;border-radius:14px;box-shadow:0 0 0 1px var(--line2) inset;font-size:11.5px;line-height:1.4;color:var(--ink2);"><span style="font-family:'Material Symbols Rounded';font-size:16px;line-height:1;flex:none;color:var(--ink);">{{ it.icon }}</span><span>{{ it.t }}</span></div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isBig }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;padding:18px 6px 10px;">
+                              <span style="width:64px;height:64px;border-radius:22px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font-family:'Material Symbols Rounded';font-size:32px;line-height:1;font-variation-settings:'wght' 300;">{{ it.icon }}</span>
+                              <span style="font-size:15px;font-weight:700;letter-spacing:-0.02em;line-height:1.2;text-wrap:balance;">{{ it.t }}</span>
+                              <sc-if value="{{ it.hasS }}" hint-placeholder-val="{{ true }}"><span style="font-size:11.5px;color:var(--ink2);">{{ it.s }}</span></sc-if>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isProg }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;flex-direction:column;gap:7px;padding:10px 12px;border-radius:14px;background:var(--bg2);">
+                              <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;"><span>{{ it.t }}</span><span style="font-family:'Geist Mono',monospace;font-weight:500;color:var(--ink2);">{{ it.pct }}</span></div>
+                              <div style="height:6px;border-radius:3px;background:var(--bg3);overflow:hidden;"><div style="width:{{ it.pct }};height:100%;border-radius:3px;background:var(--ink);"></div></div>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isTerm }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;flex-direction:column;gap:2px;font:400 11.5px/1.6 'Geist Mono',monospace;">
+                              <sc-for list="{{ it.lines }}" as="tl" hint-placeholder-count="3">
+                                <div style="display:flex;gap:8px;"><span style="color:#8a8a86;flex:none;">{{ tl.p }}</span><span style="word-break:break-all;color:{{ tl.c }};">{{ tl.t }}</span></div>
+                              </sc-for>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isField }}" hint-placeholder-val="{{ false }}">
+                            <div style="display:flex;flex-direction:column;gap:4px;">
+                              <span style="font-size:10.5px;font-weight:600;color:var(--ink2);padding-left:4px;">{{ it.l }}</span>
+                              <div style="height:38px;border-radius:12px;background:var(--bg);box-shadow:{{ it.fieldRing }};display:flex;align-items:center;padding:0 12px;font-size:12.5px;font-weight:550;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ it.v }}</div>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isSys }}" hint-placeholder-val="{{ false }}">
+                            <div style="margin-top:150px;padding:20px 18px 14px;border-radius:24px;background:var(--bg);box-shadow:0 0 0 1px var(--line2),0 18px 40px -18px rgba(0,0,0,.4);display:flex;flex-direction:column;gap:10px;">
+                              <span style="width:40px;height:40px;border-radius:12px;background:var(--ink);color:var(--invink);display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:750;letter-spacing:-0.07em;">piu</span>
+                              <span style="font-size:15px;font-weight:650;line-height:1.25;">{{ it.t }}</span>
+                              <span style="font-size:12px;color:var(--ink2);">{{ it.s }}</span>
+                              <div style="display:flex;justify-content:flex-end;gap:6px;margin-top:6px;">
+                                <span style="height:34px;padding:0 12px;display:flex;align-items:center;font-size:13px;font-weight:600;color:var(--ink2);">{{ it.a }}</span>
+                                <span style="position:relative;height:34px;padding:0 14px;border-radius:17px;background:var(--ink);color:var(--invink);display:flex;align-items:center;font-size:13px;font-weight:650;"><span style="position:absolute;inset:-4px;border-radius:21px;border:2px solid var(--ink);animation:ajPing 2.4s ease-out infinite;"></span>{{ it.b }}</span>
+                              </div>
+                            </div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isCode }}" hint-placeholder-val="{{ false }}">
+                            <div style="padding:12px;border-radius:14px;box-shadow:0 0 0 1.5px currentColor inset;text-align:center;font:600 16px 'Geist Mono',monospace;letter-spacing:.08em;">{{ it.t }}</div>
+                          </sc-if>
+
+                          <sc-if value="{{ it.isText }}" hint-placeholder-val="{{ false }}">
+                            <div style="font-size:12px;line-height:1.45;color:var(--ink2);text-align:center;padding:2px 6px;">{{ it.t }}</div>
+                          </sc-if>
+                        </div>
+                      </sc-for>
+                    </div>
+                  </div>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+
+          <sc-if value="{{ g.hasTech }}" hint-placeholder-val="{{ false }}">
+            <div style="padding:24px 28px;border-radius:28px;box-shadow:0 0 0 1px var(--line2) inset;display:flex;flex-direction:column;gap:12px;">
+              <button onClick="{{ g.toggleTech }}" style="align-self:flex-start;height:36px;padding:0 12px 0 10px;border:none;border-radius:18px;background:transparent;box-shadow:0 0 0 1px var(--line2) inset;color:var(--ink);font:600 13px Geist;cursor:pointer;display:flex;align-items:center;gap:6px;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">terminal</span>{{ ui.tech }} · {{ g.techT }}<span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;transform:rotate({{ g.techRot }});transition:transform .2s;">expand_more</span></button>
+              <sc-if value="{{ g.techOpen }}" hint-placeholder-val="{{ false }}">
+                <div style="position:relative;padding:16px 18px;border-radius:18px;background:#0c0c0c;color:#f4f4f2;font:400 13px/1.7 'Geist Mono',monospace;overflow-x:auto;animation:ajUp .25s both;">
+                  <button onClick="{{ g.copy }}" style="position:absolute;top:10px;right:10px;height:30px;padding:0 10px;border:none;border-radius:15px;background:rgba(255,255,255,.12);color:#f4f4f2;font:500 12px Geist;cursor:pointer;display:flex;align-items:center;gap:5px;"><span style="font-family:'Material Symbols Rounded';font-size:15px;line-height:1;">{{ g.copyIcon }}</span>{{ g.copyLabel }}</button>
+                  <sc-for list="{{ g.lines }}" as="ln" hint-placeholder-count="3"><div style="white-space:pre;padding-right:84px;color:{{ ln.c }};">{{ ln.l }}</div></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-if>
+
+          <div style="margin-top:12px;padding:clamp(28px,4vw,44px);border-radius:32px;background:var(--ink);color:var(--invink);display:flex;flex-direction:column;gap:18px;">
+            <div style="display:flex;align-items:center;gap:10px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;opacity:.7;"><span style="font-family:'Material Symbols Rounded';font-size:18px;line-height:1;">task_alt</span>{{ ui.finishUp }}</div>
+            <div style="font-size:clamp(24px,2.8vw,34px);font-weight:700;letter-spacing:-0.04em;line-height:1.12;text-wrap:balance;max-width:720px;">{{ g.fim }}</div>
+            <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;">
+              <a href="{{ g.next.href }}" style="height:50px;padding:0 20px;border-radius:25px;background:var(--invink);color:var(--ink);display:flex;align-items:center;gap:10px;font-size:15px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">{{ g.next.icon }}</span>{{ ui.next }}: {{ g.next.t }}</a>
+              <sc-if value="{{ g.showStuck }}" hint-placeholder-val="{{ true }}">
+                <a href="{{ stuckHref }}" style="height:50px;padding:0 20px;border-radius:25px;box-shadow:0 0 0 1px rgba(127,127,127,.5) inset;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:600;"><span style="font-family:'Material Symbols Rounded';font-size:20px;line-height:1;">build</span>{{ ui.stuck }} {{ ui.stuckLink }}</a>
+              </sc-if>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;lang&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;pt&quot;,&quot;en&quot;],&quot;default&quot;:&quot;pt&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;route&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;ajuda&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  state = { q: '', done: {}, tech: {}, copied: null, ready: !!window.__piuAjudaReady };
+  componentDidMount() {
+    try { this.setState({ done: JSON.parse(localStorage.getItem('piu-ajuda-feito') || '{}') || {} }); } catch (e) {}
+    this._lastRoute = this.props.route; this._wasReady = this.state.ready;
+    this.load();
+    this.scrollFor(this.props.route, true);
+  }
+  componentDidUpdate(prev) {
+    const route = this.props.route;
+    const rc = this._lastRoute !== undefined && this._lastRoute !== route;
+    const rd = this.state.ready && !this._wasReady;
+    this._lastRoute = route; this._wasReady = this.state.ready;
+    if (rc) this.scrollFor(route, false);
+    else if (rd) this.scrollFor(route, true);
+  }
+  componentWillUnmount() { clearTimeout(this.cpT); clearTimeout(this.scT); }
+  load() {
+    if (window.__piuAjudaReady) { if (!this.state.ready) this.setState({ ready: true }); return; }
+    const add = (src, cb) => {
+      let el = document.querySelector('script[data-piu="' + src + '"]');
+      if (el) { if (el.dataset.ok) cb(); else el.addEventListener('load', cb); return; }
+      el = document.createElement('script'); el.src = src; el.dataset.piu = src;
+      el.onload = () => { el.dataset.ok = '1'; cb(); };
+      document.head.appendChild(el);
+    };
+    add('piu-ajuda-dados.js', () => add('piu-ajuda-antenas.js', () => { window.__piuAjudaReady = true; this.setState({ ready: true }); }));
+  }
+  scrollFor(route, first) {
+    clearTimeout(this.scT);
+    const parts = String(route || '').split('/');
+    const n = parts[2];
+    if (!n) { window.scrollTo({ top: 0, behavior: 'instant' }); return; }
+    let tries = 0;
+    const go = () => {
+      const el = document.getElementById('passo-' + n);
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY - 90, behavior: first ? 'instant' : 'smooth' });
+      else if (tries++ < 40) this.scT = setTimeout(go, 50);
+    };
+    go();
+  }
+  saveDone(done) { this.setState({ done }); try { localStorage.setItem('piu-ajuda-feito', JSON.stringify(done)); } catch (e) {} }
+  copy(key, lines) {
+    const txt = lines.filter(l => l.indexOf('#') !== 0).join('\n');
+    try { navigator.clipboard.writeText(txt); } catch (e) {}
+    clearTimeout(this.cpT); this.setState({ copied: key });
+    this.cpT = setTimeout(() => this.setState({ copied: null }), 1800);
+  }
+  screen(sc) {
+    if (!sc) return null;
+    const isP = sc.f === 'p', isT = sc.f === 't', isW = sc.f === 'w' || isT;
+    const RING = '0 0 0 2px currentColor';
+    const items = sc.i.map((it, j) => {
+      const k = it[0];
+      const o = { mt: '0px', hl: false, r: '18px', ring: 'none', isRow: k === 'row', isTog: k === 'tog', isBtn: k === 'btn', isGhost: k === 'ghost', isHold: k === 'hold', isQr: k === 'qr', isWords: k === 'words', isNote: k === 'note', isBig: k === 'big', isProg: k === 'prog', isTerm: k === 'term', isField: k === 'field', isSys: k === 'sys', isCode: k === 'code', isText: k === 'text' };
+      if (k === 'row') Object.assign(o, { icon: it[1], t: it[2], s: it[3] || '', hasS: !!it[3], hl: !!it[4], chev: !!it[5], r: '18px' });
+      if (k === 'tog') Object.assign(o, { t: it[1], s: it[2] || '', hasS: !!it[2], hl: !!it[4], r: '18px', togBg: it[3] ? 'var(--ink)' : 'var(--bg3)', knobL: it[3] ? '16px' : '2px', knobBg: it[3] ? 'var(--invink)' : 'var(--bg)' });
+      if (k === 'btn') Object.assign(o, { t: it[1], hl: !!it[2], r: '25px', mt: '4px' });
+      if (k === 'ghost') Object.assign(o, { t: it[1] });
+      if (k === 'hold') Object.assign(o, { t: it[1], hl: !!it[2], r: '28px', mt: '4px' });
+      if (k === 'qr') Object.assign(o, { t: it[1] || '', hasT: !!it[1] });
+      if (k === 'words') { const ws = it[1], twelve = ws.length > 6; Object.assign(o, { cols: twelve ? 'repeat(3,minmax(0,1fr))' : 'repeat(2,minmax(0,1fr))', words: ws.map((w, i) => ({ w, n: String(i + 1), hasN: twelve, jc: twelve ? 'flex-start' : 'center', bg: it[2] === i ? 'var(--ink)' : 'var(--bg2)', fg: it[2] === i ? 'var(--invink)' : 'var(--ink)' })) }); }
+      if (k === 'note') Object.assign(o, { icon: it[1], t: it[2] });
+      if (k === 'big') Object.assign(o, { icon: it[1], t: it[2], s: it[3] || '', hasS: !!it[3] });
+      if (k === 'prog') Object.assign(o, { t: it[1], pct: it[2] });
+      if (k === 'term') Object.assign(o, { lines: it[1].map(l => l.indexOf('$ ') === 0 ? { p: '$', t: l.slice(2), c: '#f4f4f2' } : { p: ' ', t: l, c: '#a2a29e' }) });
+      if (k === 'field') Object.assign(o, { l: it[1], v: it[2], hl: !!it[3], r: '16px', fieldRing: it[3] ? '0 0 0 2px var(--ink) inset' : '0 0 0 1px var(--line2) inset' });
+      if (k === 'sys') Object.assign(o, { t: it[1], s: it[2], a: it[3][0], b: it[3][1] });
+      if (k === 'code') Object.assign(o, { t: it[1] });
+      if (k === 'text') Object.assign(o, { t: it[1] });
+      if (o.hl && (o.isRow || o.isTog)) o.ring = RING;
+      return o;
+    });
+    return {
+      isPhone: isP, isWin: isW, isTerm: isT, title: sc.t || '', hasTitle: !!sc.t, url: sc.u || '', hasUrl: !!sc.u, noUrl: !sc.u, winTitle: isW && !!sc.u && !isT, items,
+      w: isP ? '236px' : '400px', minH: isP ? '460px' : '250px', radius: isP ? '36px' : '14px', pad: isP ? '10px 12px 18px' : '0px', bodyPad: isP ? '0px' : '14px',
+      bg: isT ? '#0c0c0c' : 'var(--bg)', fg: isT ? '#f4f4f2' : 'var(--ink)',
+      shadow: isP ? '0 0 0 1.5px var(--ink) inset,0 24px 48px -28px rgba(0,0,0,.45)' : isT ? '0 24px 48px -28px rgba(0,0,0,.5)' : '0 0 0 1px var(--line2),0 24px 48px -28px rgba(0,0,0,.35)',
+      barBg: isT ? '#1c1c1c' : 'var(--bg2)', barLine: isT ? '#262626' : 'var(--line)', dot: isT ? '#3a3a3a' : 'var(--bg3)', urlBg: 'var(--bg)'
+    };
+  }
+  renderVals() {
+    const s = this.state, lang = this.props.lang === 'en' ? 'en' : 'pt';
+    const D = s.ready && window.PIU_AJUDA ? window.PIU_AJUDA[lang] : null;
+    if (!D) return { loading: true, isIndex: false, isGuide: false, ui: {}, hasQuery: false, noQuery: false };
+    const U = D.ui, base = U.base;
+    const ui = Object.assign({}, U, { beforeUp: U.before.toUpperCase(), finishUp: U.finish.toUpperCase() });
+    const parts = String(this.props.route || base).split('/');
+    const g = parts[1] ? D.guides.find(x => x.id === parts[1]) : null;
+    const TIER = { 'Fácil': 1, 'Easy': 1, 'Amador': 1, 'Hobbyist': 1, 'Médio': 2, 'Medium': 2, 'Intermediário': 2, 'Intermediate': 2, 'Avançado': 3, 'Advanced': 3, 'Profissional': 3, 'Professional': 3 };
+    const bars = lvl => [1, 2, 3].map(n => ({ h: (4 + n * 3) + 'px', bg: n <= (TIER[lvl] || 1) ? 'var(--ink)' : 'var(--bg3)' }));
+    const doneOf = id => (s.done[id] || []);
+    const href = (id, n) => '#' + base + '/' + id + (n ? '/' + n : '');
+    const catName = id => (D.cats.find(c => c.id === id) || {}).t || '';
+    const out = { loading: false, ui, homeHref: '#' + base, stuckHref: href('troubleshoot'), q: s.q,
+      setQ: e => this.setState({ q: e.target.value }), clearQ: () => this.setState({ q: '' }) };
+
+    if (!g) {
+      const card = x => { const d = doneOf(x.id).length, n = x.steps.length; return { href: href(x.id), icon: x.icon, t: x.t, sum: x.sum, time: x.time, lvl: x.lvl, bars: bars(x.lvl), doneTxt: d ? d + '/' + n + ' ' + U.doneCount : n + ' ' + U.steps, pct: Math.round(d / n * 100) + '%' }; };
+      const norm = x => String(x || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+      const q = norm(s.q.trim());
+      const results = [];
+      if (q) D.guides.forEach(x => {
+        if (norm(x.t + ' ' + x.sum).indexOf(q) >= 0) results.push({ href: href(x.id), icon: x.icon, t: x.t, sub: catName(x.cat) + ' · ' + x.time });
+        x.steps.forEach((st, i) => { if (norm(st.t + ' ' + st.d + ' ' + (st.tip || '') + ' ' + (st.tech || []).join(' ')).indexOf(q) >= 0) results.push({ href: href(x.id, i + 1), icon: 'subdirectory_arrow_right', t: st.t, sub: (x.kind === 'prob' ? U.problem : U.step).toLowerCase().replace(/^./, c => c.toUpperCase()) + ' ' + (i + 1) + ' ' + U.inGuide + ' “' + x.t + '”' }); });
+      });
+      return Object.assign(out, {
+        isIndex: true, isGuide: false, hasQuery: !!q, noQuery: !q,
+        results: results.slice(0, 40), noResults: !!q && !results.length, resLabel: results.length + ' ' + (results.length === 1 ? U.result : U.results).toUpperCase(),
+        popular: ['android', 'share', 'openwrt', 'ant-groundplane', 'recovery'].map(id => D.guides.find(x => x.id === id)).filter(Boolean).map(x => ({ href: href(x.id), icon: x.icon, t: x.t })),
+        cats: D.cats.map((c, i) => ({ n: String(i + 1).padStart(2, '0'), t: c.t, d: c.d, guides: D.guides.filter(x => x.cat === c.id).map(card) }))
+      });
+    }
+
+    const prob = g.kind === 'prob', dn = doneOf(g.id), total = g.steps.length;
+    const toggleDone = n => () => { const cur = doneOf(g.id); const nx = cur.indexOf(n) >= 0 ? cur.filter(x => x !== n) : cur.concat(n); this.saveDone(Object.assign({}, s.done, { [g.id]: nx })); };
+    const techLines = arr => arr.slice(1).map(l => ({ l, c: l.indexOf('#') === 0 ? '#8a8a86' : '#f4f4f2' }));
+    const steps = g.steps.map((st, i) => {
+      const n = i + 1, isDone = dn.indexOf(n) >= 0, tk = g.id + ':' + n, scr = this.screen(st.s), open = !!s.tech[tk];
+      return { id: 'passo-' + n, n: String(n), label: (prob ? U.problem : U.step) + ' ' + n + ' ' + U.of + ' ' + total, t: st.t, d: st.d,
+        hasTip: !!st.tip, tip: st.tip || '', hasWarn: !!st.warn, warn: st.warn || '',
+        hasTech: !!st.tech, techT: st.tech ? st.tech[0] : '', lines: st.tech ? techLines(st.tech) : [], techOpen: open, techRot: open ? '180deg' : '0deg',
+        toggleTech: () => this.setState(x => ({ tech: Object.assign({}, x.tech, { [tk]: !x.tech[tk] }) })),
+        copy: () => this.copy(tk, st.tech.slice(1)), copyLabel: s.copied === tk ? U.copied : U.copy, copyIcon: s.copied === tk ? 'check' : 'content_copy',
+        isDone, notDone: !isDone, toggleDone: toggleDone(n),
+        doneLabel: isDone ? (prob ? U.solved : U.done) : (prob ? U.markSolved : U.mark), doneIcon: isDone ? 'check_circle' : 'radio_button_unchecked',
+        doneBg: isDone ? 'var(--ink)' : 'transparent', doneFg: isDone ? 'var(--invink)' : 'var(--ink)', cardBg: isDone ? 'var(--bg2)' : 'var(--bg)',
+        hasScr: !!scr, scr: scr || { items: [] }, cols: scr ? 'repeat(auto-fit,minmax(min(100%,300px),1fr))' : 'minmax(0,1fr)' };
+    });
+    const gi = D.guides.indexOf(g), nx = D.guides[(gi + 1) % D.guides.length];
+    const gk = g.id + ':g', gOpen = !!s.tech[gk];
+    out.g = {
+      t: g.t, sum: g.sum, icon: g.icon, cat: catName(g.cat), time: g.time, lvl: g.lvl, bars: bars(g.lvl), nSteps: total + ' ' + U.steps,
+      hasWarn: !!g.warn, warn: g.warn || '', needs: (g.needs || []).map(t => ({ t })), hasNeeds: !!(g.needs && g.needs.length),
+      progLabel: U.progress.toUpperCase(), progTxt: dn.length + '/' + total, pct: Math.round(dn.length / total * 100) + '%', hasProg: dn.length > 0,
+      reset: () => this.saveDone(Object.assign({}, s.done, { [g.id]: [] })),
+      index: g.steps.map((st, i) => { const d = dn.indexOf(i + 1) >= 0; return { href: href(g.id, i + 1), t: st.t, icon: d ? 'check_circle' : 'radio_button_unchecked', fg: d ? 'var(--ink2)' : 'var(--ink)' }; }),
+      steps, fim: g.fim, next: { href: href(nx.id), t: nx.t, icon: nx.icon }, showStuck: g.id !== 'troubleshoot',
+      hasTech: !!g.tech, techT: g.tech ? g.tech[0] : '', lines: g.tech ? techLines(g.tech) : [], techOpen: gOpen, techRot: gOpen ? '180deg' : '0deg',
+      toggleTech: () => this.setState(x => ({ tech: Object.assign({}, x.tech, { [gk]: !x.tech[gk] }) })),
+      copy: () => this.copy(gk, g.tech.slice(1)), copyLabel: s.copied === gk ? U.copied : U.copy, copyIcon: s.copied === gk ? 'check' : 'content_copy'
+    };
+    return Object.assign(out, { isIndex: false, isGuide: true, hasQuery: false, noQuery: false });
+  }
+}
+</script>
+</body>
+</html>

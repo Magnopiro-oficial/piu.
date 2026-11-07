@@ -1,6 +1,7 @@
 import { ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SIZE, ANDROID_URL } from '../lib/androidRelease';
 import { DESKTOP_PUBLISHED } from '../lib/desktopRelease';
 import type { Dict } from './pt';
+import { ajudaEn } from './ajuda.en';
 import { redeEn } from './rede.en';
 
 export const en: Dict = {
@@ -8,7 +9,7 @@ export const en: Dict = {
   path: '/en/',
   title: 'Piu · messages without internet',
   description: 'Piu carries your conversations from device to device over Bluetooth, Wi-Fi and radio. No servers, no carrier, end-to-end encrypted.',
-  nav: { network: 'The network', how: 'How it works', privacy: 'Privacy', provider: 'Become a provider', lunes: 'LUNES', desktop: 'Desktop', faq: 'FAQ', download: 'Download', themeLight: 'Use light theme', themeDark: 'Use dark theme', langLabel: 'Language', github: 'Project source code on GitHub' },
+  nav: { network: 'The network', how: 'How it works', privacy: 'Privacy', provider: 'Become a provider', lunes: 'LUNES', desktop: 'Desktop', faq: 'FAQ', help: 'Help', download: 'Download', themeLight: 'Use light theme', themeDark: 'Use dark theme', langLabel: 'Language', github: 'Project source code on GitHub' },
   hero: {
     kicker: 'LUNES NETWORK · DECENTRALIZED MESSENGER',
     title: 'Messages that fly without internet.',
@@ -183,10 +184,11 @@ export const en: Dict = {
   },
   // Página "A rede" (/rede/), textos em rede.en.ts.
   rede: redeEn,
+  ajuda: ajudaEn,
   footer: {
     tagline: 'A Lunes Network product. Community-owned, open, distributed communication.',
     cols: [
-      { t: 'PRODUCT', links: [['How it works', '#como'], ['The network', '/en/rede/'], ['Privacy', '#privacidade'], ['Security', '#seguranca'], ['Download', '#baixar'], ['Piu Desktop', '#desktop']] },
+      { t: 'PRODUCT', links: [['How it works', '#como'], ['The network', '/en/rede/'], ['Privacy', '#privacidade'], ['Security', '#seguranca'], ['Download', '#baixar'], ['Piu Desktop', '#desktop'], ['Help', '/en/help/']] },
       { t: 'PROVIDER', links: [['Become a provider', '#provider'], ['Provider dashboard', '/painel/'], ['Piu Node', '#baixar']] },
       { t: 'PROJECT', links: [['App screens', 'https://github.com/Magnopiro-oficial/piu./tree/main/design'], ['Source on GitHub', 'https://github.com/Magnopiro-oficial/piu.'], ['Manifesto', 'https://github.com/Magnopiro-oficial/piu./blob/main/MANIFESTO.en.md'], ['LNNP specification', 'https://github.com/Magnopiro-oficial/piu./blob/main/docs/lnnp/especificacao-v1.md'], ['Requirements document v1.1', 'https://github.com/Magnopiro-oficial/piu./tree/main/docs/requisitos']] },
     ],

@@ -6,7 +6,7 @@ export const redeEn: RedeDict = {
   title: 'Piu · how the network works',
   description: 'How a Piu message travels from device to device, with no internet and no central server, step by step.',
   navLabel: 'Page sections',
-  nav: [['camadas', 'Layers'], ['mensagem', 'The journey'], ['relay', 'Along the way'], ['dinheiro', 'LUNES'], ['pontos', 'Piu Points'], ['recompensas', 'Rewards']],
+  nav: [['camadas', 'Layers'], ['mensagem', 'The journey'], ['relay', 'Along the way'], ['caminho', 'The right medium'], ['dinheiro', 'LUNES'], ['pontos', 'Piu Points'], ['computador', 'Phone + computer'], ['recompensas', 'Rewards']],
   status: { on: 'WORKS TODAY', test: 'IN TESTING', soon: 'COMING' },
   hero: {
     kicker: 'HOW THE PIU NETWORK WORKS',
@@ -34,7 +34,7 @@ export const redeEn: RedeDict = {
     items: [
       { icon: 'smartphone', t: 'Direct', sub: 'Phone to phone', d: 'Phones talk to each other over Bluetooth and Wi-Fi Direct, like a digital walkie-talkie. No antenna or router needed.', k: 'on', nodes: [['smartphone', 'Ana'], ['smartphone', 'Neighbor'], ['smartphone', 'Bruno']] },
       { icon: 'wifi', t: 'Local network', sub: 'Any Wi-Fi, even without internet', d: 'On a home, school or office Wi-Fi, Piu devices find each other and exchange messages through the router. The internet can be off. It already works on the computer and on Piu Node; on the phone, it’s coming.', k: 'on', nodes: [['smartphone', 'Phone'], ['router', 'Ordinary router'], ['computer', 'Piu Desktop']] },
-      { icon: 'storefront', t: 'Piu Points', sub: 'Places that make the network stronger', d: 'A router or a phone sitting in a busy place becomes a meeting point. A keeper point holds locked messages until the recipient walks by.', k: 'soon', nodes: [['smartphone', 'Visitor'], ['storefront', 'Point'], ['inventory_2', 'Keeper']] },
+      { icon: 'storefront', t: 'Piu Points', sub: 'Places that make the network stronger', d: 'A router or a phone sitting in a busy place becomes a meeting point. A keeper point holds locked messages until the recipient walks by.', k: 'test', nodes: [['smartphone', 'Visitor'], ['storefront', 'Point'], ['inventory_2', 'Keeper']] },
       { icon: 'settings_input_antenna', t: 'Backbone', sub: 'Long distances', d: 'LoRa radios carry short messages for kilometers. And people on the move carry messages from one neighborhood to another, holding them until they meet the next device. A mesh between routers is coming.', k: 'on', nodes: [['settings_input_antenna', 'LoRa radio'], ['directions_walk', 'People on the move'], ['settings_input_antenna', 'LoRa radio']] },
       { icon: 'public', t: 'Gateways', sub: 'The internet as a shortcut', d: 'A device with internet will be able to publish to the Lunes network the transfers of people who are offline. The logic already exists and is in testing, but it isn’t in the app yet. It’s an optional shortcut, never a requirement.', k: 'test', nodes: [['smartphone', 'Offline'], ['cell_tower', 'Gateway'], ['public', 'Lunes']] },
     ],

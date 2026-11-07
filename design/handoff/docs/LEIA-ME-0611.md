@@ -10,8 +10,8 @@ Depois acesse http://localhost:3000 e clique no arquivo. Precisa de internet só
 - design/Piu 11 Modo no e malha.dc.html: modo nó no celular, transações pela malha, gateway e evidências (N1–N10)
 - design/Piu 12 Desktop briefing.dc.html: Piu bloqueado, atualizações, painel do Piu Node e Desktop como guardião (E1–E5)
 - design/Piu 13 Pontos Piu.dc.html: Pontos Piu com roteador Wi-Fi (P1–P9)
-- design/Piu Site Rede.dc.html: página do site "A rede", com o fluxograma animado para leigos
-- design/Piu Site.dc.html, Piu Site EN.dc.html, Piu 7 Provider computador.dc.html: o site e as páginas para onde ele leva
+- design/Piu Site.dc.html (inclui as páginas "A rede", em #rede, e "Ajuda", em #ajuda), Piu Site EN.dc.html (com "Help", em #help)
+- design/PiuAjuda.dc.html + piu-ajuda-dados.js + piu-ajuda-antenas.js: central de ajuda com 17 guias passo a passo (PT e EN), usada pelos dois sites, Piu 7 Provider computador.dc.html: o site e as páginas para onde ele leva
 - design/Piu 9 e Piu 10: versões anteriores, só para consulta
 - TELAS-BRIEFING-0611.md: cada item do briefing com o ID da tela e as decisões tomadas
 - TELAS-NOVAS.md: documentação anterior (entrada, estados, ações)

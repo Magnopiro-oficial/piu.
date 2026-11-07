@@ -37,13 +37,13 @@
 @media (prefers-reduced-motion:reduce){*{animation-duration:.01ms!important;animation-iteration-count:1!important}}
 </style>
 </helmet>
-<div data-piu-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;overflow-x:hidden;">
+<div data-piu-theme="{{ theme }}" style="min-height:100vh;background:var(--bg);color:var(--ink);font-family:Geist,system-ui,sans-serif;-webkit-font-smoothing:antialiased;letter-spacing:-0.005em;overflow-x:clip;">
 
   <div style="position:sticky;top:0;z-index:20;background:var(--bg);border-bottom:1px solid var(--line);">
     <div style="max-width:1200px;margin:0 auto;padding:0 24px;height:68px;display:flex;align-items:center;gap:28px;">
       <a href="#topo" style="font-size:30px;font-weight:750;letter-spacing:-0.07em;line-height:1;">piu<span style="color:var(--ink3);">.</span></a>
-      <div style="flex:1;display:flex;gap:22px;flex-wrap:wrap;font-size:14px;font-weight:500;color:var(--ink2);">
-        <a href="#como">How it works</a><a href="#privacidade">Privacy</a><a href="#provider">Become a provider</a><a href="#lunes">LUNES</a><a href="#desktop">Desktop</a><a href="#faq">FAQ</a>
+      <div style="flex:1;display:flex;gap:6px 18px;flex-wrap:wrap;font-size:14px;font-weight:500;color:var(--ink2);">
+        <a href="#como">How it works</a><a href="#privacidade">Privacy</a><a href="#provider">Become a provider</a><a href="#lunes">LUNES</a><a href="#desktop">Desktop</a><a href="#faq">FAQ</a><a href="#help" style="color:{{ helpNavColor }};">Help</a>
       </div>
       <div style="display:flex;gap:2px;padding:3px;border-radius:19px;border:1px solid var(--line2);flex:none;font:600 12.5px Geist;">
         <a href="Piu%20Site.dc.html" style="height:30px;padding:0 10px;border-radius:15px;display:flex;align-items:center;color:var(--ink2);">PT</a>
@@ -54,6 +54,7 @@
     </div>
   </div>
 
+  <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
   <div id="topo" style="max-width:1200px;margin:0 auto;padding:72px 24px 56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:56px;align-items:center;">
     <div style="display:flex;flex-direction:column;gap:26px;">
       <div style="display:flex;align-items:center;gap:8px;font:500 12px 'Geist Mono',monospace;letter-spacing:.06em;color:var(--ink2);animation:siteUp .6s cubic-bezier(.2,.85,.3,1) .05s both;"><div style="position:relative;width:8px;height:8px;border-radius:50%;background:var(--ink);"><div style="position:absolute;inset:0;border-radius:50%;border:1.5px solid var(--ink);animation:sitePing 2.4s ease-out 1s infinite;"></div></div>LUNES NETWORK · DECENTRALIZED MESSENGER</div>
@@ -310,6 +311,11 @@
     </div>
   </div>
 
+  </sc-if>
+  <sc-if value="{{ isHelp }}" hint-placeholder-val="{{ false }}">
+    <dc-import name="PiuAjuda" lang="en" route="{{ helpRoute }}" hint-size="100%,900px"></dc-import>
+  </sc-if>
+
   <div style="border-top:1px solid var(--line);">
     <div style="max-width:1200px;margin:0 auto;padding:48px 24px 56px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:32px;">
       <div style="display:flex;flex-direction:column;gap:10px;">
@@ -329,7 +335,27 @@
 </x-dc>
 <script type="text/x-dc" data-dc-script data-props="{&quot;theme&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;light&quot;,&quot;dark&quot;],&quot;default&quot;:&quot;light&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
 class Component extends DCLogic {
-  state = { theme: null, open: 0, dlText: null, deskScale: 0.6, desk2Scale: 0.6, deskOs: null };
+  state = { page: 'home', hash: '', theme: null, open: 0, dlText: null, deskScale: 0.6, desk2Scale: 0.6, deskOs: null };
+  componentDidMount() {
+    this.onHash = () => this.route();
+    window.addEventListener('hashchange', this.onHash);
+    this.route();
+  }
+  route() {
+    const h = decodeURIComponent((location.hash || '').slice(1));
+    const help = h === 'help' || h.indexOf('help/') === 0;
+    const page = help ? 'help' : 'home';
+    const changed = page !== this.state.page;
+    if (help) { if (changed || h !== this.state.hash) this.setState({ page, hash: h }); return; }
+    let tries = 0;
+    const go = () => {
+      if (!h) { window.scrollTo({ top: 0, behavior: 'instant' }); return; }
+      const el = document.getElementById(h);
+      if (el) window.scrollTo({ top: el.getBoundingClientRect().top + window.scrollY, behavior: 'instant' });
+      else if (tries++ < 30) setTimeout(go, 50);
+    };
+    if (changed) { this.setState({ page, hash: h }); setTimeout(go, 0); }
+  }
   setDesk2El(el) {
     if (el === this.desk2El) return;
     if (this.ro2) this.ro2.disconnect();
@@ -361,7 +387,7 @@ class Component extends DCLogic {
     const upd = () => { const w = el.clientWidth; if (w) { const sc = Math.min(1, w / 1280); if (Math.abs(sc - this.state.deskScale) > 0.002) this.setState({ deskScale: sc }); } };
     this.ro = new ResizeObserver(upd); this.ro.observe(el); upd();
   }
-  componentWillUnmount() { if (this.ro) this.ro.disconnect(); if (this.ro2) this.ro2.disconnect(); clearTimeout(this.noteT); clearTimeout(this.noteT2); }
+  componentWillUnmount() { window.removeEventListener('hashchange', this.onHash); if (this.ro) this.ro.disconnect(); if (this.ro2) this.ro2.disconnect(); clearTimeout(this.noteT); clearTimeout(this.noteT2); }
   renderVals() {
     const s = this.state, theme = s.theme || this.props.theme || 'light';
     if (!this._deskRef) this._deskRef = el => this.setDeskEl(el);
@@ -373,6 +399,7 @@ class Component extends DCLogic {
     };
     const out = {
       ...this.deskVals(s),
+      isHome: s.page === 'home', isHelp: s.page === 'help', helpRoute: s.hash || 'help', helpNavColor: s.page === 'help' ? 'var(--ink)' : 'inherit',
       transportsLoop: [],
       deskRef: this._deskRef, deskScale: s.deskScale.toFixed(4), deskW: Math.floor(1280 * s.deskScale) + 'px', deskH: Math.floor(820 * s.deskScale) + 'px',
       theme, themeIcon: theme === 'dark' ? 'light_mode' : 'dark_mode', toggleTheme: () => this.setState({ theme: theme === 'dark' ? 'light' : 'dark' }),
@@ -428,7 +455,7 @@ class Component extends DCLogic {
         ['Do I need to buy any equipment?', 'No. Ordinary phones already form the network. Off-the-shelf routers, computers and radios can join, with no official Lunes hardware.'],
       ].map(([q, a], i) => ({ q, a, open: s.open === i, rot: s.open === i ? '45deg' : '0deg', toggle: () => this.setState({ open: s.open === i ? -1 : i }) })),
       footer: [
-        { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar'], ['Piu Desktop', '#desktop']] },
+        { t: 'PRODUCT', links: [['How it works', '#como'], ['Privacy', '#privacidade'], ['Download', '#baixar'], ['Piu Desktop', '#desktop'], ['Help center', '#help']] },
         { t: 'PROVIDER', links: [['Become a provider', '#provider'], ['Provider dashboard', 'Piu 7 Provider computador.dc.html'], ['Piu Node', '#baixar']] },
         { t: 'PROJECT', links: [['App screens', 'Piu.dc.html'], ['LNNP specification', '#faq'], ['Requirements document v1.1', '#faq']] },
       ].map(c => ({ t: c.t, links: c.links.map(([l, href]) => ({ l, href: href.indexOf('.dc.html') > 0 ? encodeURI(href) : href })) })),

@@ -1,0 +1,11 @@
+---
+import AjudaPage from '../../components/AjudaPage.astro';
+import { en } from '../../i18n/en';
+import { pt } from '../../i18n/pt';
+
+export function getStaticPaths() {
+  return pt.ajuda.guides.map(g => ({ params: { guia: g.id } }));
+}
+const { guia } = Astro.params;
+---
+<AjudaPage t={pt} alt={en} guide={guia} />
