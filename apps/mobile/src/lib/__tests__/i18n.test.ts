@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  DEFAULT_LANG, LANGS, decimalSeparator, dictOf, interpolate, isLang, matchLang, regionLocale, regionSample, resolveLang, selectPlural, setLang, setRegion, t, tIn, varsOf,
+  DEFAULT_LANG, LANGS, decimalSeparator, dictOf, interpolate, interpolateParts, isLang, matchLang, regionLocale, regionSample, resolveLang, selectPlural, setLang, setRegion, t, tIn, tPartsIn, varsOf,
   type Dict, type Lang, type Plural,
 } from '../../i18n';
 import { ptBR } from '../../i18n/pt-BR';
@@ -159,5 +159,41 @@ test('Hermes: reserva CLDR mantém categorias dos 11 idiomas, decimais, negativo
     assert.equal(selectPlural('ar', Infinity), 'zero');
   } finally {
     Object.defineProperty(Intl, 'PluralRules', descriptor);
+  }
+});
+
+test('tParts: separa as variáveis do texto para destacar trechos, na ordem de cada idioma', () => {
+  assert.deepEqual(interpolateParts('Abra o {app} e escolha {action}.', { app: 'Piu Desktop', action: 'Conectar' }), [
+    { text: 'Abra o ' }, { text: 'Piu Desktop', var: 'app' }, { text: ' e escolha ' }, { text: 'Conectar', var: 'action' }, { text: '.' },
+  ]);
+  assert.deepEqual(interpolateParts('{a}{b}', { a: 'x', b: 'y' }), [{ text: 'x', var: 'a' }, { text: 'y', var: 'b' }]);
+  assert.deepEqual(interpolateParts('sem variável', {}), [{ text: 'sem variável' }]);
+  assert.deepEqual(interpolateParts('falta {x}', {}), [{ text: 'falta {x}' }]);
+  const parts = tPartsIn('en', 'linkDesktop.idle.body', { app: 'Piu Desktop', action: 'X' });
+  assert.equal(parts.map(p => p.text).join(''), tIn('en', 'linkDesktop.idle.body', { app: 'Piu Desktop', action: 'X' }));
+  assert.ok(parts.some(p => p.var === 'app') && parts.some(p => p.var === 'action'));
+});
+
+test('Conectar ao computador: traduzido de verdade em todos os idiomas (não é cópia do pt-BR)', () => {
+  const keys = Object.keys(ptBR).filter(k => k.startsWith('linkDesktop.'));
+  assert.ok(keys.length >= 20, 'chaves linkDesktop.* no pt-BR');
+  for (const lang of ALL) {
+    if (lang === 'pt-BR' || lang === 'pt-PT') continue;
+    const d = dictOf(lang) as Dict;
+    // Palavras curtas podem coincidir (es: "Desconectar"); frases não.
+    const same = keys.filter(k => d[k] === (ptBR as Dict)[k] && ((ptBR as Dict)[k] as string).length > 25);
+    assert.deepEqual(same, [], `${lang}: iguais ao pt-BR`);
+  }
+});
+
+test('recompensas desligadas: os textos do provider e do convite não prometem pagamento hoje', () => {
+  const ref = ptBR as Dict;
+  for (const k of ['provIntro.sub', 'provIntro.step3', 'provIntro.note', 'network.provider.pitch', 'wallet.ref.title', 'wallet.ref.desc', 'invite.reward']) {
+    const v = ref[k] as string;
+    assert.ok(v, k);
+    assert.doesNotMatch(v, /\bganhe\b|\bganhar\b|você recebe LUNES|você ganha|ela ganha/i, `${k}: ${v}`);
+  }
+  for (const k of ['provIntro.sub', 'provIntro.note', 'wallet.ref.desc', 'invite.reward']) {
+    assert.match(ref[k] as string, /nada é pago|ainda não/i, `${k} diz que hoje não paga`);
   }
 });

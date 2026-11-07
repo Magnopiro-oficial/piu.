@@ -1,0 +1,32 @@
+// Português de Portugal. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Ligar ao computador',
+  'linkDesktop.disconnected': 'Computador desligado',
+  'linkDesktop.disconnected.body': 'O Piu Desktop deixou de receber o que quer que seja deste telemóvel.',
+  'linkDesktop.idle.title': 'Usa o Piu no computador',
+  'linkDesktop.idle.body': 'No computador, abre o {app} e escolhe {action}. Depois lê o QR que aparece lá.',
+  'linkDesktop.idle.action': 'Ligar telemóvel',
+  'linkDesktop.idle.keys': 'As chaves ficam só no telemóvel. O computador mostra as conversas e envia através do telemóvel, cifrado pela rede local (TLS com o certificado do QR), enquanto os dois estiverem na mesma Wi-Fi.',
+  'linkDesktop.unavailable': 'Ligar ao computador precisa da app Piu instalada (não funciona no Expo Go nem no navegador).',
+  'linkDesktop.scan': 'Ler o QR do computador',
+  'linkDesktop.scan.hint': 'Aponta a câmara para o QR do computador. Muda a cada 30 segundos; se demorar, lê o novo.',
+  'linkDesktop.connecting': 'A ligar…',
+  'linkDesktop.connecting.body': 'Os dois têm de estar na mesma Wi-Fi. Nada sai do telemóvel antes de conferires as palavras.',
+  'linkDesktop.confirm.title': 'Confiram as 3 palavras',
+  'linkDesktop.confirm.body': 'O computador mostra 3 palavras no ecrã. Têm de ser exatamente estas, pela mesma ordem:',
+  'linkDesktop.confirm.bodyNamed': 'O computador ({name}) mostra 3 palavras no ecrã. Têm de ser exatamente estas, pela mesma ordem:',
+  'linkDesktop.confirm.prompt': 'No computador:',
+  'linkDesktop.confirm.warn': 'Se forem diferentes, cancela: alguém na mesma rede pode estar a meter-se no caminho. Ainda não foi enviado nada.',
+  'linkDesktop.confirm.same': 'São iguais · ligar',
+  'linkDesktop.confirm.different': 'Diferentes · cancelar',
+  'linkDesktop.connected.name': 'Computador ligado',
+  'linkDesktop.connected.since': 'ligado desde as {time}',
+  'linkDesktop.connected.frames': '{sent} quadros enviados · {received} recebidos',
+  'linkDesktop.connected.body': 'O computador só vê o que este telemóvel envia, cifrado. Se o telemóvel sair da Wi-Fi ou fechar a app, a ligação cai e o computador deixa de atualizar.',
+  'linkDesktop.disconnect': 'Desligar',
+  'linkDesktop.error': 'A ligação caiu.',
+  'linkDesktop.retry': 'Tentar outra vez',
+  'linkDesktop.footer': 'A chave e o certificado do computador chegam pela câmara, por isso quem está na mesma Wi-Fi não lê o que o telemóvel envia nem consegue fazer-se passar pelo computador. As 3 palavras denunciam quem tentar meter-se no caminho. Sem servidor: só os dois aparelhos.',
+};

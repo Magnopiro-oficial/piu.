@@ -184,6 +184,36 @@ export function tIn(lang: Lang, key: Key, vars?: Vars): string {
   return interpolate(v, vars);
 }
 
+/** Trecho de texto; `var` diz de qual `{variável}` ele veio (para a tela destacar, ex. em negrito). */
+export interface TextPart { text: string; var?: string }
+
+/** Como `interpolate`, mas em trechos: a tela destaca as variáveis sem quebrar a ordem de cada idioma. */
+export function interpolateParts(s: string, vars: Vars): TextPart[] {
+  const out: TextPart[] = [];
+  let last = 0;
+  const push = (text: string) => {
+    if (!text) return;
+    const prev = out[out.length - 1];
+    if (prev && !prev.var) prev.text += text; else out.push({ text });
+  };
+  for (const m of s.matchAll(/\{(\w+)\}/g)) {
+    const k = m[1]!;
+    push(s.slice(last, m.index));
+    if (k in vars) out.push({ text: String(vars[k]), var: k }); else push(m[0]);
+    last = m.index! + m[0].length;
+  }
+  push(s.slice(last));
+  return out;
+}
+
+/** `tIn` em trechos (veja `interpolateParts`). */
+export function tPartsIn(lang: Lang, key: Key, vars: Vars): TextPart[] {
+  const raw = tIn(lang, key);
+  return interpolateParts(raw, vars);
+}
+/** `t` em trechos, no idioma atual. */
+export const tParts = (key: Key, vars: Vars): TextPart[] => tPartsIn(current, key, vars);
+
 /** Variáveis `{x}` usadas num valor (todas as formas, no plural). Para o teste de paridade entre idiomas. */
 export function varsOf(v: string | Plural): string[] {
   const forms = typeof v === 'string' ? [v] : Object.values(v);

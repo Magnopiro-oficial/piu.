@@ -1,0 +1,32 @@
+// Italiano. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Collega al computer',
+  'linkDesktop.disconnected': 'Computer scollegato',
+  'linkDesktop.disconnected.body': 'Piu Desktop non riceve più nulla da questo telefono.',
+  'linkDesktop.idle.title': 'Usa Piu sul computer',
+  'linkDesktop.idle.body': 'Sul computer, apri {app} e scegli {action}. Poi inquadra il QR che compare lì.',
+  'linkDesktop.idle.action': 'Collega telefono',
+  'linkDesktop.idle.keys': 'Le chiavi restano solo sul telefono. Il computer mostra le conversazioni e invia tramite il telefono, cifrato sulla rete locale (TLS con il certificato del QR), finché i due sono sullo stesso Wi-Fi.',
+  'linkDesktop.unavailable': 'Il collegamento al computer richiede l’app Piu installata (non funziona in Expo Go né nel browser).',
+  'linkDesktop.scan': 'Inquadra il QR del computer',
+  'linkDesktop.scan.hint': 'Punta la fotocamera sul QR del computer. Cambia ogni 30 secondi; se ci metti troppo, inquadra quello nuovo.',
+  'linkDesktop.connecting': 'Connessione…',
+  'linkDesktop.connecting.body': 'I due devono essere sullo stesso Wi-Fi. Niente esce dal telefono prima che tu abbia controllato le parole.',
+  'linkDesktop.confirm.title': 'Controllate le 3 parole',
+  'linkDesktop.confirm.body': 'Il computer mostra 3 parole sullo schermo. Devono essere esattamente queste, nello stesso ordine:',
+  'linkDesktop.confirm.bodyNamed': 'Il computer ({name}) mostra 3 parole sullo schermo. Devono essere esattamente queste, nello stesso ordine:',
+  'linkDesktop.confirm.prompt': 'Sul computer:',
+  'linkDesktop.confirm.warn': 'Se sono diverse, annulla: qualcuno sulla stessa rete potrebbe mettersi in mezzo. Non è stato ancora inviato nulla.',
+  'linkDesktop.confirm.same': 'Sono uguali · collega',
+  'linkDesktop.confirm.different': 'Diverse · annulla',
+  'linkDesktop.connected.name': 'Computer collegato',
+  'linkDesktop.connected.since': 'collegato dalle {time}',
+  'linkDesktop.connected.frames': '{sent} frame inviati · {received} ricevuti',
+  'linkDesktop.connected.body': 'Il computer vede solo ciò che questo telefono invia, cifrato. Se il telefono esce dal Wi-Fi o chiude l’app, la connessione cade e il computer smette di aggiornarsi.',
+  'linkDesktop.disconnect': 'Scollega',
+  'linkDesktop.error': 'La connessione è caduta.',
+  'linkDesktop.retry': 'Riprova',
+  'linkDesktop.footer': 'La chiave e il certificato del computer arrivano dalla fotocamera, quindi chi è sullo stesso Wi-Fi non può leggere ciò che il telefono invia né spacciarsi per il computer. Le 3 parole smascherano chi prova a mettersi in mezzo. Nessun server: solo i due dispositivi.',
+};

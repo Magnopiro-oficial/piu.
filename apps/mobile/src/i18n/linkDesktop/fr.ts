@@ -1,0 +1,32 @@
+// Français. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Connecter à l’ordinateur',
+  'linkDesktop.disconnected': 'Ordinateur déconnecté',
+  'linkDesktop.disconnected.body': 'Piu Desktop ne reçoit plus rien de ce téléphone.',
+  'linkDesktop.idle.title': 'Utilisez Piu sur l’ordinateur',
+  'linkDesktop.idle.body': 'Sur l’ordinateur, ouvrez {app} et choisissez {action}. Scannez ensuite le QR qui s’affiche.',
+  'linkDesktop.idle.action': 'Connecter le téléphone',
+  'linkDesktop.idle.keys': 'Les clés restent uniquement sur le téléphone. L’ordinateur affiche les conversations et envoie via le téléphone, chiffré sur le réseau local (TLS avec le certificat du QR), tant que les deux sont sur le même Wi-Fi.',
+  'linkDesktop.unavailable': 'La connexion à l’ordinateur nécessite l’app Piu installée (elle ne fonctionne ni dans Expo Go ni dans le navigateur).',
+  'linkDesktop.scan': 'Scanner le QR de l’ordinateur',
+  'linkDesktop.scan.hint': 'Pointez l’appareil photo vers le QR de l’ordinateur. Il change toutes les 30 secondes ; si c’est trop long, scannez le nouveau.',
+  'linkDesktop.connecting': 'Connexion…',
+  'linkDesktop.connecting.body': 'Les deux doivent être sur le même Wi-Fi. Rien ne sort du téléphone avant que vous ayez vérifié les mots.',
+  'linkDesktop.confirm.title': 'Vérifiez les 3 mots',
+  'linkDesktop.confirm.body': 'L’ordinateur affiche 3 mots à l’écran. Ils doivent être exactement ceux-ci, dans le même ordre :',
+  'linkDesktop.confirm.bodyNamed': 'L’ordinateur ({name}) affiche 3 mots à l’écran. Ils doivent être exactement ceux-ci, dans le même ordre :',
+  'linkDesktop.confirm.prompt': 'Sur l’ordinateur :',
+  'linkDesktop.confirm.warn': 'S’ils sont différents, annulez : quelqu’un sur le même réseau tente peut-être de s’interposer. Rien n’a encore été envoyé.',
+  'linkDesktop.confirm.same': 'Identiques · connecter',
+  'linkDesktop.confirm.different': 'Différents · annuler',
+  'linkDesktop.connected.name': 'Ordinateur connecté',
+  'linkDesktop.connected.since': 'connecté depuis {time}',
+  'linkDesktop.connected.frames': '{sent} trames envoyées · {received} reçues',
+  'linkDesktop.connected.body': 'L’ordinateur ne voit que ce que ce téléphone envoie, chiffré. Si le téléphone quitte le Wi-Fi ou ferme l’app, la connexion tombe et l’ordinateur cesse de se mettre à jour.',
+  'linkDesktop.disconnect': 'Déconnecter',
+  'linkDesktop.error': 'La connexion est tombée.',
+  'linkDesktop.retry': 'Réessayer',
+  'linkDesktop.footer': 'La clé et le certificat de l’ordinateur passent par l’appareil photo : quelqu’un sur le même Wi-Fi ne peut ni lire ce que le téléphone envoie, ni se faire passer pour l’ordinateur. Les 3 mots trahissent toute tentative d’interposition. Pas de serveur : seulement les deux appareils.',
+};

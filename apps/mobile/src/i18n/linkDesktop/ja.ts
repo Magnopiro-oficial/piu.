@@ -1,0 +1,32 @@
+// 日本語. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'パソコンに接続',
+  'linkDesktop.disconnected': 'パソコンの接続を解除しました',
+  'linkDesktop.disconnected.body': 'Piu Desktop はこのスマホから何も受け取らなくなりました。',
+  'linkDesktop.idle.title': 'パソコンで Piu を使う',
+  'linkDesktop.idle.body': 'パソコンで {app} を開き、{action} を選びます。表示された QR を読み取ってください。',
+  'linkDesktop.idle.action': 'スマホを接続',
+  'linkDesktop.idle.keys': '鍵はスマホにだけ残ります。パソコンは会話を表示し、スマホ経由で送信します。通信はローカルネットワーク上で暗号化され（QR の証明書による TLS）、両方が同じ Wi-Fi にいる間だけ有効です。',
+  'linkDesktop.unavailable': 'パソコンへの接続には、インストールした Piu アプリが必要です（Expo Go やブラウザでは使えません）。',
+  'linkDesktop.scan': 'パソコンの QR を読み取る',
+  'linkDesktop.scan.hint': 'カメラをパソコンの QR に向けてください。QR は 30 秒ごとに変わります。時間がかかったら新しい QR を読み取ってください。',
+  'linkDesktop.connecting': '接続中…',
+  'linkDesktop.connecting.body': '両方が同じ Wi-Fi にいる必要があります。言葉を確認するまで、スマホからは何も送信されません。',
+  'linkDesktop.confirm.title': '3 つの言葉を確認',
+  'linkDesktop.confirm.body': 'パソコンの画面に 3 つの言葉が表示されます。次の言葉と同じ順番で完全に一致している必要があります：',
+  'linkDesktop.confirm.bodyNamed': 'パソコン（{name}）の画面に 3 つの言葉が表示されます。次の言葉と同じ順番で完全に一致している必要があります：',
+  'linkDesktop.confirm.prompt': 'パソコン側：',
+  'linkDesktop.confirm.warn': '違っていたらキャンセルしてください。同じネットワークの誰かが間に入ろうとしている可能性があります。まだ何も送信されていません。',
+  'linkDesktop.confirm.same': '一致 · 接続する',
+  'linkDesktop.confirm.different': '不一致 · キャンセル',
+  'linkDesktop.connected.name': 'パソコンに接続済み',
+  'linkDesktop.connected.since': '{time} から接続中',
+  'linkDesktop.connected.frames': '送信 {sent} フレーム · 受信 {received}',
+  'linkDesktop.connected.body': 'パソコンに見えるのは、このスマホが暗号化して送る内容だけです。スマホが Wi-Fi から外れるかアプリを閉じると接続が切れ、パソコンの表示は更新されなくなります。',
+  'linkDesktop.disconnect': '接続を解除',
+  'linkDesktop.error': '接続が切れました。',
+  'linkDesktop.retry': 'もう一度試す',
+  'linkDesktop.footer': 'パソコンの鍵と証明書はカメラで受け取るため、同じ Wi-Fi にいる人がスマホの送信内容を読んだり、パソコンになりすましたりすることはできません。間に入ろうとする人は 3 つの言葉で見破れます。サーバーは使わず、2 台の端末だけでつながります。',
+};

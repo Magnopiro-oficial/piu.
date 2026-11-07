@@ -1,0 +1,32 @@
+// Español. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Conectar a la computadora',
+  'linkDesktop.disconnected': 'Computadora desconectada',
+  'linkDesktop.disconnected.body': 'Piu Desktop ya no recibe nada de este celular.',
+  'linkDesktop.idle.title': 'Usa Piu en la computadora',
+  'linkDesktop.idle.body': 'En la computadora, abre {app} y elige {action}. Después escanea el QR que aparece allí.',
+  'linkDesktop.idle.action': 'Conectar celular',
+  'linkDesktop.idle.keys': 'Las claves se quedan solo en el celular. La computadora muestra las conversaciones y envía a través del celular, cifrado por la red local (TLS con el certificado del QR), mientras los dos estén en la misma Wi-Fi.',
+  'linkDesktop.unavailable': 'Conectar a la computadora requiere la app Piu instalada (no funciona en Expo Go ni en el navegador).',
+  'linkDesktop.scan': 'Escanear el QR de la computadora',
+  'linkDesktop.scan.hint': 'Apunta la cámara al QR de la computadora. Cambia cada 30 segundos; si tardas, escanea el nuevo.',
+  'linkDesktop.connecting': 'Conectando…',
+  'linkDesktop.connecting.body': 'Los dos deben estar en la misma Wi-Fi. Nada sale del celular antes de que compruebes las palabras.',
+  'linkDesktop.confirm.title': 'Comprueben las 3 palabras',
+  'linkDesktop.confirm.body': 'La computadora muestra 3 palabras en la pantalla. Tienen que ser exactamente estas, en el mismo orden:',
+  'linkDesktop.confirm.bodyNamed': 'La computadora ({name}) muestra 3 palabras en la pantalla. Tienen que ser exactamente estas, en el mismo orden:',
+  'linkDesktop.confirm.prompt': 'En la computadora:',
+  'linkDesktop.confirm.warn': 'Si son distintas, cancela: alguien en la misma red podría estar metiéndose en medio. Todavía no se envió nada.',
+  'linkDesktop.confirm.same': 'Son iguales · conectar',
+  'linkDesktop.confirm.different': 'Distintas · cancelar',
+  'linkDesktop.connected.name': 'Computadora conectada',
+  'linkDesktop.connected.since': 'conectada desde las {time}',
+  'linkDesktop.connected.frames': '{sent} tramas enviadas · {received} recibidas',
+  'linkDesktop.connected.body': 'La computadora solo ve lo que este celular envía, cifrado. Si el celular sale de la Wi-Fi o cierra la app, la conexión se cae y la computadora deja de actualizarse.',
+  'linkDesktop.disconnect': 'Desconectar',
+  'linkDesktop.error': 'Se cayó la conexión.',
+  'linkDesktop.retry': 'Intentar de nuevo',
+  'linkDesktop.footer': 'La clave y el certificado de la computadora llegan por la cámara, así que quien esté en la misma Wi-Fi no puede leer lo que envía el celular ni hacerse pasar por la computadora. Las 3 palabras delatan a quien intente meterse en medio. Sin servidor: solo los dos dispositivos.',
+};

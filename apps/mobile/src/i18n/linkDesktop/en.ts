@@ -1,0 +1,32 @@
+// English. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Connect to computer',
+  'linkDesktop.disconnected': 'Computer disconnected',
+  'linkDesktop.disconnected.body': 'Piu Desktop no longer receives anything from this phone.',
+  'linkDesktop.idle.title': 'Use Piu on your computer',
+  'linkDesktop.idle.body': 'On the computer, open {app} and choose {action}. Then scan the QR code it shows.',
+  'linkDesktop.idle.action': 'Connect phone',
+  'linkDesktop.idle.keys': 'The keys stay on the phone only. The computer shows your chats and sends through the phone, encrypted over the local network (TLS with the certificate from the QR code), while both are on the same Wi-Fi.',
+  'linkDesktop.unavailable': 'Connecting to a computer needs the installed Piu app (it does not work in Expo Go or in the browser).',
+  'linkDesktop.scan': 'Scan the computer’s QR code',
+  'linkDesktop.scan.hint': 'Point the camera at the computer’s QR code. It changes every 30 seconds; if it takes too long, scan the new one.',
+  'linkDesktop.connecting': 'Connecting…',
+  'linkDesktop.connecting.body': 'Both must be on the same Wi-Fi. Nothing leaves the phone before you check the words.',
+  'linkDesktop.confirm.title': 'Check the 3 words',
+  'linkDesktop.confirm.body': 'The computer shows 3 words on screen. They must be exactly these, in the same order:',
+  'linkDesktop.confirm.bodyNamed': 'The computer ({name}) shows 3 words on screen. They must be exactly these, in the same order:',
+  'linkDesktop.confirm.prompt': 'On the computer:',
+  'linkDesktop.confirm.warn': 'If they are different, cancel: someone on the same network may be getting in the middle. Nothing has been sent yet.',
+  'linkDesktop.confirm.same': 'They match · connect',
+  'linkDesktop.confirm.different': 'Different · cancel',
+  'linkDesktop.connected.name': 'Computer connected',
+  'linkDesktop.connected.since': 'connected since {time}',
+  'linkDesktop.connected.frames': '{sent} frames sent · {received} received',
+  'linkDesktop.connected.body': 'The computer only sees what this phone sends, encrypted. If the phone leaves the Wi-Fi or closes the app, the connection drops and the computer stops updating.',
+  'linkDesktop.disconnect': 'Disconnect',
+  'linkDesktop.error': 'The connection dropped.',
+  'linkDesktop.retry': 'Try again',
+  'linkDesktop.footer': 'The computer’s key and certificate come through the camera, so anyone on the same Wi-Fi can neither read what the phone sends nor pretend to be the computer. The 3 words expose anyone trying to get in the middle. No server: just the two devices.',
+};

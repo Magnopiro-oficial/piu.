@@ -1,0 +1,32 @@
+// العربية. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'الاتصال بالكمبيوتر',
+  'linkDesktop.disconnected': 'تم فصل الكمبيوتر',
+  'linkDesktop.disconnected.body': 'لم يعد Piu Desktop يستقبل أي شيء من هذا الهاتف.',
+  'linkDesktop.idle.title': 'استخدم Piu على الكمبيوتر',
+  'linkDesktop.idle.body': 'على الكمبيوتر، افتح {app} واختر {action}. ثم امسح رمز QR الذي يظهر هناك.',
+  'linkDesktop.idle.action': 'توصيل الهاتف',
+  'linkDesktop.idle.keys': 'تبقى المفاتيح على الهاتف فقط. يعرض الكمبيوتر المحادثات ويرسل عبر الهاتف، مشفّرًا عبر الشبكة المحلية (TLS بشهادة رمز QR)، ما دام الجهازان على شبكة Wi-Fi نفسها.',
+  'linkDesktop.unavailable': 'يتطلب الاتصال بالكمبيوتر تطبيق Piu مثبّتًا (لا يعمل في Expo Go ولا في المتصفح).',
+  'linkDesktop.scan': 'امسح رمز QR الخاص بالكمبيوتر',
+  'linkDesktop.scan.hint': 'وجّه الكاميرا نحو رمز QR على الكمبيوتر. يتغيّر كل 30 ثانية؛ إذا تأخرت، امسح الرمز الجديد.',
+  'linkDesktop.connecting': 'جارٍ الاتصال…',
+  'linkDesktop.connecting.body': 'يجب أن يكون الجهازان على شبكة Wi-Fi نفسها. لا يخرج أي شيء من الهاتف قبل أن تتحقق من الكلمات.',
+  'linkDesktop.confirm.title': 'تحقّقا من الكلمات الثلاث',
+  'linkDesktop.confirm.body': 'يعرض الكمبيوتر 3 كلمات على الشاشة. يجب أن تكون هذه الكلمات بالضبط، وبالترتيب نفسه:',
+  'linkDesktop.confirm.bodyNamed': 'يعرض الكمبيوتر ({name}) 3 كلمات على الشاشة. يجب أن تكون هذه الكلمات بالضبط، وبالترتيب نفسه:',
+  'linkDesktop.confirm.prompt': 'على الكمبيوتر:',
+  'linkDesktop.confirm.warn': 'إذا كانت مختلفة، فألغِ: ربما يحاول شخص على الشبكة نفسها التدخّل في الطريق. لم يُرسَل أي شيء بعد.',
+  'linkDesktop.confirm.same': 'متطابقة · اتصال',
+  'linkDesktop.confirm.different': 'مختلفة · إلغاء',
+  'linkDesktop.connected.name': 'الكمبيوتر متصل',
+  'linkDesktop.connected.since': 'متصل منذ {time}',
+  'linkDesktop.connected.frames': 'أُرسل {sent} إطارًا · استُقبل {received}',
+  'linkDesktop.connected.body': 'لا يرى الكمبيوتر إلا ما يرسله هذا الهاتف مشفّرًا. إذا خرج الهاتف من شبكة Wi-Fi أو أُغلق التطبيق، ينقطع الاتصال ويتوقف الكمبيوتر عن التحديث.',
+  'linkDesktop.disconnect': 'قطع الاتصال',
+  'linkDesktop.error': 'انقطع الاتصال.',
+  'linkDesktop.retry': 'حاول مجددًا',
+  'linkDesktop.footer': 'يصل مفتاح الكمبيوتر وشهادته عبر الكاميرا، لذا لا يستطيع من على شبكة Wi-Fi نفسها قراءة ما يرسله الهاتف ولا انتحال صفة الكمبيوتر. وتكشف الكلمات الثلاث كل من يحاول التدخّل في الطريق. بلا خادم: الجهازان فقط.',
+};

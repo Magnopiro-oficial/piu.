@@ -19,6 +19,7 @@ import { type Config, loadLnnpConfig } from '../../piu-node/src/config';
 import { ABSOLUTE_MS, SESSION_COOKIE, sessionLabel } from '../../piu-node/src/security/session';
 import { startNode, type NodeServer } from '../../piu-node/src/server';
 import { externalUrl } from './external';
+import { matchLang, translator } from './i18n';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 
 const PREFERRED_PORT = 8420;
@@ -34,6 +35,8 @@ let tray: Tray | null = null;
 let quitting = false;
 let latestCode = '';
 let prefs: Prefs;
+/** Textos no idioma do sistema (definido em `whenReady`, quando o Electron já sabe o locale). */
+let t = translator('pt-BR');
 
 const asset = (name: string) => join(app.isPackaged ? process.resourcesPath : join(__dirname, '..'), 'assets', name);
 const panelDir = () => (app.isPackaged ? join(process.resourcesPath, 'panel') : join(__dirname, '..', '..', 'provider-panel', 'dist'));
@@ -98,7 +101,7 @@ async function restartNode() {
     await bootNode();
     if (win) void win.loadURL(node!.url + '/');
   } catch (err) {
-    dialog.showErrorBox('Não foi possível reiniciar o nó', `O piu-node embutido não voltou a subir.\n\n${(err as Error).message}`);
+    dialog.showErrorBox(t('restart.title'), t('restart.body', { error: (err as Error).message }));
     quitting = true;
     app.exit(1);
   } finally { restarting = false; }
@@ -156,7 +159,7 @@ function createWindow() {
       e.preventDefault();
       win?.hide();
       if (!prefs.trayHintShown && Notification.isSupported()) {
-        new Notification({ title: 'O Piu Provider continua ligado', body: 'O nó segue retransmitindo. Use o ícone da bandeja para abrir ou sair.' }).show();
+        new Notification({ title: t('trayHint.title'), body: t('trayHint.body') }).show();
         prefs = savePrefs({ ...prefs, trayHintShown: true });
       }
     }
@@ -199,7 +202,7 @@ async function autoPair() {
 }
 
 function operatorName() {
-  try { const n = userInfo().username; return (n.charAt(0).toUpperCase() + n.slice(1)).slice(0, 40) || 'Este computador'; } catch { return 'Este computador'; }
+  try { const n = userInfo().username; return (n.charAt(0).toUpperCase() + n.slice(1)).slice(0, 40) || t('operator.fallback'); } catch { return t('operator.fallback'); }
 }
 
 function showWindow() {
@@ -210,21 +213,21 @@ function showWindow() {
 async function showCode() {
   const code = latestCode || node!.issueCode();
   await dialog.showMessageBox(win ?? undefined!, {
-    type: 'info', title: 'Código de pareamento', message: `${code.slice(0, 4)} ${code.slice(4)}`,
-    detail: 'Use este código para entrar no painel por outro navegador da rede local, ou para confirmar uma operação sensível (transferir LUNES, encerrar sessões).\n\nVale por 10 minutos e uma única vez. Não envie para ninguém.',
-    buttons: ['Fechar'],
+    type: 'info', title: t('code.title'), message: `${code.slice(0, 4)} ${code.slice(4)}`,
+    detail: t('code.detail'),
+    buttons: [t('close')],
   });
 }
 
 async function toggleLan() {
   const next = !prefs.lan;
   const { response } = await dialog.showMessageBox(win ?? undefined!, {
-    type: 'question', buttons: [next ? 'Permitir e reiniciar' : 'Desligar e reiniciar', 'Cancelar'], defaultId: 0, cancelId: 1,
-    title: 'Acesso pela rede local',
-    message: next ? 'Permitir acesso ao painel pela rede de casa?' : 'Voltar a aceitar só este computador?',
+    type: 'question', buttons: [next ? t('lan.allow') : t('lan.disallow'), t('cancel')], defaultId: 0, cancelId: 1,
+    title: t('lan.title'),
+    message: next ? t('lan.messageOn') : t('lan.messageOff'),
     detail: next
-      ? `O painel passa a responder em https://piu-node.local:${PREFERRED_PORT} e no endereço deste computador na rede. Quem estiver na mesma rede ainda precisa do código de pareamento, que só aparece aqui. Nunca pela internet.`
-      : 'Outros aparelhos da rede deixam de ver o painel. As sessões abertas por eles param de funcionar.',
+      ? t('lan.detailOn', { port: PREFERRED_PORT })
+      : t('lan.detailOff'),
   });
   if (response !== 0) return;
   prefs = savePrefs({ ...prefs, lan: next });
@@ -235,22 +238,22 @@ async function toggleLan() {
 
 function buildMenu() {
   const nodeMenu: MenuItemConstructorOptions = {
-    label: 'Nó',
+    label: t('menu.node'),
     submenu: [
-      { label: 'Mostrar código de pareamento…', accelerator: 'CmdOrCtrl+K', click: () => void showCode() },
-      { label: 'Copiar endereço do painel', click: () => clipboard.writeText(prefs.lan ? `https://piu-node.local:${node!.port}` : node!.url) },
-      { label: 'Impressão digital do certificado…', click: () => void dialog.showMessageBox(win ?? undefined!, { type: 'info', title: 'Certificado do nó', message: 'SHA-256', detail: `${node!.fingerprint}\n\nConfira este valor no navegador antes de aceitar o certificado de piu-node.local.`, buttons: ['Fechar'] }) },
+      { label: t('menu.showCode'), accelerator: 'CmdOrCtrl+K', click: () => void showCode() },
+      { label: t('menu.copyAddress'), click: () => clipboard.writeText(prefs.lan ? `https://piu-node.local:${node!.port}` : node!.url) },
+      { label: t('menu.fingerprint'), click: () => void dialog.showMessageBox(win ?? undefined!, { type: 'info', title: t('cert.title'), message: 'SHA-256', detail: t('cert.detail', { fingerprint: node!.fingerprint }), buttons: [t('close')] }) },
       { type: 'separator' },
-      { label: 'Permitir acesso pela rede local', type: 'checkbox', checked: prefs.lan, click: () => void toggleLan() },
-      ...(isMac ? [{ label: 'Abrir ao iniciar a sessão', type: 'checkbox' as const, checked: app.getLoginItemSettings().openAtLogin, click: (i: Electron.MenuItem) => app.setLoginItemSettings({ openAtLogin: i.checked }) }] : []),
-      { label: 'Abrir pasta de dados', click: () => void shell.openPath(app.getPath('userData')) },
+      { label: t('menu.lan'), type: 'checkbox', checked: prefs.lan, click: () => void toggleLan() },
+      ...(isMac ? [{ label: t('menu.openAtLogin'), type: 'checkbox' as const, checked: app.getLoginItemSettings().openAtLogin, click: (i: Electron.MenuItem) => app.setLoginItemSettings({ openAtLogin: i.checked }) }] : []),
+      { label: t('menu.dataFolder'), click: () => void shell.openPath(app.getPath('userData')) },
     ],
   };
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : [{ label: 'Arquivo', submenu: [{ label: 'Sair', accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }]),
+    ...(isMac ? [{ role: 'appMenu' as const }] : [{ label: t('menu.file'), submenu: [{ label: t('menu.quit'), accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }]),
     { role: 'editMenu' },
     nodeMenu,
-    { label: 'Exibir', submenu: [{ role: 'reload' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
+    { label: t('menu.view'), submenu: [{ role: 'reload' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
     { role: 'windowMenu' },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
@@ -261,12 +264,12 @@ function buildTray() {
     const img = nativeImage.createFromPath(asset(isMac ? 'trayTemplate.png' : 'tray.png'));
     if (isMac) img.setTemplateImage(true);
     tray = new Tray(img);
-    tray.setToolTip(`Piu Provider · nó ${prefs.lan ? 'na rede local' : 'local'}`);
+    tray.setToolTip(prefs.lan ? t('tray.tooltipLan') : t('tray.tooltipLocal'));
     tray.setContextMenu(Menu.buildFromTemplate([
-      { label: 'Abrir painel', click: showWindow },
-      { label: 'Mostrar código de pareamento…', click: () => void showCode() },
+      { label: t('tray.open'), click: showWindow },
+      { label: t('menu.showCode'), click: () => void showCode() },
       { type: 'separator' },
-      { label: 'Sair do Piu Provider', click: () => { quitting = true; app.quit(); } },
+      { label: t('tray.quit'), click: () => { quitting = true; app.quit(); } },
     ]));
     tray.on('click', showWindow);
   } catch { tray = null; } // sem bandeja (alguns ambientes Linux): fechar a janela encerra o app
@@ -278,12 +281,13 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.on('second-instance', showWindow);
   app.whenReady().then(async () => {
+    t = translator(matchLang([...app.getPreferredSystemLanguages(), app.getLocale()]) ?? 'pt-BR');
     prefs = loadPrefs(app.getPath('userData'));
     hardenSession();
     try {
       await bootNode();
     } catch (err) {
-      dialog.showErrorBox('Não foi possível iniciar o nó', `O piu-node embutido não subiu.\n\n${(err as Error).message}`);
+      dialog.showErrorBox(t('boot.title'), t('boot.body', { error: (err as Error).message }));
       app.exit(1);
       return;
     }

@@ -1,0 +1,32 @@
+// Deutsch. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'Mit Computer verbinden',
+  'linkDesktop.disconnected': 'Computer getrennt',
+  'linkDesktop.disconnected.body': 'Piu Desktop empfängt nichts mehr von diesem Handy.',
+  'linkDesktop.idle.title': 'Piu am Computer nutzen',
+  'linkDesktop.idle.body': 'Öffne am Computer {app} und wähle {action}. Scanne danach den QR-Code, der dort erscheint.',
+  'linkDesktop.idle.action': 'Handy verbinden',
+  'linkDesktop.idle.keys': 'Die Schlüssel bleiben nur auf dem Handy. Der Computer zeigt die Chats und sendet über das Handy, verschlüsselt im lokalen Netz (TLS mit dem Zertifikat aus dem QR-Code), solange beide im selben WLAN sind.',
+  'linkDesktop.unavailable': 'Die Verbindung mit dem Computer braucht die installierte Piu-App (funktioniert nicht in Expo Go oder im Browser).',
+  'linkDesktop.scan': 'QR-Code des Computers scannen',
+  'linkDesktop.scan.hint': 'Richte die Kamera auf den QR-Code des Computers. Er ändert sich alle 30 Sekunden; dauert es zu lange, scanne den neuen.',
+  'linkDesktop.connecting': 'Verbinde…',
+  'linkDesktop.connecting.body': 'Beide müssen im selben WLAN sein. Nichts verlässt das Handy, bevor du die Wörter geprüft hast.',
+  'linkDesktop.confirm.title': 'Prüft die 3 Wörter',
+  'linkDesktop.confirm.body': 'Der Computer zeigt 3 Wörter auf dem Bildschirm. Es müssen genau diese sein, in derselben Reihenfolge:',
+  'linkDesktop.confirm.bodyNamed': 'Der Computer ({name}) zeigt 3 Wörter auf dem Bildschirm. Es müssen genau diese sein, in derselben Reihenfolge:',
+  'linkDesktop.confirm.prompt': 'Am Computer:',
+  'linkDesktop.confirm.warn': 'Wenn sie abweichen, brich ab: Jemand im selben Netz könnte sich dazwischenschalten. Es wurde noch nichts gesendet.',
+  'linkDesktop.confirm.same': 'Stimmen überein · verbinden',
+  'linkDesktop.confirm.different': 'Abweichend · abbrechen',
+  'linkDesktop.connected.name': 'Computer verbunden',
+  'linkDesktop.connected.since': 'verbunden seit {time}',
+  'linkDesktop.connected.frames': '{sent} Frames gesendet · {received} empfangen',
+  'linkDesktop.connected.body': 'Der Computer sieht nur, was dieses Handy verschlüsselt sendet. Verlässt das Handy das WLAN oder wird die App geschlossen, bricht die Verbindung ab und der Computer aktualisiert nicht mehr.',
+  'linkDesktop.disconnect': 'Trennen',
+  'linkDesktop.error': 'Die Verbindung ist abgebrochen.',
+  'linkDesktop.retry': 'Erneut versuchen',
+  'linkDesktop.footer': 'Schlüssel und Zertifikat des Computers kommen über die Kamera. Wer im selben WLAN ist, kann also weder lesen, was das Handy sendet, noch sich als der Computer ausgeben. Die 3 Wörter entlarven jeden, der sich dazwischenschalten will. Kein Server: nur die beiden Geräte.',
+};

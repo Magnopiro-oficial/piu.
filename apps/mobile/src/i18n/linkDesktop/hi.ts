@@ -1,0 +1,32 @@
+// हिन्दी. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': 'कंप्यूटर से जोड़ें',
+  'linkDesktop.disconnected': 'कंप्यूटर डिस्कनेक्ट हो गया',
+  'linkDesktop.disconnected.body': 'Piu Desktop को अब इस फ़ोन से कुछ नहीं मिलता।',
+  'linkDesktop.idle.title': 'कंप्यूटर पर Piu इस्तेमाल करें',
+  'linkDesktop.idle.body': 'कंप्यूटर पर {app} खोलें और {action} चुनें। फिर वहाँ दिखने वाला QR स्कैन करें।',
+  'linkDesktop.idle.action': 'फ़ोन जोड़ें',
+  'linkDesktop.idle.keys': 'कुंजियाँ सिर्फ़ फ़ोन पर रहती हैं। कंप्यूटर बातचीत दिखाता है और फ़ोन के ज़रिए भेजता है, लोकल नेटवर्क पर एन्क्रिप्ट करके (QR के सर्टिफ़िकेट वाला TLS), जब तक दोनों एक ही Wi-Fi पर हों।',
+  'linkDesktop.unavailable': 'कंप्यूटर से जोड़ने के लिए इंस्टॉल किया हुआ Piu ऐप चाहिए (यह Expo Go या ब्राउज़र में काम नहीं करता)।',
+  'linkDesktop.scan': 'कंप्यूटर का QR स्कैन करें',
+  'linkDesktop.scan.hint': 'कैमरा कंप्यूटर के QR की ओर करें। यह हर 30 सेकंड में बदलता है; देर हो जाए तो नया QR स्कैन करें।',
+  'linkDesktop.connecting': 'जोड़ा जा रहा है…',
+  'linkDesktop.connecting.body': 'दोनों का एक ही Wi-Fi पर होना ज़रूरी है। शब्द जाँचने से पहले फ़ोन से कुछ नहीं जाता।',
+  'linkDesktop.confirm.title': '3 शब्द जाँचें',
+  'linkDesktop.confirm.body': 'कंप्यूटर स्क्रीन पर 3 शब्द दिखाता है। वे ठीक यही होने चाहिए, इसी क्रम में:',
+  'linkDesktop.confirm.bodyNamed': 'कंप्यूटर ({name}) स्क्रीन पर 3 शब्द दिखाता है। वे ठीक यही होने चाहिए, इसी क्रम में:',
+  'linkDesktop.confirm.prompt': 'कंप्यूटर पर:',
+  'linkDesktop.confirm.warn': 'अगर अलग हों, तो रद्द करें: उसी नेटवर्क पर कोई बीच में घुसने की कोशिश कर रहा हो सकता है। अभी तक कुछ नहीं भेजा गया है।',
+  'linkDesktop.confirm.same': 'एक जैसे हैं · जोड़ें',
+  'linkDesktop.confirm.different': 'अलग हैं · रद्द करें',
+  'linkDesktop.connected.name': 'कंप्यूटर जुड़ा हुआ है',
+  'linkDesktop.connected.since': '{time} से जुड़ा हुआ',
+  'linkDesktop.connected.frames': '{sent} फ़्रेम भेजे · {received} मिले',
+  'linkDesktop.connected.body': 'कंप्यूटर सिर्फ़ वही देखता है जो यह फ़ोन एन्क्रिप्ट करके भेजता है। अगर फ़ोन Wi-Fi से हट जाए या ऐप बंद हो जाए, तो कनेक्शन टूट जाता है और कंप्यूटर अपडेट होना बंद कर देता है।',
+  'linkDesktop.disconnect': 'डिस्कनेक्ट करें',
+  'linkDesktop.error': 'कनेक्शन टूट गया।',
+  'linkDesktop.retry': 'फिर से कोशिश करें',
+  'linkDesktop.footer': 'कंप्यूटर की कुंजी और सर्टिफ़िकेट कैमरे से आते हैं, इसलिए उसी Wi-Fi पर मौजूद कोई व्यक्ति न तो फ़ोन का भेजा हुआ पढ़ सकता है, न कंप्यूटर होने का दिखावा कर सकता है। बीच में घुसने की कोशिश करने वाले को 3 शब्द पकड़ लेते हैं। कोई सर्वर नहीं: सिर्फ़ दो डिवाइस।',
+};

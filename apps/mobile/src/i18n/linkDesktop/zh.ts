@@ -1,0 +1,32 @@
+// 中文（简体）. Same keys and {vars} as linkDesktop/pt-BR.ts (src/lib/__tests__/i18n.test.ts).
+import type { Dict } from '../core';
+
+export const linkDesktop: Dict = {
+  'linkDesktop.title': '连接到电脑',
+  'linkDesktop.disconnected': '电脑已断开',
+  'linkDesktop.disconnected.body': 'Piu Desktop 不再从这部手机接收任何内容。',
+  'linkDesktop.idle.title': '在电脑上使用 Piu',
+  'linkDesktop.idle.body': '在电脑上打开 {app}，选择 {action}。然后扫描那里显示的二维码。',
+  'linkDesktop.idle.action': '连接手机',
+  'linkDesktop.idle.keys': '密钥只保存在手机上。电脑显示聊天内容，并通过手机发送，经本地网络加密（使用二维码中证书的 TLS），只在两者连接同一个 Wi-Fi 时有效。',
+  'linkDesktop.unavailable': '连接到电脑需要安装 Piu 应用（在 Expo Go 和浏览器中无法使用）。',
+  'linkDesktop.scan': '扫描电脑上的二维码',
+  'linkDesktop.scan.hint': '将相机对准电脑上的二维码。二维码每 30 秒更换一次；如果耗时太久，请扫描新的二维码。',
+  'linkDesktop.connecting': '正在连接…',
+  'linkDesktop.connecting.body': '两者必须连接同一个 Wi-Fi。在你核对词语之前，手机不会发出任何内容。',
+  'linkDesktop.confirm.title': '核对 3 个词',
+  'linkDesktop.confirm.body': '电脑屏幕上会显示 3 个词。它们必须与下面的词完全相同，且顺序一致：',
+  'linkDesktop.confirm.bodyNamed': '电脑（{name}）屏幕上会显示 3 个词。它们必须与下面的词完全相同，且顺序一致：',
+  'linkDesktop.confirm.prompt': '电脑上：',
+  'linkDesktop.confirm.warn': '如果不同，请取消：同一网络中可能有人试图插入中间。目前还没有发送任何内容。',
+  'linkDesktop.confirm.same': '一致 · 连接',
+  'linkDesktop.confirm.different': '不同 · 取消',
+  'linkDesktop.connected.name': '电脑已连接',
+  'linkDesktop.connected.since': '自 {time} 起已连接',
+  'linkDesktop.connected.frames': '已发送 {sent} 帧 · 已接收 {received}',
+  'linkDesktop.connected.body': '电脑只能看到这部手机加密发送的内容。如果手机离开 Wi-Fi 或关闭应用，连接就会断开，电脑也不再更新。',
+  'linkDesktop.disconnect': '断开连接',
+  'linkDesktop.error': '连接已断开。',
+  'linkDesktop.retry': '重试',
+  'linkDesktop.footer': '电脑的密钥和证书通过相机传递，因此同一 Wi-Fi 中的人既无法读取手机发送的内容，也无法冒充电脑。任何试图插入中间的人都会被 3 个词揭穿。没有服务器：只有这两台设备。',
+};
