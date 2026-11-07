@@ -130,7 +130,7 @@ export const redePt: RedeDict = {
     cards: [
       { icon: 'bluetooth', when: 'Mensagem curta ou bateria baixa', name: 'Bluetooth', k: 'on', a: '~10 kB/s', b: 'gasta pouco' },
       { icon: 'wifi_tethering', when: 'Foto, vídeo, arquivo', name: 'Wi-Fi Direct', k: 'on', a: '~500 kB/s', b: '50× mais rápido' },
-      { icon: 'router', when: 'Num Wi-Fi com outros aparelhos Piu', name: 'Rede local', k: 'soon', a: 'o roteador faz a ponte', b: 'sem internet' },
+      { icon: 'router', when: 'Num Wi-Fi com outros aparelhos Piu', name: 'Rede local', k: 'test', a: 'o roteador faz a ponte', b: 'sem internet' },
     ],
     bridgeB: 'A caminho:',
     bridge: 'o que chega por Bluetooth poderá seguir pelo Wi-Fi, e vice-versa. Um celular no meio vira ponte entre dois grupos.',
@@ -161,7 +161,7 @@ export const redePt: RedeDict = {
   pontos: {
     kicker: '06 · PONTOS PIU',
     title: 'Um roteador comum vira ponto de encontro.',
-    lead: 'Em breve: uma padaria, uma escola, uma igreja. Quem passa por ali entra no Wi-Fi, e os celulares trocam mensagens entre si, mesmo sem internet. O roteador não precisa de nada novo.',
+    lead: 'Em teste: uma padaria, uma escola, uma igreja. Quem passa por ali entra no Wi-Fi, e os celulares trocam mensagens entre si, mesmo sem internet. O roteador não precisa de nada novo.',
     place: 'Padaria do Zé',
     guardian: 'Guardião',
     steps: [

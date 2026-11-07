@@ -91,7 +91,7 @@ export const redeEn: RedeDict = {
     cards: [
       { icon: 'bluetooth', when: 'Short message or low battery', name: 'Bluetooth', k: 'on', a: '~10 kB/s', b: 'uses little power' },
       { icon: 'wifi_tethering', when: 'Photo, video, file', name: 'Wi-Fi Direct', k: 'on', a: '~500 kB/s', b: '50× faster' },
-      { icon: 'router', when: 'On a Wi-Fi with other Piu devices', name: 'Local network', k: 'soon', a: 'the router bridges', b: 'no internet' },
+      { icon: 'router', when: 'On a Wi-Fi with other Piu devices', name: 'Local network', k: 'test', a: 'the router bridges', b: 'no internet' },
     ],
     bridgeB: 'Coming:',
     bridge: 'what arrives over Bluetooth will be able to continue over Wi-Fi, and vice versa. A phone in the middle becomes a bridge between two groups.',
@@ -122,7 +122,7 @@ export const redeEn: RedeDict = {
   pontos: {
     kicker: '06 · PIU POINTS',
     title: 'An ordinary router becomes a meeting point.',
-    lead: 'Coming soon: a bakery, a school, a church. Whoever passes by joins the Wi-Fi, and phones exchange messages with each other, even without internet. The router needs nothing new.',
+    lead: 'In testing: a bakery, a school, a church. Whoever passes by joins the Wi-Fi, and phones exchange messages with each other, even without internet. The router needs nothing new.',
     place: 'Joe’s Bakery',
     guardian: 'Keeper',
     steps: [
