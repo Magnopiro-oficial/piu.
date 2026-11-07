@@ -22,7 +22,7 @@ As 31 atividades de 05–06/11, cobrindo:
 - fluxograma;
 - Desktop sem itens pendentes.
 
-Mais os ajustes de 07/11: convite, regra única de limites, Desktop 0.1.1 e página de Ajuda.
+Mais os ajustes de 07/11: convite, regra única de limites, Desktop 0.1.1, página de Ajuda, textos do celular e do Provider em 11 idiomas sem prometer LUNES, pacotes do Piu Node (.ipk e .deb) e Provider 0.1.2.
 
 ## 2. Implementado e testado (I)
 
@@ -98,13 +98,14 @@ Os guias de Ajuda que dependem de comandos inexistentes, como os de rádio do pi
 
 | Produto | Typecheck | Testes | Build |
 |---|---|---|---|
-| Celular | ok | 600/600 | APK release assinado |
+| Celular | ok | 603/603 | APK release assinado |
 | Desktop | ok | 197/197 | empacotado (Mac x64 local) e 7 instaladores no CI |
-| piu-node | ok | 120/120 | ok |
+| piu-node | ok | 122/122 | ok |
 | Settlement | ok | 76/76 | ok |
 | Painel do Provider | ok | 99/99 | ok |
-| Provider Desktop | ok | 1/1 | 7 instaladores no CI |
-| OpenWrt | — | 17/17 | — |
+| Provider Desktop | ok | 4/4 | 7 instaladores no CI |
+| OpenWrt | — | 19/19 | `.ipk` no CI |
+| Linux (`.deb`) | — | 16/16 | `.deb` no CI; instalado com systemd em Debian 13 (Docker) |
 | Site | ok (`astro check`) | — | ok, publicado |
 
 Instalação:
@@ -133,7 +134,8 @@ Instalação:
 - Versões publicadas:
   - Android 0.1.1 (Latest);
   - Desktop 0.1.0 e 0.1.1;
-  - Provider 0.1.1.
+  - Provider 0.1.1 e 0.1.2 (menus em 11 idiomas);
+  - Piu Node 0.1.0 (`.ipk` para OpenWrt e `.deb` para Debian/Ubuntu/Raspberry Pi OS).
 - Rascunho antigo do Provider 0.1.0: feito com código anterior, preservado e sem publicar.
 - O site lê os downloads de `releases.json`, gerado por `sync-release.mjs`, que confere cada SHA-256 com o `SHA256SUMS.txt`.
 
@@ -161,7 +163,7 @@ Instalação:
   - prova v2 e registro v2 prontos;
   - ativação espera as chaves (E).
 - **Site:**
-  - I, no ar com "A rede", downloads reais de três produtos e textos honestos;
+  - I, no ar com "A rede", Ajuda, downloads reais de quatro produtos e textos honestos;
   - página de Ajuda: ver `docs/ajuda/ANALISE.md`.
 - **Desktop:**
   - I; versão 0.1.1 sem itens "em breve", 11 idiomas, tema claro/escuro;
@@ -169,9 +171,10 @@ Instalação:
   - sem certificados (decisão).
 - **Provider** (piu-node, painel, Provider Desktop, OpenWrt):
   - I; gateway e painel testados ponta a ponta;
-  - Provider Desktop 0.1.1 publicado;
-  - OpenWrt 17/17.
+  - Provider Desktop 0.1.2 publicado;
+  - Piu Node 0.1.0 publicado (`.ipk` e `.deb`); LoRa por USB experimental;
+  - broadcast UDP 8423 validado com o endereço da sub-rede (num roteador de verdade, a confirmar).
 - **Mobile:**
-  - I no código (600 testes);
+  - I no código (603 testes);
   - APK 0.1.1 publicado;
   - teste no aparelho e APK 0.1.2 pendentes (P).
