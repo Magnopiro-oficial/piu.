@@ -17,15 +17,113 @@
   "desktop": {
     "tag": "desktop-v0.1.0",
     "version": "0.1.0",
-    "published": false,
-    "publishedAt": null,
-    "assets": {}
+    "published": true,
+    "publishedAt": "2026-11-07T03:34:46Z",
+    "assets": {
+      "linux-deb": {
+        "name": "Piu-0.1.0-linux-amd64.deb",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-linux-amd64.deb",
+        "size": 107269936,
+        "sha256": "c547bc507691290ca927df08673372295913045c3b0f8166ed051904e9e253f0"
+      },
+      "linux-appimage": {
+        "name": "Piu-0.1.0-linux-x86_64.AppImage",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-linux-x86_64.AppImage",
+        "size": 132411899,
+        "sha256": "cf54709ff7e31cbd3fd089bd5cd88ca437e038bb87a2c6367d4a3f990611caa6"
+      },
+      "mac-arm64-dmg": {
+        "name": "Piu-0.1.0-mac-arm64.dmg",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-mac-arm64.dmg",
+        "size": 127494371,
+        "sha256": "f96b6b1c0bc359ac8d4899508c98d8cbc9243c4b6c069bb44bf7990f0cf3e4bb"
+      },
+      "mac-arm64-zip": {
+        "name": "Piu-0.1.0-mac-arm64.zip",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-mac-arm64.zip",
+        "size": 123896109,
+        "sha256": "de8f1bb2dbbe535e1e86b5407dafb92fcc1ecabdc00b4bf1c8db295fcc92be8e"
+      },
+      "mac-x64-dmg": {
+        "name": "Piu-0.1.0-mac-x64.dmg",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-mac-x64.dmg",
+        "size": 133418405,
+        "sha256": "d5eb2c731bb8cff0567bd72f50463b870aebdeb4defb73a4b8976ae8c4c5198a"
+      },
+      "mac-x64-zip": {
+        "name": "Piu-0.1.0-mac-x64.zip",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-mac-x64.zip",
+        "size": 129814399,
+        "sha256": "8607f72ebb9c2bcfec49d7028ad5bbce6980578470461d2260af7fb15ce7b6bc"
+      },
+      "win-x64-exe": {
+        "name": "Piu-0.1.0-win-x64.exe",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/Piu-0.1.0-win-x64.exe",
+        "size": 127901453,
+        "sha256": "27961e7530848d32480bb0d271ff8dc37b12c10a9b7c06fa55d7aa39d28b2438"
+      },
+      "sums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/desktop-v0.1.0/SHA256SUMS.txt",
+        "size": 634,
+        "sha256": "01320944c0d7ba21b0279e5241beb7f3f7df3e241db662f260fe0cb8c7e08515"
+      }
+    }
   },
   "provider": {
-    "tag": "provider-v0.1.0",
-    "version": "0.1.0",
-    "published": false,
-    "publishedAt": null,
-    "assets": {}
+    "tag": "provider-v0.1.1",
+    "version": "0.1.1",
+    "published": true,
+    "publishedAt": "2026-11-07T03:34:48Z",
+    "assets": {
+      "linux-deb": {
+        "name": "Piu-Provider-0.1.1-linux-amd64.deb",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-linux-amd64.deb",
+        "size": 107506812,
+        "sha256": "a2c6af0c25d6189f782c8d135d9ffd312c2cc7700cc8718a273fecb37d044f9f"
+      },
+      "linux-appimage": {
+        "name": "Piu-Provider-0.1.1-linux-x86_64.AppImage",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-linux-x86_64.AppImage",
+        "size": 132583642,
+        "sha256": "e7dd56ef3003627a8a8a4828efff07251da2388b95ff9b6bdcfedc9bc1031e56"
+      },
+      "mac-arm64-dmg": {
+        "name": "Piu-Provider-0.1.1-mac-arm64.dmg",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-mac-arm64.dmg",
+        "size": 127718967,
+        "sha256": "b6a5901783f069a3eec5cb588a55b1d1cc0f4d80893523c25a716558ed956bba"
+      },
+      "mac-arm64-zip": {
+        "name": "Piu-Provider-0.1.1-mac-arm64.zip",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-mac-arm64.zip",
+        "size": 124129021,
+        "sha256": "724f712aa9e8aef9c27a9802d83d96264945a90b7ea9ac62547099b247128064"
+      },
+      "mac-x64-dmg": {
+        "name": "Piu-Provider-0.1.1-mac-x64.dmg",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-mac-x64.dmg",
+        "size": 133656910,
+        "sha256": "e4828bac19d8f949c57c5c45a09d2a158701482cc8afa0e731828f21c2320460"
+      },
+      "mac-x64-zip": {
+        "name": "Piu-Provider-0.1.1-mac-x64.zip",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-mac-x64.zip",
+        "size": 130047327,
+        "sha256": "af582614c3ba8ef777a7c5af72683bedf6396ba389a2b8d8c685d16d53f8a682"
+      },
+      "win-x64-exe": {
+        "name": "Piu-Provider-0.1.1-win-x64.exe",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/Piu-Provider-0.1.1-win-x64.exe",
+        "size": 128188348,
+        "sha256": "735196baa0b34a3db7f52ba026155c4c432c264d0217c65b10d37ec3fcd21a90"
+      },
+      "sums": {
+        "name": "SHA256SUMS.txt",
+        "url": "https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.1/SHA256SUMS.txt",
+        "size": 697,
+        "sha256": "2535d6ae9af1bee4bed00ecef506a0b7c4a355b61e8d6de1e6453897aa17ed29"
+      }
+    }
   }
 }
