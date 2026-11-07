@@ -17,7 +17,11 @@ import { lunesToPlanck } from './units.js';
 
 export interface LotInput { id: string; payouts: { address: string; lunes: string | number }[] }
 export interface Payout { address: string; planck: bigint }
-export interface PlannedLot { id: string; payouts: Payout[]; total: bigint; digest: string; remark: string }
+export interface PlannedLot {
+  id: string; payouts: Payout[]; total: bigint; digest: string; remark: string;
+  /** Hash só dos pagamentos, SEM o id: o diário recusa os mesmos pagamentos com outro id (M-05). */
+  payoutsDigest: string;
+}
 
 export interface PlanOptions {
   /** Prefixo SS58 dos endereços no lote (padrão 42, o formato que o explorador mostra). */
@@ -30,7 +34,12 @@ export interface PlanOptions {
 const LOT_ID = /^[0-9A-Za-z][0-9A-Za-z._-]{0,47}$/;
 
 export function normalizeAddress(a: string, ss58 = 42): string {
-  try { return encodeAddress(decodeAddress(a.trim()), ss58); } catch { throw new Error(`Endereço inválido: ${a}`); }
+  // Só conta comum (chave de 32 bytes): endereço de índice (1–8 bytes) ou de 33 bytes faria o
+  // `batchAll` falhar ou pagar a conta errada, e o lote travaria a cada época (auditoria final, M-1).
+  let pk: Uint8Array;
+  try { pk = decodeAddress(a.trim()); } catch { throw new Error(`Endereço inválido: ${a}`); }
+  if (pk.length !== 32) throw new Error(`Endereço inválido: ${a} (não é uma conta de 32 bytes)`);
+  return encodeAddress(pk, ss58);
 }
 
 export function planLot(input: LotInput, o: PlanOptions = {}): PlannedLot {
@@ -55,5 +64,6 @@ export function planLot(input: LotInput, o: PlanOptions = {}): PlannedLot {
   // Hash canônico (endereço em hex da chave pública + valor), independente do prefixo SS58.
   const canon = payouts.map(p => `${Buffer.from(decodeAddress(p.address)).toString('hex')}:${p.planck}`).join('\n');
   const digest = createHash('sha256').update(`piu/lote/v1\n${input.id}\n${canon}`).digest('hex');
-  return { id: input.id, payouts, total, digest, remark: `piu/lote/v1 ${input.id} ${digest}` };
+  const payoutsDigest = createHash('sha256').update(`piu/lote/pagamentos/v1\n${canon}`).digest('hex');
+  return { id: input.id, payouts, total, digest, remark: `piu/lote/v1 ${input.id} ${digest}`, payoutsDigest };
 }

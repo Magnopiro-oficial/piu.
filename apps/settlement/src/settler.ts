@@ -29,6 +29,8 @@ export interface PayOptions {
   wait?: () => Promise<void>;
   /** Tentativas novas no máximo (cada uma só depois de a anterior vencer sem entrar). */
   maxAttempts?: number;
+  /** Gênese esperada (padrão: a da Lunes Mainnet; `expectedGenesis()` lê a de uma rede de desenvolvimento). */
+  genesisHash?: string;
 }
 
 export class SettlementError extends Error {}
@@ -36,14 +38,24 @@ export class SettlementError extends Error {}
 type Attempt = Pick<SignedLot, 'hash' | 'hex' | 'fromBlock' | 'validUntil'>;
 
 export async function payLot(chain: ChainClient, journal: Journal, lot: PlannedLot, o: PayOptions): Promise<JournalEntry> {
+  // Um pagamento por lote por vez (M-2): o diário é lido e gravado só com a trava na mão.
+  let release: () => void;
+  try { release = journal.lock(lot.id); } catch (e) { throw new SettlementError((e as Error).message); }
+  try { return await payLocked(chain, journal, lot, o); } finally { release(); }
+}
+
+async function payLocked(chain: ChainClient, journal: Journal, lot: PlannedLot, o: PayOptions): Promise<JournalEntry> {
   const log = o.log ?? (() => {});
   const wait = o.wait ?? (() => new Promise<void>(r => setTimeout(r, 6000)));
   let e = journal.get(lot.id);
   if (e && e.digest !== lot.digest) throw new SettlementError(`O lote ${lot.id} já existe no diário com outros pagamentos. Use outro id.`);
   if (e && (e.state === 'finalizado' || e.state === 'falhou')) { log(`Lote ${lot.id} já ${e.state}.`); return e; }
+  // Os mesmos pagamentos com outro id: só se o outro lote falhou (nada foi pago, batchAll é tudo ou nada).
+  const same = journal.findByPayouts(lot.payoutsDigest, lot.id);
+  if (same && same.state !== 'falhou') throw new SettlementError(`Estes pagamentos já estão no lote ${same.lot} (${same.state}). Não pago de novo com outro id.`);
 
   const info = await chain.info();
-  const problems = preflight(info);
+  const problems = preflight(info, o.genesisHash);
   if (problems.length) throw new SettlementError(`A chain não é a esperada: ${problems.join('; ')}.`);
 
   for (let round = 0; round < (o.maxAttempts ?? 3) + 1; round++) {
@@ -62,7 +74,7 @@ export async function payLot(chain: ChainClient, journal: Journal, lot: PlannedL
     const need = lot.total + fee + info.existentialDeposit;
     if (free < need) throw new SettlementError(`Saldo insuficiente na conta pagadora: tem ${planckToLunes(free)}, precisa de ${planckToLunes(need)} LUNES.`);
     const signed = await chain.sign(lot, o.signer, await chain.nonce(o.from));
-    e ??= { lot: lot.id, digest: lot.digest, total: lot.total.toString(), state: 'assinado', attempts: [], updatedAt: 0 };
+    e ??= { lot: lot.id, digest: lot.digest, payoutsDigest: lot.payoutsDigest, total: lot.total.toString(), state: 'assinado', attempts: [], updatedAt: 0 };
     e.state = 'assinado';
     e.attempts.push({ hash: signed.hash, hex: signed.hex, nonce: signed.nonce, fromBlock: signed.fromBlock, validUntil: signed.validUntil, fee: signed.fee.toString(), at: Date.now() });
     journal.put(e); // gravado ANTES de enviar

@@ -4,8 +4,8 @@
  * `batchAll` tudo ou nada e reenvio dos mesmos bytes.
  */
 import { createHash } from 'node:crypto';
-import type { ChainClient, ChainInfo, SignedLot, TxOutcome } from '../src/chain.js';
-import { TxRejected } from '../src/chain.js';
+import type { ChainClient, ChainInfo, SignedLot, TransferInfo, TxOutcome } from '../src/chain.js';
+import { EXPECTED, TxRejected } from '../src/chain.js';
 import type { PlannedLot } from '../src/lot.js';
 
 interface Pending { hash: string; from: string; nonce: number; validUntil: number; lot: PlannedLot; fee: bigint }
@@ -25,7 +25,7 @@ export class FakeChain implements ChainClient {
   readonly ed = 500n;
 
   async info(): Promise<ChainInfo> {
-    return { chain: 'Lunes (simulada)', specName: 'lunes-nightly', specVersion: 107, genesisHash: '0x00', decimals: 8, symbol: 'LUNES', ss58: 57, existentialDeposit: this.ed, finalized: this.head, ...this.info_ };
+    return { chain: 'Lunes (simulada)', specName: 'lunes-nightly', specVersion: 107, genesisHash: EXPECTED.genesisHash, decimals: 8, symbol: 'LUNES', ss58: 57, existentialDeposit: this.ed, finalized: this.head, ...this.info_ };
   }
   async freeBalance(a: string) { return this.balances.get(a) ?? 0n; }
   async nonce(a: string) { return this.nonces.get(a) ?? 0; }
@@ -79,6 +79,20 @@ export class FakeChain implements ChainClient {
       if (x) return x.ok ? { status: 'finalized', blockHash: `0xb${n}`, blockNumber: n } : { status: 'failed', blockHash: `0xb${n}`, blockNumber: n, error: x.error! };
     }
     return null;
+  }
+
+  /** Transferências simples (caução dos celulares): hash → transferência, no bloco dela. */
+  transfers = new Map<string, TransferInfo>();
+  /** Registra uma transferência finalizada (devolve o hash). `ok: false` = entrou e falhou. */
+  addTransfer(from: string, to: string, amount: bigint, o: { ok?: boolean; at?: number } = {}): { txHash: string; block: number } {
+    this.head++;
+    const txHash = `0x${createHash('sha256').update(`${from}:${to}:${amount}:${this.head}:${this.transfers.size}`).digest('hex')}`;
+    this.transfers.set(txHash, { from, to, amount, ok: o.ok ?? true, blockNumber: this.head, at: o.at ?? 0 });
+    return { txHash, block: this.head };
+  }
+  async transferOf(hash: string, block: number): Promise<TransferInfo | null> {
+    const t = this.transfers.get(hash);
+    return t && t.blockNumber === block && block <= this.head ? { ...t } : null;
   }
 
   /** Quanto cada carteira recebeu do lote (para conferir pagamento único). */

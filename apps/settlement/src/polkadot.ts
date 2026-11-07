@@ -10,7 +10,7 @@ import '@polkadot/api-augment';
 import { ApiPromise, WsProvider } from '@polkadot/api';
 import type { SubmittableExtrinsic } from '@polkadot/api/types';
 import type { KeyringPair } from '@polkadot/keyring/types';
-import type { ChainClient, ChainInfo, SignedLot, TxOutcome } from './chain.js';
+import type { ChainClient, ChainInfo, SignedLot, TransferInfo, TxOutcome } from './chain.js';
 import { TxRejected } from './chain.js';
 import type { PlannedLot } from './lot.js';
 
@@ -136,6 +136,25 @@ export class PolkadotChain implements ChainClient {
       }
     }
     return null;
+  }
+
+  async transferOf(hash: string, block: number): Promise<TransferInfo | null> {
+    const head = (await this.api.rpc.chain.getHeader(await this.api.rpc.chain.getFinalizedHead())).number.toNumber();
+    if (!Number.isInteger(block) || block < 0 || block > head) return null;
+    const blockHash = await this.api.rpc.chain.getBlockHash(block);
+    const signed = await this.api.rpc.chain.getBlock(blockHash);
+    const index = signed.block.extrinsics.findIndex(x => x.hash.toHex() === hash);
+    if (index < 0) return null;
+    const x = signed.block.extrinsics[index]!;
+    const m = x.method;
+    if (m.section !== 'balances' || !['transferKeepAlive', 'transferAllowDeath', 'transfer'].includes(m.method) || !x.isSigned) return null;
+    const at = await this.api.at(blockHash);
+    const [events, now] = await Promise.all([at.query.system.events(), at.query.timestamp.now()]);
+    let ok = false;
+    for (const { phase, event } of events) {
+      if (phase.isApplyExtrinsic && phase.asApplyExtrinsic.toNumber() === index && this.api.events.system.ExtrinsicSuccess.is(event)) ok = true;
+    }
+    return { from: x.signer.toString(), to: m.args[0]!.toString(), amount: BigInt(m.args[1]!.toString()), ok, blockNumber: block, at: Math.floor(Number(now.toString()) / 1000) };
   }
 
   private describe(err: { isModule?: boolean; asModule?: unknown; toString(): string }): string {

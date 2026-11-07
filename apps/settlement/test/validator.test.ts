@@ -7,35 +7,23 @@ import { encodeAddress } from '@polkadot/util-crypto';
 import { Journal } from '../src/journal.js';
 import { planLot } from '../src/lot.js';
 import { toHex } from '../src/protocol/bytes.js';
-import { deriveNodeKey, type KeyPair, newSeed } from '../src/protocol/keys.js';
-import { makePayoutClaim, makeRelayReceipt, type RelayReceipt } from '../src/protocol/receipts.js';
-import { hash, random } from '../src/protocol/suite.js';
+import type { KeyPair } from '../src/protocol/keys.js';
+import { makePayoutClaim } from '../src/protocol/receipts.js';
 import { payLot } from '../src/settler.js';
 import { lunesToPlanck } from '../src/units.js';
 import {
-  type AuditFile, buildLedger, closeEpoch, emptyState, epochEnd, epochOf, epochStart, type EvidenceFile, settleLot, toClaims, toEvidence, type ValidatorState,
+  type AuditFile, closeEpoch, emptyState, epochEnd, epochOf, epochStart, type EvidenceFile, settleLot, toClaims, toEvidence, type ValidatorState,
 } from '../src/validator.js';
 import { FakeChain } from './fake-chain.js';
+import { buildLedger, delivery, evidence, node } from './v2-helpers.js';
 
 const L = (s: string) => lunesToPlanck(s);
 const E1 = '2026-S40', E2 = '2026-S41', E3 = '2026-S42';
 const inE = (e: string, h = 12) => epochStart(e) + h * 3600;
 const closeAt = (e: string) => epochEnd(e) + 7 * 86400 + 60; // depois da janela das provas
-const node = () => deriveNodeKey(newSeed());
 const wallet = (n: number) => encodeAddress(new Uint8Array(32).fill(n), 42);
 
-/** Uma entrega comprovada: recibos dos relays e a prova do destino. */
-function delivery(relays: KeyPair[], at: number, proven = true) {
-  const envelopeId = toHex(random(16));
-  const secret = random(16);
-  const ackHash = hash(secret).slice(0, 16);
-  const receipts = relays.map(r => makeRelayReceipt(r, envelopeId, ackHash, at));
-  return { receipts, proofs: proven ? [{ envelopeId, ackSecret: secret }] : [] };
-}
-
-function evidence(ds: ReturnType<typeof delivery>[], extra: RelayReceipt[] = []): EvidenceFile {
-  return toEvidence([...ds.flatMap(d => d.receipts), ...extra], ds.flatMap(d => d.proofs));
-}
+// Entregas, nós (registrados, cada um com o seu operador) e provas v2: test/v2-helpers.ts.
 
 function close(epoch: string, ev: EvidenceFile[], state: ValidatorState, claims: { node: KeyPair; addr: string }[] = [], budget = '1000', audits: AuditFile[] = []) {
   const now = closeAt(epoch);

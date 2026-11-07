@@ -18,7 +18,10 @@
     "protocol:sync": "node scripts/sync-protocol.mjs",
     "validator:close": "tsx src/validator-cli.ts close",
     "validator:paid": "tsx src/validator-cli.ts paid",
-    "validator:demo": "tsx scripts/demo-dados.ts"
+    "validator:demo": "tsx scripts/demo-dados.ts",
+    "validator:keygen": "tsx src/validator-cli.ts keygen",
+    "validator:bonds": "tsx src/validator-cli.ts bonds",
+    "validator:inbox": "tsx src/validator-cli.ts inbox"
   },
   "dependencies": {
     "@noble/ciphers": "^2.4.0",

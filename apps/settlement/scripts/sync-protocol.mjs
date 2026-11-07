@@ -1,5 +1,5 @@
 // Copia do protocolo do app (apps/mobile/src/protocol) só o que o validador usa: recibos, provas de
-// entrega, vínculo nó → carteira e o livro de contribuições. Usa o mesmo gerador do piu-node (imports
+// entrega (v2: proof.ts, que lê o cabeçalho do envelope), vínculo nó → carteira, o livro de contribuições e o celular como nó (phoneNode: certificado, aval, registro). Usa o mesmo gerador do piu-node (imports
 // `.js` e ajustes de tipo), para as duas cópias saírem iguais. test/protocol-sync.test.ts confere.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -8,7 +8,7 @@ import { generate, SRC } from '../../piu-node/scripts/sync-protocol.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 export const DST = join(here, '../src/protocol');
-export const FILES = ['bytes', 'suite', 'keys', 'receipts'];
+export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'proof', 'phoneNode', 'carry'];
 export { generate, SRC };
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

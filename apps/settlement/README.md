@@ -15,15 +15,20 @@ npm run validator:close -- --epoch 2026-S41 --budget 1000 --now 2026-10-20T00:00
 npm run validator:paid -- --lot piu-lote-2026-S41 --journal diario               # depois do lot:pay
 npm run mainnet:check    # só leitura: confere a Mainnet contra o esperado (precisa de rede até a Lunes)
 npm run lot:plan -- examples/lote-exemplo.json [--ws wss://…] [--from 5…]
-npm run lot:pay  -- lote.json --confirm <id do lote> [--ws wss://…] [--journal diario]
+npm run lot:pay  -- lote.json --confirm <id do lote> [--ws wss://…] [--journal diario] [--dir dados | --manual]
+npm run validator:keygen -- --dir dados   # chave que abre as provas v2 (a pública vai no app)
+npm run validator:bonds -- list           # cauções dos celulares no modo nó (docs/economia/no-celular.md)
 ```
 
 ## Validador de contribuições
 Segue a proposta econômica. Os valores marcados como [decidir] lá são parâmetros aqui:
 
-- **Evidências** (`dados/evidencias/*.json`): recibos de retransmissão, assinados pela chave do nó, e provas de entrega (o `ackSecret` revelado pelo destino).
-  - As regras do livro são as do protocolo (`ContributionLedger`): assinatura, uma vez por envelope e nó, `hash(ackSecret) = ackHash`, teto de 8 relays por envelope e de recibos por nó por dia.
+- **Evidências** (`dados/evidencias/*.json`, v1 ou v2): recibos de retransmissão, assinados pela chave do nó, e provas de entrega **v2** (assinadas pelo destino e seladas para a chave do validador). Desenho completo: `docs/economia/prova-de-entrega-v2.md`.
+  - Livro v2 (`src/ledger-v2.ts`): `ackHash` do cabeçalho do envelope, a primeira prova válida vence e prova conflitante invalida o envelope, só nó registrado (`dados/operadores.json` + `dados/registro/*.json`, `src/registry.ts`), excesso de recibos = ninguém ganha (auditar), tetos por nó/dia e por destino/época.
+  - Prova v1 (o `ackSecret` em claro) não rende nada: aparece no relatório como "só prova v1".
   - Recibo sem prova quando a época fecha não rende nada.
+- **Teto por operador:** os 2% valem por nó **e** por operador (muitas chaves do mesmo operador não somam tetos).
+- **Lote v2** (`stateHash`): `lot:pay` confere o lote contra `dados/validador.json` antes de conectar na chain (`src/binding.ts`); renomeado ou editado é recusado. O diário recusa os mesmos pagamentos com outro id.
 - **Valor:** cada entrega comprovada vale 1 unidade, **dividida entre os relays**. Assim, nó falso no caminho não aumenta o total.
   - Valor da unidade = orçamento da época ÷ unidades da época.
   - Teto por nó: 2% do orçamento (`--cap`).
@@ -101,7 +106,15 @@ Entrada (gerada pelo validador de créditos):
 ## Conta pagadora (custódia)
 A chave nunca fica no código nem no diário (`src/signer.ts`). Há duas formas de informá-la:
 - **Uso normal:** `PIU_SETTLEMENT_KEYSTORE`, o JSON cifrado exportado pela extensão ou app polkadot-js, mais `PIU_SETTLEMENT_PASSWORD_FILE`, um arquivo com a senha que precisa ter permissão `600`.
-- **Só em redes de desenvolvimento:** `PIU_SETTLEMENT_SEED`.
+- **Só em redes de desenvolvimento:** `PIU_SETTLEMENT_SEED`. Na Lunes Mainnet (gênese `0xb9926ab2…61efac`) a semente em texto claro é recusada, e o keystore e o arquivo de senha precisam ter permissão `600`.
+
+**Rede e nó RPC (auditoria final de 06/11/2026):**
+- O liquidante confere o hash de gênese antes de assinar. Para uma rede de desenvolvimento, declare a gênese dela em `PIU_SETTLEMENT_GENESIS` (`0x` + 64 hex).
+- `--ws`/`PIU_SETTLEMENT_WS`: só `wss://`; `ws://` apenas em `localhost`.
+- Dois `lot:pay` do mesmo lote ao mesmo tempo: o segundo é recusado pela trava `diario/<lote>.lock`. Se nenhum estiver rodando (queda), a trava de um processo morto é retomada sozinha.
+- Diário corrompido ou ilegível aborta o pagamento (nunca vira "lote novo").
+- Caixa atrás de um proxy HTTPS neste computador: `validator:inbox -- --listen 8430 --trust-proxy` (limite por cliente pelo `X-Forwarded-For`). A caixa recusa com `507` quando `evidencias/` ou `registro/` passam de 200 000 arquivos.
+- Cauções: `validator:bonds -- refund --operator <hex> --tx <hash da caução> --refund-tx <hash da devolução>` guarda a transação de devolução (a mesma não vale duas vezes); `--tx` é obrigatório quando o celular tem mais de uma caução ativa.
 
 **Quem guarda essa conta e onde este serviço roda ainda é decisão em aberto.** Por exemplo: um serviço da Lunes com a carteira do tesouro de recompensas, com multisig ou não.
 
