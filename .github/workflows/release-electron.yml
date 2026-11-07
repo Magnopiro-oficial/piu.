@@ -6,7 +6,7 @@
 #
 # Matriz de build
 #   macOS Intel (x64)          macos-15-intel   (.dmg + .zip)   ← macos-13 foi aposentado pelo GitHub
-#   macOS Apple Silicon (arm64) macos-14         (.dmg + .zip)
+#   macOS Apple Silicon (arm64) macos-15         (.dmg + .zip)   ← macos-14 foi aposentado pelo GitHub
 #   Linux x64                   ubuntu-latest    (.AppImage + .deb)
 #   Windows x64                 windows-latest   (.exe NSIS)
 #
@@ -123,7 +123,7 @@ jobs:
             platform: mac
             arch: x64
           - label: macos-arm64
-            os: macos-14
+            os: macos-15
             platform: mac
             arch: arm64
           - label: linux-x64
