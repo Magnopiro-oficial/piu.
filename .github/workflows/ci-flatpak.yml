@@ -27,7 +27,7 @@ jobs:
           persist-credentials: false
       - name: Flatpak e o builder do Flathub (com o linter)
         run: |
-          sudo apt-get update && sudo apt-get install -y flatpak
+          sudo apt-get update && sudo apt-get install -y flatpak flatpak-builder
           flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
           flatpak install --user -y --noninteractive flathub org.flatpak.Builder \
             org.freedesktop.Platform//26.08 org.freedesktop.Sdk//26.08 org.electronjs.Electron2.BaseApp//26.08
@@ -38,7 +38,7 @@ jobs:
         run: flatpak run --command=flatpak-builder-lint org.flatpak.Builder manifest "$MANIFEST"
       - name: Montar
         run: |
-          flatpak run org.flatpak.Builder --user --repo=repo --force-clean \
+          flatpak-builder --user --repo=repo --force-clean \
             --disable-rofiles-fuse build "$MANIFEST"
       - name: Linter do resultado (metainfo, ícone, .desktop)
         continue-on-error: true
