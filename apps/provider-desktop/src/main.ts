@@ -6,15 +6,19 @@
  * - Por padrão o nó só escuta em 127.0.0.1. "Permitir acesso pela rede local" (menu Nó) abre para a
  *   rede de casa, como o piu-node instalado num roteador ou Raspberry Pi.
  * - A janela só aceita o certificado do próprio nó (fixado pelo PEM) e não navega para fora dele.
- * - O pareamento desta janela é automático: o processo principal é a "tela do equipamento".
- *   Outros navegadores e o step-up continuam pedindo o código, que aparece em Nó → Mostrar código.
+ * - O pareamento desta janela é automático: o processo principal é a "tela do equipamento". A sessão
+ *   é criada aqui no processo principal e o cookie vai direto para a sessão do Electron, sem código e
+ *   sem passar pelo JavaScript da página. Ela não vale como step-up: outros navegadores e as operações
+ *   sensíveis continuam pedindo o código, que aparece em Nó → Mostrar código.
  */
-import { app, BrowserWindow, clipboard, dialog, Menu, nativeImage, Notification, session, shell, Tray, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, Menu, nativeImage, nativeTheme, Notification, session, shell, Tray, type MenuItemConstructorOptions } from 'electron';
 import { createServer } from 'node:net';
 import { hostname, networkInterfaces, userInfo } from 'node:os';
 import { join } from 'node:path';
 import { type Config, loadLnnpConfig } from '../../piu-node/src/config';
+import { ABSOLUTE_MS, SESSION_COOKIE, sessionLabel } from '../../piu-node/src/security/session';
 import { startNode, type NodeServer } from '../../piu-node/src/server';
+import { externalUrl } from './external';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 
 const PREFERRED_PORT = 8420;
@@ -120,7 +124,8 @@ function hardenSession() {
 
 app.on('web-contents-created', (_e, contents) => {
   contents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://') && !url.startsWith(origin())) void shell.openExternal(url);
+    const ext = externalUrl(url); // só https para os hosts de external.ts (explorer da Lunes)
+    if (ext) void shell.openExternal(ext);
     return { action: 'deny' };
   });
   contents.on('will-navigate', (e, url) => { if (!url.startsWith(origin() + '/')) e.preventDefault(); });
@@ -132,11 +137,17 @@ app.on('web-contents-created', (_e, contents) => {
 function createWindow() {
   win = new BrowserWindow({
     width: 1320, height: 880, minWidth: 760, minHeight: 600,
-    title: 'Piu Provider', show: false, backgroundColor: '#F7F7F5',
+    // Fundo da janela antes do painel pintar: o --side do design (claro #F8F8F6, escuro #0E0E0E).
+    title: 'Piu Provider', show: false, backgroundColor: nativeTheme.shouldUseDarkColors ? '#0E0E0E' : '#F8F8F6',
     icon: asset('icon.png'),
+    // macOS: como no design, a faixa superior de 42 px do painel é a barra da janela, com os semáforos
+    // de verdade dentro dela (o painel reconhece o app pelo user agent "PiuProvider/" e reserva o espaço).
+    ...(isMac ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 16, y: 14 } } : {}),
     webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false, webviewTag: false, spellcheck: false, devTools: !app.isPackaged },
   });
   win.once('ready-to-show', () => win?.show());
+  // O nome da janela é o do app ("Piu Provider"), não o <title> da página.
+  win.on('page-title-updated', e => e.preventDefault());
   win.webContents.on('did-finish-load', () => { void autoPair(); });
   win.on('close', e => {
     if (quitting || isMac) return;
@@ -154,19 +165,35 @@ function createWindow() {
   void win.loadURL(node!.url + '/');
 }
 
-/** Esta janela é a tela do próprio equipamento: pareia sozinha com um código gerado aqui. */
+/** A sessão deste cookie está viva no nó? Pergunta direto ao nó embutido (sem rede e sem a página). */
+async function sessionAlive(n: NodeServer, token: string) {
+  const r = await n.app.inject({ method: 'GET', url: '/api/session', headers: { host: new URL(n.url).host, cookie: `${SESSION_COOKIE}=${token}`, accept: 'application/json' } });
+  return r.statusCode === 200;
+}
+
+/**
+ * Esta janela é a tela do próprio equipamento: pareia sozinha. A sessão nasce aqui no processo
+ * principal e o token vai direto para o cookie `__Host-piu_session` (HttpOnly) da sessão do Electron.
+ * Nenhum código é gerado nem entregue à página: um script nela não consegue capturar um código para
+ * usar como step-up (auditoria 2026-11-06, provider.md M-01).
+ */
 let pairing = false;
 async function autoPair() {
-  if (!win || pairing) return;
+  if (!win || !node || pairing) return;
   pairing = true;
   try {
-    const status = await win.webContents.executeJavaScript(`fetch('/api/session', { credentials: 'same-origin', headers: { Accept: 'application/json' } }).then(r => r.status)`);
-    if (status !== 401) return;
-    const body = JSON.stringify({ code: node!.issueCode(), name: operatorName() });
-    const ok = await win.webContents.executeJavaScript(
-      `fetch('/api/pair', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', Accept: 'application/json' }, body: ${JSON.stringify(body)} }).then(r => r.ok)`,
-    );
-    if (ok) win.webContents.reload();
+    const n = node, url = n.url + '/';
+    const [cur] = await session.defaultSession.cookies.get({ url, name: SESSION_COOKIE });
+    if (cur && await sessionAlive(n, cur.value)) return;
+    const { token } = n.localSession(operatorName(), sessionLabel(app.userAgentFallback));
+    // Sem `domain`: cookie só deste host, como o prefixo __Host- exige (Secure, Path=/).
+    await session.defaultSession.cookies.set({
+      url, name: SESSION_COOKIE, value: token, secure: true, httpOnly: true, sameSite: 'strict', path: '/',
+      expirationDate: Math.floor((Date.now() + ABSOLUTE_MS) / 1000),
+    });
+    // Só recarrega com a sessão de pé (nada de recarregar sem parar se algo der errado).
+    const [set] = await session.defaultSession.cookies.get({ url, name: SESSION_COOKIE });
+    if (set?.value === token && await sessionAlive(n, token)) win?.webContents.reload();
   } catch { /* a página mostra a tela de pareamento; o código está em Nó → Mostrar código */ }
   finally { pairing = false; }
 }

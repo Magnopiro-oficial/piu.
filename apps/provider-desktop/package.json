@@ -20,6 +20,7 @@
     "build:panel": "npm --prefix ../provider-panel run build",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
+    "test": "node --test test/*.test.ts",
     "start": "npm run build && electron .",
     "dist:linux": "npm run build:panel && npm run build && electron-builder --linux AppImage deb",
     "dist:mac": "npm run build:panel && npm run build && electron-builder --mac dmg zip",

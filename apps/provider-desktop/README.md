@@ -36,7 +36,9 @@ O processo principal é **um único arquivo** (`dist/main.cjs`, esbuild) com o `
 
 ## Instaladores
 - **Linux:** `npm run dist:linux` gera `Piu Provider-<versão>.AppImage` e `piu-provider-desktop_<versão>_amd64.deb` (testados nesta máquina: o app sobe, pareia e só responde em localhost).
-- **macOS:** `npm run dist:mac` num Mac gera `.dmg` e `.zip`. **Sem assinatura nem notarização** por enquanto: na primeira abertura, clique com o botão direito no app → Abrir. Para distribuir, a Lunes precisa de uma conta Apple Developer (certificado "Developer ID Application") e de configurar `mac.identity` e a notarização.
+- **macOS:** `npm run dist:mac` num Mac gera `.dmg` e `.zip`. Assinatura **ad-hoc**, sem notarização, por enquanto: na primeira abertura, clique com o botão direito no app → Abrir. Com o certificado "Developer ID Application" (conta Apple Developer) e a chave da API de notarização no ambiente, o mesmo comando assina com hardened runtime e notariza, sem mudar nenhum arquivo (`electron-builder.signing.cjs`).
+- **Windows:** `npm run dist:win` gera o instalador NSIS x64, sem assinatura (aviso do SmartScreen) até haver `WIN_CSC_LINK` ou Azure Trusted Signing.
+- **Assinatura de código:** o que comprar, variáveis e conferência em [docs/distribuicao/assinatura.md](../../docs/distribuicao/assinatura.md).
 - **Pendente (decisão da Lunes):** `appId` no `electron-builder.yml` (identificador do app, como os das lojas) e a chave pública de release (`PIU_RELEASE_PUBKEY`) para oferecer pacotes do instalador.
 
 ## Limitações
