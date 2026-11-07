@@ -8,9 +8,10 @@ import { test } from 'node:test';
 import { derivePhoneOperatorKey } from '../../protocol/phoneNode';
 import { deriveIdentity, deriveNodeKey, newSeed } from '../../protocol/keys';
 import { toHex } from '../../protocol/bytes';
+import { MAX_TTL_SEC } from '../../protocol/envelope';
 import { classifyLanCheck, type LanCheckInputs } from '../../transport/lan/lanCheck';
 import {
-  accumulateStats, DEFAULT_DAYS, DEFAULT_SPACE_MB, emptyStats, groupId, isolationOnset, isPiuSsid, looksSeparated, mergePolicy, NO_POINT, nearbyList, parseWifiQr,
+  accumulateStats, DAYS_STEPS, DEFAULT_DAYS, DEFAULT_SPACE_MB, SPACE_STEPS_MB, emptyStats, groupId, isolationOnset, isPiuSsid, looksSeparated, mergePolicy, NO_POINT, nearbyList, parseWifiQr,
   pointCheckView, pointHealth, pointName, pointRuntime, pointWifiQr, proofsSince, reviveConfig, seenKey, shouldNotifyPoint, signalBars, stepDays, stepSpace,
   validWpaPassword, type PointConfig,
 } from '../pointCore';
@@ -60,15 +61,24 @@ test('política: o ponto só aumenta os limites escolhidos no modo nó', () => {
 });
 
 test('passos do − / + (P5): espaço e dias, com teto e piso', () => {
-  assert.equal(stepSpace(1024, 1), 2048);
-  assert.equal(stepSpace(1024, -1), 512);
-  assert.equal(stepSpace(4096, 1), 4096);
+  assert.equal(stepSpace(512, 1), 1024);
+  assert.equal(stepSpace(512, -1), 256);
+  assert.equal(stepSpace(1024, 1), 1024);
   assert.equal(stepSpace(256, -1), 256);
   assert.equal(stepSpace(700, 1), 1024, 'valor fora da lista vai para o próximo passo');
   assert.equal(stepSpace(700, -1), 512);
-  assert.equal(stepDays(7, 1), 14);
+  assert.equal(stepDays(3, 1), 7);
   assert.equal(stepDays(1, -1), 1);
-  assert.equal(stepDays(30, 1), 30);
+  assert.equal(stepDays(7, 1), 7);
+});
+
+test('regra única: até 1 GB e até a validade máxima do envelope (7 dias); padrão 512 MB · 7 dias', () => {
+  assert.equal(Math.max(...SPACE_STEPS_MB), 1024);
+  assert.equal(Math.max(...DAYS_STEPS) * 86_400, MAX_TTL_SEC);
+  assert.equal(DEFAULT_SPACE_MB, 512);
+  assert.equal(DEFAULT_DAYS, 7);
+  const old = reviveConfig({ ...cfg(), spaceMb: 4096, days: 30 })!;
+  assert.deepEqual([old.spaceMb, old.days], [DEFAULT_SPACE_MB, DEFAULT_DAYS], 'ponto salvo com 4 GB · 30 dias volta ao padrão');
 });
 
 test('configuração salva: valida e corrige; hotspot é sempre separado; senha só válida', () => {

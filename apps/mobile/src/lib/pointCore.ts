@@ -11,6 +11,7 @@
  * - Rede de casa exposta (vermelho) bloqueia a ativação.
  * - Números do painel só de medições reais (contagens; ninguém identificado).
  */
+import { MAX_TTL_SEC } from '../protocol/envelope';
 import type { LanCheckResult } from '../transport/lan/lanCheck';
 import type { ProbeResult } from '../transport/lan/types';
 
@@ -21,16 +22,17 @@ export type PointLevel = 'multiplier' | 'guardian' | 'guardianApp' | 'gateway';
 export const POINT_LEVELS: readonly PointLevel[] = ['multiplier', 'guardian', 'guardianApp', 'gateway'];
 export const isPointLevel = (x: unknown): x is PointLevel => typeof x === 'string' && (POINT_LEVELS as readonly string[]).includes(x);
 
-/** Espaço para mensagens de terceiros (MB) e por quantos dias: passos do controle −/+ do P5. */
-export const SPACE_STEPS_MB = [256, 512, 1024, 2048, 4096] as const;
-export const DAYS_STEPS = [1, 2, 3, 7, 14, 30] as const;
 /**
- * Padrão para celular: 1 GB e 7 dias. Um celular parado na tomada aguenta, sem tomar o armazenamento
- * da pessoa; 7 dias é o prazo dos avisos do modo nó. O roteador do envelope ainda limita cada mensagem
- * ao prazo dela (no máximo 48 h de TTL padrão): "dias" é o teto de retenção que o ponto aceita.
+ * Espaço para mensagens de terceiros (MB) e por quantos dias: passos do controle −/+ do P5.
+ * Regra única do Piu, igual no celular e no Desktop (apps/desktop/src/shared/guardian.ts, docs/rede/guardiao-desktop.md):
+ * até 1 GB e até 7 dias. Um envelope vale no máximo `MAX_TTL_SEC` (7 dias) no protocolo, então guardar mais não serve;
+ * e o roteador guarda em memória. Padrão: 512 MB e 7 dias.
  */
-export const DEFAULT_SPACE_MB = 1024;
-export const DEFAULT_DAYS = 7;
+export const SPACE_STEPS_MB = [256, 512, 1024] as const;
+export const MAX_GUARD_DAYS = MAX_TTL_SEC / 86_400;
+export const DAYS_STEPS = [1, 3, MAX_GUARD_DAYS] as const;
+export const DEFAULT_SPACE_MB = 512;
+export const DEFAULT_DAYS = MAX_GUARD_DAYS;
 
 const stepIn = (steps: readonly number[], cur: number, dir: 1 | -1) => {
   const i = steps.findIndex(s => s >= cur);

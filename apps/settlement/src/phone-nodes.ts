@@ -5,7 +5,7 @@
  * fica habilitado quando:
  * 1. tem caução conferida na chain e não devolvida/confiscada (bond.ts);
  * 2. passaram `minAgeDays` (7) desde o bloco da caução;
- * 3. tem, ao mesmo tempo, avais VÁLIDOS de pelo menos `minEndorsements` (2) avalistas distintos,
+ * 3. tem, ao mesmo tempo, avais VÁLIDOS de pelo menos `minEndorsements` (3) avalistas distintos,
  *    habilitados no momento do aval, e a linhagem dele chega a pelo menos `minRoots` (2) operadores
  *    admitidos (raízes do `operadores.json`) diferentes.
  *

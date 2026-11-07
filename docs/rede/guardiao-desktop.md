@@ -21,7 +21,7 @@ conecte o computador nela e volte.
 | Guardião + app | Também entrega o app a quem não tem. | Só com o APK do Piu baixado **e conferido** (assinatura + SHA-256) neste computador. Hoje o desktop não baixa o APK: o nível aparece desligado, com o motivo. |
 | Gateway (papel a mais) | Envia à Lunes as transferências assinadas que chegam pela malha e devolve o recibo. | Só com internet (o teste confere). Desligado por padrão. |
 
-Limites: o protótipo propôs 10 GB · 30 dias. Um envelope vale no máximo 7 dias no protocolo
+Limites (regra única, igual no celular em `apps/mobile/src/lib/pointCore.ts`): até 1 GB e até 7 dias, padrão 512 MB · 7 dias. Um envelope vale no máximo 7 dias no protocolo
 (`MAX_TTL_SEC` em `apps/mobile/src/protocol/envelope.ts`): guardar por mais tempo não adiantaria. O roteador
 do protocolo guarda em memória e grava cifrado em disco ao pausar, ao fechar e a cada minuto; por isso o teto é
 1 GB nesta versão.

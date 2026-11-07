@@ -19,7 +19,7 @@ import { Badge, Bar, Body, KV, ListBox, Mono, NavRow, OutlineBtn, PulseDot, Radi
 
 const ICON = require('../../../assets/icon.png');
 
-/** 256 MB, 1 GB, 2 GB… */
+/** 256 MB, 512 MB, 1 GB */
 export const fmtSpace = (mb: number) => (mb >= 1024 ? `${fmtNumber(Math.round((mb / 1024) * 10) / 10)} GB` : `${mb} MB`);
 
 const LEVEL_KEY = { multiplier: 'point.level.mult', guardian: 'point.level.guard', guardianApp: 'point.level.app', gateway: 'point.level.gw' } as const;

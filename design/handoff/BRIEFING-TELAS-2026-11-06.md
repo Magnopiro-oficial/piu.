@@ -6,7 +6,7 @@ Nada aqui pode prometer recompensa paga: o programa de recompensas está desliga
 ## Celular — modo nó ("Do celular")
 
 Contexto: o celular já retransmite mensagens sem internet (Bluetooth, Wi-Fi Direct). Virar nó é se cadastrar para, quando o programa abrir,
-render por entregas comprovadas. Para evitar celulares falsos: caução pequena em LUNES (10 por padrão) + 7 dias + aval de 2 contatos que já são nós.
+render por entregas comprovadas. Para evitar celulares falsos: caução pequena em LUNES (100 por padrão) + 7 dias + aval de 3 contatos que já são nós.
 O celular rende no máximo metade do teto de um Piu Node.
 
 1. **Entrada do modo nó** — opção "Do celular" no seletor "Do celular | Pelo terminal" (Provider → conectar).
@@ -16,7 +16,7 @@ O celular rende no máximo metade do teto de um Piu Node.
    - Precisa da caução (botão "Pagar caução");
    - Caução enviada, aguardando confirmação na rede;
    - Aguardando os 7 dias (faltam N dias);
-   - Avais: X de 2;
+   - Avais: X de 3;
    - Pronto (habilitado — estimativa local; quem decide é o validador);
    - Saiu do programa.
    - Também: créditos estimados (recibos e créditos, não é dinheiro), a chave do nó para copiar (para um operador de Piu Node avalizar), "Compartilhar arquivo de registro", "Sair do programa".

@@ -162,7 +162,7 @@ npm run validator:bonds -- slash  --operator <hex> --note "fraude: …"         
 
 | Ator | Pode | Não pode |
 |---|---|---|
-| Fazenda de celulares (Sybil) | gerar chaves de celular de graça; pagar várias cauções | habilitar sem caução por chave; habilitar sem 2 avais de quem já está dentro e 2 raízes na linhagem; passar de 10 habilitações por raiz por mês; ganhar mais que 1/4 da caução por época |
+| Fazenda de celulares (Sybil) | gerar chaves de celular de graça; pagar várias cauções | habilitar sem caução por chave; habilitar sem 3 avais de quem já está dentro e 2 raízes na linhagem; passar de 10 habilitações por raiz por mês; ganhar mais que 1/4 da caução por época |
 | Operador admitido corrupto | avalizar; rotacionar a chave; ter o próprio celular | contar como dois avalistas (raiz única, cota única); habilitar sozinho (precisa de outra raiz); passar do teto mensal da raiz; continuar avalizando depois de 3 confiscos na linhagem |
 | Anel de celulares novos | avalizar uns aos outros | entrar sem um caminho de avais até um operador admitido (ponto fixo) |
 | Avalista comprado / descuidado | dar avais; pôr qualquer data no aval | dar mais de 5 avais que contam por mês; voltar a data além da janela (o mês da cota é o do visto); ficar anônimo (o aval é assinado e fica no registro) |
