@@ -16,7 +16,7 @@
     "@fontsource-variable/geist": "^5.3.0",
     "@fontsource/geist-mono": "^5.3.0",
     "astro": "^7.4.4",
-    "material-symbols": "^0.48.2",
+    "material-symbols": "^0.48.3",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"
   },
