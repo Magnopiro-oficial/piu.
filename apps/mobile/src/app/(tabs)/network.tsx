@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, type Href } from 'expo-router';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
 import { TRANSPORTS, type TxKey, UNAVAILABLE_TX } from '../../data/network';
@@ -218,9 +218,10 @@ function Radar({ peers, live, count }: { peers: Peer[]; live: (p: Peer) => boole
   }, [reduceMotion, rings]);
   const label = t('network.radar.nodes', { count });
 
+  // Toque no radar: abre o mapa da rede (Piu 18).
   return (
-    <View accessibilityLabel={t('network.radar.a11y', { label })}
-      style={{ marginTop: 10, marginHorizontal: 20, height: 230, borderRadius: 24, backgroundColor: c.bg2, overflow: 'hidden' }}>
+    <Pressable onPress={() => router.push('/network-map' as Href)} accessibilityRole="button" accessibilityLabel={t('network.radar.a11y', { label })} accessibilityHint={t('map.open')}
+      style={({ pressed }) => ({ marginTop: 10, marginHorizontal: 20, height: 230, borderRadius: 24, backgroundColor: c.bg2, overflow: 'hidden', transform: [{ scale: pressed ? 0.99 : 1 }] })}>
       {[300, 200, 100].map(s => (
         <View key={s} style={{ position: 'absolute', left: '50%', top: '50%', width: s, height: s, marginLeft: -s / 2, marginTop: -s / 2, borderRadius: s / 2, borderWidth: 1, borderColor: c.line2 }} />
       ))}
@@ -245,6 +246,6 @@ function Radar({ peers, live, count }: { peers: Peer[]; live: (p: Peer) => boole
         <View style={{ width: 40, height: 40, borderRadius: 20, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}><T size={11} w={600} color={c.invink}>{t('network.radar.you')}</T></View>
       </View>
       <T size={11} w={500} mono color={c.ink2} style={{ position: 'absolute', left: 14, bottom: 12 }}>{t('network.radar.caption', { label })}</T>
-    </View>
+    </Pressable>
   );
 }

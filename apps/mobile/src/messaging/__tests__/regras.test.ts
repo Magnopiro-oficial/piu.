@@ -426,3 +426,26 @@ test('chamada de voz: sinal ao vivo só com vizinho; pedido pela fila confirma e
   assert.equal(b.m.directLink(a.ids.public.id, 120), null, 'pela malha não conta como direto');
   for (const w of net.wire) assert.ok(!Buffer.from(w).includes(Buffer.from('request')), 'o relay não sabe que é pedido de chamada');
 });
+
+test('chamada de voz: sinal ao vivo nunca vai ao rádio LoRa (docs/transporte/piu-sobre-meshtastic.md); o pedido de chamada vai', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), radio = device(net, 'Radio');
+  know(a, b); know(b, a);
+  a.m.sendText(b.ids.public.id, 'm0', 'firmar a sessão');
+  net.link('Ana', 'Beto'); net.run();
+  b.m.sendText(a.ids.public.id, 'm1', 'ok'); net.run();
+  // O rádio LoRa da Ana entra como mais um vizinho (classe 'lora'), ao lado do Beto pelo Bluetooth.
+  net.links.add(net.key('Ana', 'Radio'));
+  a.m.peerConnected('Radio', 'lora'); radio.m.peerConnected('Ana', 'lora');
+  net.run();
+  const toRadio = () => net.queue.filter(([f, t]) => f === 'Ana' && t === 'Radio').length;
+  const toBeto = () => net.queue.filter(([f, t]) => f === 'Ana' && t === 'Beto').length;
+  const live = { t: 'cl' as const, s: { t: 'invite', callId: 'call-0001', route: 'bt' }, k: 'A'.repeat(43) };
+  assert.equal(a.m.sendCallSignal(b.ids.public.id, live, { live: true, ttlSec: 30 }), true);
+  assert.equal(toRadio(), 0, 'oferta ao vivo não gasta o tempo de rádio');
+  assert.equal(toBeto(), 1, 'vai pelo Bluetooth');
+  net.run();
+  const req = { t: 'cl' as const, s: { t: 'request', requestId: 'req-00001' } };
+  assert.equal(a.m.sendCallSignal(b.ids.public.id, req, { live: false, ttlSec: 24 * 3600, msgId: 'req-00001' }), true);
+  assert.equal(toRadio(), 1, 'o pedido de chamada pode ir pelo LoRa');
+});

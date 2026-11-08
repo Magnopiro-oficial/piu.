@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'طريقة التثبيت',
   'piu.band.title': 'هذه اللوحة لنطاق تردد آخر',
   'piu.band.d': 'لم تقبل {freq}. استخدم لوحة لنطاق المنطقة، أو غيّر المنطقة إن كنت في بلد آخر.',
+  'piu.band.d2': 'لم تقبل {freq}. استخدم لوحة {band}، أو غيّر المنطقة إن كنت في بلد آخر.',
+  'piu.board': 'اللوحة · {band}',
+  'piu.superNodes': { other: '{count} Super Node بالقرب' },
+  'piu.gateways': { other: '{count} بوابة' },
+  'piu.btOn': 'تشغيل البلوتوث',
   'piu.changeRegion': 'تغيير المنطقة',
   'piu.boards': 'عرض اللوحات المتوافقة',
   'piu.code.d': 'أطفئ اللوحة وشغّلها ثم حاول مجددًا. إن استمر الخطأ، أرِ هذا الرمز لمن يساعدك في الجهاز.',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'العالم 2.4 GHz',
   'piu.route.via': 'عبر LoRa (Piu)',
   'piu.route.radio': 'راديو Piu',
+  'piu.why.away': 'تلقائي: كان راديو Piu خارج النطاق، فأُرسلت عبر Meshtastic.',
+  'piu.why.failed': 'تلقائي: تعذّر على راديو Piu الإرسال، فأُرسلت عبر Meshtastic.',
 };

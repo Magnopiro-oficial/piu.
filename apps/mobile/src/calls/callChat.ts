@@ -15,3 +15,21 @@ export function callRecordMsg(rec: CallRecord, name: string): Msg {
   return { id: `call-${rec.callId}`, from, time: nowHM(), at: rec.at, text: title, call: rec, ...(from === 'me' ? { status: 'entregue' as const } : {}) };
 }
 
+
+/** Rascunhos que a rota pode pedir, pela chave: o texto sai do app, nunca do link. */
+const DRAFTS = { decline: 'call.declineDraft' } as const;
+
+/**
+ * Recusar com "Mensagem": abre a conversa com o rascunho do desenho pronto no campo, sem enviar
+ * (o app não guarda rascunhos; a chave vai como parâmetro da rota e a conversa preenche o campo).
+ */
+export const declineDraftRoute = (chatId: string) =>
+  ({ pathname: '/chat/[id]' as const, params: { id: chatId, draft: 'decline' as const } });
+
+/**
+ * Rascunho vindo da rota (`?draft=`). Só uma chave de DRAFTS: um link de fora (piu://chat/…?draft=…)
+ * não consegue deixar texto dele pronto para a pessoa enviar sem perceber. Nunca é enviado sozinho.
+ */
+export function draftParam(p: unknown): string {
+  return typeof p === 'string' && Object.hasOwn(DRAFTS, p) ? t(DRAFTS[p as keyof typeof DRAFTS]) : '';
+}

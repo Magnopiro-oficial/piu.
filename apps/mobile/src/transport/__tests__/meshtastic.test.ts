@@ -144,6 +144,7 @@ test('enlace LoRa: anúncio de Super Node conta como "por perto" e não vira env
   radio.push(fromPacket(0x777, encodeNodeBeacon(node, { at: now.t / 1000, relay: true, gateway: true })));
   assert.equal(link.status().superNodes, 1);
   assert.equal(link.status().gateways, 1);
+  assert.deepEqual(link.heard().map(n => [n.gateway, n.last]), [[true, now.t / 1000]], 'o mapa da rede lê cada um');
   assert.equal(ev.filter(e => e.type === 'data').length, 0);
   // Anúncio forjado (assinado por outra chave) não conta.
   const forged = encodeNodeBeacon(deriveNodeKey(newSeed()), { at: now.t / 1000, relay: true, gateway: false });
@@ -153,6 +154,7 @@ test('enlace LoRa: anúncio de Super Node conta como "por perto" e não vira env
   now.t += 41 * 60_000;
   link.refreshNodes();
   assert.equal(link.status().superNodes, 0);
+  assert.deepEqual(link.heard(), []);
 });
 
 test('seletor: LoRa só quando não há outro meio, e nunca para envelope grande', () => {

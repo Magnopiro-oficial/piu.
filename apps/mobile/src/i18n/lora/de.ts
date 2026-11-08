@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'So installieren',
   'piu.band.title': 'Diese Platine ist für ein anderes Frequenzband',
   'piu.band.d': 'Sie hat {freq} nicht akzeptiert. Nutzen Sie eine Platine für das Band der Region, oder wechseln Sie die Region, wenn Sie in einem anderen Land sind.',
+  'piu.band.d2': 'Sie hat {freq} nicht akzeptiert. Nutzen Sie eine {band}-Platine oder ändern Sie die Region, wenn Sie in einem anderen Land sind.',
+  'piu.board': 'Platine · {band}',
+  'piu.superNodes': { one: 'Super-Node in der Nähe', other: '{count} Super-Nodes in der Nähe' },
+  'piu.gateways': { one: '{count} Gateway', other: '{count} Gateways' },
+  'piu.btOn': 'Bluetooth einschalten',
   'piu.changeRegion': 'Region wechseln',
   'piu.boards': 'Kompatible Platinen ansehen',
   'piu.code.d': 'Schalten Sie die Platine aus und wieder ein und versuchen Sie es erneut. Bleibt es so, zeigen Sie diesen Code der Person, die Ihnen beim Funkgerät hilft.',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'Welt 2,4 GHz',
   'piu.route.via': 'über LoRa (Piu)',
   'piu.route.radio': 'Piu-Funkgerät',
+  'piu.why.away': 'Automatisch: Das Piu-Funkgerät war außer Reichweite, gesendet über Meshtastic.',
+  'piu.why.failed': 'Automatisch: Das Piu-Funkgerät konnte nicht senden, gesendet über Meshtastic.',
 };

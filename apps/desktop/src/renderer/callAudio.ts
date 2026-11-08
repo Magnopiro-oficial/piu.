@@ -5,7 +5,7 @@
  * Sem AudioWorklet (a CSP não aceita módulo por blob): captura por ScriptProcessor, que basta para voz.
  */
 import { decodePcmuFloat } from '../../../mobile/src/calls/pcmu';
-import { Framer, Smoother, levelOf, rmsOf, scheduleAt } from './callAudioCore';
+import { Framer, Smoother, levelOf, ringCycle, rmsOf, scheduleAt } from './callAudioCore';
 
 export type Codec = 'opus' | 'pcmu';
 export type AudioDevice = { id: string; label: string; kind: 'mic' | 'out' };
@@ -53,6 +53,33 @@ export class MicMeter {
     this.stream?.getTracks().forEach(t => t.stop());
     void this.ctx?.close().catch(() => {});
     this.ctx = this.stream = this.an = undefined;
+  }
+}
+
+/**
+ * Toque da chamada recebida: o ciclo de `ringCycle` em laço (AudioBufferSourceNode.loop), na saída padrão do
+ * sistema. Sem timer: segue tocando com a janela escondida. Quem decide quando toca é o principal (`ring`).
+ */
+export class Ringtone {
+  private ctx?: AudioContext;
+  private src?: AudioBufferSourceNode;
+  start() {
+    if (this.ctx) return;
+    try {
+      const ctx = this.ctx = new AudioContext();
+      const data = ringCycle(ctx.sampleRate);
+      const buf = ctx.createBuffer(1, data.length, ctx.sampleRate);
+      buf.copyToChannel(data, 0);
+      const src = this.src = ctx.createBufferSource();
+      src.buffer = buf; src.loop = true;
+      src.connect(ctx.destination);
+      src.start();
+    } catch { this.stop(); }
+  }
+  stop() {
+    try { this.src?.stop(); } catch { /* não começou */ }
+    void this.ctx?.close().catch(() => {});
+    this.ctx = this.src = undefined;
   }
 }
 

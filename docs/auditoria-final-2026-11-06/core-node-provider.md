@@ -128,15 +128,22 @@ Fonte:
 
 | Id | Sev. | Por que não agora | Próximo passo |
 |---|---|---|---|
-| M-N1 (raiz) | Média | `lunes/carryGateway.ts` é cópia GERADA de `apps/mobile/src/lib/carryGateway.ts` (outra frente). A janela global de 20 envios/min é gasta antes de `validate_transaction`. Com os baldes novos, o atacante precisa de identidade E IP novos a cada 10 cargas | No app: validar (ou conferir a sr25519) antes de gastar a cota de envio, com orçamento separado para validação |
-| B-N3 | Baixa | Também no `carryGateway.ts` (app): o acompanhamento lê os mesmos blocos para cada transação | Ler cada bloco uma vez por rodada, com teto de RPC por rodada |
-| H-1 (raiz) | Baixa (mitigada) | `protocol/bytes.ts` (`Writer.u32` faz `>>> 0`) é cópia de `apps/mobile/src/protocol` | No app: `u32` lançar erro fora de `[0, 2^32−1]`. O settlement já não depende disso |
 | B-b | Baixa | Rotação não contém uma chave de operador vazada (o `issuedAt` é declarado por quem assina) | Guardar no estado do validador o "visto pela primeira vez" de cada certificado |
 | B-01, B-04 | Baixa | Decisões de produto (código de pareamento também vale como step-up; 5 erros destroem o código) | Separar códigos de pareamento e de step-up |
 | B-10 / I-N1 | Baixa | Co-operadores leem estatísticas, recibos e o gateway. Restringir pede ajuste das telas do painel | Decidir o que o co-operador vê |
 | B-03 (provider) | Baixa | Chaves do nó e do operador em 0600, sem cifra em repouso (keychain); exige teste em aparelho | Selador no piu-node e migração do `keys.json` |
 | M-02 (provider) | Média / E | Sem notarização nem Authenticode (decisão de 06/11: lançar sem certificados) | Conta Apple Developer e certificado Windows |
 | npm audit (dev) | Info | `provider-desktop`: 6 moderadas só de build (minimatch via electron-builder), fora do app distribuído | Atualizar o electron-builder quando sair a correção |
+
+### Corrigidos depois no app (conferido no código em 08/11/2026)
+
+Os três estavam abertos aqui porque a raiz fica em arquivos do app que o piu-node copia. Já foram corrigidos na fonte, e as cópias acompanham (`sync-lunes`, `sync-protocol`).
+
+| Id | Onde | Como ficou |
+|---|---|---|
+| M-N1 (raiz) | `apps/mobile/src/lib/carryGateway.ts` (`submit`) | Decodifica e deduplica pelo hash (de graça), depois `validate_transaction` (cota de validação), e só então gasta a cota de envio |
+| B-N3 | `apps/mobile/src/lib/carryGateway.ts` | O acompanhamento lê cada bloco uma vez por rodada para todas as transações |
+| H-1 (raiz) | `apps/mobile/src/protocol/bytes.ts` (`Writer`) | `u8`, `u16` e `u32` são estritos (`fixed`): valor fora da faixa lança erro |
 
 ## 3. Testes, typecheck e build (depois da sincronização com o `apps/mobile`)
 

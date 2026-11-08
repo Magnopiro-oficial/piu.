@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from 'react';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { useEffect, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Animated, Easing, Pressable, View } from 'react-native';
 import { useT } from '../../i18n';
 import type { Key } from '../../i18n/core';
 import { loraRowState, type LoraRowView } from '../../lib/loraRow';
@@ -16,6 +16,7 @@ import { RegionPicker } from './RegionPicker';
 import { useLora } from './useLora';
 import { usePiuLora } from './usePiuLora';
 import { BusyBar } from './LoraCard';
+import { LrBlink, NATIVE } from './motion';
 
 export const regionKey = (id: string) => `piu.region.${id}` as Key;
 
@@ -38,22 +39,25 @@ export function LoraBlock({ first, on, onToggle, granted, askPermission }: { fir
   };
   return (
     <>
-      <LoraBlockView first={first} on={on} onToggle={onToggle} noPerm={!granted} askPermission={askPermission} mode={loraMode} onMode={setLoraMode} pv={pv} mv={mv}
+      <LoraBlockView first={first} on={on} onToggle={onToggle} noPerm={!granted} askPermission={askPermission} mode={loraMode} onMode={setLoraMode} pv={pv} mv={mv} busyUntil={piu?.link.busyUntil}
         onAdd={() => (!piu ? setOpen('mesh') : !mesh ? connectPiu() : setOpen('type'))} onRegion={() => setOpen('region')}
         onProblem={p => setOpen(p.kind === 'region' ? 'region' : { problem: p })} onReconnect={reconnect} />
       {open === 'type' ? <RadioTypeSheet onClose={() => setOpen(null)} onPick={k => (k === 'mesh' ? setOpen('mesh') : connectPiu())} /> : null}
       {open === 'mesh' && mesh ? <ConnectRadioSheet radio={mesh.radio} onConnected={() => onToggle(true)} onClose={() => setOpen(null)} /> : null}
-      {open === 'piu' && piu ? <ConnectPiuSheet radio={piu.radio} onRegion={() => setOpen('region')} onClose={() => setOpen(null)} /> : null}
-      {typeof open === 'object' && open && piu ? <ConnectPiuSheet radio={piu.radio} problem={open.problem} onRegion={() => setOpen('region')} onClose={() => setOpen(null)} /> : null}
+      {open === 'piu' && piu ? <ConnectPiuSheet radio={piu.radio} askPermission={askPermission} onRegion={() => setOpen('region')} onClose={() => setOpen(null)} /> : null}
+      {typeof open === 'object' && open && piu ? <ConnectPiuSheet radio={piu.radio} problem={open.problem} askPermission={askPermission} onRegion={() => setOpen('region')} onClose={() => setOpen(null)} /> : null}
       {(open === 'region' || open === 'regionFirst') && piu ? <RegionPicker link={piu.radio.link} first={open === 'regionFirst'} onDone={() => setOpen(open === 'regionFirst' ? 'piu' : null)} onClose={() => setOpen(null)} /> : null}
     </>
   );
 }
 
-/** O desenho da linha (1a–1h) só com props: a aba Rede liga aos rádios (LoraBlock); a galeria usa dados de exemplo. */
-export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode, onMode, pv, mv, onAdd, onRegion, onProblem, onReconnect }: {
+/**
+ * O desenho da linha (1a–1h) só com props: a aba Rede liga aos rádios (LoraBlock); a galeria usa dados de exemplo.
+ * `busyUntil`: fim da espera do rádio do Piu (ms), para a barra do 1f esvaziar no tempo exato (sem ele, conta de `busySec`).
+ */
+export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode, onMode, pv, mv, busyUntil, onAdd, onRegion, onProblem, onReconnect }: {
   first?: boolean; on: boolean; onToggle: (on: boolean) => void; noPerm: boolean; askPermission: () => void; mode: LoraMode; onMode: (m: LoraMode) => void;
-  pv: PiuRowView | null; mv: LoraRowView | null; onAdd: () => void; onRegion: () => void; onProblem: (p: PiuProblem) => void; onReconnect: (w: 'piu' | 'mesh') => void;
+  pv: PiuRowView | null; mv: LoraRowView | null; busyUntil?: number; onAdd: () => void; onRegion: () => void; onProblem: (p: PiuProblem) => void; onReconnect: (w: 'piu' | 'mesh') => void;
 }) {
   const { c } = useTheme();
   const t = useT();
@@ -64,6 +68,8 @@ export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode
   const waiting = both ? waitingFor(mode, up) : null;
   const sub = !on ? t('piu.row.subOff') : noPerm ? t('lora.noPerm') : shown.piu || shown.mesh ? t('piu.row.sub') : t('piu.row.subNone');
   const nodes = (s?: { count: number; gateway: boolean }) => (s ? <Meta icon="hub" text={s.gateway ? t('lora.superNode.gateway', { count: s.count }) : t('lora.superNode', { count: s.count })} /> : null);
+  // Rádio do Piu (desenho 1c): "2 Super Nodes por perto · 1 gateway".
+  const piuNodes = (s?: { count: number; gateways: number }) => (s ? <Meta icon="hub" text={superNodesText(t, s.count, s.gateways)} /> : null);
 
   return (
     <View style={{ paddingVertical: 13, paddingHorizontal: 12, borderTopWidth: first ? 0 : 1, borderTopColor: c.line, gap: 12 }}>
@@ -93,8 +99,8 @@ export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode
                       <T size={12} w={650} style={{ textDecorationLine: 'underline' }}>{t('piu.change')}</T>
                     </Pressable>
                   ) : null}
-                  {nodes(pv.superNodes)}
-                  {pv.busySec ? <AirLine sec={pv.busySec} /> : null}
+                  {piuNodes(pv.superNodes)}
+                  {pv.busySec ? <AirLine key={busyUntil ?? 0} sec={pv.busySec} until={busyUntil} /> : null}
                 </>
               ) : pv.kind === 'failed' ? (
                 <Pressable onPress={() => onProblem(pv.problem)} accessibilityRole="button" style={{ gap: 6 }}>
@@ -126,7 +132,7 @@ export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode
           ) : null}
           {both ? (
             <View style={{ gap: 8, paddingTop: 2 }}>
-              <Segmented<LoraMode> label={t('piu.row.title')} value={mode} onChange={onMode}
+              <Segmented<LoraMode> size="sm" label={t('piu.row.title')} value={mode} onChange={onMode}
                 options={[['auto', t('piu.mode.auto')], ['piu', t('piu.mode.piu')], ['mesh', t('piu.mode.mesh')]]} />
               <T size={12} lh={1.45} color={c.ink2} style={{ paddingHorizontal: 4 }}>{t(`piu.mode.${mode}.d`)}</T>
             </View>
@@ -179,16 +185,31 @@ function Meta({ icon, text }: { icon: 'hub'; text: string }) {
   return <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}><Icon name={icon} size={14} w={400} color={c.ink2} /><T size={12} color={c.ink2}>{text}</T></View>;
 }
 
-/** 1f: a região limita o tempo no ar; a barra esvazia até a próxima janela. */
-function AirLine({ sec }: { sec: number }) {
-  const { c } = useTheme();
+/**
+ * 1f: a região limita o tempo no ar; a barra esvazia em linha reta, sem degraus (lrDrain), até a próxima
+ * janela. A contagem do texto anda de segundo em segundo; a barra, no tempo todo da espera.
+ */
+function AirLine({ sec, until }: { sec: number; until?: number }) {
+  const { c, reduceMotion } = useTheme();
   const t = useT();
-  const [max] = useState(sec);
+  // A barra cheia é o que faltava quando a linha apareceu; o fim vem do enlace (`until`) ou da contagem.
+  const [wait] = useState(() => { const now = Date.now(), end = until ?? now + sec * 1000; return { end, total: Math.max(1, end - now) }; });
+  const [left] = useState(() => new Animated.Value(1));
+  // Reduzir movimento: a barra anda junto com a contagem, de segundo em segundo.
+  const tick = reduceMotion ? sec : 0;
+  useEffect(() => {
+    const ms = Math.max(0, wait.end - Date.now());
+    left.setValue(ms / wait.total);
+    if (reduceMotion || !ms) return;
+    const a = Animated.timing(left, { toValue: 0, duration: ms, easing: Easing.linear, useNativeDriver: NATIVE });
+    a.start();
+    return () => a.stop();
+  }, [wait, reduceMotion, tick, left]);
   return (
     <View style={{ gap: 6 }} accessibilityLiveRegion="polite">
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><Icon name="hourglass_top" size={14} w={400} color={c.ink2} /><T size={12} color={c.ink2}>{t('piu.busy', { sec })}</T></View>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}><LrBlink><Icon name="hourglass_top" size={14} w={400} color={c.ink2} /></LrBlink><T size={12} color={c.ink2}>{t('piu.busy', { sec })}</T></View>
       <View style={{ height: 3, borderRadius: 2, backgroundColor: c.bg3, overflow: 'hidden' }}>
-        <View style={{ width: `${Math.min(100, Math.round((sec / Math.max(max, sec)) * 100))}%`, height: 3, backgroundColor: c.ink2 }} />
+        <Animated.View style={{ height: 3, borderRadius: 2, backgroundColor: c.ink2, transformOrigin: 'left', transform: [{ scaleX: left }] }} />
       </View>
     </View>
   );
@@ -199,7 +220,7 @@ function Waiting({ text, action, onAction }: { text: string; action?: string; on
   const { c } = useTheme();
   return (
     <View style={{ padding: 10, borderRadius: 12, backgroundColor: c.warnbg, gap: 9 }}>
-      <View style={{ flexDirection: 'row', gap: 5 }}><Icon name="schedule_send" size={15} w={400} color={c.warn} /><T size={12} w={600} lh={1.35} color={c.warn} style={{ flex: 1 }}>{text}</T></View>
+      <View style={{ flexDirection: 'row', gap: 5 }}><LrBlink><Icon name="schedule_send" size={15} w={400} color={c.warn} /></LrBlink><T size={12} w={600} lh={1.35} color={c.warn} style={{ flex: 1 }}>{text}</T></View>
       {action ? (
         <Pressable onPress={onAction} accessibilityRole="button" style={{ height: 34, borderRadius: 17, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center' }}>
           <T size={12.5} w={650} color={c.invink}>{action}</T>
@@ -221,4 +242,10 @@ function Lost({ text, onPress }: { text: string; onPress: () => void }) {
       </Pressable>
     </View>
   );
+}
+
+/** "2 Super Nodes por perto · 1 gateway" (rádio do Piu, desenhos 1c e 3e). */
+export function superNodesText(t: ReturnType<typeof useT>, count: number, gateways: number): string {
+  const n = t('piu.superNodes', { count });
+  return gateways > 0 ? `${n} · ${t('piu.gateways', { count: gateways })}` : n;
 }

@@ -17,6 +17,12 @@ export type TransportState = 'off' | 'starting' | 'running' | 'unavailable';
 export type Medium = 'nearby' | 'ble' | 'lan' | 'lora' | 'piulora' | 'sim';
 
 /**
+ * Por onde um envio saiu. `fallback`: no LoRa Automático, saiu pelo Meshtastic porque o rádio do Piu
+ * estava fora do alcance (`away`) ou falhou ao enviar (`failed`). A escolha "Só Meshtastic" não conta.
+ */
+export interface SentVia { medium: Medium; fallback?: 'away' | 'failed' }
+
+/**
  * Características declaradas de cada meio (INF-005). Usadas pela seleção de transporte
  * (FUN-013/014) para escolher, por vizinho, por onde cada envelope sai.
  */
@@ -33,7 +39,8 @@ export interface MediumCaps {
 }
 
 /** `via`: o meio pelo qual o vizinho foi visto/conectado (o melhor disponível, se houver mais de um). */
-export interface Peer { id: string; name: string; via: Medium; connected: boolean }
+/** `via`: meio mostrado. `media`: todos os meios por onde o vizinho é alcançável agora (mapa da rede). */
+export interface Peer { id: string; name: string; via: Medium; media?: Medium[]; connected: boolean }
 
 export type TransportEvent =
   | { type: 'state'; state: TransportState; reason?: string }
@@ -52,8 +59,8 @@ export interface Transport {
   /** `name`: identificador curto deste nó; `serviceId`: separa redes/versões do protocolo. */
   start(name: string, serviceId: string): Promise<void>;
   stop(): Promise<void>;
-  /** Envia ao vizinho pelo melhor meio; se falhar, tenta o próximo (FUN-014). */
-  send(peerId: string, data: Uint8Array): Promise<void>;
+  /** Envia ao vizinho pelo melhor meio; se falhar, tenta o próximo (FUN-014). Diz por qual meio saiu. */
+  send(peerId: string, data: Uint8Array): Promise<SentVia | void>;
   subscribe(fn: (e: TransportEvent) => void): () => void;
   /** Bateria baixa → prefere BLE. `null` volta à leitura automática da bateria. */
   setPowerHint?(lowBattery: boolean | null): void;

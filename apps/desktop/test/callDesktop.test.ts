@@ -3,7 +3,8 @@ import { test } from 'node:test';
 import { IDLE, type CallState } from '../../mobile/src/calls/callMachine';
 import { contactOf, type Tr } from '../../mobile/src/calls/callView';
 import { DESKTOP_GEOMETRY } from '../../mobile/src/calls/callVisual';
-import { callKeyLabel, callTimer, callToastText, callWindowTitle, deviceIcon, matchCallKey, stageLayout, type KeyLike } from '../src/renderer/call/callDesktop';
+import { callKeyLabel, callTimer, callToastText, callWindowTitle, declineDraft, deviceIcon, matchCallKey, stageLayout, type KeyLike } from '../src/renderer/call/callDesktop';
+import { callPtBR } from '../../mobile/src/i18n/call/pt-BR';
 import { tIn, type Key } from '../src/shared/i18n';
 
 const key = (k: string, o: Partial<KeyLike> = {}): KeyLike => ({ key: k, ctrlKey: false, metaKey: false, shiftKey: false, altKey: false, ...o });
@@ -64,4 +65,12 @@ test('aparelhos de áudio: ícone pelo nome; avisos da máquina viram texto', ()
   assert.equal(deviceIcon('out', { id: '6', label: 'x', icon: 'tv' }), 'tv');
   assert.equal(callToastText(tr, 'verified'), 'Ninguém no meio. Pode falar tranquilo');
   assert.equal(callToastText(tr, 'requestLater', contactOf('Ana Souza')), 'Ana vai saber que agora não dá');
+});
+
+test('Recusar → Mensagem: o rascunho do celular fica pronto, sem apagar o que a pessoa já escreveu', () => {
+  assert.equal(declineDraft(tr, ''), 'Não posso falar agora, te ligo em 10 min.');
+  assert.equal(declineDraft(tr, ''), callPtBR['call.declineDraft'], 'o mesmo texto do celular');
+  assert.equal(declineDraft(tr, '   '), callPtBR['call.declineDraft']);
+  assert.equal(declineDraft(tr, 'já te respondo'), 'já te respondo');
+  assert.equal(declineDraft((k, v) => tIn('en', k as Key, v), ''), tIn('en', 'call.declineDraft'));
 });

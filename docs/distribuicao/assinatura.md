@@ -7,7 +7,7 @@ A configuração já está pronta para o dia em que houver certificado: **basta 
 ## Como funciona
 
 - `apps/desktop/electron-builder.yml` e `apps/provider-desktop/electron-builder.yml` começam com `extends: ./electron-builder.signing.cjs`. YAML não tem condição; o `.cjs` decide pelo ambiente e devolve só os blocos `mac`/`win` de assinatura. Todo o resto (nome dos arquivos, fusíveis, alvos, ícones) continua no yml, que tem prioridade.
-- A lógica é uma só para os dois apps: `scripts/electron-signing/index.cjs`. Os entitlements ficam ao lado, em `scripts/electron-signing/entitlements.mac.plist`.
+- A lógica é uma só para os dois apps: `scripts/electron-signing/index.cjs`. Os entitlements do Provider ficam ao lado, em `scripts/electron-signing/entitlements.mac.plist`. O Piu Desktop usa os próprios, em `apps/desktop/entitlements.mac.plist`: os mesmos, mais o microfone da chamada de voz (`apps/desktop/electron-builder.signing.cjs` troca o arquivo).
 - Vale para qualquer forma de chamar o electron-builder (`npm run dist:*`, `npx electron-builder ...`, o workflow), porque o yml é sempre o arquivo carregado.
 - Cada build imprime uma linha com o estado, por exemplo:
   `• assinatura  macOS=adhoc  notarização=não  Windows=unsigned`
@@ -32,14 +32,15 @@ node -e "console.log(require('../../scripts/electron-signing/index.cjs').signing
 
 ## Entitlements do macOS (hardened runtime)
 
-Só valem com Developer ID (o build ad-hoc não usa hardened runtime). O mesmo arquivo serve para o app e para os helpers do Electron.
+Só valem com Developer ID (o build ad-hoc não usa hardened runtime). Em cada app, o mesmo arquivo serve para o app e para os helpers do Electron.
 
 | Entitlement | Usa? | Por quê |
 |---|---|---|
 | `com.apple.security.cs.allow-jit` | **sim** | O V8 compila JavaScript em tempo de execução. Sem ele o hardened runtime derruba o app. |
 | `com.apple.security.cs.allow-unsigned-executable-memory` | não | Só era preciso no Electron antigo. O Electron 45 usa `MAP_JIT`; `allow-jit` basta. |
 | `com.apple.security.cs.disable-library-validation` | não | Só serve para carregar `.dylib`/`.node` de outro time. Os dois apps não têm módulo nativo (bundle esbuild) e o Electron Framework é reassinado com o nosso Developer ID. |
-| Câmera, microfone, localização, Bluetooth, USB | não | O Piu Desktop só **mostra** QR; quem escaneia é o celular. |
+| `com.apple.security.device.audio-input` | **só no Piu Desktop** | Microfone da chamada de voz. Com hardened runtime e sem ele, o macOS entrega o microfone mudo, sem perguntar. O texto do pedido vem do Info.plist (`NSMicrophoneUsageDescription`), e o processo principal pede o acesso (`askForMediaAccess`) antes de abrir o microfone. O Provider não usa microfone. |
+| Câmera, localização, Bluetooth, USB | não | O Piu Desktop só **mostra** QR; quem escaneia é o celular. |
 | Rede | não | App fora do App Sandbox não precisa de entitlement para TCP/UDP na rede local nem para o servidor HTTPS do vínculo. |
 
 Notificações, Touch ID (`systemPreferences.promptTouchID`) e keychain (`safeStorage`) também não pedem entitlement fora do sandbox.
@@ -114,7 +115,7 @@ macOS (em cada `.app`, de preferência o que sai de dentro do `.dmg` baixado do 
 APP="/Volumes/Piu/Piu.app"
 codesign -dv --verbose=4 "$APP"          # Authority=Developer ID Application: …, TeamIdentifier=…, flags=0x10000(runtime)
 codesign --verify --deep --strict --verbose=2 "$APP"
-codesign -d --entitlements - "$APP"      # só com.apple.security.cs.allow-jit
+codesign -d --entitlements - "$APP"      # Piu Desktop: allow-jit e device.audio-input; Provider: só allow-jit
 spctl -a -vv -t exec "$APP"              # accepted · source=Notarized Developer ID
 xcrun stapler validate "$APP"            # The validate action worked!
 ```

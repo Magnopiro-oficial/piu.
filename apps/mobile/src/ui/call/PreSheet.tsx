@@ -3,7 +3,7 @@ import { Animated, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Svg, { Line } from 'react-native-svg';
 import type { CallController } from '../../calls/callController';
-import { ROUTE_ICON, type CallScene } from '../../calls/callView';
+import { meshNodes, ROUTE_ICON, routeKey, type CallScene } from '../../calls/callView';
 import { useT } from '../../i18n';
 import { useTheme } from '../../theme/ThemeProvider';
 import { Icon, type IconName } from '../Icon';
@@ -13,7 +13,8 @@ import { EASE_ENTER, EASE_LINEAR, useShown } from './anim';
 /**
  * Folha "pre" (§4.1/§4.5): sobe 105 % → 0 em .5 s, fundo preto 32 % em .35 s. Com caminho ao vivo
  * mostra o caminho e "Chamar {first}"; só pela malha, o diagrama e "Enviar pedido de chamada"; só pelo
- * LoRa (5a), o rádio no diagrama e sem "Gravar um áudio".
+ * LoRa (5a), o rádio no diagrama e sem "Gravar um áudio". "Gravar um áudio" só aparece quando o app tem
+ * gravador para ligar (`onRecordAudio`): a conversa ainda não grava áudio, então hoje não aparece.
  */
 export function PreSheet({ scene, on, controller, onRecordAudio }: { scene: CallScene; on: boolean; controller: CallController; onRecordAudio?: () => void }) {
   const { c } = useTheme();
@@ -24,10 +25,11 @@ export function PreSheet({ scene, on, controller, onRecordAudio }: { scene: Call
   const [h, setH] = useState(520);
   const s = scene.state;
   const ct = scene.contact;
-  const route = s.preRoute;
+  const route = s.preRoute ? routeKey(s.preRoute, s.wifiDirect) : null;
   const close = () => controller.dispatch({ type: 'closePre' });
   const ms = scene.latencyMs !== undefined ? t('call.ms', { ms: Math.round(scene.latencyMs) }) : '';
   const sub = route === 'direct' ? (ms ? t('call.pre.direct.sub', { ms }) : t('call.pre.direct.subNoQ'))
+    : route === 'nearby' ? t('call.pre.nearby.sub') + (ms ? ` · ${ms}` : '')
     : route === 'bt' ? t('call.pre.bt.sub') + (ms ? ` · ${ms}` : '')
       : route === 'point' ? t('call.pre.point.sub') + (ms ? ` · ${ms}` : '') : '';
   return (
@@ -84,8 +86,8 @@ export function PreSheet({ scene, on, controller, onRecordAudio }: { scene: Call
               <T size={13} lh={1.45} color={c.ink2}>{scene.lora ? t('lora.call.body') : t('call.pre.mesh.body')}</T>
             </View>
             <Big icon="schedule_send" label={t('call.pre.sendRequest')} onPress={() => controller.sendRequest()} />
-            {/* Pelo LoRa nem o áudio gravado passa (desenho 5a): sai o "Gravar um áudio". */}
-            {!scene.lora && <Pressable onPress={() => { close(); onRecordAudio?.(); }} accessibilityRole="button"
+            {/* Pelo LoRa nem o áudio gravado passa (desenho 5a): sai o "Gravar um áudio". Sem gravador, também. */}
+            {!scene.lora && onRecordAudio && <Pressable onPress={() => { close(); onRecordAudio(); }} accessibilityRole="button"
               style={({ pressed }) => ({ height: 50, borderRadius: 25, backgroundColor: c.bg2, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, opacity: pressed ? 0.75 : 1 })}>
               <Icon name="mic" size={20} />
               <T size={15} w={600}>{t('call.pre.recordAudio')}</T>
@@ -112,11 +114,12 @@ function Big({ icon, fill, label, onPress }: { icon: IconName; fill?: boolean; l
 /**
  * Você → ○ → ○ → ○ → {first}, com linhas tracejadas (um nó por salto intermediário, 3 no protótipo).
  * `lora`: o rádio no lugar do primeiro nó, e um nó só depois dele (os saltos entre rádios não são conhecidos).
+ * Sem saber os saltos: Você → malha → {first}, sem contagem (nada de 3 nós inventados).
  */
 function MeshPath({ first, hops, lora }: { first: string; hops?: number; lora?: boolean }) {
   const { c } = useTheme();
   const t = useT();
-  const nodes = lora ? 2 : Math.min(5, Math.max(1, hops ?? 3));
+  const nodes = meshNodes(hops, lora);
   const dash = (k: number) => (
     <Svg key={`l${k}`} height={2} style={{ flex: 1 }}>
       <Line x1={0} y1={1} x2="100%" y2={1} stroke={c.ink} strokeWidth={2} strokeDasharray="4 4" />
@@ -125,10 +128,10 @@ function MeshPath({ first, hops, lora }: { first: string; hops?: number; lora?: 
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} accessible accessibilityLabel={`${t('call.pre.you')} → ${first}`}>
       <T size={11.5} w={650}>{t('call.pre.you')}</T>
-      {Array.from({ length: nodes }, (_, k) => [dash(k), lora && k === 0
+      {nodes === 0 ? [dash(0), <Icon key="mesh" name={ROUTE_ICON.mesh as IconName} size={16} />] : Array.from({ length: nodes }, (_, k) => [dash(k), lora && k === 0
         ? <Icon key={`n${k}`} name="settings_input_antenna" size={16} />
         : <View key={`n${k}`} style={{ width: 10, height: 10, borderRadius: 5, borderWidth: 2, borderColor: c.ink }} />])}
-      {dash(nodes)}
+      {dash(Math.max(1, nodes))}
       <T size={11.5} w={650}>{first}</T>
     </View>
   );

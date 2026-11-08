@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CallService, type AudioEngine, type CallServicePorts } from '../callService';
-import type { CallRecord, LiveRoute } from '../callMachine';
+import type { CallRecord, RouteHint } from '../callMachine';
 import type { RequestStep } from '../callView';
 import type { Codec } from '../callMedia';
 
@@ -20,19 +20,26 @@ class TestAudio implements AudioEngine {
   speak(n: number) { this.emit?.('opus', new Uint8Array(n)); }
 }
 
-function pair(route: LiveRoute | null = 'direct') {
+/** `bOld`: o outro não tem chamada (iPhone, 0.1.3 ou anterior): recebe e ignora. `aNoSession`: o sinal de A não sai. */
+function pair(route: RouteHint | null = 'direct', o: { bOld?: boolean; aNoSession?: boolean } = {}) {
   let now = 1000, n = 0;
   const timers: { fn: () => void; ms: number; dead?: boolean }[] = [];
   const recs = { a: [] as CallRecord[], b: [] as CallRecord[] };
   const reqs: { who: string; step: RequestStep }[] = [];
-  let live: LiveRoute | null = route;
+  const reminds: { who: string; peer: string; ms: number }[] = [];
+  let live: RouteHint | null = route;
   const audio = { a: new TestAudio(), b: new TestAudio() };
   const svc: Record<'a' | 'b', CallService> = {} as never;
   const ports = (me: 'a' | 'b'): CallServicePorts => {
     const other = me === 'a' ? 'b' : 'a';
     return {
       now: () => now, newId: () => `id-${me}-${String(++n).padStart(6, '0')}`,
-      sendSignal: (_peer, wire) => { svc[other].onSignal(me === 'a' ? 'alice' : 'bob', JSON.parse(JSON.stringify(wire))); return true; },
+      sendSignal: (_peer, wire) => {
+        if (me === 'a' && o.aNoSession) return false;
+        if (other === 'b' && o.bOld) return true;
+        svc[other].onSignal(me === 'a' ? 'alice' : 'bob', JSON.parse(JSON.stringify(wire))); return true;
+      },
+      remind: (peer, ms) => reminds.push({ who: me, peer, ms }),
       record: r => recs[me].push(r),
       requestUpdate: (_p, _id, step) => reqs.push({ who: me, step }),
       liveRouteTo: () => live,
@@ -47,7 +54,8 @@ function pair(route: LiveRoute | null = 'direct') {
   svc.a = new CallService(ports('a'));
   svc.b = new CallService(ports('b'));
   const fire = (ms: number) => { const t = timers.find(x => !x.dead && x.ms === ms); assert.ok(t); t!.dead = true; now += ms; t!.fn(); };
-  return { a: svc.a, b: svc.b, audio, recs, reqs, fire, tick: (ms: number) => { now += ms; }, setLive: (r: LiveRoute | null) => { live = r; } };
+  const pending = () => timers.filter(x => !x.dead).map(x => x.ms);
+  return { a: svc.a, b: svc.b, audio, recs, reqs, reminds, fire, pending, tick: (ms: number) => { now += ms; }, setLive: (r: RouteHint | null) => { live = r; } };
 }
 
 test('chamada de ponta a ponta: toca, atende, voz nos dois sentidos, mesmas 4 palavras, desliga e registra dos dois lados', () => {
@@ -105,6 +113,64 @@ test('sem caminho ao vivo: pedido pela malha → aceito → liga sozinho e conec
   assert.deepEqual(w.reqs.map(r => `${r.who}:${r.step}`), ['a:traveling', 'b:delivered', 'a:accepted']);
 });
 
+test('resposta "pode ligar" a um pedido que eu não fiz (ou de outro contato) não liga nem abre o microfone', () => {
+  const w = pair('direct');
+  // Ninguém pediu nada: um contato ao vivo inventa a resposta.
+  w.a.onSignal('mallory', { t: 'cl', s: { t: 'requestAnswer', requestId: 'forjado-0001', ok: true } });
+  w.a.tryWaiting();
+  assert.equal(w.a.state.phase, 'idle');
+  assert.equal(w.audio.a.on, false);
+  assert.deepEqual(w.reqs, [], 'nem mexe no cartão da conversa');
+  // Pedido de verdade para o bob, mas a resposta vem de outro contato com o mesmo id.
+  w.setLive(null);
+  w.a.open('bob'); w.a.controller.sendRequest();
+  const id = (w.a.state.requestId ?? w.b.state.requestId)!;
+  w.a.onSignal('mallory', { t: 'cl', s: { t: 'requestAnswer', requestId: id, ok: true } });
+  w.setLive('direct'); w.a.tryWaiting();
+  assert.notEqual(w.a.state.phase, 'active');
+  assert.equal(w.audio.a.on, false);
+});
+
+test('a resposta de um pedido vale uma vez só', () => {
+  const w = pair(null);
+  w.a.open('bob'); w.a.controller.sendRequest();
+  const id = w.b.state.requestId!;
+  w.setLive('direct');
+  w.b.controller.requestNow();
+  assert.equal(w.a.state.phase, 'active');
+  w.a.controller.hangup();
+  while ((w.a.state.phase as string) !== 'idle') w.fire(w.pending().at(-1)!);
+  // O bob repete a mesma resposta depois: não liga de novo.
+  w.a.onSignal('bob', { t: 'cl', s: { t: 'requestAnswer', requestId: id, ok: true } });
+  w.a.tryWaiting();
+  assert.notEqual(w.a.state.phase, 'calling');
+});
+
+test('convite com id de chamada já usado não toca de novo (Intent repetida não atende chamada nova)', () => {
+  const w = pair();
+  const invite = { t: 'cl', s: { t: 'invite', callId: 'sempre-o-mesmo', route: 'direct' }, k: 'A'.repeat(43) };
+  w.b.onSignal('alice', invite);
+  assert.equal(w.b.state.phase, 'ringing');
+  w.b.controller.decline();
+  while ((w.b.state.phase as string) !== 'idle') w.fire(w.pending().at(-1)!);
+  w.b.onSignal('alice', invite);
+  assert.equal(w.b.state.phase, 'idle');
+});
+
+test('quem liga sem parar: do 6º convite em 10 min em diante, responde "ocupado" sem tocar', () => {
+  const w = pair();
+  const sent: string[] = [];
+  for (let i = 0; i < 7; i++) {
+    w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: `convite-${i}-abcd`, route: 'direct' }, k: 'A'.repeat(43) });
+    sent.push(w.b.state.phase);
+    if (w.b.state.phase === 'ringing') { w.b.controller.decline(); while ((w.b.state.phase as string) !== 'idle') w.fire(w.pending().at(-1)!); }
+  }
+  assert.deepEqual(sent, ['ringing', 'ringing', 'ringing', 'ringing', 'ringing', 'idle', 'idle']);
+  w.tick(10 * 60_000);
+  w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: 'convite-depois-abcd', route: 'direct' }, k: 'A'.repeat(43) });
+  assert.equal(w.b.state.phase, 'ringing', 'passada a janela, toca de novo');
+});
+
 test('palavras diferentes encerram dos dois lados por segurança', () => {
   const w = pair();
   w.a.open('bob'); w.a.controller.dial(); w.b.controller.answer();
@@ -120,4 +186,48 @@ test('aceite forjado (outra chamada ou sem chave) não conecta', () => {
   assert.equal(w.a.state.phase, 'calling');
   w.a.onSignal('mallory', { t: 'cl', s: { t: 'accept', callId: w.a.state.callId }, k: 'A'.repeat(43) });
   assert.equal(w.a.state.phase, 'calling');
+});
+
+test('contato sem chamada: nada volta em 10 s → termina com o motivo, sem ficar 45 s em "Procurando…"', () => {
+  const w = pair('direct', { bOld: true });
+  w.a.open('bob'); w.a.controller.dial();
+  assert.equal(w.a.state.stage, 'searching');
+  w.fire(10_000);
+  assert.equal(w.a.state.phase, 'ending');
+  assert.equal(w.a.state.end?.reason, 'nocall');
+  assert.equal(w.recs.a[0].note, 'nocall');
+  assert.ok(!w.pending().includes(45_000), 'o tempo de 45 s foi cancelado');
+});
+
+test('oferta que não sai (sem sessão com o contato): termina na hora com "sem conexão", sem timers pendurados', () => {
+  const w = pair('direct', { aNoSession: true });
+  w.a.open('bob'); w.a.controller.dial();
+  assert.equal(w.a.state.phase, 'ending');
+  assert.equal(w.a.state.end?.reason, 'unreachable');
+  assert.equal(w.b.state.phase, 'idle');
+  assert.deepEqual(w.pending(), [1700], 'só a tela de fim');
+  assert.ok(!w.audio.a.on);
+});
+
+test('recusar com "Em 10 min" pede o lembrete ao aparelho (quem ligou, 10 min)', () => {
+  const w = pair();
+  w.a.open('bob'); w.a.controller.dial();
+  w.b.controller.decline('later');
+  assert.deepEqual(w.reminds, [{ who: 'b', peer: 'alice', ms: 10 * 60_000 }]);
+  assert.equal(w.a.state.end?.reason, 'declined');
+});
+
+test('Wi-Fi Direct (Nearby): vai como `bt` com a marca nos dois lados, até o registro na conversa', () => {
+  const w = pair('wifiDirect');
+  w.a.open('bob');
+  assert.deepEqual([w.a.state.preRoute, w.a.state.wifiDirect], ['bt', true]);
+  w.a.controller.dial();
+  assert.deepEqual([w.a.state.route, w.a.state.wifiDirect], ['bt', true]);
+  assert.deepEqual([w.b.state.route, w.b.state.wifiDirect], ['bt', true]);
+  w.b.controller.decline();
+  assert.deepEqual([w.recs.a[0].route, w.recs.a[0].wifiDirect], ['bt', true]);
+  assert.deepEqual([w.recs.b[0].route, w.recs.b[0].wifiDirect], ['bt', true]);
+  const v = pair('bt');
+  v.a.open('bob');
+  assert.equal(v.a.state.wifiDirect, undefined, 'Bluetooth de verdade não leva a marca');
 });

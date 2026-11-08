@@ -16,6 +16,8 @@ export type CallSnapshot = {
   latencyMs?: number;
   /** Contatos com caminho ao vivo agora (caixa "pre": ligar ou pedir chamada). */
   routes: Record<string, LiveRoute>;
+  /** Chamada recebida tocando e o toque deve soar (Não perturbe e conversa silenciada calam; shared/callNotify.ts). */
+  ring: boolean;
 };
 
 export type CallAudioCmd =

@@ -65,6 +65,7 @@ test('enlace piulora: envia em pedaços KISS dentro do tempo de rádio; recebe e
   await settle();
   assert.equal(link.status().superNodes, 1);
   assert.equal(link.status().gateways, 1);
+  assert.deepEqual(link.heard().map(n => n.gateway), [true], 'o mapa da rede lê cada um');
   let busy = 0;
   for (let i = 0; i < 10; i++) await link.send(LORA_PEER, env).catch(() => { busy++; });
   assert.ok(busy > 0, 'o balde de tempo de rádio segura a rajada');

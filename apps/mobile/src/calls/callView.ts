@@ -9,16 +9,21 @@ type Vars = Record<string, string | number>;
 export type Tr = (key: string, vars?: Vars) => string;
 export type Contact = { name: string; first: string; initials: string };
 
-export const ROUTE_ICON: Record<LiveRoute | 'switching' | 'mesh', string> = { direct: 'wifi', bt: 'bluetooth', point: 'storefront', switching: 'sync', mesh: 'hub' };
-const LOST_KEY: Record<LiveRoute, string> = { direct: 'call.route.lostWifi', bt: 'call.route.lostBt', point: 'call.route.lostPoint' };
+/** Como a rota aparece: Wi-Fi Direct (Nearby) anda como `bt` no fio, com a marca `wifiDirect`, mas não é Bluetooth. */
+export type RouteKey = LiveRoute | 'nearby';
+export const routeKey = (r: LiveRoute, wifiDirect?: boolean): RouteKey => (r === 'bt' && wifiDirect ? 'nearby' : r);
+
+export const ROUTE_ICON: Record<RouteKey | 'switching' | 'mesh', string> = { direct: 'wifi', nearby: 'wifi_tethering', bt: 'bluetooth', point: 'storefront', switching: 'sync', mesh: 'hub' };
+const LOST_KEY: Record<RouteKey, string> = { direct: 'call.route.lostWifi', nearby: 'call.route.lostNearby', bt: 'call.route.lostBt', point: 'call.route.lostPoint' };
+const SEARCH_KEY: Partial<Record<RouteKey, string>> = { nearby: 'call.stage.searchingNearby', bt: 'call.stage.searchingBt' };
 
 export const routeChip = (t: Tr, s: CallState, latencyMs?: number) => {
-  if (s.switching) return { icon: 'sync', text: t(LOST_KEY[s.switching.from]), q: '' };
-  const r = s.route ?? 'direct';
+  if (s.switching) return { icon: 'sync', text: t(LOST_KEY[routeKey(s.switching.from, s.wifiDirect)]), q: '' };
+  const r = routeKey(s.route ?? 'direct', s.wifiDirect);
   return { icon: ROUTE_ICON[r], text: t(`call.route.${r}`), q: latencyMs !== undefined ? t('call.ms', { ms: Math.round(latencyMs) }) : '' };
 };
-/** "direto pelo Wi-Fi" · "direto por Bluetooth" · "via Ponto Piu". */
-export const routeVia = (t: Tr, r: LiveRoute | undefined) => t(`call.route.via.${r ?? 'direct'}`);
+/** "direto pelo Wi-Fi" · "direto por Wi-Fi Direct" · "direto por Bluetooth" · "via Ponto Piu". */
+export const routeVia = (t: Tr, r: LiveRoute | undefined, wifiDirect?: boolean) => t(`call.route.via.${routeKey(r ?? 'direct', wifiDirect)}`);
 
 export const encChip = (t: Tr, s: CallState) => (s.verified ? { icon: 'verified', text: t('call.verified') } : { icon: 'lock', text: t('call.e2e') });
 
@@ -29,6 +34,8 @@ export function endTitle(t: Tr, s: CallState): string {
     case 'declined': case 'message': case 'later': return t('call.end.declined');
     case 'sas': return t('call.end.sas');
     case 'noanswer': return t('call.end.noanswer');
+    case 'nocall': return t('call.end.nocall');
+    case 'unreachable': return t('call.end.unreachable');
     case 'busy': return t('call.end.busy');
     case 'lost': return t('call.end.lost');
     default: return t('call.end.done');
@@ -38,10 +45,10 @@ export function endTitle(t: Tr, s: CallState): string {
 /** Linha mono embaixo do nome: estágio, cronômetro ou fim. */
 export function statusLine(t: Tr, s: CallState, c: Contact, now: number, o: { desktop?: boolean } = {}): string {
   switch (s.phase) {
-    case 'ringing': return routeVia(t, s.route);
+    case 'ringing': return routeVia(t, s.route, s.wifiDirect);
     case 'calling':
       switch (s.stage) {
-        case 'searching': return t(s.route === 'bt' ? 'call.stage.searchingBt' : 'call.stage.searching', { first: c.first });
+        case 'searching': return t((s.route && SEARCH_KEY[routeKey(s.route, s.wifiDirect)]) || 'call.stage.searching', { first: c.first });
         case 'ringing': return t(o.desktop ? 'call.stage.ringingBoth' : 'call.stage.ringing', { first: c.first });
         case 'accepted': return t('call.stage.accepted', { first: c.first });
         case 'notifying': return t('call.stage.notifying', { first: c.first });
@@ -85,7 +92,7 @@ export function controls(t: Tr, s: CallState, o: { desktop?: boolean; audioOpen?
 /** Cartão de registro na conversa (§4.11). `mine` = eu iniciei. */
 export function recordCard(t: Tr, r: CallRecord, c: Contact, o: { desktop?: boolean } = {}): { icon: string; title: string; sub: string; mine: boolean; callBack: boolean } {
   const mine = r.dir === 'out';
-  const via = r.route ? routeVia(t, r.route) : '';
+  const via = r.route ? routeVia(t, r.route, r.wifiDirect) : '';
   const withDur = (x: string) => (r.durationMs !== undefined ? `${fmtDuration(r.durationMs)}${x ? ' · ' + x : ''}` : x);
   switch (r.outcome) {
     case 'done': return { icon: mine ? 'call_made' : 'call_received', title: t('call.rec.voice'), sub: withDur(via), mine, callBack: false };
@@ -98,13 +105,25 @@ export function recordCard(t: Tr, r: CallRecord, c: Contact, o: { desktop?: bool
       return { icon: 'call_end', title: t('call.end.declined'), sub, mine, callBack: false };
     }
     case 'cancelled': return { icon: 'call_end', title: t('call.end.cancelled'), sub: via, mine, callBack: false };
-    case 'noanswer': return { icon: 'call_end', title: t('call.end.noanswer'), sub: via, mine, callBack: false };
+    case 'noanswer': {
+      const sub = r.note === 'nocall' ? t('call.rec.nocallSub') : r.note === 'unreachable' ? t('call.rec.unreachableSub') : via;
+      return { icon: 'call_end', title: t('call.end.noanswer'), sub, mine, callBack: false };
+    }
     case 'busy': return { icon: 'call_end', title: t('call.end.busy'), sub: via, mine, callBack: false };
     case 'sas': return { icon: 'call_end', title: t('call.end.sas'), sub: withDur(t('call.rec.sasSub')), mine, callBack: false };
     case 'lost': return { icon: 'call_end', title: t('call.end.lost'), sub: withDur(via), mine, callBack: false };
     case 'elsewhere': return { icon: 'call_received', title: t('call.rec.voice'), sub: t('call.rec.elsewhere', { device: r.note ?? '' }), mine: false, callBack: false };
     case 'handoff': return { icon: mine ? 'call_made' : 'call_received', title: t('call.rec.voice'), sub: t('call.rec.handoff', { duration: fmtDuration(r.durationMs ?? 0), device: r.note ?? '' }), mine, callBack: false };
   }
+}
+
+/**
+ * Nós no meio do diagrama da folha em modo malha: um por salto quando se sabe (até 5); sem saber, 0
+ * (o diagrama mostra só a malha, sem número inventado). LoRa (5a): o rádio e um nó depois dele.
+ */
+export function meshNodes(hops?: number, lora?: boolean): number {
+  if (lora) return 2;
+  return hops && hops > 0 ? Math.min(5, Math.round(hops)) : 0;
 }
 
 export type RequestStep = 'traveling' | 'delivered' | 'accepted' | 'declined' | 'expired';

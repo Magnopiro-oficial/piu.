@@ -1,15 +1,18 @@
 /**
  * SÓ DESENVOLVIMENTO (importado por src/app/__dev/radio.tsx atrás de `__DEV__`; fora do build de produção).
  * Cada id do Piu 17 renderiza a MESMA peça que o app usa (LoraBlockView, RadioTypeSheet, ConnectPiuSheet,
- * RegionPicker) com DADOS DE EXEMPLO. As folhas de conexão rodam o caminho real (PiuLoraRadio →
+ * RegionPicker, RouteSheet) com DADOS DE EXEMPLO. As folhas de conexão rodam o caminho real (PiuLoraRadio →
  * PiuLoraLink → RNodeSetup) com um rádio de exemplo que responde pelo "Bluetooth".
  * `/__dev/radio` lista; `/__dev/radio?id=1d` mostra um só.
  */
 import { router, useLocalSearchParams, type Href } from 'expo-router';
 import { useState, type ReactNode } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
+import type { Chat, Msg } from '../data/types';
 import type { LoraRowView } from '../lib/loraRow';
 import type { LoraMode, PiuProblem, PiuRowView } from '../lib/piuLora';
+import type { RouteRec } from '../lib/routeCore';
+import { Priority } from '../protocol/envelope';
 import { useTheme } from '../theme/ThemeProvider';
 import type { RadioDevice } from '../transport/meshtastic/radio';
 import { PiuLoraLink } from '../transport/rnode/link';
@@ -20,6 +23,7 @@ import { ConnectPiuSheet } from '../ui/lora/ConnectPiuSheet';
 import { LoraBlockView } from '../ui/lora/LoraBlock';
 import { RadioTypeSheet } from '../ui/lora/RadioTypeSheet';
 import { RegionPicker } from '../ui/lora/RegionPicker';
+import { RouteSheet } from '../ui/RouteSheet';
 import { T } from '../ui/T';
 
 const noop = () => {};
@@ -28,16 +32,22 @@ const DEVS: RadioDevice[] = [{ id: 'AA:00:00:00:3F:2A', name: 'RNode 3F2A', rssi
 /**
  * Rádio de exemplo: a placa emulada byte a byte (rnode/emulator.ts). `answer` liga o Bluetooth à placa;
  * sem ele a placa fica calada (configurando). `board`/`fw`/`tnc`/`provisioned` reproduzem os casos reais.
+ * `connect` com um código de erro (TIMEOUT, PERMISSION, BT_OFF) falha a conexão com ele (3f). `stagger`: os
+ * rádios aparecem um a um, a cada `stagger` ms (lrIn).
  */
-function exampleRadio(o: { devices?: RadioDevice[]; connect?: 'ok' | 'bond' | 'TIMEOUT'; answer?: boolean; region?: string | null } & EmulatorOptions & { board?: string } = {}) {
+function exampleRadio(o: { devices?: RadioDevice[]; connect?: 'ok' | 'bond' | 'TIMEOUT' | 'PERMISSION' | 'BT_OFF'; answer?: boolean; region?: string | null; stagger?: number } & EmulatorOptions & { board?: string } = {}) {
   const data = new Set<(b: Uint8Array) => void>(), dev = new Set<(d: RadioDevice) => void>(), st = new Set<(s: string, r?: string) => void>();
   const sub = <F,>(s: Set<F>, f: F) => { s.add(f); return { remove: () => { s.delete(f); } }; };
   const emu = new RNodeEmulator(RNODE_BOARDS.find(b => b.name === (o.board ?? 'Heltec V3 (915)'))!, o);
   emu.onOutput(b => { const c = b.slice(); setTimeout(() => data.forEach(fn => fn(c)), 0); });
   const client: RNodeClient = {
-    async scan(sec) { (o.devices ?? []).forEach(d => dev.forEach(f => f(d))); await new Promise(r => setTimeout(r, sec * 1000)); },
+    async scan(sec) {
+      const st = o.stagger;
+      (o.devices ?? []).forEach((d, i) => (st ? setTimeout(() => dev.forEach(f => f(d)), (i + 1) * st) : dev.forEach(f => f(d))));
+      await new Promise(r => setTimeout(r, sec * 1000));
+    },
     async connect() {
-      if (o.connect === 'TIMEOUT') throw Object.assign(new Error('timeout'), { code: 'TIMEOUT' });
+      if (o.connect && o.connect !== 'ok' && o.connect !== 'bond') throw Object.assign(new Error(o.connect.toLowerCase()), { code: o.connect });
       if (o.connect === 'bond') { st.forEach(f => f('connecting', 'bond')); await new Promise(() => {}); }
     },
     async write(b) { if (o.answer) emu.input(b); },
@@ -49,7 +59,7 @@ function exampleRadio(o: { devices?: RadioDevice[]; connect?: 'ok' | 'bond' | 'T
   return radio;
 }
 
-const piuUp = (p: Partial<Extract<PiuRowView, { kind: 'connected' }>> = {}): PiuRowView => ({ kind: 'connected', radio: 'RNode 3F2A', region: 'BR_902', freqHz: 904_750_000, superNodes: { count: 2, gateway: true }, ...p });
+const piuUp = (p: Partial<Extract<PiuRowView, { kind: 'connected' }>> = {}): PiuRowView => ({ kind: 'connected', radio: 'RNode 3F2A', region: 'BR_902', freqHz: 904_750_000, superNodes: { count: 2, gateways: 1 }, ...p });
 const meshUp: LoraRowView = { kind: 'connected', radio: 'T-Echo', battery: 82, nodes: 7 };
 
 function Rede({ on = true, pv = null, mv = null, mode: m0 = 'auto' }: { on?: boolean; pv?: PiuRowView | null; mv?: LoraRowView | null; mode?: LoraMode }) {
@@ -68,6 +78,13 @@ function Rede({ on = true, pv = null, mv = null, mode: m0 = 'auto' }: { on?: boo
 
 const PROBLEM: Record<string, PiuProblem> = { '3g': { kind: 'notRNode' }, '3h': { kind: 'band' }, '3i': { kind: 'code', code: '0x03' } };
 
+/** 5 e 5 · M: uma mensagem entregue pelo LoRa (rádio do Piu, ou Meshtastic porque o do Piu estava fora do alcance). */
+const AT = Date.UTC(2026, 10, 8, 17, 2);
+const chatOf = (name: string, initials: string): Chat => ({ id: `c-${initials}`, ident: 'public', kind: 'direct', name, initials, time: '14:02', unread: 0 });
+const MSG: Msg = { id: 'm-route', from: 'me', text: 'Chego no mercado às 15h', time: '14:02', status: 'entregue', at: AT };
+const REC_PIU: RouteRec = { m: MSG.id, d: 'out', md: 'piulora', b: 180, f: 1, p: Priority.Normal, at: AT };
+const REC_MESH: RouteRec = { m: MSG.id, d: 'out', md: 'lora', w: 'away', b: 410, f: 2, p: Priority.Normal, at: AT };
+
 const FRAMES: Record<string, () => ReactNode> = {
   '1a': () => <Rede on={false} />,
   '1b': () => <Rede />,
@@ -80,11 +97,16 @@ const FRAMES: Record<string, () => ReactNode> = {
   '1h': () => <Rede pv={{ kind: 'away', radio: 'RNode 3F2A' }} />,
   '2': () => <RadioTypeSheet onClose={noop} onPick={noop} />,
   '3a': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS })} onRegion={noop} onClose={noop} />,
+  // 3a com os rádios chegando um a um (cada um entra com lrIn).
+  '3a-in': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, stagger: 900 })} onRegion={noop} onClose={noop} />,
   '3b': () => <ConnectPiuSheet radio={exampleRadio({})} onRegion={noop} onClose={noop} />,
   '3c': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, connect: 'bond' })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
   '3d': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
   '3e': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, answer: true })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
   '3f': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, connect: 'TIMEOUT' })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
+  // 3f · permissão e 3f · Bluetooth desligado: o botão principal muda com o motivo.
+  '3f-perm': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, connect: 'PERMISSION' })} deviceId={DEVS[0]!.id} askPermission={noop} onRegion={noop} onClose={noop} />,
+  '3f-bt': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, connect: 'BT_OFF' })} deviceId={DEVS[0]!.id} askPermission={noop} onRegion={noop} onClose={noop} />,
   '3g': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3g']} onRegion={noop} onClose={noop} />,
   '3h': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3h']} onRegion={noop} onClose={noop} />,
   '3i': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3i']} onRegion={noop} onClose={noop} />,
@@ -96,6 +118,11 @@ const FRAMES: Record<string, () => ReactNode> = {
   '4a': () => <RegionPicker link={new PiuLoraLink({})} first country="BR" onDone={noop} onClose={noop} />,
   '4b': () => <RegionPicker link={new PiuLoraLink({})} first country="AR" onDone={noop} onClose={noop} />,
   '4c': () => <RegionPicker link={new PiuLoraLink({ region: 'BR_902' })} first={false} country="BR" onDone={noop} onClose={noop} />,
+  // 4c · depois: trocou para Europa 868 MHz; o aviso fica 2,5 s embaixo.
+  '4c-2': () => <RegionPicker link={new PiuLoraLink({ region: 'EU_868' })} first={false} country="BR" justSwapped="EU_868" onDone={noop} onClose={noop} />,
+  '5': () => <RouteSheet chat={chatOf('Dona Cida', 'DC')} msg={MSG} rec={REC_PIU} onClose={noop} />,
+  // 5 · M: o Automático seguiu pelo Meshtastic; a linha "por quê" aparece embaixo do texto.
+  '5-m': () => <RouteSheet chat={chatOf('Seu Antônio', 'SA')} msg={MSG} rec={REC_MESH} onClose={noop} />,
 };
 const IDS = Object.keys(FRAMES);
 

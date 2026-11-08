@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'इंस्टॉल कैसे करें',
   'piu.band.title': 'यह बोर्ड दूसरे फ़्रीक्वेंसी बैंड का है',
   'piu.band.d': 'इसने {freq} स्वीकार नहीं की। क्षेत्र के बैंड वाला बोर्ड इस्तेमाल करें, या किसी दूसरे देश में हों तो क्षेत्र बदलें।',
+  'piu.band.d2': 'इसने {freq} स्वीकार नहीं की। {band} वाला बोर्ड इस्तेमाल करें, या किसी दूसरे देश में हों तो क्षेत्र बदलें।',
+  'piu.board': 'बोर्ड · {band}',
+  'piu.superNodes': { one: 'पास में Super Node', other: 'पास में {count} Super Node' },
+  'piu.gateways': { one: '{count} गेटवे', other: '{count} गेटवे' },
+  'piu.btOn': 'Bluetooth चालू करें',
   'piu.changeRegion': 'क्षेत्र बदलें',
   'piu.boards': 'संगत बोर्ड देखें',
   'piu.code.d': 'बोर्ड बंद करके फिर चालू करें और दोबारा कोशिश करें। फिर भी हो तो यह कोड उसे दिखाएँ जो रेडियो में आपकी मदद करता है।',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'दुनिया 2.4 GHz',
   'piu.route.via': 'LoRa (Piu) से',
   'piu.route.radio': 'Piu रेडियो',
+  'piu.why.away': 'स्वचालित: Piu रेडियो दायरे से बाहर था, इसलिए Meshtastic से भेजा गया।',
+  'piu.why.failed': 'स्वचालित: Piu रेडियो भेज नहीं सका, इसलिए Meshtastic से भेजा गया।',
 };

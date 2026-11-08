@@ -8,7 +8,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { type CallEvent, type CallState, IDLE, type LiveRoute } from '../../../../mobile/src/calls/callMachine';
 import { contactOf } from '../../../../mobile/src/calls/callView';
 import type { CallAct, CallSnapshot } from '../../shared/callBridge';
-import { listDevices, MicMeter, WebAudioEngine } from '../callAudio';
+import { listDevices, MicMeter, Ringtone, WebAudioEngine } from '../callAudio';
 import { motionOff } from '../ui';
 import type { CallControl, CallDevices, DesktopCallHost } from './CallContext';
 
@@ -76,6 +76,16 @@ export function useDesktopCall(on: boolean, nameOf: (peer: string) => string, on
     });
     return () => { off(); engine.current?.stop(); engine.current = null; };
   }, [on]);
+
+  // Toque da chamada recebida: o principal liga `ring` enquanto toca (Não perturbe e conversa silenciada calam)
+  // e desliga ao atender, recusar ou terminar. Bloqueado, `on` cai e o toque para junto.
+  const ring = !!snap?.ring;
+  useEffect(() => {
+    if (!on || !ring) return;
+    const r = new Ringtone();
+    r.start();
+    return () => r.stop();
+  }, [on, ring]);
 
   // Caixa "pre": medidor do microfone e a lista de aparelhos (os nomes só vêm depois da permissão).
   const phase = snap?.state.phase ?? 'idle';

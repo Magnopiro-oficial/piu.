@@ -7,6 +7,8 @@ export const palettes = {
     knob: '#FFFFFF', scrim: 'rgba(0,0,0,0.32)',
     // Estado de um rádio (desenho Piu 17): só no ponto e no aviso da linha; o resto segue monocromático.
     ok: '#1F9D55', warn: '#9A5A00', warnbg: 'rgba(196,120,0,0.11)', err: '#CF3328', errbg: 'rgba(207,51,40,0.09)',
+    // Mapa da rede (Piu 18): fundo dos anéis de alcance de cada canal.
+    reach: 'rgba(0,0,0,0.045)',
   },
   dark: {
     bg: '#0A0A0A', bg2: '#171717', bg3: '#262626', bub: '#1A1A1A',
@@ -14,6 +16,7 @@ export const palettes = {
     line: 'rgba(255,255,255,0.08)', line2: 'rgba(255,255,255,0.18)', dot: 'rgba(255,255,255,0.06)',
     knob: '#8C8C88', scrim: 'rgba(0,0,0,0.60)',
     ok: '#4CC38A', warn: '#F2B545', warnbg: 'rgba(242,181,69,0.13)', err: '#FF6A5C', errbg: 'rgba(255,106,92,0.14)',
+    reach: 'rgba(255,255,255,0.05)',
   },
 } as const;
 

@@ -27,7 +27,7 @@ export function waitingFor(mode: LoraMode, up: Record<LoraWho, boolean>): LoraWh
 }
 
 export type PiuProblem =
-  | { kind: 'band' } | { kind: 'code'; code: string } | { kind: 'notRNode' } | { kind: 'region' }
+  | { kind: 'band'; board?: string } | { kind: 'code'; code: string } | { kind: 'notRNode' } | { kind: 'region' }
   | { kind: 'old'; version: string } | { kind: 'tnc' } | { kind: 'setup' } | { kind: 'silent' } | { kind: 'other' };
 
 /** O motivo do RNodeSetup/PiuLoraLink (texto) no que a tela mostra (3g, 3h, 3i e os do mundo real). */
@@ -35,6 +35,13 @@ export function piuProblem(problem: string | null | undefined): PiuProblem {
   const p = problem ?? '';
   const code = /erro do RNode (0x[0-9a-f]{2})/.exec(p);
   if (code) return { kind: 'code', code: code[1]! };
+  const range = /^frequência fora da faixa da placa \((\d+(?:,\d+)?)–(\d+(?:,\d+)?) MHz\)/.exec(p);
+  if (range) {
+    const [lo, hi] = [range[1]!, range[2]!].map(x => Number(x.replace(',', '.')) * 1e6) as [number, number];
+    // A placa diz a faixa dela: a nominal que cabe nela ("433 MHz"); com nenhuma ou mais de uma, a faixa exata.
+    const fits = [433e6, 868e6, 915e6, 2450e6].filter(f => f >= lo && f <= hi);
+    return { kind: 'band', board: fits.length === 1 ? nominalBand(fits[0]!)! : `${range[1]}–${range[2]} MHz` };
+  }
   if (p.startsWith('frequência diferente') || p.startsWith('frequência fora da faixa')) return { kind: 'band' };
   const old = /^firmware antigo \(([^)]*)\)/.exec(p);
   if (old) return { kind: 'old', version: old[1]! };
@@ -48,7 +55,7 @@ export function piuProblem(problem: string | null | undefined): PiuProblem {
 
 export type PiuRowView =
   | { kind: 'none' | 'searching' | 'noPerm' }
-  | { kind: 'connected'; radio?: string; region: string | null; freqHz?: number; superNodes?: { count: number; gateway: boolean }; busySec?: number }
+  | { kind: 'connected'; radio?: string; region: string | null; freqHz?: number; superNodes?: { count: number; gateways: number }; busySec?: number }
   | { kind: 'failed'; radio?: string; region: string | null; problem: PiuProblem }
   | { kind: 'away'; radio: string };
 
@@ -63,12 +70,23 @@ export function piuRowState(radio: RadioStatus, link: PiuLoraStatus, o: { grante
     return {
       kind: 'connected', radio: name, region: link.region,
       ...(link.region ? { freqHz: piuRadio(link.region).freqHz } : {}),
-      ...(link.superNodes ? { superNodes: { count: link.superNodes, gateway: link.gateways > 0 } } : {}),
+      ...(link.superNodes ? { superNodes: { count: link.superNodes, gateways: link.gateways } } : {}),
       ...(busy ? { busySec: busy } : {}),
     };
   }
   if ((radio.phase === 'away' || radio.phase === 'error') && name) return { kind: 'away', radio: name };
   return { kind: 'none' };
+}
+
+/**
+ * Faixa nominal das placas LoRa ("433 MHz", "868 MHz", "915 MHz", "2,4 GHz"), como vem escrito na placa,
+ * para a frequência `hz` (até 25 MHz de distância). Fora disso (ex.: China 470–510), `undefined`.
+ */
+export function nominalBand(hz: number): string | undefined {
+  const mhz = hz / 1e6;
+  if (mhz >= 2400 && mhz <= 2500) return '2,4 GHz';
+  const n = [433, 868, 915].find(b => Math.abs(mhz - b) <= 25);
+  return n ? `${n} MHz` : undefined;
 }
 
 /** "904,75 MHz" (até 2 casas, vírgula); acima de 1 GHz sem casas. */

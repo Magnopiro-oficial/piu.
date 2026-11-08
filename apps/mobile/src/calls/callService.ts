@@ -7,7 +7,7 @@
 import { b64url, unb64url as fromB64url } from '../messaging/card';
 import { callKeys, newCallKeypair, voiceTag, type CallKeys } from './callCrypto';
 import { CallController } from './callController';
-import type { CallRecord, CallState, LiveRoute, Signal } from './callMachine';
+import { splitRoute, type CallRecord, type CallState, type RouteHint, type Signal } from './callMachine';
 import { VoiceLink, type Codec } from './callMedia';
 import { isLiveSignal, readCallWire, callWire, type WireCall } from './callSignals';
 import type { RequestStep } from './callView';
@@ -35,8 +35,10 @@ export type CallServicePorts = {
   requestUpdate(peer: string, requestId: string, step: RequestStep, dir: 'out' | 'in'): void;
   toast?(text: 'verified' | 'remindLater' | 'requestLater', peer?: string): void;
   draft?(peer: string): void;
-  /** Há caminho ao vivo até o contato agora? (vizinho direto recente e o meio). */
-  liveRouteTo(peer: string): LiveRoute | null;
+  /** "Em 10 min" ao recusar: lembrete de ligar para `peer` daqui a `ms`. */
+  remind?(peer: string, ms: number): void;
+  /** Há caminho ao vivo até o contato agora? (vizinho direto recente e o meio; `wifiDirect` = Nearby). */
+  liveRouteTo(peer: string): RouteHint | null;
   links(): { peerId: string; medium: Medium }[];
   sendFrame(peerId: string, frame: Uint8Array): void;
   isPoint?(peerId: string): boolean;
@@ -49,7 +51,22 @@ export type CallServicePorts = {
 
 /** Pedido aceito por quem recebeu, esperando um caminho ao vivo para ligar (até 10 min). */
 const ACCEPTED_WAIT_MS = 10 * 60_000;
+/** Pedido que eu mandei vale uma resposta até o prazo máximo de um envelope na malha (7 dias). */
+const REQUEST_TTL_MS = 7 * 24 * 3600_000;
+/** Tetos das memórias que um contato consegue fazer crescer. */
+const MAX_REQUESTS = 16;
+const MAX_SEEN_CALLS = 64;
+/** Quem liga sem parar: até 5 convites do mesmo contato a cada 10 min; os seguintes ouvem "ocupado" sem tocar. */
+const INVITES_PER_WINDOW = 5;
+const INVITE_WINDOW_MS = 10 * 60_000;
 const TICK_MS = 250;
+
+/** Põe no mapa com teto: passando do teto, sai o mais antigo. */
+function putCapped<K, V>(m: Map<K, V>, k: K, v: V, max: number) {
+  m.delete(k);
+  m.set(k, v);
+  while (m.size > max) m.delete(m.keys().next().value as K);
+}
 
 export class CallService {
   readonly controller: CallController;
@@ -59,6 +76,12 @@ export class CallService {
   private link?: VoiceLink;
   private ticker?: unknown;
   private waiting = new Map<string, { peer: string; until: number }>();
+  /** Pedidos que EU mandei (id → contato e prazo): só eles aceitam um "pode ligar". */
+  private outgoing = new Map<string, { peer: string; until: number }>();
+  /** Ids de chamada já recebidos: quem liga escolhe o id, e o mesmo convite não toca de novo. */
+  private seenCalls = new Map<string, true>();
+  /** Convites recentes por contato (início da janela e quantos). */
+  private invites = new Map<string, { since: number; n: number }>();
   private listeners = new Set<() => void>();
 
   constructor(private readonly p: CallServicePorts) {
@@ -69,6 +92,7 @@ export class CallService {
       media: (on, s) => (on ? this.startMedia(s) : this.stopMedia()),
       toast: (text, peer) => p.toast?.(text, peer),
       draft: peer => p.draft?.(peer),
+      remind: (peer, ms) => p.remind?.(peer, ms),
     });
     // Mudo e alto-falante na hora (não esperam o tique): mudo é privacidade.
     this.controller.subscribe(() => { if (this.link) this.syncAudio(); this.emit(); });
@@ -84,7 +108,10 @@ export class CallService {
   private emit() { for (const fn of this.listeners) fn(); }
 
   /** Botão ligar: abre a folha com o caminho ao vivo de agora (ou em modo malha). */
-  open(peer: string) { this.controller.open(peer, this.p.liveRouteTo(peer)); }
+  open(peer: string) {
+    const h = this.p.liveRouteTo(peer);
+    this.controller.dispatch({ type: 'open', peer, ...(h ? splitRoute(h) : { route: null }) });
+  }
 
   /** Quadro de um vizinho: `true` se era voz desta chamada (não vai para o mensageiro). */
   onFrame(peerId: string, medium: Medium, frame: Uint8Array): boolean {
@@ -101,8 +128,19 @@ export class CallService {
     switch (s.t) {
       case 'invite': {
         if (!key) return;
+        const seen = peer + '|' + s.callId;
+        if (this.seenCalls.has(seen)) return;
+        putCapped(this.seenCalls, seen, true, MAX_SEEN_CALLS);
+        if (!this.inviteAllowed(peer, now)) {
+          this.p.sendSignal(peer, callWire({ t: 'decline', callId: s.callId, reason: 'busy' }), true);
+          return;
+        }
+        // A chave precisa estar aqui antes do despacho (o aceite do pedido sai dentro dele); se a
+        // máquina não ficou com esta chamada (ocupado), ela sai na hora.
         this.theirKey.set(s.callId, fromB64url(key));
-        this.controller.dispatch({ type: 'incoming', callId: s.callId, peer, route: this.p.liveRouteTo(peer) ?? s.route, now, requestId: s.requestId });
+        const h = this.p.liveRouteTo(peer);
+        this.controller.dispatch({ type: 'incoming', callId: s.callId, peer, ...(h ? splitRoute(h) : { route: s.route }), now, requestId: s.requestId });
+        if (this.controller.state.callId !== s.callId) this.theirKey.delete(s.callId);
         break;
       }
       case 'ringing': if (st.peer === peer) this.controller.dispatch({ type: 'peerRinging', callId: s.callId }); break;
@@ -119,11 +157,26 @@ export class CallService {
         this.p.requestUpdate(peer, s.requestId, 'delivered', 'in');
         this.controller.dispatch({ type: 'requestIn', requestId: s.requestId, peer });
         break;
-      case 'requestAnswer':
+      case 'requestAnswer': {
+        // Só a resposta de um pedido que eu mandei a este contato, no prazo, e uma vez só. Sem isto,
+        // um contato ao vivo inventava um "pode ligar" e o aparelho ligava sozinho e abria o microfone.
+        const mineReq = this.outgoing.get(s.requestId);
+        if (!mineReq || mineReq.peer !== peer || now > mineReq.until) return;
+        this.outgoing.delete(s.requestId);
         this.p.requestUpdate(peer, s.requestId, s.ok ? 'accepted' : 'declined', 'out');
-        if (s.ok) { this.waiting.set(s.requestId, { peer, until: now + ACCEPTED_WAIT_MS }); this.tryWaiting(); }
+        if (s.ok) { putCapped(this.waiting, s.requestId, { peer, until: now + ACCEPTED_WAIT_MS }, MAX_REQUESTS); this.tryWaiting(); }
         break;
+      }
     }
+  }
+
+  /** Conta o convite do contato na janela; falso quando passou do limite. */
+  private inviteAllowed(peer: string, now: number): boolean {
+    const w = this.invites.get(peer);
+    const cur = w && now - w.since < INVITE_WINDOW_MS ? w : { since: now, n: 0 };
+    cur.n++;
+    putCapped(this.invites, peer, cur, MAX_SEEN_CALLS);
+    return cur.n <= INVITES_PER_WINDOW;
   }
 
   /** Chamar quando os vizinhos mudam: um pedido aceito liga assim que houver caminho ao vivo. */
@@ -131,10 +184,10 @@ export class CallService {
     const now = this.p.now();
     for (const [requestId, w] of this.waiting) {
       if (now > w.until) { this.waiting.delete(requestId); this.p.requestUpdate(w.peer, requestId, 'expired', 'out'); continue; }
-      const route = this.p.liveRouteTo(w.peer);
-      if (!route || this.controller.state.phase !== 'idle') continue;
+      const h = this.p.liveRouteTo(w.peer);
+      if (!h || this.controller.state.phase !== 'idle') continue;
       this.waiting.delete(requestId);
-      this.controller.dispatch({ type: 'requestAccepted', requestId, peer: w.peer, route, callId: this.p.newId(), now });
+      this.controller.dispatch({ type: 'requestAccepted', requestId, peer: w.peer, ...splitRoute(h), callId: this.p.newId(), now });
     }
   }
 
@@ -152,9 +205,12 @@ export class CallService {
       kp.sk.fill(0);
       key = b64url(kp.pk);
     } else if (s.t === 'request') {
+      putCapped(this.outgoing, s.requestId, { peer, until: this.p.now() + REQUEST_TTL_MS }, MAX_REQUESTS);
       this.p.requestUpdate(peer, s.requestId, 'traveling', 'out');
     }
-    this.p.sendSignal(peer, callWire(s, key), isLiveSignal(s));
+    const ok = this.p.sendSignal(peer, callWire(s, key), isLiveSignal(s));
+    // A oferta nem saiu (sem sessão com o contato ou sem vizinho): termina já, sem esperar 45 s à toa.
+    if (!ok && s.t === 'invite') this.controller.dispatch({ type: 'unreachable', callId: s.callId, now: this.p.now() });
   }
 
   private startMedia(s: CallState) {
@@ -163,11 +219,11 @@ export class CallService {
     this.link = new VoiceLink(this.keys, {
       now: this.p.now, links: this.p.links, send: this.p.sendFrame, isPoint: this.p.isPoint,
       onAudio: (codec, payload, seq) => a.play(codec, payload, seq),
-      onRoute: route => {
+      onRoute: (route, _latency, wifiDirect) => {
         const st = this.controller.state;
         if (st.phase !== 'active') return;
         if (route === null) this.controller.dispatch({ type: 'routeLost', now: this.p.now() });
-        else if (route !== st.route || st.switching) this.controller.dispatch({ type: 'routeFound', route });
+        else if (route !== st.route || st.switching || !!wifiDirect !== !!st.wifiDirect) this.controller.dispatch({ type: 'routeFound', route, ...(wifiDirect ? { wifiDirect: true as const } : {}) });
         this.emit();
       },
     });

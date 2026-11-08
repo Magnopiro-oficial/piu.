@@ -10,20 +10,24 @@ import { T } from './T';
 
 /** Controle segmentado (raio 12, botões de 32 px). */
 export function Segmented<V extends string>({ options, value, onChange, label, size = 'md' }: { options: [V, string][]; value: V; onChange: (v: V) => void; label: string;
-  /** `lg`: o segmentado da Carteira no design (altura 36, raio 11, trilho `bg2` raio 14, 14 px). */
-  size?: 'md' | 'lg' }) {
+  /**
+   * `lg`: o segmentado da Carteira no design (altura 36, raio 11, trilho `bg2` raio 14, 14 px).
+   * `sm`: o seletor do rádio LoRa (desenho Piu 17, 1d): altura 34, raio 11, trilho `bg3` raio 14, espaço 2,
+   * 12 px numa linha só, pesos 650/500, o não selecionado em `ink2`.
+   */
+  size?: 'sm' | 'md' | 'lg' }) {
   const { c } = useTheme();
   const { compact } = useLayout();
-  const lg = size === 'lg';
+  const lg = size === 'lg', sm = size === 'sm';
   return (
-    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', gap: 4, padding: 3, borderRadius: lg ? 14 : 12, backgroundColor: lg ? c.bg2 : c.bg3 }}>
+    <View accessibilityRole="radiogroup" accessibilityLabel={label} style={{ flexDirection: 'row', gap: sm ? 2 : 4, padding: 3, borderRadius: lg || sm ? 14 : 12, backgroundColor: lg ? c.bg2 : c.bg3 }}>
       {options.map(([k, l]) => {
         const on = k === value;
         return (
           <Pressable key={k} onPress={() => onChange(k)} accessibilityRole="radio" accessibilityState={{ checked: on }} aria-checked={on}
-            style={{ flex: 1, minHeight: lg ? 36 : 32, paddingVertical: 4, borderRadius: lg ? 11 : 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: on ? c.bg : 'transparent',
-              shadowColor: '#000', shadowOpacity: on ? 0.12 : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
-            <T size={lg ? 14 : compact ? 12 : 13} w={on ? 600 : 450} numberOfLines={2} align="center">{l}</T>
+            style={{ flex: 1, minHeight: lg ? 36 : sm ? 34 : 32, paddingVertical: sm ? 0 : 4, borderRadius: lg || sm ? 11 : 9, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 4, backgroundColor: on ? c.bg : 'transparent',
+              shadowColor: '#000', shadowOpacity: on ? (sm ? 0.2 : 0.12) : 0, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: on ? 1 : 0 }}>
+            <T size={lg ? 14 : sm || compact ? 12 : 13} w={on ? (sm ? 650 : 600) : sm ? 500 : 450} color={sm && !on ? c.ink2 : undefined} numberOfLines={sm ? 1 : 2} align="center">{l}</T>
           </Pressable>
         );
       })}

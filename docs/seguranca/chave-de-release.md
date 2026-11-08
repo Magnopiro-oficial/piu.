@@ -53,7 +53,7 @@ A chave pública é **fixada** no software, para que ninguém consiga trocá-la 
 
 - `piu-node`: variável `PIU_RELEASE_PUBKEY` (ver o README do `piu-node`). Sem ela, nenhum pacote é oferecido.
 - Instalador e `verify-package.mjs`: a mesma chave.
-- App: a tela "Compartilhar o app" mostra a impressão digital da assinatura (hoje um valor de exemplo, `4C9A…E1F0`), que deve passar a mostrar o resumo real.
+- App: a tela "Compartilhar o app" mostra a impressão digital do certificado de assinatura do Android (`OFFICIAL_CERT_SHA256` em `apps/mobile/src/lib/apkIntegrity.ts`, `595bdc6a…78b7ff31`; um teste confere que é a mesma do site). Essa é a chave do APK, não a chave de release dos pacotes: quando a chave de release existir, a tela também deve mostrar o resumo dela.
 - Site: publique a chave e o resumo numa página de segurança, para conferência independente.
 
 Mande a chave pública para a equipe de desenvolvimento por **dois canais diferentes** (por exemplo, o PR e uma mensagem assinada) e confira o resumo nos dois.

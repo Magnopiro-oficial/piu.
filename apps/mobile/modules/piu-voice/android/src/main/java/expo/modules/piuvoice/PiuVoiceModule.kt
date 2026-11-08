@@ -48,6 +48,8 @@ class PiuVoiceModule : Module() {
         try {
           val e = engine()
           e.start { control.execute { e.applyRoute() } }
+          // Microfone aberto: sobe o serviço em primeiro plano da chamada, se o JS já pediu (./PiuCallService.kt).
+          PiuCallService.retry(context.applicationContext)
           promise.resolve(null)
         } catch (_: NoPermission) {
           promise.reject(CodedException("PERMISSION", "Sem permissão de microfone.", null))

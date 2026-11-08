@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': "Comment l'installer",
   'piu.band.title': "Cette carte est d'une autre bande de fréquence",
   'piu.band.d': "Elle n'a pas accepté {freq}. Utilisez une carte de la bande de la région, ou changez de région si vous êtes dans un autre pays.",
+  'piu.band.d2': 'Elle n\'a pas accepté {freq}. Utilisez une carte {band}, ou changez de région si vous êtes dans un autre pays.',
+  'piu.board': 'carte · {band}',
+  'piu.superNodes': { one: 'Super Node à proximité', other: '{count} Super Nodes à proximité' },
+  'piu.gateways': { one: '{count} passerelle', other: '{count} passerelles' },
+  'piu.btOn': 'Activer le Bluetooth',
   'piu.changeRegion': 'Changer de région',
   'piu.boards': 'Voir les cartes compatibles',
   'piu.code.d': 'Éteignez et rallumez la carte, puis réessayez. Si cela continue, montrez ce code à la personne qui vous aide avec la radio.',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'Monde 2,4 GHz',
   'piu.route.via': 'par LoRa (Piu)',
   'piu.route.radio': 'Radio Piu',
+  'piu.why.away': 'Auto : la radio Piu était hors de portée, envoi par Meshtastic.',
+  'piu.why.failed': 'Auto : la radio Piu n’a pas pu envoyer, envoi par Meshtastic.',
 };

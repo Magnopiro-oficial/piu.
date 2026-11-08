@@ -122,6 +122,8 @@ interface PointCtx {
   offerFromQr: (text: string) => boolean;
   dismissOffer: () => void;
   join: () => Promise<void>;
+  /** Mapa da rede: entra no Wi-Fi de um ponto "Piu · …" da varredura (o mesmo caminho de `join`, sem a folha). */
+  joinNet: (net: { ssid: string; secure: boolean }) => Promise<void>;
   leave: () => Promise<void>;
   clearLeft: () => void;
 }
@@ -349,9 +351,7 @@ export function PointProvider({ children }: { children: ReactNode }) {
     setVisitor(v => ({ ...v, offer: null, error: null }));
   }, [setDismissed]);
 
-  const join = useCallback(async () => {
-    const o = visitorRef.current.offer;
-    if (!o) return;
+  const joinOffer = useCallback(async (o: PointOffer) => {
     setVisitor(v => ({ ...v, joining: true, error: null }));
     try {
       await joinPointNetwork(o.ssid, o.password);
@@ -361,6 +361,11 @@ export function PointProvider({ children }: { children: ReactNode }) {
       setVisitor(v => ({ ...v, joining: false, error: errCode(e) }));
     }
   }, [msgStats]);
+  const join = useCallback(async () => {
+    const o = visitorRef.current.offer;
+    if (o) await joinOffer(o);
+  }, [joinOffer]);
+  const joinNet = useCallback((n: { ssid: string; secure: boolean }) => joinOffer({ ssid: n.ssid, name: n.ssid, security: n.secure ? 'WPA' : 'nopass', password: null, from: 'scan' }), [joinOffer]);
 
   const leave = useCallback(async () => {
     await leavePointNetwork();
@@ -403,8 +408,8 @@ export function PointProvider({ children }: { children: ReactNode }) {
     config, health, hotspot, pageUrl, pageError, support, qr,
     stats: { peersToday: pstats.day === dayOf(Date.now()) ? pstats.seenToday.length : 0, relayed: pstats.relayed, ...live },
     draft, setDraft, current, nearby, nearbyError, refreshNearby, useCurrentWifi, startHotspot, check, runCheck, activate, pause, resume, end, setLevel,
-    visitor, offerFromQr, dismissOffer, join, leave, clearLeft,
-  }), [config, health, hotspot, pageUrl, pageError, support, qr, pstats, live, draft, setDraft, current.connected, current.ssid, current.internet, current.hotspot, nearby, nearbyError, refreshNearby, useCurrentWifi, startHotspot, check, runCheck, activate, pause, resume, end, setLevel, visitor, offerFromQr, dismissOffer, join, leave, clearLeft]); // eslint-disable-line react-hooks/exhaustive-deps
+    visitor, offerFromQr, dismissOffer, join, joinNet, leave, clearLeft,
+  }), [config, health, hotspot, pageUrl, pageError, support, qr, pstats, live, draft, setDraft, current.connected, current.ssid, current.internet, current.hotspot, nearby, nearbyError, refreshNearby, useCurrentWifi, startHotspot, check, runCheck, activate, pause, resume, end, setLevel, visitor, offerFromQr, dismissOffer, join, joinNet, leave, clearLeft]); // eslint-disable-line react-hooks/exhaustive-deps
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
 

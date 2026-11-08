@@ -5,6 +5,7 @@ import { pontos } from './pontos/ja';
 import { linkDesktop } from './linkDesktop/ja';
 import { call } from './call/ja';
 import { lora } from './lora/ja';
+import { map } from './map/ja';
 
 export const dict: Dict = {
   ...piu11,
@@ -12,6 +13,7 @@ export const dict: Dict = {
   ...linkDesktop,
   ...call,
   ...lora,
+  ...map,
   'common.back': '戻る',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',

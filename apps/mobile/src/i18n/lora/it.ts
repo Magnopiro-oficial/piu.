@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'Come installarlo',
   'piu.band.title': "Questa scheda è di un'altra banda di frequenza",
   'piu.band.d': 'Non ha accettato {freq}. Usa una scheda della banda della regione, oppure cambia regione se sei in un altro paese.',
+  'piu.band.d2': 'Non ha accettato {freq}. Usa una scheda da {band}, o cambia regione se sei in un altro paese.',
+  'piu.board': 'scheda · {band}',
+  'piu.superNodes': { one: 'Super Node vicino', other: '{count} Super Node vicini' },
+  'piu.gateways': { one: '{count} gateway', other: '{count} gateway' },
+  'piu.btOn': 'Attiva Bluetooth',
   'piu.changeRegion': 'Cambia regione',
   'piu.boards': 'Vedi schede compatibili',
   'piu.code.d': 'Spegni e riaccendi la scheda e riprova. Se continua, mostra questo codice a chi ti aiuta con la radio.',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'Mondo 2,4 GHz',
   'piu.route.via': 'via LoRa (Piu)',
   'piu.route.radio': 'Radio Piu',
+  'piu.why.away': 'Automatico: la radio Piu era fuori portata, inviato tramite Meshtastic.',
+  'piu.why.failed': 'Automatico: la radio Piu non è riuscita a inviare, inviato tramite Meshtastic.',
 };

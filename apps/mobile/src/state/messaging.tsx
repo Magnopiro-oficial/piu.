@@ -12,7 +12,7 @@ import type { PhoneRegistryFile } from '../lib/phoneNodeCore';
 import { bundleRefHex, CarryKind } from '../protocol/carry';
 import { VALIDATOR_PROOF_PK } from '../protocol/proof';
 import { judgementText, judgePayment, newPayRequest, type PaidNotice, type PaymentJudgement, type PaymentRequest, payRequestSummary } from '../lib/paymentRequest';
-import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
+import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, patchRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
 import { placeFromText } from '../lib/locationCore';
 import { Priority } from '../protocol/envelope';
 import type { Medium } from '../transport/types';
@@ -385,7 +385,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         // Grava as sessões antes de os bytes saírem do aparelho (uma gravação por lote).
         saving ??= Promise.resolve().then(saveNow).finally(() => { saving = null; });
         await saving;
-        await transport.send(peerId, bytes);
+        return transport.send(peerId, bytes);
       },
       events: {
         changed: saveSoon,
@@ -525,6 +525,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         typing: contactId => {
           const cid = chatIdFor(contactId);
           if (chatsRef.current.some(c => c.id === cid)) handlers.current.setTyping(cid);
+        },
+        // O transporte confirmou o meio: a rota da mensagem passa a mostrar o rádio de verdade (e o porquê da troca).
+        routed: (msgId, via) => {
+          const cid = msgToChat.current.get(msgId);
+          if (cid) setRoutes(b => patchRoute(b, cid, msgId, via));
         },
         status: (msgId, st, route) => {
           const cid = msgToChat.current.get(msgId) ?? chatsRef.current.find(c => (c.peer || c.group) && c.msgs?.some(x => x.id === msgId))?.id;
@@ -712,7 +717,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!messenger || !PiuVoice.isAvailable()) return;
     const call = makePhoneCall({
-      messenger, send: (peerId, bytes) => transport.send(peerId, bytes), media: peerMedium.current, chatIdFor,
+      messenger, send: async (peerId, bytes) => { await transport.send(peerId, bytes); }, media: peerMedium.current, chatIdFor,
       receive: (cid, m, o) => handlers.current.receive(cid, m, o),
       patchMsg: (cid, mid, p) => handlers.current.patchMsg(cid, mid, p),
       nameOf: id => chatsRef.current.find(c => c.peer === id)?.name ?? '',

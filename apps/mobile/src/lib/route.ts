@@ -16,6 +16,8 @@ export interface RouteView {
   steps: { label: string; done: boolean; current: boolean }[];
   hops: { n: string; k: string; reached: boolean; last: boolean; via: string; viaIcon: IconName; solid: boolean }[];
   meta: { l: string; v: string }[];
+  /** Linha curta quando o LoRa Automático trocou de rádio (desenho Piu 17, 5 · M). */
+  why?: string;
 }
 
 const ORDER = ['criada', 'aguardando', 'encaminhada', 'entregue'];
@@ -61,7 +63,9 @@ export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority 
   const durationH = Math.max(0, Math.ceil((deadline - created) / 3_600_000));
   const left = Math.max(0, Math.ceil((deadline - Date.now()) / 3_600_000));
   const ttl = bad ? (st === 'expirada' ? t('route.ttl.exhausted', { h: durationH }) : t('route.ttl.notSent')) : st === 'entregue' ? t('route.ttl.removed') : `${left} h`;
+  const why = rec?.md === 'lora' && rec.w ? t(rec.w === 'away' ? 'piu.why.away' : 'piu.why.failed') : undefined;
   return {
+    ...(why ? { why } : {}),
     text: msgSummary(msg, t),
     steps: labels.map((label, i) => ({ label, done: i <= si, current: i === si })),
     hops: nodes.map((x, i) => ({ n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1, via: legs[i]?.via ?? '', viaIcon: legs[i]?.icon ?? icon, solid: i + 1 < reached && legs[i] !== air })),

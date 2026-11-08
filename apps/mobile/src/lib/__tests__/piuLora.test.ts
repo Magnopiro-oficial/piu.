@@ -7,7 +7,7 @@ import type { PiuLoraStatus } from '../../transport/rnode/link';
 import type { RadioStatus } from '../../transport/meshtastic/radio';
 import { PiuLoraLink } from '../../transport/rnode/link';
 import { bench, settle } from '../../transport/__tests__/support/rnodeBench';
-import { freqLabel, inUse, loraMedia, piuProblem, piuRowState, REGION_GROUPS, regionRows, waitingFor } from '../piuLora';
+import { freqLabel, inUse, loraMedia, nominalBand, piuProblem, piuRowState, REGION_GROUPS, regionRows, waitingFor } from '../piuLora';
 
 test('caminho LoRa: a chave desliga os dois; "Só …" desliga o outro rádio', () => {
   assert.deepEqual(loraMedia('auto', true), { lora: true, piulora: true });
@@ -37,7 +37,8 @@ async function problemOf(name: string, o: Parameters<typeof bench>[1] = {}, regi
 }
 
 test('motivo do rádio do Piu: cada problema real da placa vira uma tela com o que fazer', async () => {
-  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (433)')), { kind: 'band' });
+  // A faixa da placa vem junto (desenho 3h: ficha "placa · 433 MHz").
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (433)')), { kind: 'band', board: '433 MHz' });
   assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { radioFault: true })), { kind: 'code', code: '0x01' });
   assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { fw: [1, 50] })), { kind: 'old', version: '1.50' });
   assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { tnc: { freqHz: 869_525_000, bwHz: 125_000, sf: 8, cr: 5, txDbm: 14 } })), { kind: 'tnc' });
@@ -62,7 +63,7 @@ test('linha do rádio do Piu: conectado com canal, sem tempo de rádio, não con
   assert.equal(piuRowState(R({}), L({}), { ...o, granted: false }).kind, 'noPerm');
   assert.equal(piuRowState(R({ phase: 'pairing', device: dev }), L({}), o).kind, 'searching');
   const up = piuRowState(R({ phase: 'connected', device: dev }), L({ state: 'up', superNodes: 2, gateways: 1, busyUntil: 41_000 }), o);
-  assert.deepEqual(up, { kind: 'connected', radio: 'RNode 3F2A', region: 'BR_902', freqHz: 904_750_000, superNodes: { count: 2, gateway: true }, busySec: 40 });
+  assert.deepEqual(up, { kind: 'connected', radio: 'RNode 3F2A', region: 'BR_902', freqHz: 904_750_000, superNodes: { count: 2, gateways: 1 }, busySec: 40 });
   const failed = piuRowState(R({ phase: 'connected', device: dev }), L({ state: 'failed', problem: 'erro do RNode 0x03' }), o);
   assert.deepEqual(failed, { kind: 'failed', radio: 'RNode 3F2A', region: 'BR_902', problem: { kind: 'code', code: '0x03' } });
   assert.equal(piuRowState(R({ phase: 'connected', device: dev }), L({ state: 'configuring' }), o).kind, 'searching');
@@ -84,4 +85,16 @@ test('regiões: todas as 27 num grupo só; busca sem acento, pelo nome e pelo pa
   assert.deepEqual(br, { id: 'BR_902', name: 'Brasil', band: '902–907,5 MHz', maxDbm: 30, dutyPct: 100 });
   assert.equal(freqLabel(904_750_000), '904,75 MHz');
   assert.equal(freqLabel(2_441_000_000), '2441 MHz');
+});
+
+test('faixa nominal: placa e região viram "433 MHz", "868 MHz", "915 MHz" ou "2,4 GHz"; fora disso, a faixa exata', () => {
+  assert.equal(nominalBand(904_750_000), '915 MHz');
+  assert.equal(nominalBand(869_525_000), '868 MHz');
+  assert.equal(nominalBand(433_875_000), '433 MHz');
+  assert.equal(nominalBand(2_427_000_000), '2,4 GHz');
+  assert.equal(nominalBand(490_000_000), undefined, 'China 470–510: sem faixa nominal');
+  assert.deepEqual(piuProblem('frequência fora da faixa da placa (420–450 MHz)'), { kind: 'band', board: '433 MHz' });
+  assert.deepEqual(piuProblem('frequência fora da faixa da placa (430–510 MHz)'), { kind: 'band', board: '433 MHz' });
+  assert.deepEqual(piuProblem('frequência fora da faixa da placa (850–950 MHz)'), { kind: 'band', board: '850–950 MHz' }, 'serve para 868 e 915');
+  assert.deepEqual(piuProblem('frequência fora da faixa da placa (470–510 MHz)'), { kind: 'band', board: '470–510 MHz' });
 });

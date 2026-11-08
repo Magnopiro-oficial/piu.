@@ -25,6 +25,13 @@ export function RouteSheet({ chat, msg, rec, prio, onClose }: { chat: Chat; msg:
       <View style={{ gap: 6 }}>
         <T size={22} w={700} ls={-0.03} accessibilityRole="header">{t('routeSheet.title')}</T>
         {!!r.text && <T size={14} color={c.ink2} numberOfLines={1}>“{r.text}”</T>}
+        {!!r.why && (
+          // LoRa Automático trocou de rádio: uma linha curta diz por quê (desenho Piu 17, 5 · M).
+          <View style={{ flexDirection: 'row', gap: 5, marginTop: 4 }}>
+            <Icon name="alt_route" size={15} color={c.ink2} />
+            <T size={12} lh={1.45} color={c.ink2} style={{ flex: 1 }}>{r.why}</T>
+          </View>
+        )}
       </View>
 
       <View style={{ flexDirection: 'row', gap: 4 }} accessibilityLabel={t('routeSheet.step.a11y', { step: r.steps.find(s => s.current)?.label ?? '' })}>

@@ -6,24 +6,41 @@
  *   idle ─open─► pre ─dial─► calling ─peerRinging─► calling(tocando) ─connected─► active ─hangup─► ending ─endDone─► idle
  *   idle ─incoming─► ringing ─answer─► active · ─decline─► idle (registro "Recusada")
  *   idle ─requestIn─► reqIn ─requestNow─► calling(avisando) · ─requestLater─► idle
+ *   calling(procurando) ─noReply (10 s sem nenhum sinal de volta)─► ending "pode não ter chamada"
+ *   calling ─unreachable (a oferta nem saiu)─► ending "sem conexão"
  *
- * Voz só passa ao vivo (Wi-Fi local, Bluetooth ou Ponto Piu). Sem caminho ao vivo, `open` leva à folha
- * em modo malha, que manda um pedido de chamada em vez de ligar.
+ * Voz só passa ao vivo (Wi-Fi local, Wi-Fi Direct, Bluetooth ou Ponto Piu). Sem caminho ao vivo, `open`
+ * leva à folha em modo malha, que manda um pedido de chamada em vez de ligar.
  */
 
-/** Caminhos ao vivo, em ordem de preferência. */
+/**
+ * Caminhos ao vivo, em ordem de preferência (os mesmos no fio, ./callSignals). `bt` = direto de aparelho
+ * a aparelho, sem rede: Bluetooth LE ou Wi-Fi Direct (Nearby Connections). Qual dos dois é só texto:
+ * vai em `wifiDirect` no estado e no registro.
+ */
 export type LiveRoute = 'direct' | 'bt' | 'point';
 export const ROUTE_ORDER: readonly LiveRoute[] = ['direct', 'bt', 'point'];
+/** O caminho como o aparelho vê: `wifiDirect` = Wi-Fi Direct (Nearby). Vira `bt` + `wifiDirect` na máquina. */
+export type RouteHint = LiveRoute | 'wifiDirect';
+export const splitRoute = (r: RouteHint): { route: LiveRoute; wifiDirect?: true } => (r === 'wifiDirect' ? { route: 'bt', wifiDirect: true } : { route: r });
 export type Phase = 'idle' | 'pre' | 'calling' | 'ringing' | 'active' | 'ending' | 'reqIn';
 export type Dir = 'out' | 'in';
 export type CallingStage = 'searching' | 'ringing' | 'accepted' | 'notifying';
-export type EndReason = 'hangup' | 'remote' | 'cancel' | 'declined' | 'busy' | 'noanswer' | 'sas' | 'lost' | 'elsewhere' | 'handoff' | 'message' | 'later';
+/** `nocall`: nada voltou em 10 s (o contato pode não ter chamada); `unreachable`: a oferta nem saiu. */
+export type EndReason = 'hangup' | 'remote' | 'cancel' | 'declined' | 'busy' | 'noanswer' | 'nocall' | 'unreachable' | 'sas' | 'lost' | 'elsewhere' | 'handoff' | 'message' | 'later';
 
 /** Tempos da especificação (§6) e do produto. */
 export const CALL_TIMING = {
   endScreenMs: 1700,
   /** Sem resposta: o chamador desiste e o outro lado registra chamada perdida. */
   ringTimeoutMs: 45_000,
+  /**
+   * Quem tem chamada responde "tocando" assim que a oferta chega. Nada em 10 s: o contato pode não ter
+   * chamada (iPhone, versão 0.1.3 ou anterior, que ignoram a oferta) e não adianta esperar os 45 s.
+   */
+  noReplyMs: 10_000,
+  /** "Em 10 min" ao recusar: lembrete de ligar de volta. */
+  remindMs: 10 * 60_000,
   /** Caminho caiu e nenhum outro apareceu: a chamada termina. */
   switchTimeoutMs: 20_000,
   toastMs: 2400,
@@ -38,10 +55,12 @@ export type CallRecord = {
   at: number;
   durationMs?: number;
   route?: LiveRoute;
+  /** O caminho `bt` era Wi-Fi Direct (Nearby), não Bluetooth LE (só muda o texto). */
+  wifiDirect?: true;
   /** Quanto tempo tocou (chamada perdida). */
   rangMs?: number;
-  /** Detalhe para o subtítulo: mensagem enviada, lembrete, aparelho que atendeu. */
-  note?: 'message' | 'later' | string;
+  /** Detalhe para o subtítulo: mensagem enviada, lembrete, aparelho que atendeu, por que não houve resposta. */
+  note?: 'message' | 'later' | 'nocall' | 'unreachable' | string;
 };
 
 export type CallState = {
@@ -53,6 +72,8 @@ export type CallState = {
   preRoute?: LiveRoute | null;
   stage?: CallingStage;
   route?: LiveRoute;
+  /** O caminho `bt` (ou o `preRoute` da folha) é Wi-Fi Direct (Nearby), não Bluetooth LE: muda só o texto. */
+  wifiDirect?: true;
   /** Caminho caiu e o Piu procura outro (a chamada continua). */
   switching?: { from: LiveRoute; since: number };
   startedAt?: number;
@@ -83,19 +104,21 @@ export type Signal =
 export type Effect =
   | { kind: 'send'; signal: Signal; peer?: string }
   | { kind: 'record'; record: CallRecord }
-  | { kind: 'timer'; name: 'endDone' | 'ringTimeout' | 'switchTimeout'; ms: number }
-  | { kind: 'cancelTimer'; name: 'ringTimeout' | 'switchTimeout' }
+  | { kind: 'timer'; name: 'endDone' | 'ringTimeout' | 'switchTimeout' | 'noReply'; ms: number }
+  | { kind: 'cancelTimer'; name: 'ringTimeout' | 'switchTimeout' | 'noReply' }
   | { kind: 'media'; on: boolean }
   | { kind: 'toast'; text: 'verified' | 'remindLater' | 'requestLater'; peer?: string }
-  | { kind: 'draft'; peer: string };
+  | { kind: 'draft'; peer: string }
+  /** Lembrete de ligar para `peer` daqui a `ms` ("Em 10 min" ao recusar). */
+  | { kind: 'remind'; peer: string; ms: number };
 
 export type CallEvent =
-  | { type: 'open'; peer: string; route: LiveRoute | null }
+  | { type: 'open'; peer: string; route: LiveRoute | null; wifiDirect?: true }
   | { type: 'closePre' }
   | { type: 'dial'; callId: string; now: number }
   | { type: 'peerRinging'; callId: string }
   | { type: 'connected'; callId: string; now: number }
-  | { type: 'incoming'; callId: string; peer: string; route: LiveRoute; now: number; requestId?: string }
+  | { type: 'incoming'; callId: string; peer: string; route: LiveRoute; now: number; requestId?: string; wifiDirect?: true }
   | { type: 'answer'; now: number }
   | { type: 'decline'; now: number; how?: 'message' | 'later' }
   | { type: 'hangup'; now: number }
@@ -104,15 +127,17 @@ export type CallEvent =
   | { type: 'remoteEnd'; callId: string; reason: 'hangup' | 'sas' | 'lost' | 'handoff'; now: number }
   | { type: 'answeredElsewhere'; callId: string; device: string; now: number }
   | { type: 'ringTimeout'; now: number }
+  | { type: 'noReply'; now: number }
+  | { type: 'unreachable'; callId: string; now: number }
   | { type: 'routeLost'; now: number }
-  | { type: 'routeFound'; route: LiveRoute }
+  | { type: 'routeFound'; route: LiveRoute; wifiDirect?: true }
   | { type: 'switchTimeout'; now: number }
   | { type: 'mute' } | { type: 'speaker' } | { type: 'openWords' } | { type: 'closeWords' }
   | { type: 'wordsMatch' } | { type: 'wordsDiffer'; now: number }
   | { type: 'minimize' } | { type: 'restore' }
   | { type: 'handoff'; device: string; now: number }
   | { type: 'sendRequest'; requestId: string }
-  | { type: 'requestAccepted'; requestId: string; peer: string; route: LiveRoute; callId: string; now: number }
+  | { type: 'requestAccepted'; requestId: string; peer: string; route: LiveRoute; callId: string; now: number; wifiDirect?: true }
   | { type: 'requestIn'; requestId: string; peer: string }
   | { type: 'requestNow'; callId: string; now: number }
   | { type: 'requestLater' }
@@ -127,8 +152,8 @@ const dur = (s: CallState, now: number) => (s.connectedAt !== undefined ? Math.m
 function toEnding(s: CallState, now: number, reason: EndReason, record: Omit<CallRecord, 'callId' | 'peer' | 'dir' | 'at'>, signal?: Signal): Step {
   const effects: Effect[] = [];
   if (signal) effects.push({ kind: 'send', signal });
-  effects.push({ kind: 'media', on: false }, { kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'cancelTimer', name: 'switchTimeout' });
-  effects.push({ kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: now, ...record } });
+  effects.push({ kind: 'media', on: false }, { kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'cancelTimer', name: 'noReply' }, { kind: 'cancelTimer', name: 'switchTimeout' });
+  effects.push({ kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: now, ...record, ...wfd(s, record.route) } });
   effects.push({ kind: 'timer', name: 'endDone', ms: CALL_TIMING.endScreenMs });
   return { state: { ...s, phase: 'ending', endedAt: now, end: { reason, durationMs: record.durationMs }, wordsOpen: false, mini: false, switching: undefined }, effects };
 }
@@ -138,9 +163,14 @@ function toIdle(s: CallState, now: number, record: Omit<CallRecord, 'callId' | '
   const effects: Effect[] = [];
   if (signal) effects.push({ kind: 'send', signal });
   effects.push({ kind: 'cancelTimer', name: 'ringTimeout' });
-  effects.push({ kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: now, ...record } });
+  effects.push({ kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: now, ...record, ...wfd(s, record.route) } });
   return { state: IDLE, effects };
 }
+
+/** O registro leva o "Wi-Fi Direct" quando o caminho registrado é o `bt` que era Wi-Fi Direct. */
+const wfd = (s: CallState, route?: LiveRoute) => (s.wifiDirect && route === 'bt' ? { wifiDirect: true as const } : {});
+/** Só `bt` tem a variante Wi-Fi Direct. */
+const wfdOf = (route: LiveRoute | null | undefined, w?: true) => (w && route === 'bt' ? { wifiDirect: true as const } : {});
 
 const live = (p: Phase) => p === 'calling' || p === 'ringing' || p === 'active' || p === 'ending';
 const mine = (s: CallState, callId: string) => s.callId === callId;
@@ -157,29 +187,33 @@ function step0(s: CallState, e: CallEvent): Step {
   switch (e.type) {
     case 'open':
       if (live(s.phase)) return same(s);
-      return same({ ...IDLE, phase: 'pre', peer: e.peer, preRoute: e.route });
+      return same({ ...IDLE, phase: 'pre', peer: e.peer, preRoute: e.route, ...wfdOf(e.route, e.wifiDirect) });
     case 'closePre':
       return s.phase === 'pre' ? same(IDLE) : same(s);
     case 'dial': {
       if (s.phase !== 'pre' || !s.preRoute || !s.peer) return same(s);
-      const next: CallState = { ...IDLE, phase: 'calling', callId: e.callId, peer: s.peer, dir: 'out', stage: 'searching', route: s.preRoute, startedAt: e.now };
-      return { state: next, effects: [{ kind: 'send', signal: { t: 'invite', callId: e.callId, route: s.preRoute } }, { kind: 'timer', name: 'ringTimeout', ms: CALL_TIMING.ringTimeoutMs }] };
+      const next: CallState = { ...IDLE, phase: 'calling', callId: e.callId, peer: s.peer, dir: 'out', stage: 'searching', route: s.preRoute, startedAt: e.now, ...wfdOf(s.preRoute, s.wifiDirect) };
+      // A oferta sai por último: se ela nem sair (`unreachable`), o fim já cancela os timers armados.
+      return { state: next, effects: [
+        { kind: 'timer', name: 'ringTimeout', ms: CALL_TIMING.ringTimeoutMs }, { kind: 'timer', name: 'noReply', ms: CALL_TIMING.noReplyMs },
+        { kind: 'send', signal: { t: 'invite', callId: e.callId, route: s.preRoute } },
+      ] };
     }
     case 'peerRinging':
-      return s.phase === 'calling' && mine(s, e.callId) && s.stage === 'searching' ? same({ ...s, stage: 'ringing' }) : same(s);
+      return s.phase === 'calling' && mine(s, e.callId) && s.stage === 'searching' ? { state: { ...s, stage: 'ringing' }, effects: [{ kind: 'cancelTimer', name: 'noReply' }] } : same(s);
     case 'connected':
       if (s.phase !== 'calling' || !mine(s, e.callId)) return same(s);
-      return { state: { ...s, phase: 'active', connectedAt: e.now }, effects: [{ kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'media', on: true }] };
+      return { state: { ...s, phase: 'active', connectedAt: e.now }, effects: [{ kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'cancelTimer', name: 'noReply' }, { kind: 'media', on: true }] };
     case 'incoming': {
       // Quem disse "Posso agora" a um pedido já consentiu: a chamada do pedido conecta sem tocar.
       if (s.phase === 'calling' && s.stage === 'notifying' && e.requestId && e.requestId === s.requestId && e.peer === s.peer) {
-        const next: CallState = { ...s, callId: e.callId, dir: 'in', route: e.route, phase: 'active', connectedAt: e.now };
+        const next: CallState = { ...s, callId: e.callId, dir: 'in', route: e.route, wifiDirect: wfdOf(e.route, e.wifiDirect).wifiDirect, phase: 'active', connectedAt: e.now };
         return { state: next, effects: [{ kind: 'send', signal: { t: 'accept', callId: e.callId } }, { kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'media', on: true }] };
       }
       if (live(s.phase) || s.phase === 'reqIn' && s.peer !== e.peer) {
         return { state: s, effects: [{ kind: 'send', signal: { t: 'decline', callId: e.callId, reason: 'busy' } }] };
       }
-      const next: CallState = { ...IDLE, phase: 'ringing', callId: e.callId, peer: e.peer, dir: 'in', route: e.route, startedAt: e.now };
+      const next: CallState = { ...IDLE, phase: 'ringing', callId: e.callId, peer: e.peer, dir: 'in', route: e.route, startedAt: e.now, ...wfdOf(e.route, e.wifiDirect) };
       return { state: next, effects: [{ kind: 'send', signal: { t: 'ringing', callId: e.callId } }, { kind: 'timer', name: 'ringTimeout', ms: CALL_TIMING.ringTimeoutMs }] };
     }
     case 'answer':
@@ -193,7 +227,7 @@ function step0(s: CallState, e: CallEvent): Step {
         ? toEnding(s, e.now, 'declined', { outcome: 'declined', route: s.route, note: how }, signal)
         : toIdle(s, e.now, { outcome: 'declined', route: s.route }, signal);
       if (how === 'message') step.effects.push({ kind: 'draft', peer: s.peer! });
-      if (how === 'later') step.effects.push({ kind: 'toast', text: 'remindLater' });
+      if (how === 'later') step.effects.push({ kind: 'toast', text: 'remindLater' }, { kind: 'remind', peer: s.peer!, ms: CALL_TIMING.remindMs });
       return step;
     }
     case 'hangup':
@@ -216,6 +250,13 @@ function step0(s: CallState, e: CallEvent): Step {
     case 'answeredElsewhere':
       if (s.phase !== 'ringing' || !mine(s, e.callId)) return same(s);
       return toIdle(s, e.now, { outcome: 'elsewhere', route: s.route, note: e.device });
+    case 'noReply':
+      // Só a chamada comum (procurando): a de um pedido aceito é com quem já respondeu, logo tem chamada.
+      if (s.phase !== 'calling' || s.dir !== 'out' || s.stage !== 'searching') return same(s);
+      return toEnding(s, e.now, 'nocall', { outcome: 'noanswer', route: s.route, note: 'nocall' }, { t: 'cancel', callId: s.callId!, rangMs: e.now - (s.startedAt ?? e.now) });
+    case 'unreachable':
+      if (s.phase !== 'calling' || s.dir !== 'out' || !mine(s, e.callId)) return same(s);
+      return toEnding(s, e.now, 'unreachable', { outcome: 'noanswer', route: s.route, note: 'unreachable' });
     case 'ringTimeout':
       if (s.phase === 'calling' && s.stage !== 'notifying') {
         const rangMs = e.now - (s.startedAt ?? e.now);
@@ -229,7 +270,7 @@ function step0(s: CallState, e: CallEvent): Step {
       return { state: { ...s, switching: { from: s.route, since: e.now } }, effects: [{ kind: 'timer', name: 'switchTimeout', ms: CALL_TIMING.switchTimeoutMs }] };
     case 'routeFound':
       if (s.phase !== 'active') return same(s);
-      return { state: { ...s, route: e.route, switching: undefined }, effects: s.switching ? [{ kind: 'cancelTimer', name: 'switchTimeout' }] : [] };
+      return { state: { ...s, route: e.route, wifiDirect: wfdOf(e.route, e.wifiDirect).wifiDirect, switching: undefined }, effects: s.switching ? [{ kind: 'cancelTimer', name: 'switchTimeout' }] : [] };
     case 'switchTimeout':
       if (s.phase !== 'active' || !s.switching) return same(s);
       return toEnding(s, e.now, 'lost', { outcome: 'lost', durationMs: dur(s, e.now), route: s.switching.from }, { t: 'end', callId: s.callId!, reason: 'lost' });
@@ -249,7 +290,7 @@ function step0(s: CallState, e: CallEvent): Step {
       if (s.phase !== 'active') return same(s);
       return { state: { ...IDLE }, effects: [
         { kind: 'media', on: false }, { kind: 'cancelTimer', name: 'switchTimeout' },
-        { kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: e.now, outcome: 'handoff', durationMs: dur(s, e.now), route: s.route, note: e.device } },
+        { kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: e.now, outcome: 'handoff', durationMs: dur(s, e.now), route: s.route, note: e.device, ...wfd(s, s.route) } },
       ] };
     case 'sendRequest':
       if (s.phase !== 'pre' || s.preRoute !== null || !s.peer) return same(s);
@@ -257,8 +298,8 @@ function step0(s: CallState, e: CallEvent): Step {
     case 'requestAccepted': {
       // O outro disse "Posso agora": quem pediu liga assim que houver caminho ao vivo.
       if (live(s.phase)) return same(s);
-      const next: CallState = { ...IDLE, phase: 'calling', callId: e.callId, peer: e.peer, dir: 'out', stage: 'accepted', route: e.route, startedAt: e.now, requestId: e.requestId };
-      return { state: next, effects: [{ kind: 'send', signal: { t: 'invite', callId: e.callId, route: e.route, requestId: e.requestId } }, { kind: 'timer', name: 'ringTimeout', ms: CALL_TIMING.ringTimeoutMs }] };
+      const next: CallState = { ...IDLE, phase: 'calling', callId: e.callId, peer: e.peer, dir: 'out', stage: 'accepted', route: e.route, startedAt: e.now, requestId: e.requestId, ...wfdOf(e.route, e.wifiDirect) };
+      return { state: next, effects: [{ kind: 'timer', name: 'ringTimeout', ms: CALL_TIMING.ringTimeoutMs }, { kind: 'send', signal: { t: 'invite', callId: e.callId, route: e.route, requestId: e.requestId } }] };
     }
     case 'requestIn':
       if (s.phase !== 'idle') return same(s);

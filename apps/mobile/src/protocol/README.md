@@ -34,6 +34,7 @@ Nenhuma primitiva criptográfica foi escrita à mão.
 | Limites do nó (FUN-018) | espaço, quantidade, tamanho, retenção; descarta primeiro o de menor valor | "limites do nó…" |
 | Modo nó (FUN-017) | `relay: false` guarda só as próprias | "Modo nó desligado…" |
 | Mídia nunca por LoRa | flag `bulk` no cabeçalho | "mídia nunca por LoRa…" |
+| Sinal ao vivo da chamada nunca por LoRa (o pedido de chamada passa) | flag `live` no cabeçalho | "sinal ao vivo da chamada nunca por LoRa…" |
 | Fragmentação para MTU pequena | `fragment.ts`, integridade pelo id | "fragmentação…" |
 | Confirmação de entrega (FUN-015) e evidências com privacidade (seção 11) | `ackSecret` cifrado no conteúdo, revelado pelo destino; recibos assinados pela chave do nó | "créditos…" |
 | Código de segurança 12 × 5 | `safety.ts` (hash iterado, como o Signal) | "código de segurança…" |
@@ -47,7 +48,7 @@ Nenhuma primitiva criptográfica foi escrita à mão.
 ## Formato do envelope
 
 ```
-0 versão · 1 suíte · 2 tipo · 3 flags (bit 0 = mídia) · 4 prioridade · 5 saltos restantes (mutável)
+0 versão · 1 suíte · 2 tipo · 3 flags (bit 0 = mídia, bit 1 = sinal ao vivo) · 4 prioridade · 5 saltos restantes (mutável)
 6 versão da chave (grupo) · 8 expira em (s) · 12 destino (16) · 28 chave efêmera (32)
 60 nonce (24) · 84 hash do segredo de entrega (16) · 100 tamanho do corpo (u32) · 104 corpo cifrado
 ```

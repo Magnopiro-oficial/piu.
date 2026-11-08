@@ -149,7 +149,7 @@ function present(n: NotifyInput, preview: Preview): { title: string; body: strin
  * Dispara uma notificação do sistema, se os ajustes permitirem e o app não estiver em primeiro plano.
  * Devolve `true` se disparou.
  */
-export const notify = (n: NotifyInput) => deliver(n, 0);
+export const notify = async (n: NotifyInput) => (await deliver(n, 0)) !== null;
 
 /**
  * Aviso de teste (Ajustes → Notificações, "Testar com o app fechado"): chega em 5 s, para dar tempo
@@ -157,16 +157,32 @@ export const notify = (n: NotifyInput) => deliver(n, 0);
  * a lista de Conversas (`/(tabs)`): é o que acontece com uma mensagem real; a prévia da tela
  * bloqueada (`/lock`) continua acessível pelo link "Ver na tela bloqueada" na mesma tela.
  */
-export const sendTestNotification = () =>
-  deliver({ kind: 'msg', title: t('notify.test.title'), body: t('notify.test.body'), data: { href: '/(tabs)' } }, 5);
+export const sendTestNotification = async () =>
+  (await deliver({ kind: 'msg', title: t('notify.test.title'), body: t('notify.test.body'), data: { href: '/(tabs)' } }, 5)) !== null;
 
-async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
+/**
+ * Lembrete agendado (chamada recusada com "Em 10 min", src/calls/callRemind.ts): chega daqui a
+ * `delaySec` s com o app aberto ou fechado, conforme os ajustes. Não soma no número do ícone (não é
+ * nada novo de alguém). Devolve o id para `cancelNotice`, ou `null` se não agendou.
+ */
+export const scheduleNotice = (n: NotifyInput, delaySec: number) => deliver(n, Math.max(1, Math.round(delaySec)), false);
+
+/** Desagenda um lembrete e, se ele já chegou, tira da lista de notificações. */
+export function cancelNotice(id: string) {
+  if (Platform.OS === 'web') return;
+  actions.delete(id);
+  void Notifications.cancelScheduledNotificationAsync(id).catch(() => {});
+  void Notifications.dismissNotificationAsync(id).catch(() => {});
+}
+
+/** Entrega (ou agenda, com `delaySec`) e devolve o id da notificação; `null` se não disparou. */
+async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Promise<string | null> {
   const c = cfg;
-  if (!c || !c.onboarded || (active && !delaySec)) return false;
+  if (!c || !c.onboarded || (active && !delaySec)) return null;
   const critical = !!n.critical;
-  if (c.notifs[n.kind] === false) return false;
+  if (c.notifs[n.kind] === false) return null;
   const key = `${n.kind}|${n.title}|${n.body}`;
-  if (key === last.key && Date.now() - last.at < 3000) return false;
+  if (key === last.key && Date.now() - last.at < 3000) return null;
   last = { key, at: Date.now() };
 
   const mode: Mode = critical ? 'critical' : c.quiet && isQuietHour() ? 'quiet' : c.discreet ? 'discreet' : c.piu ? 'piu' : 'normal';
@@ -175,18 +191,18 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
 
   try {
     if (Platform.OS === 'web') {
-      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return false;
+      if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
       setTimeout(() => {
         const w = new Notification(title, { body, tag: n.data?.href ?? n.kind, silent: mode !== 'normal' && mode !== 'piu' && mode !== 'critical', data });
         w.onclick = () => { window.focus(); open(n.go, n.data?.href); w.close(); };
       }, delaySec * 1000);
-      return true;
+      return `web-${key}`;
     }
-    if ((await notificationPermission()) !== 'granted') return false;
+    if ((await notificationPermission()) !== 'granted') return null;
     await ensureChannels();
     // Número no ícone: alertas críticos não contam. `badge` no conteúdo vale quando a notificação
     // chega (iPhone, inclusive a agendada); `setBadgeCountAsync` cobre o launcher do Android agora.
-    const badge = nextBadgeCount(badgeCount, { critical });
+    const badge = countBadge ? nextBadgeCount(badgeCount, { critical }) : badgeCount;
     const counts = badge !== badgeCount;
     const id = await Notifications.scheduleNotificationAsync({
       content: {
@@ -204,9 +220,9 @@ async function deliver(n: NotifyInput, delaySec: number): Promise<boolean> {
     if (n.go) { actions.set(id, n.go); if (actions.size > 50) actions.delete(actions.keys().next().value!); }
     // Agendada com o app aberto (aviso de teste): o número só muda quando ela chegar, pelo `badge` acima.
     if (counts) { if (active) badgeCount = badge; else setBadge(badge); }
-    return true;
+    return id;
   } catch {
-    return false;
+    return null;
   }
 }
 

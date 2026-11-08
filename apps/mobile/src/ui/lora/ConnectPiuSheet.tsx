@@ -1,8 +1,8 @@
-import { useEffect, useReducer, useRef, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, View } from 'react-native';
+import { Fragment, useEffect, useReducer, useRef, useState } from 'react';
+import { Linking, Pressable, View } from 'react-native';
 import { useT } from '../../i18n';
 import { radioErrorKind, signalOf } from '../../lib/loraRow';
-import { freqLabel, piuProblem, type PiuProblem } from '../../lib/piuLora';
+import { freqLabel, nominalBand, piuProblem, type PiuProblem } from '../../lib/piuLora';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { PiuLoraRadio } from '../../transport/rnode/radio';
 import { bandLabel, piuRadio } from '../../transport/rnode/regions';
@@ -10,7 +10,8 @@ import { Button } from '../Button';
 import { Icon, type IconName } from '../Icon';
 import { Sheet, type SheetHandle } from '../Sheet';
 import { T } from '../T';
-import { regionKey } from './LoraBlock';
+import { regionKey, superNodesText } from './LoraBlock';
+import { LrIn, LrPulse, LrSpin } from './motion';
 import { BOARDS_URL, RNODE_INSTALL_URL } from './RadioTypeSheet';
 
 /**
@@ -19,7 +20,7 @@ import { BOARDS_URL, RNODE_INSTALL_URL } from './RadioTypeSheet';
  * firmware que não é RNode, placa de outra faixa e erro com código. `problem`: aberta pelo "Ver o que
  * fazer" da linha LoRa, direto no erro.
  */
-export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }: { radio: PiuLoraRadio; problem?: PiuProblem; deviceId?: string; onRegion: () => void; onClose: () => void }) {
+export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose, askPermission }: { radio: PiuLoraRadio; problem?: PiuProblem; deviceId?: string; onRegion: () => void; onClose: () => void; askPermission?: () => void | Promise<void> }) {
   const { c } = useTheme();
   const t = useT();
   const ref = useRef<SheetHandle>(null);
@@ -30,6 +31,8 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
   const st = radio.status();
   const link = radio.link.status();
   const up = st.phase === 'connected' && link.state === 'up';
+  // lrIn: só o rádio que aparece depois de a folha abrir entra animado.
+  const [atOpen] = useState(() => new Set(st.devices.map(d => d.id)));
 
   // A busca continua enquanto a folha está aberta e nada foi escolhido.
   useEffect(() => {
@@ -52,8 +55,12 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
   if (fail && fail.kind !== 'region') {
     const retry = () => { const id = picked ?? st.device?.id; if (id) connect(id); };
     body = fail.kind === 'band' ? (
-      <Result tone="err" icon="settings_input_antenna" title={t('piu.band.title')} desc={t('piu.band.d', { freq: region ? freqLabel(piuRadio(region).freqHz) : '' })}
-        chips={region ? [['public', `${t(regionKey(region))} · ${bandLabel(region)}`]] : []}
+      <Result tone="err" icon="settings_input_antenna" title={t('piu.band.title')}
+        desc={region && nominalBand(piuRadio(region).freqHz)
+          ? t('piu.band.d2', { freq: freqLabel(piuRadio(region).freqHz), band: nominalBand(piuRadio(region).freqHz)! })
+          : t('piu.band.d', { freq: region ? freqLabel(piuRadio(region).freqHz) : '' })}
+        // Desenho 3h: a região e, em vermelho, a faixa da placa.
+        chips={[...(region ? [['public', `${t(regionKey(region))} · ${bandLabel(region)}`] as [IconName, string]] : []), ...(fail.board ? [['memory', t('piu.board', { band: fail.board }), 'err'] as [IconName, string, 'err']] : [])]}
         primary={[t('piu.changeRegion'), () => ref.current?.close(onRegion)]} secondary={[t('piu.boards'), () => { void Linking.openURL(BOARDS_URL).catch(() => {}); }]} />
     ) : fail.kind === 'notRNode' ? (
       <Result tone="neutral" icon="memory" title={t('piu.fail.notRNode')} desc={t('piu.notRNode.d')}
@@ -72,7 +79,7 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
   } else if (up) {
     body = (
       <Result tone="ok" icon="check" title={t('piu.ok')} desc={[name, region ? t(regionKey(region)) : '', region ? freqLabel(piuRadio(region).freqHz) : ''].filter(Boolean).join(' · ')}
-        chips={link.superNodes ? [['hub', link.gateways ? t('lora.superNode.gateway', { count: link.superNodes }) : t('lora.superNode', { count: link.superNodes })]] : []}
+        chips={link.superNodes ? [['hub', superNodesText(t, link.superNodes, link.gateways)]] : []}
         primary={[t('piu.done'), () => ref.current?.close(onClose)]} />
     );
   } else if (st.phase === 'error' && picked) {
@@ -84,7 +91,11 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
     ];
     if (why === 'pin') fixes.unshift(fixes.splice(1, 1)[0]!);
     const title = why === 'pin' ? t('piu.err.pin') : why === 'timeout' ? t('lora.err.timeout') : why === 'perm' ? t('lora.err.perm') : why === 'btOff' ? t('lora.err.btOff') : t('lora.err.title');
-    body = <Result tone="err" icon="link_off" title={title} desc={t('lora.err.body', { name })} tips={fixes} primary={[t('lora.retry'), () => connect(picked)]} secondary={[t('lora.other'), other]} />;
+    // Desenho 3f: o botão muda com o motivo (permissão ou Bluetooth desligado); senão, tentar de novo.
+    const primary: [string, () => void] = why === 'perm' && askPermission ? [t('piu.grant'), () => { void Promise.resolve(askPermission()).then(() => connect(picked)); }]
+      : why === 'btOff' ? [t('piu.btOn'), () => { void Linking.sendIntent('android.bluetooth.adapter.action.REQUEST_ENABLE').catch(() => Linking.sendIntent('android.settings.BLUETOOTH_SETTINGS')).catch(() => {}); }]
+      : [t('lora.retry'), () => connect(picked)];
+    body = <Result tone="err" icon="link_off" title={title} desc={t('lora.err.body', { name })} tips={fixes} primary={primary} secondary={[t('lora.other'), other]} />;
   } else if (picked && st.phase === 'pairing') {
     body = <PinCard />;
   } else if (picked) {
@@ -104,7 +115,7 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
           {steps.map(([label, k, sub]) => (
             <View key={label} style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
               <View style={{ width: 22, height: 22, borderRadius: 11, alignItems: 'center', justifyContent: 'center', backgroundColor: k === 'done' ? c.ink : 'transparent', borderWidth: k === 'wait' ? 1.5 : 0, borderColor: c.line2 }}>
-                {k === 'done' ? <Icon name="check" size={15} w={400} color={c.invink} /> : k === 'now' ? <ActivityIndicator size="small" color={c.ink} /> : null}
+                {k === 'done' ? <Icon name="check" size={15} w={400} color={c.invink} /> : k === 'now' ? <LrSpin size={22} border={2} /> : null}
               </View>
               <View style={{ gap: 2, paddingTop: 2 }}>
                 <T size={14} w={k === 'now' ? 620 : 450} color={k === 'wait' ? c.ink3 : c.ink}>{label}</T>
@@ -113,34 +124,40 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
             </View>
           ))}
         </View>
-        <Button variant="outline" label={t('common.cancel')} onPress={other} />
+        {/* Desenho 3d: pílula cheia de 46 px no fundo do cartão, 14/600. */}
+        <Button variant="soft" height={46} fontSize={14} label={t('common.cancel')} onPress={other} />
       </View>
     );
   } else {
     body = (
       <View style={{ gap: 14 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 2 }}>
-          <ActivityIndicator size="small" color={c.ink} /><T size={11} w={500} mono ls={0.05} color={c.ink2}>{t('lora.sheet.scanning')}</T>
+          <LrSpin size={12} border={1.5} /><T size={11} w={500} mono ls={0.05} color={c.ink2}>{t('lora.sheet.scanning')}</T>
         </View>
-        <View style={{ borderRadius: 20, backgroundColor: c.bg2, overflow: 'hidden' }}>
+        <View style={{ borderRadius: 20, backgroundColor: c.bg2, overflow: st.devices.length ? 'hidden' : 'visible' }}>
           {st.devices.length ? st.devices.map((d, i) => {
             const s = signalOf(d.rssi);
             return (
-              <Pressable key={d.id} onPress={() => connect(d.id)} accessibilityRole="button" accessibilityLabel={`${d.name}, ${t(`lora.sig.${s.word}`)}`}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
-                <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name="settings_input_antenna" size={20} w={300} /></View>
-                <T size={14} w={600} numberOfLines={1} style={{ flex: 1 }}>{d.name}</T>
-                <View style={{ alignItems: 'flex-end', gap: 3 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 14 }}>
-                    {[5, 8, 11, 14].map((h, k) => <View key={h} style={{ width: 4, height: h, borderRadius: 1, backgroundColor: k < s.bars ? c.ink : c.bg3 }} />)}
+              <LrIn key={d.id} skip={atOpen.has(d.id)}>
+                <Pressable onPress={() => connect(d.id)} accessibilityRole="button" accessibilityLabel={`${d.name}, ${t(`lora.sig.${s.word}`)}`}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+                  <View style={{ width: 38, height: 38, borderRadius: 12, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name="settings_input_antenna" size={20} w={300} /></View>
+                  <T size={14} w={600} numberOfLines={1} style={{ flex: 1 }}>{d.name}</T>
+                  <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: 2, height: 14 }}>
+                      {[5, 8, 11, 14].map((h, k) => <View key={h} style={{ width: 4, height: h, borderRadius: 1, backgroundColor: k < s.bars ? c.ink : c.bg3 }} />)}
+                    </View>
+                    <T size={10} w={500} mono color={c.ink2}>{t(`lora.sig.${s.word}`)}</T>
                   </View>
-                  <T size={10} w={500} mono color={c.ink2}>{t(`lora.sig.${s.word}`)}</T>
-                </View>
-              </Pressable>
+                </Pressable>
+              </LrIn>
             );
           }) : (
             <View style={{ alignItems: 'center', gap: 14, paddingVertical: 26, paddingHorizontal: 18 }}>
-              <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name="settings_input_antenna" size={24} w={300} /></View>
+              <View style={{ width: 52, height: 52 }}>
+                <LrPulse dur={2000} color={c.ink3} radius={26} />
+                <View style={{ width: 52, height: 52, borderRadius: 26, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name="settings_input_antenna" size={24} w={300} /></View>
+              </View>
               <T size={14} w={600}>{t('lora.sheet.empty')}</T>
             </View>
           )}
@@ -168,7 +185,7 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
 
 /** 3e–3i: a mesma folha de resultado (ícone, título, texto, fichas ou dicas, link, botões). */
 function Result({ tone, icon, title, desc, chips, tips, link, primary, secondary }: {
-  tone: 'ok' | 'err' | 'neutral'; icon: IconName; title: string; desc: string; chips?: [IconName, string][]; tips?: [IconName, string, string][];
+  tone: 'ok' | 'err' | 'neutral'; icon: IconName; title: string; desc: string; chips?: [IconName, string, 'err'?][]; tips?: [IconName, string, string][];
   link?: [string, () => void]; primary?: [string, () => void]; secondary?: [string, () => void];
 }) {
   const { c } = useTheme();
@@ -183,9 +200,9 @@ function Result({ tone, icon, title, desc, chips, tips, link, primary, secondary
       </View>
       {chips?.length ? (
         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
-          {chips.map(([ic, text]) => (
-            <View key={text} style={{ height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: c.bg2, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-              <Icon name={ic} size={15} w={400} /><T size={11.5} w={500} mono>{text}</T>
+          {chips.map(([ic, text, tone]) => (
+            <View key={text} style={{ height: 28, paddingHorizontal: 10, borderRadius: 14, backgroundColor: tone === 'err' ? c.errbg : c.bg2, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+              <Icon name={ic} size={15} w={400} color={tone === 'err' ? c.err : undefined} /><T size={11.5} w={500} mono color={tone === 'err' ? c.err : undefined}>{text}</T>
             </View>
           ))}
         </View>
@@ -239,9 +256,13 @@ function PinCard() {
           <T size={21} w={600} mono ls={0.06} color="#9FE0A8">••••••</T>
         </View>
         <View style={{ position: 'absolute', left: 170, top: 20, alignItems: 'center', gap: 3 }}><View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: c.ink3 }} /><T size={8.5} w={600} mono color={c.ink2}>RST</T></View>
-        <View style={{ position: 'absolute', left: 170, top: 58, alignItems: 'center', gap: 3 }}><View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: c.ink }} /><T size={8.5} w={700} mono>PRG</T></View>
+        <View style={{ position: 'absolute', left: 170, top: 58, alignItems: 'center', gap: 3 }}>
+          <View style={{ width: 16, height: 16 }}><LrPulse dur={1600} color={c.ink} radius={8} /><View style={{ width: 16, height: 16, borderRadius: 8, backgroundColor: c.ink }} /></View>
+          <T size={8.5} w={700} mono>PRG</T>
+        </View>
       </View>
-      <T size={13} lh={1.5}>{t('piu.pin.body')}</T>
+      {/* "PRG" em negrito (desenho 3c) sem mexer nas traduções: o texto se parte no nome do botão. */}
+      <T size={13} lh={1.5}>{t('piu.pin.body').split('PRG').map((s, i) => <Fragment key={i}>{i ? <T size={13} w={650}>PRG</T> : null}{s}</Fragment>)}</T>
       <T size={12} lh={1.45} color={c.ink2}>{t('piu.pin.note')}</T>
     </View>
   );

@@ -8,6 +8,7 @@ import { pontosPtBR } from './pontos/pt-BR';
 import { linkDesktopPtBR } from './linkDesktop/pt-BR';
 import { callPtBR } from './call/pt-BR';
 import { loraPtBR } from './lora/pt-BR';
+import { mapPtBR } from './map/pt-BR';
 
 export const ptBR = {
   ...piu11PtBR,
@@ -15,6 +16,7 @@ export const ptBR = {
   ...linkDesktopPtBR,
   ...callPtBR,
   ...loraPtBR,
+  ...mapPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',

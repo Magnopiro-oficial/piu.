@@ -108,6 +108,24 @@ test('mídia nunca por LoRa; texto passa', () => {
   void R; void B;
 });
 
+test('sinal ao vivo da chamada nunca por LoRa (nem repassado); pedido de chamada e texto passam', () => {
+  const A = node('A'), R = node('R'), B = node('B');
+  const live = msg(A.id, B.id, 'oferta', { live: true, ttlSec: 30, priority: Priority.High });
+  const text = msg(A.id, B.id, 'pedido de chamada', { ttlSec: 24 * 3600 });
+  // Flag no cabeçalho (bit 1): relays leem sem chave; o bit 0 (mídia) continua livre.
+  assert.equal(live.bytes[3], 2);
+  assert.deepEqual([parseHeader(live.bytes).live, parseHeader(live.bytes).bulk], [true, false]);
+  assert.equal(parseHeader(text.bytes).live, false);
+  A.router.send(live.bytes, NOW); A.router.send(text.bytes, NOW);
+  assert.deepEqual(A.router.outgoing('R', 'lora', NOW + 1).map(envelopeId), [text.id]);
+  assert.deepEqual(A.router.outgoing('R', 'ble', NOW + 2).map(envelopeId), [live.id], 'ao vivo vai pelo Bluetooth');
+  // O relay que recebeu pelo Bluetooth também não põe no ar pelo LoRa.
+  R.router.ingest(A.router.outgoing('R2', 'direct', NOW + 3).find(x => envelopeId(x) === live.id)!, 'A', NOW + 3);
+  assert.deepEqual(R.router.outgoing('L', 'lora', NOW + 4).map(envelopeId), []);
+  assert.deepEqual(R.router.outgoing('B', 'direct', NOW + 4).map(envelopeId), [live.id]);
+  void B;
+});
+
 test('Modo nó desligado: não guarda mensagens de terceiros, mas envia as próprias', () => {
   const A = node('A'), R = node('R', { relay: false }), B = node('B');
   const m = msg(A.id, B.id, 'via R?');

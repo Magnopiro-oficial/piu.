@@ -20,6 +20,7 @@ import { MeshNode } from './mesh';
 import { RemoteAudio } from './callHost';
 import { randomBytes } from 'node:crypto';
 import { type CallAct, type CallSnapshot, readCallAct, readCallFrame } from '../shared/callBridge';
+import { shouldRing } from '../shared/callNotify';
 import { migratePrefs } from './prefs';
 import { type AppState, Store } from './store';
 import type { SafeStorageLike } from './vault';
@@ -48,7 +49,10 @@ export interface CoreOptions {
   link?: { host?: string; listen?: string };
   /** Leitura de saldo na Mainnet (testes: substituto sem rede). */
   walletBalance?: typeof accountBalance;
-  /** Antes de abrir o microfone da chamada: pede a permissão do sistema (macOS). Recusada, rejeita. */
+  /**
+   * Antes de abrir o microfone (caixa "pre", que já mede o microfone, e a chamada conectada): pede a
+   * permissão do sistema (macOS). Recusada, rejeita.
+   */
   micAccess?: () => Promise<void>;
 }
 
@@ -211,7 +215,11 @@ export class PiuCore {
         audio: this.callAudio,
         newId: () => randomBytes(16).toString('base64url'),
         blocked: peer => this.isBlocked(peer),
-        record: rec => { this.setConversations(appendCallRecord(this.state.conversations, rec)); this.emitLast(rec.peer); },
+        record: rec => {
+          this.setConversations(appendCallRecord(this.state.conversations, rec)); this.emitLast(rec.peer);
+          // Perdida com o Piu bloqueado: o main.ts guarda quem ligou para o aviso ao desbloquear.
+          this.events.emit('callRecord', rec);
+        },
         requestUpdate: (peer, requestId, step, dir) => {
           this.setConversations(upsertCallRequest(this.state.conversations, { peer, requestId, step, dir, at: Math.floor(Date.now() / 1000) }));
           this.emitLast(peer, `callreq-${requestId}`);
@@ -520,8 +528,12 @@ export class PiuCore {
       const r = this.mesh!.liveRouteTo(c.id);
       if (r) routes[c.id] = r;
     }
-    return { state: call.state, words: call.words, ...(call.latencyMs !== undefined ? { latencyMs: call.latencyMs } : {}), routes };
+    const st = call.state;
+    const ring = shouldRing(this.state.prefs, st, !!st.peer && this.isMuted(st.peer));
+    return { state: st, words: call.words, ...(call.latencyMs !== undefined ? { latencyMs: call.latencyMs } : {}), routes, ring };
   }
+  /** Silenciou a conversa ou ligou Não perturbe com a chamada tocando: a janela para (ou volta) o toque na hora. */
+  private emitRinging() { if (this.mesh?.call?.state.phase === 'ringing') this.emit('call', this.callSnapshot()); }
 
   callAct(x: unknown) {
     const call = this.mesh?.call, act = readCallAct(x);
@@ -531,6 +543,10 @@ export class PiuCore {
       case 'open': {
         const c = this.mesh!.listContacts().find(x => x.id === act.peer);
         if (!c || c.request || this.isBlocked(c.id)) throw new Error(tm('main.core.callUnavailable'));
+        // macOS: o sistema pergunta pelo microfone antes de a caixa "pre" abrir o medidor (recusado, abre igual:
+        // a chamada segue sem a minha voz e o main.ts avisa). Nos outros sistemas `micAccess` volta na hora.
+        const mic = this.o.micAccess;
+        if (mic) return mic().catch(() => {}).then(() => { if (this.mesh?.call === call) call.open(act.peer); });
         call.open(act.peer);
         break;
       }
@@ -572,6 +588,7 @@ export class PiuCore {
     if (muted) cur.add(contactId); else cur.delete(contactId);
     this.state = { ...this.state, muted: [...cur] };
     this.scheduleSave(); this.emit('conversations', undefined);
+    this.emitRinging();
   }
 
   isBlocked(contactId: string) { return (this.state.blocked ?? []).some(b => b.id === contactId); }
@@ -799,6 +816,7 @@ export class PiuCore {
     this.emit('prefs', next);
     this.emit('session', this.session());
     if (patch.relay !== undefined) this.emit('network', this.networkStatus());
+    if (patch.dnd !== undefined) this.emitRinging();
     return next;
   }
 

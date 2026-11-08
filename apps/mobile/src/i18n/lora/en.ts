@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'How to install',
   'piu.band.title': 'This board is for a different frequency band',
   'piu.band.d': "It didn't accept {freq}. Use a board for your region's band, or change the region if you're in another country.",
+  'piu.band.d2': 'It didn\'t accept {freq}. Use a {band} board, or change the region if you\'re in another country.',
+  'piu.board': 'board · {band}',
+  'piu.superNodes': { one: 'Super Node nearby', other: '{count} Super Nodes nearby' },
+  'piu.gateways': { one: '{count} gateway', other: '{count} gateways' },
+  'piu.btOn': 'Turn on Bluetooth',
   'piu.changeRegion': 'Change region',
   'piu.boards': 'See compatible boards',
   'piu.code.d': 'Turn the board off and on and try again. If it keeps happening, show this code to whoever helps you with the radio.',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': 'World 2.4 GHz',
   'piu.route.via': 'over LoRa (Piu)',
   'piu.route.radio': 'Piu radio',
+  'piu.why.away': 'Auto: the Piu radio was out of range, so it went over Meshtastic.',
+  'piu.why.failed': 'Auto: the Piu radio failed to send, so it went over Meshtastic.',
 };

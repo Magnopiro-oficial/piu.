@@ -24,7 +24,7 @@ function Overlay({ api, onPerf }: { api: CallApi; onPerf?: (p: CallPerf) => void
   const now = api.now ?? Date.now;
   // Aviso no topo → tocar no corpo abre a tela de toque em tela cheia.
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const expanded = s.phase === 'ringing' && !!s.callId && expandedId === s.callId;
+  const expanded = s.phase === 'ringing' && !!s.callId && (expandedId === s.callId || api.shownCallId === s.callId);
 
   const full = s.phase === 'calling' || s.phase === 'ending' || (s.phase === 'active' && !s.mini) || (s.phase === 'ringing' && (expanded || !!api.locked));
   const banner = s.phase === 'ringing' && !full;

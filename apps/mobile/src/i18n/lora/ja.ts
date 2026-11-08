@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': 'インストール方法',
   'piu.band.title': 'このボードは別の周波数帯用です',
   'piu.band.d': '{freq} を受け付けませんでした。地域の周波数帯のボードを使うか、別の国にいる場合は地域を変更してください。',
+  'piu.band.d2': '{freq} を受け付けませんでした。{band} のボードを使うか、別の国にいる場合は地域を変更してください。',
+  'piu.board': 'ボード · {band}',
+  'piu.superNodes': { other: '近くの Super Node：{count}' },
+  'piu.gateways': { other: 'ゲートウェイ {count}' },
+  'piu.btOn': 'Bluetooth をオンにする',
   'piu.changeRegion': '地域を変更',
   'piu.boards': '対応ボードを見る',
   'piu.code.d': 'ボードの電源を入れ直して、もう一度試してください。続く場合は、無線機を手伝ってくれる人にこのコードを見せてください。',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': '全世界 2.4 GHz',
   'piu.route.via': 'LoRa（Piu）経由',
   'piu.route.radio': 'Piu 無線機',
+  'piu.why.away': '自動：Piu 無線機が圏外だったため、Meshtastic で送信しました。',
+  'piu.why.failed': '自動：Piu 無線機で送信できなかったため、Meshtastic で送信しました。',
 };

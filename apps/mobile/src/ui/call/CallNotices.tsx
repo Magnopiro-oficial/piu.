@@ -33,7 +33,7 @@ export function CallBanner({ scene, on, controller, onExpand }: { scene: CallSce
         boxShadow: scheme === 'dark' ? '0 0 0 1px rgba(255,255,255,0.12), 0 20px 40px -14px rgba(0,0,0,0.5)' : '0 20px 40px -14px rgba(0,0,0,0.5)',
         transform: [{ translateY: v.interpolate({ inputRange: [0, 1], outputRange: [hidden, 0] }) }],
       }}>
-      <Pressable onPress={onExpand} accessibilityRole="button" accessibilityLabel={`${ct.name}. ${t('call.incoming.banner', { via: routeVia(tr, scene.state.route) })}`}
+      <Pressable onPress={onExpand} accessibilityRole="button" accessibilityLabel={`${ct.name}. ${t('call.incoming.banner', { via: routeVia(tr, scene.state.route, scene.state.wifiDirect) })}`}
         style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
         <View style={{ width: 46, height: 46, borderRadius: 23, backgroundColor: '#fff', alignItems: 'center', justifyContent: 'center' }}>
           <View style={{ position: 'absolute', top: -4, left: -4, right: -4, bottom: -4, borderRadius: 27, borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.35)' }} />
@@ -41,7 +41,7 @@ export function CallBanner({ scene, on, controller, onExpand }: { scene: CallSce
         </View>
         <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
           <T size={15} w={650} color="#fff" numberOfLines={1}>{ct.name}</T>
-          <T size={12.5} color="rgba(255,255,255,0.65)" numberOfLines={1}>{t('call.incoming.banner', { via: routeVia(tr, scene.state.route) })}</T>
+          <T size={12.5} color="rgba(255,255,255,0.65)" numberOfLines={1}>{t('call.incoming.banner', { via: routeVia(tr, scene.state.route, scene.state.wifiDirect) })}</T>
         </View>
       </Pressable>
       <Pressable onPress={() => controller.decline()} accessibilityRole="button" accessibilityLabel={t('call.decline')}

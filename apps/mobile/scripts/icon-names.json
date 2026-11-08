@@ -222,5 +222,9 @@
   "wifi_tethering",
   "workspace_premium",
   "workspaces",
-  "memory"
+  "memory",
+  "navigation",
+  "view_list",
+  "link",
+  "directions_walk"
 ]

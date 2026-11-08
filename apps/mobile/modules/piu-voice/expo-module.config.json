@@ -1,6 +1,6 @@
 {
   "platforms": ["android"],
   "android": {
-    "modules": ["expo.modules.piuvoice.PiuVoiceModule"]
+    "modules": ["expo.modules.piuvoice.PiuVoiceModule", "expo.modules.piuvoice.PiuCallAlertModule"]
   }
 }

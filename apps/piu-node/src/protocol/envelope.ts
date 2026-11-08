@@ -5,7 +5,7 @@
  * QUEM enviou, fica cifrado (remetente selado).
  *
  * Cabeçalho (104 bytes, big-endian):
- *   0 versão · 1 suíte · 2 tipo · 3 flags · 4 prioridade · 5 saltos restantes (único campo mutável)
+ *   0 versão · 1 suíte · 2 tipo · 3 flags (bit 0 mídia, bit 1 ao vivo) · 4 prioridade · 5 saltos restantes (único campo mutável)
  *   6 versão da chave (grupo) · 8 expira em (s) · 12 destino (16) · 28 chave efêmera (32)
  *   60 nonce (24) · 84 hash do segredo de entrega (16) · 100 tamanho do corpo (u32) · 104 corpo
  *
@@ -35,7 +35,13 @@ export enum MsgType {
 }
 
 export interface Header {
-  version: number; suite: number; kind: EnvelopeKind; bulk: boolean; priority: Priority; hops: number;
+  version: number; suite: number; kind: EnvelopeKind; bulk: boolean;
+  /**
+   * Sinal ao vivo da chamada de voz (oferta, aceite, recusa, desligar): vale segundos e nunca vai por
+   * LoRa (bit 1 das flags). Leitores antigos ignoram o bit; o envelope continua igual para eles.
+   */
+  live: boolean;
+  priority: Priority; hops: number;
   keyVersion: number; expiresAt: number; dest: Uint8Array; eph: Uint8Array; nonce: Uint8Array; ackHash: Uint8Array; bodyLen: number;
 }
 
@@ -49,7 +55,7 @@ export interface Opened {
 
 export interface SealOptions {
   from: Identity; type: MsgType; body: Uint8Array; now: number;
-  ttlSec?: number; priority?: Priority; bulk?: boolean; hops?: number;
+  ttlSec?: number; priority?: Priority; bulk?: boolean; live?: boolean; hops?: number;
   /** Preencher até o próximo tamanho padrão (padrão: sim). */
   pad?: boolean;
 }
@@ -73,7 +79,7 @@ function readHeader(r: Reader): Header {
   const priority = r.u8();
   if (priority > Priority.Critical) throw new ProtocolError('PRIORITY', 'Prioridade inválida.');
   return {
-    version, suite, kind, bulk: (flags & 1) === 1, priority, hops: r.u8(), keyVersion: r.u16(), expiresAt: r.u32(),
+    version, suite, kind, bulk: (flags & 1) === 1, live: (flags & 2) === 2, priority, hops: r.u8(), keyVersion: r.u16(), expiresAt: r.u32(),
     dest: r.bytes(16), eph: r.bytes(32), nonce: r.bytes(NONCE_BYTES), ackHash: r.bytes(16), bodyLen: r.u32(),
   };
 }
@@ -98,7 +104,7 @@ export function parseAuthHeader(header: Uint8Array): Header {
 }
 
 function writeHeader(h: Header): Uint8Array {
-  return new Writer().u8(h.version).u8(h.suite).u8(h.kind).u8(h.bulk ? 1 : 0).u8(h.priority).u8(h.hops)
+  return new Writer().u8(h.version).u8(h.suite).u8(h.kind).u8((h.bulk ? 1 : 0) | (h.live ? 2 : 0)).u8(h.priority).u8(h.hops)
     .u16(h.keyVersion).u32(h.expiresAt).bytes(h.dest).bytes(h.eph).bytes(h.nonce).bytes(h.ackHash).u32(h.bodyLen).done();
 }
 
@@ -176,7 +182,7 @@ function readInner(plain: Uint8Array, auth: Uint8Array, h: Header, now: number):
 function baseHeader(o: SealOptions, kind: EnvelopeKind, ackSecret: Uint8Array): Header {
   const ttl = Math.min(o.ttlSec ?? 48 * 3600, MAX_TTL_SEC);
   return {
-    version: PROTOCOL_VERSION, suite: SUITE_V0, kind, bulk: !!o.bulk, priority: o.priority ?? Priority.Normal, hops: o.hops ?? DEFAULT_HOPS,
+    version: PROTOCOL_VERSION, suite: SUITE_V0, kind, bulk: !!o.bulk, live: !!o.live, priority: o.priority ?? Priority.Normal, hops: o.hops ?? DEFAULT_HOPS,
     keyVersion: 0, expiresAt: o.now + ttl, dest: new Uint8Array(16), eph: new Uint8Array(32), nonce: random(NONCE_BYTES),
     ackHash: hash(ackSecret).slice(0, 16), bodyLen: 0,
   };

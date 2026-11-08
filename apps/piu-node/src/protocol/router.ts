@@ -7,7 +7,7 @@
  * - evita loops: limite de saltos, não devolve a quem enviou, não repete o envio ao mesmo vizinho,
  *   e limita o número de cópias por envelope;
  * - aplica os limites do nó: espaço, quantidade, tamanho e retenção (FUN-018);
- * - nunca manda conteúdo pesado (mídia) por LoRa;
+ * - nunca manda conteúdo pesado (mídia) nem sinal ao vivo da chamada por LoRa;
  * - só retransmite para terceiros com o Modo nó ligado (FUN-017).
  * O nó não precisa de chave nenhuma para rotear: lê só o cabeçalho.
  */
@@ -218,7 +218,7 @@ export class Router {
       if (e.header.hops === 0) continue;                       // limite de saltos (anti-loop)
       if (e.from === peer || e.sentTo.has(peer)) continue;     // não devolve, não repete
       if (e.copies >= this.limits.maxCopies) continue;         // spray limitado
-      if (e.header.bulk && via === 'lora') continue;           // mídia nunca por LoRa
+      if ((e.header.bulk || e.header.live) && via === 'lora') continue; // mídia e sinal ao vivo nunca por LoRa
       if (opts.maxBytes !== undefined && e.bytes.length > opts.maxBytes) continue; // grande demais para este meio (fica para outro)
       if (!e.own && !this.relay) continue;                     // Modo nó desligado: só as próprias
       out.push(e);

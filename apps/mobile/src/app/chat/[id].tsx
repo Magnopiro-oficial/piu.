@@ -34,13 +34,14 @@ import { useChatScreenSecurity } from '../../ui/ScreenSecurity';
 import { useCall } from '../../ui/call/CallContext';
 import { CallButton, CallRecordCard, CallRequestCard } from '../../ui/call/CallCards';
 import { contactOf } from '../../calls/callView';
+import { draftParam } from '../../calls/callChat';
 import { loraComposer, loraMsgState, type LoraMsgState } from '../../lib/loraChat';
 import { LoraCard } from '../../ui/lora/LoraCard';
 import { useLora } from '../../ui/lora/useLora';
 
 /** Conversa: balões (enviado = ink, recebido = bub + borda), estados de entrega, rodapé com o transporte atual. */
 export default function ChatScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, draft: draftIn } = useLocalSearchParams<{ id: string; draft?: string }>();
   const { c } = useTheme();
   const t = useT();
   const insets = useSafeAreaInsets();
@@ -58,6 +59,13 @@ export default function ChatScreen() {
   // Chamada de voz: o botão só existe quando há um provedor de chamada (sem ele, o cabeçalho fica igual).
   const call = useCall();
   const [draft, setDraft] = useState('');
+  // Rascunho pronto vindo da rota (recusar a chamada com "Mensagem"): preenche o campo vazio, sem enviar.
+  useEffect(() => {
+    const d = draftParam(draftIn);
+    if (!d) return;
+    setDraft(cur => (cur.trim() ? cur : d));
+    router.setParams({ draft: undefined });
+  }, [draftIn]);
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
   const [locOpen, setLocOpen] = useState(false);

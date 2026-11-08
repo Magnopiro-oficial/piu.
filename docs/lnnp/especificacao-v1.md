@@ -72,7 +72,7 @@ tipo u8 · destino u32 · origem u32 · seq u8 · dados
 - **LoRa**:
   - pacote de até 255 bytes; MTU anunciada 245;
   - meio LoRa (8);
-  - mídia (`bulk`) nunca vai, e envelope acima de `PIU_LORA_MAX_ENVELOPE` (1536 bytes) fica para outro meio;
+  - mídia (`bulk`) e sinal ao vivo da chamada (`live`) nunca vão, e envelope acima de `PIU_LORA_MAX_ENVELOPE` (1536 bytes) fica para outro meio;
   - anúncio a cada 30 s e espera aleatória antes de cada envio;
   - o tempo no ar de cada pacote é calculado pela fórmula da Semtech, e o nó não passa de `PIU_LORA_DUTY` % do canal por hora (padrão 10). Os ACKs sempre passam.
 - **USB**: pacote de até 4096 bytes, meio USB (32), mídia permitida, sem limite de tempo no ar.
@@ -271,6 +271,7 @@ O nó repassa envelopes com o roteador do protocolo (`router.ts`), sem chave nen
 - **TTL** (FUN-011): vencido é apagado sem comando remoto; TTL acima de 7 dias é recusado.
 - **Limites** (FUN-018, INF-009): espaço, quantidade, tamanho, retenção, balde de fichas por vizinho e banda para terceiros. O que for de menor prioridade e vencer antes sai primeiro.
 - **Mídia** (flag `bulk`) nunca vai por LoRa, e o operador PODE recusar mídia de terceiros.
+- **Sinal ao vivo da chamada de voz** (flag `live`, bit 1 do byte de flags) nunca vai por LoRa: vale segundos e gastaria o tempo de rádio. O pedido de chamada não leva a flag e passa.
 - **Recibos** (seção 11 do documento): na primeira cópia de um envelope de terceiro, o nó assina um recibo com a chave do nó. Os recibos ficam guardados e PODEM ser passados em `RELAY_RECEIPT` a um vizinho com rota até o validador. Quem recebe DEVE conferir a assinatura.
 
 ## 10. Erros

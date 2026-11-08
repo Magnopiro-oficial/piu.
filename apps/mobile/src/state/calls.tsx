@@ -3,10 +3,10 @@ import { isLora } from '../transport/select';
 import { AccessibilityInfo, PermissionsAndroid, Platform } from 'react-native';
 import { router } from 'expo-router';
 import PiuVoice from '../../modules/piu-voice';
-import { routeOfMedium } from '../calls/callMedia';
+import { hintOfMedium } from '../calls/callMedia';
 import { CallService, type AudioEngine } from '../calls/callService';
 import { LIVE_SIGNAL_TTL_SEC, REQUEST_TTL_SEC } from '../calls/callSignals';
-import { callRecordMsg } from '../calls/callChat';
+import { callRecordMsg, declineDraftRoute } from '../calls/callChat';
 import { contactOf, requestCard, type Tr } from '../calls/callView';
 import type { Chat, Msg } from '../data/types';
 import { t } from '../i18n/core';
@@ -16,6 +16,9 @@ import type { Messenger } from '../messaging/messenger';
 import { nowHM } from '../lib/text';
 import type { Medium } from '../transport/types';
 import { CallContext, type CallApi } from '../ui/call/CallContext';
+import { useCallAlerts } from './callAlerts';
+import { phoneReminders, useReminderBanner } from './callReminders';
+import { useSettings } from './settings';
 
 /**
  * Chamada de voz no celular: o `CallService` (src/calls) ligado ao mensageiro (sinais dentro da sessão
@@ -58,14 +61,16 @@ export type PhoneCallDeps = {
   nameOf(contactId: string): string;
 };
 
-/** O serviço e os avisos escuros dele (o provedor das telas assina). */
-export type PhoneCall = { svc: CallService; onToast(fn: (text: string) => void): () => void };
+/** O serviço, os avisos escuros dele e os lembretes do "Em 10 min" com o app aberto (o provedor das telas assina). */
+export type PhoneCall = { svc: CallService; onToast(fn: (text: string) => void): () => void; onRemind(fn: (peer: string) => void): () => void };
 
 const newId = () => b64url(random(16));
 
 export function makePhoneCall(d: PhoneCallDeps): PhoneCall {
   const toasts = new Set<(text: string) => void>();
   const say = (text: string) => toasts.forEach(f => f(text));
+  const remindFns = new Set<(peer: string) => void>();
+  const reminders = phoneReminders(d, peer => remindFns.forEach(f => f(peer)));
   const svc = new CallService({
     now: () => Date.now(),
     newId,
@@ -87,18 +92,26 @@ export function makePhoneCall(d: PhoneCallDeps): PhoneCall {
     },
     toast: (text, peer) => say(text === 'verified' ? t('call.toast.verified') : text === 'remindLater' ? t('call.toast.remind')
       : t('call.toast.requestLater', { first: contactOf(peer ? d.nameOf(peer) : '').first })),
-    draft: peer => router.push({ pathname: '/chat/[id]', params: { id: d.chatIdFor(peer) } }),
+    // "Mensagem": a conversa abre com o rascunho do desenho no campo, sem enviar.
+    draft: peer => router.push(declineDraftRoute(d.chatIdFor(peer))),
+    // "Em 10 min": notificação local "Ligar para {name}" (com o app aberto, o banner do app).
+    remind: (peer, ms) => reminders.add(peer, ms),
     liveRouteTo: peer => {
       const link = d.messenger.directLink(peer, 120);
       const medium = link ? d.media.get(link) : undefined;
-      return medium && !isLora(medium) ? routeOfMedium(medium, false) : null;
+      return medium && !isLora(medium) ? hintOfMedium(medium, false) : null;
     },
     // LoRa não carrega voz ao vivo (~1 kbps compartilhado): fica fora dos enlaces da chamada.
     links: () => [...d.media].filter(([, m]) => !isLora(m)).map(([peerId, medium]) => ({ peerId, medium })),
     sendFrame: (peerId, frame) => { void d.send(peerId, frame).catch(() => {}); },
     audio: phoneAudio(() => say(t('call.err.mic'))),
   });
-  return { svc, onToast: fn => { toasts.add(fn); return () => { toasts.delete(fn); }; } };
+  // Falou com a pessoa antes dos 10 min: o lembrete perde o sentido.
+  svc.subscribe(() => { const s = svc.state; if (s.phase === 'active' && s.peer) reminders.cancel(s.peer); });
+  return {
+    svc, onToast: fn => { toasts.add(fn); return () => { toasts.delete(fn); }; },
+    onRemind: fn => { remindFns.add(fn); return () => { remindFns.delete(fn); }; },
+  };
 }
 
 /** O serviço da chamada criado pelo MessagingProvider (`null` sem módulo de áudio ou sem mensageiro). */
@@ -118,6 +131,10 @@ export function CallsProvider({ children, chats, onlyLora }: { children: ReactNo
   // Versão que muda a cada mudança do serviço (estado, palavras, latência).
   const ver = useSyncExternalStore(fn => (svc ? svc.subscribe(fn) : () => {}), () => (svc ? svc.state : null), () => null);
   useEffect(() => call?.onToast(text => setToast(x => ({ text, seq: (x?.seq ?? 0) + 1 }))), [call]);
+  useReminderBanner(call?.onRemind, chats);
+  // Fora do app (Android): toque, notificação de chamada, tela bloqueada e serviço do microfone.
+  const { preview } = useSettings();
+  const alert = useCallAlerts(svc, peer => chats.find(c => c.peer === peer)?.name ?? '', preview === 'never');
 
   const api = useMemo<CallApi | null>(() => {
     if (!svc) return null;
@@ -127,17 +144,20 @@ export function CallsProvider({ children, chats, onlyLora }: { children: ReactNo
     return {
       controller: svc.controller,
       scene: s.phase === 'idle' || !s.peer ? null : {
-        state: s, contact: contactOf(chat?.name ?? ''), words: svc.words,
+        // Pré-visualização "Nunca": sobre a tela bloqueada, ninguém por perto vê quem liga.
+        state: s, contact: contactOf(alert.locked && preview === 'never' ? 'Piu' : chat?.name ?? ''), words: svc.words,
         ...(svc.latencyMs !== undefined ? { latencyMs: svc.latencyMs } : {}),
         levels: () => svc.levels(), soft,
         ...(onlyLora ? { lora: true } : {}),
       },
+      ...(alert.locked ? { locked: true } : {}),
+      ...(alert.shown ? { shownCallId: alert.shown } : {}),
       callChat: id => { const c = direct(id); if (c) svc.open(c.peer!); },
       canCall: id => !!direct(id),
       toast,
       now: () => Date.now(),
     };
-  }, [svc, ver, chats, toast, soft, onlyLora]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [svc, ver, chats, toast, soft, onlyLora, alert.locked, alert.shown, preview]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return <CallContext.Provider value={api}>{children}</CallContext.Provider>;
 }

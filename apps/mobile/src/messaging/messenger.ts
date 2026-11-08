@@ -25,6 +25,7 @@ import { type CarryItem, CarryKind, CarryLimiter, carryOf, OPEN_MESH_CARRY, type
 import { decodeProofV2Frame, encodeProofV2Frame, isProofV2Frame, makeDeliveryProof, MAX_PROOFS_PER_FRAME, sealDeliveryProof, SEALED_PROOF_BYTES, VALIDATOR_PROOF_PK } from '../protocol/proof';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
+import type { SentVia } from '../transport/types';
 import { SessionManager } from '../protocol/sessions';
 import type { EndorsementJson } from '../protocol/phoneNode';
 /** Pedido de aval como chega pelo mensageiro (modo nó). */
@@ -65,6 +66,14 @@ interface Invite { code: string; kind: IdentityKind; expiresAt: number }
  */
 export interface RouteInfo { peer: string; via?: TransportClass; bytes: number; hops?: number; priority: Priority }
 
+const SENT_MEDIA = new Set(['nearby', 'ble', 'lan', 'lora', 'piulora', 'sim']);
+/** Resposta do transporte com o meio usado (o resto é ignorado). */
+function isSentVia(r: unknown): r is SentVia {
+  if (!r || typeof r !== 'object') return false;
+  const x = r as { medium?: unknown; fallback?: unknown };
+  return typeof x.medium === 'string' && SENT_MEDIA.has(x.medium) && (x.fallback === undefined || x.fallback === 'away' || x.fallback === 'failed');
+}
+
 /** Localização em texto curto (graus decimais, 5 casas ≈ 1 m). */
 export interface WireLocation { lat: number; lon: number }
 /** Valida `[lat, lon]` recebido; `undefined` se não for uma coordenada. */
@@ -95,6 +104,8 @@ export interface MessengerEvents {
    * do envelope); `entregue`: o destino confirmou.
    */
   status(msgId: string, status: 'encaminhada' | 'entregue' | 'expirada', route?: RouteInfo): void;
+  /** O transporte confirmou por qual meio a mensagem saiu (e, no LoRa Automático, por que trocou de rádio). */
+  routed?(msgId: string, via: SentVia): void;
   /** O contato leu estas mensagens minhas (confirmação de leitura dele). */
   read(contactId: string, msgIds: string[]): void;
   /** O contato está digitando (dura alguns segundos). */
@@ -210,7 +221,8 @@ export interface MessengerOptions {
   /** Relógio em segundos. */
   now: () => number;
   /** Entrega bytes a um vizinho pelo transporte. */
-  transmit: (peerId: string, bytes: Uint8Array) => Promise<void>;
+  /** Resolve com o meio usado (`SentVia`) quando o transporte sabe; sem isso, `void`. */
+  transmit: (peerId: string, bytes: Uint8Array) => Promise<SentVia | void | unknown>;
   events: Partial<MessengerEvents>;
   /** Ajuste de Privacidade "Atraso aleatório no envio". */
   randomDelay?: () => boolean;
@@ -644,14 +656,15 @@ export class Messenger {
 
   /**
    * Sinal da chamada de voz. Ao vivo (convite, aceite, recusa…): como o "digitando", sem fila e só com
-   * vizinho por perto, mas com prioridade alta e 30 s de validade. Pedido de chamada e resposta: pela
-   * fila da malha (até 24 h); `msgId` volta como "entregue" quando o contato confirmar.
+   * vizinho por perto, mas com prioridade alta e 30 s de validade, e nunca pelo LoRa (flag `live` no
+   * envelope: nem eu nem quem repassa põe no ar). Pedido de chamada e resposta: pela fila da malha
+   * (até 24 h, LoRa inclusive); `msgId` volta como "entregue" quando o contato confirmar.
    */
   sendCallSignal(contactId: string, payload: { t: 'cl'; s: unknown; k?: string }, o: { live: boolean; ttlSec: number; msgId?: string }): boolean {
     const c = this.contacts.get(contactId);
     if (!c || c.request || !this.managers[c.via].get(contactId)?.established) return false;
     if (o.live && !this.peers.size) return false;
-    this.enqueue(c, payload, o.live ? null : o.msgId ?? null, o.live ? Priority.High : Priority.Normal, false, o.ttlSec);
+    this.enqueue(c, payload, o.live ? null : o.msgId ?? null, o.live ? Priority.High : Priority.Normal, false, o.ttlSec, o.live);
     return true;
   }
 
@@ -662,10 +675,10 @@ export class Messenger {
     return d && this.peers.has(d.peer) && this.o.now() - d.at <= maxAgeSec ? d.peer : null;
   }
 
-  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false, ttlSec = TTL_SEC) {
+  private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false, ttlSec = TTL_SEC, live = false) {
     const now = this.o.now();
     const body = p instanceof Uint8Array ? p : utf8(JSON.stringify(p));
-    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec, priority, bulk, pad: this.o.pad?.() ?? true });
+    const sealed = this.managers[c.via].seal(c.pub, body, { now, ttlSec, priority, bulk, live, pad: this.o.pad?.() ?? true });
     const delaySec = msgId && this.o.randomDelay?.() ? randomDelaySec() : 0;
     const r = this.router.send(sealed.bytes, now, { delaySec });
     if (r.status === 'stored') { this.ownTo.set(sealed.id, c.id); if (this.ownTo.size > 5000) this.pruneOwn(); }
@@ -2021,6 +2034,8 @@ export class Messenger {
       const gm = this.groupOut.get(id);
       if (gm) { this.groupOut.delete(id); changed = true; this.o.events.status?.(gm, 'encaminhada', { peer: peerId, via, bytes: bytes.length, priority: headerPriority(bytes) }); }
       const q = this.outbox.get(id);
+      /** Mensagem minha saindo pela primeira vez neste envio: recebe o meio confirmado pelo transporte. */
+      const mine = gm ?? (q && !q.forwarded ? q.msgId : undefined);
       if (q && !q.forwarded) {
         q.forwarded = true; q.fwdAt = now; q.via = via; changed = true;
         this.o.events.status?.(q.msgId, 'encaminhada', { peer: peerId, via, bytes: bytes.length, priority: q.pr ?? headerPriority(bytes) });
@@ -2029,7 +2044,10 @@ export class Messenger {
       if (q) { q.peers = [...new Set([...(q.peers ?? []), peerId])]; if (q.peers.length === 2) this.day().altRoutes++; }
       if (!this.router.isOwn(id)) this.day().relayed++;
       const vm = (this.day().via[via] ??= { ok: 0, fail: 0, lat: [] });
-      this.o.transmit(peerId, bytes).then(() => { vm.ok++; }, () => { vm.fail++; /* o vizinho saiu; fica na fila para o próximo */ });
+      this.o.transmit(peerId, bytes).then(r => {
+        vm.ok++;
+        if (mine && isSentVia(r)) this.o.events.routed?.(mine, r);
+      }, () => { vm.fail++; /* o vizinho saiu; fica na fila para o próximo */ });
     }
     // Recibos que o roteador acabou de assinar (envelopes de terceiros): viram créditos pendentes.
     for (const rc of this.router.receipts.splice(0)) {

@@ -53,6 +53,9 @@ export function App() {
   const locked = !!lock?.locked;
   /** Nome de cada contato (palco e avisos da chamada mostram quem é). */
   const [names, setNames] = useState<Record<string, string>>({});
+  /** Recusou uma chamada com "Mensagem": Conversas abre a conversa de quem ligou com o rascunho pronto. */
+  const [draftFor, setDraftFor] = useState<{ peer: string; seq: number } | null>(null);
+  const onDraftDone = useCallback(() => setDraftFor(null), []);
   const bus = useMemo(() => new EventTarget(), []);
 
   const showToast = useCallback((text: string, icon = 'check') => {
@@ -155,7 +158,7 @@ export function App() {
   useEffect(() => {
     const offs = [
       window.piu.on('callToast', n => showToast(callToastText(tr, n.text, n.peer ? contactOf(nameRef.current[n.peer] ?? '') : undefined), 'check')),
-      window.piu.on('callDraft', () => setNav('chats')),
+      window.piu.on('callDraft', d => { setDraftFor(p => ({ peer: d.peer, seq: (p?.seq ?? 0) + 1 })); setNav('chats'); }),
     ];
     return () => offs.forEach(f => f());
   }, [showToast, tr]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -221,7 +224,7 @@ export function App() {
               {linked ? (me.name ? initialsOf(me.name, me.publicId) : <Sym name="smartphone" size={20} />) : pub ? initialsOf(prefs!.displayName, me.publicId) : initialsOf('', me.anonId)}
             </button>
           </div>
-          {nav === 'chats' && <Chats me={me} prefs={prefs!} net={net} linked={linked} toast={showToast} setDialog={setDialog} onConversationOpen={onConversationOpen} bus={bus} onPay={onPay} onTitle={setChatTitle} mac={mac}
+          {nav === 'chats' && <Chats me={me} prefs={prefs!} net={net} linked={linked} toast={showToast} setDialog={setDialog} onConversationOpen={onConversationOpen} bus={bus} onPay={onPay} onTitle={setChatTitle} mac={mac} draftFor={draftFor} onDraftDone={onDraftDone}
             footer={<>
               {lowFree !== null && <DiskBanner free={lowFree} onOpen={() => { setPage('storage'); setNav('settings'); }} />}
               {update.state === 'ready' && <UpdateBanner s={update} onOpen={() => setUpdDialog(true)} />}

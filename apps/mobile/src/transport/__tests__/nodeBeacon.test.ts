@@ -42,3 +42,32 @@ test('Super Nodes por perto: 40 min depois do último anúncio, um por chave', (
   assert.equal(s.near(T + 60 + 40 * 60 + 1).length, 1);
   assert.equal(s.near(T + 100 + 40 * 60 + 1).length, 0);
 });
+
+test('anúncio repetido (o mesmo ou mais antigo) não renova o Super Node; lista cheia tira o que está calado há mais tempo', () => {
+  const s = new NodeSightings();
+  const a = deriveNodeKey(newSeed());
+  const old = decodeNodeBeacon(encodeNodeBeacon(a, { at: T, relay: true, gateway: false }), T)!;
+  s.saw(old, T);
+  // Quem gravou o anúncio do ar e repete: continua valendo a hora do anúncio de verdade.
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(a, { at: T, relay: true, gateway: false }), T + 30 * 60)!, T + 30 * 60);
+  assert.equal(s.near(T + 40 * 60 + 1).length, 0);
+  // Enxurrada de 64 chaves novas não expulsa o nó real que segue anunciando.
+  const real = deriveNodeKey(newSeed());
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(real, { at: T, relay: true, gateway: true }), T)!, T);
+  for (let i = 0; i < 63; i++) s.saw(decodeNodeBeacon(encodeNodeBeacon(deriveNodeKey(newSeed()), { at: T + 1, relay: false, gateway: false }), T + 1)!, T + 1);
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(real, { at: T + 2, relay: true, gateway: true }), T + 2)!, T + 2);
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(deriveNodeKey(newSeed()), { at: T + 3, relay: false, gateway: false }), T + 3)!, T + 3);
+  assert.ok(s.near(T + 4).some(n => n.gateway), 'o nó real ficou');
+});
+
+test('Super Nodes ouvidos para o mapa: id da chave, gateway e quando foi o último anúncio (só os de 40 min)', () => {
+  const s = new NodeSightings();
+  const a = deriveNodeKey(newSeed()), b = deriveNodeKey(newSeed());
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(a, { at: T, relay: true, gateway: false }), T)!, T);
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(b, { at: T + 30, relay: false, gateway: true }), T + 30)!, T + 30);
+  s.saw(decodeNodeBeacon(encodeNodeBeacon(a, { at: T + 60, relay: true, gateway: false }), T + 60)!, T + 60);
+  const hex = (x: Uint8Array) => Array.from(x, v => v.toString(16).padStart(2, '0')).join('');
+  const l = s.heard(T + 100);
+  assert.deepEqual(l.map(n => [n.id, n.gateway, n.last]).sort(), [[hex(a.pk), false, T + 60], [hex(b.pk), true, T + 30]].sort());
+  assert.equal(s.heard(T + 30 + 40 * 60 + 1).length, 1);
+});

@@ -72,7 +72,7 @@ Serviço Nordic UART do RNode: `6e400001-b5a3-f393-e0a9-e50e24dcca9e`, escrita e
 
 Novo meio `piulora` (custo 3, LoRa Meshtastic é 4): com os dois disponíveis, o seletor de enlaces escolhe o rádio próprio; o Meshtastic fica de reserva. Os dois têm o mesmo limite de envelope (904 bytes, 4 pedaços). Os dois rádios são a mesma malha, o mesmo vizinho virtual `lora:mesh`: para o mensageiro é um vizinho só, com dois enlaces, e se o rádio próprio cair ou falhar o envio segue pelo Meshtastic sem desconectar. As regras do LoRa (nunca mídia, nunca voz, texto curto) valem para os dois; no roteador do celular, o vizinho LoRa entra com a classe `lora`.
 
-Região no app: a que a pessoa escolheu; senão a do país do aparelho (`initialRegion`); senão o rádio não sobe e a tela pede a região. Trocar a região reconfigura o rádio conectado.
+Região no app: só a que a pessoa escolheu ou confirmou. O país do aparelho apenas sugere (`countryFromLocale`); antes da escolha o rádio não transmite e a tela pede a região. Trocar a região reconfigura o rádio conectado.
 
 ### Estado
 
@@ -86,6 +86,5 @@ Região no app: a que a pessoa escolheu; senão a do país do aparelho (`initial
   - a região está fora da faixa do modelo gravado pelo rnodeconf.
 - Sem resposta completa em 12 s, o app desiste ("o rádio não respondeu"). Com o rádio no ar, falha de transmissão reconfigura a placa; fila cheia, memória e modem só contam.
 - Testes sem placa (`docs/hardware/testar-radio-piu.md`): placa emulada byte a byte a partir do firmware, as 41 versões de placa da documentação contra as 27 regiões, simulação no ar e testes de segurança.
-- Falta:
-  - o teste com placas de verdade (guia para a comunidade em `docs/hardware/testar-radio-piu.md`);
-  - a linha "por quê" do Automático (o app ainda não registra quando trocou de caminho).
+- Linha "por quê" do Automático (desenho 5 · M): o transporte diz por qual rádio cada envio saiu (`SentVia` em `transport/types.ts`); quando saiu pelo Meshtastic com o rádio do Piu escolhido, diz se ele estava fora do alcance ou falhou. A rota da mensagem guarda isso (`patchRoute`) e a folha "Por onde passou" mostra a linha. Nos modos "Só …" ela não aparece.
+- Falta: o teste com placas de verdade (guia para a comunidade em `docs/hardware/testar-radio-piu.md`).

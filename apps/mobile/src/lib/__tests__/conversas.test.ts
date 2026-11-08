@@ -12,7 +12,7 @@ import { dayLabel, daySeparators, msgSummary } from '../chatCore';
 import { formatCoords, locationText, mapUrl, parseLocation, placeFromText } from '../locationCore';
 import { safeFileName } from '../mediaCore';
 import { buildRoute } from '../route';
-import { addRoute, cleanBook, dropChatRoutes, fragmentsFor, lastRoute, makeRoute, pruneRoutes, ROUTE_HISTORY, routeLabel, routeOf, trimBook } from '../routeCore';
+import { addRoute, cleanBook, dropChatRoutes, fragmentsFor, lastRoute, makeRoute, patchRoute, pruneRoutes, ROUTE_HISTORY, routeLabel, routeOf, trimBook } from '../routeCore';
 import { mediaBytes, previewBytes, stripPreviews } from '../storageCore';
 
 const rec = (m: string, o: Partial<Parameters<typeof makeRoute>[0]> = {}) =>
@@ -66,8 +66,11 @@ test('rota: limpa mensagens que sumiram e conversas apagadas, mantendo a última
 
 test('rota: o que foi gravado é conferido ao ler', () => {
   const ok = rec('m1');
-  const b = cleanBook({ c1: [ok, { m: 1 }, { ...ok, md: 'lora' }, null], c2: 'x', c3: [] });
+  const b = cleanBook({ c1: [ok, { m: 1 }, { ...ok, md: 'fax' }, null], c2: 'x', c3: [] });
   assert.deepEqual(b, { c1: [ok] });
+  // Rotas pelo LoRa (Meshtastic e rádio do Piu) continuam depois de reabrir o app.
+  const air = [rec('l1', { medium: 'lora' }), rec('l2', { medium: 'piulora' })];
+  assert.deepEqual(cleanBook({ c1: air }), { c1: air });
   assert.deepEqual(cleanBook(null), {});
 });
 
@@ -102,16 +105,34 @@ test('rota pelo LoRa (desenho 4b): celular → rádio por Bluetooth LE, depois L
   const m: Msg = { id: 'l1', from: 'me', text: 'Oi', time: '', status: 'entregue', at: Date.now() };
   const out = buildRoute(chat, m, rec('l1', { medium: 'lora', bytes: 593 }));
   assert.deepEqual(out.hops.map(h => h.n), ['Você', 'Rádio Meshtastic', 'Beto']);
-  assert.deepEqual(out.hops.slice(0, 2).map(h => h.via), ['Bluetooth LE', 'por LoRa (Meshtastic)']);
+  assert.deepEqual(out.hops.slice(0, 2).map(h => h.via), ['Bluetooth LE', 'via LoRa (Meshtastic)']);
   assert.deepEqual(out.hops.slice(0, 2).map(h => h.viaIcon), ['bluetooth', 'settings_input_antenna']);
   assert.deepEqual(out.hops.map(h => h.reached), [true, true, true]);
   assert.equal(Object.fromEntries(out.meta.map(x => [x.l, x.v])).Fragmentos, '3 de 3');
   const inn = buildRoute(chat, { id: 'l2', from: 'them', text: 'Oi', time: '' }, rec('l2', { dir: 'in', medium: 'lora', bytes: 593 }));
   assert.deepEqual(inn.hops.map(h => h.n), ['Beto', 'Rádio Meshtastic', 'Você']);
-  assert.deepEqual(inn.hops.slice(0, 2).map(h => h.via), ['por LoRa (Meshtastic)', 'Bluetooth LE']);
+  assert.deepEqual(inn.hops.slice(0, 2).map(h => h.via), ['via LoRa (Meshtastic)', 'Bluetooth LE']);
   // Ainda sem confirmação: o rádio recebeu, o destino não.
   const wait = buildRoute(chat, { ...m, status: 'encaminhada' }, rec('l1', { medium: 'lora', bytes: 593 }));
   assert.deepEqual(wait.hops.map(h => h.reached), [true, true, false]);
+});
+
+test('rota pelo LoRa: quando o Automático trocou de rádio, uma linha diz por quê (desenho Piu 17, 5 · M)', () => {
+  const m: Msg = { id: 'l1', from: 'me', text: 'Oi', time: '', status: 'entregue', at: Date.now() };
+  assert.equal(buildRoute(chat, m, { ...rec('l1', { medium: 'lora' }), w: 'away' }).why, 'Automático: o rádio do Piu estava fora do alcance, seguiu pelo Meshtastic.');
+  assert.equal(buildRoute(chat, m, { ...rec('l1', { medium: 'lora' }), w: 'failed' }).why, 'Automático: o rádio do Piu falhou ao enviar, seguiu pelo Meshtastic.');
+  assert.equal(buildRoute(chat, m, rec('l1', { medium: 'lora' })).why, undefined, 'sem troca, sem linha');
+  assert.equal(buildRoute(chat, m, rec('l1', { medium: 'piulora' })).why, undefined);
+  // O transporte confirma o meio depois do envio: o registro troca de rádio e guarda o porquê.
+  let b = addRoute({}, 'p1', rec('l1', { medium: 'piulora' }), true);
+  b = patchRoute(b, 'p1', 'l1', { medium: 'lora', fallback: 'away' });
+  assert.deepEqual([b.p1![0]!.md, b.p1![0]!.w], ['lora', 'away']);
+  assert.equal(patchRoute(b, 'p1', 'l1', { medium: 'lora', fallback: 'away' }), b, 'sem mudança, mesmo objeto');
+  assert.equal(patchRoute(b, 'p1', 'l1', { medium: 'piulora' }).p1![0]!.w, undefined, 'pelo rádio do Piu, sem linha');
+  assert.equal(patchRoute(b, 'p9', 'x', { medium: 'lora' }), b);
+  // Gravado: o motivo é conferido ao ler.
+  const ok = { ...rec('m1', { medium: 'lora' }), w: 'away' as const };
+  assert.deepEqual(cleanBook({ c1: [ok, { ...ok, w: 'outro' }] }), { c1: [ok] });
 });
 
 test('separador de data: Hoje, Ontem e data por extenso; agrupa por dia', () => {

@@ -7,7 +7,7 @@
 import type { LinkEvent } from '../multi';
 import { AirtimeBudget } from './budget';
 import { Reassembler, splitEnvelope } from './fragments';
-import { decodeNodeBeacon, NodeSightings } from './nodeBeacon';
+import { decodeNodeBeacon, NodeSightings, type HeardNode } from './nodeBeacon';
 import { bandLabel, regionByCode } from '../rnode/regions';
 import { decodeFromRadio, encodeToRadioPacket, encodeWantConfig, PRIVATE_APP } from './proto';
 
@@ -161,4 +161,6 @@ export class LoraLink {
     if (n !== (this.st.superNodes ?? 0) || g !== (this.st.gateways ?? 0)) this.set({ superNodes: n, gateways: g });
   }
   refreshNodes() { this.syncNodes(); }
+  /** Cada Super Node ouvido nos últimos 40 min (mapa da rede). */
+  heard(): HeardNode[] { return this.sightings.heard(Math.floor(this.now() / 1000)); }
 }

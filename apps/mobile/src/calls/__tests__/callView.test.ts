@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { tIn } from '../../i18n/core';
 import '../../i18n';
 import { IDLE, type CallState } from '../callMachine';
-import { contactOf, controls, encChip, recordCard, requestCard, routeChip, speakLine, statusLine } from '../callView';
+import { contactOf, controls, encChip, meshNodes, recordCard, requestCard, routeChip, routeVia, ROUTE_ICON, speakLine, statusLine } from '../callView';
 
 const t = (k: string, v?: Record<string, string | number>) => tIn('pt-BR', k as Parameters<typeof tIn>[1], v);
 const marina = contactOf('Marina Alves');
@@ -57,4 +57,36 @@ test('cartões de registro: feita, perdida, recusada, palavras diferentes, pedid
   assert.equal(req.sub, 'Entregue · Marina viu o pedido');
   assert.deepEqual(req.dots, [true, true, false]);
   assert.equal(requestCard(t, 'traveling', marina, 3).sub, 'Viajando pela malha · 3 saltos');
+});
+
+test('contato sem chamada e oferta que não saiu: o fim diz o motivo (não "Sem resposta" à toa)', () => {
+  const end = (reason: 'nocall' | 'unreachable') => statusLine(t, { ...IDLE, phase: 'ending', end: { reason } }, marina, 0);
+  assert.equal(end('nocall'), 'O contato pode não ter chamada (versão antiga ou iPhone)');
+  assert.equal(end('unreachable'), 'Sem conexão com o contato agora');
+  const rec = (note?: string) => recordCard(t, { callId: 'c', peer: 'm', dir: 'out', outcome: 'noanswer', at: 0, route: 'direct', ...(note ? { note } : {}) }, marina);
+  assert.deepEqual([rec('nocall').title, rec('nocall').sub], ['Sem resposta', 'pode não ter chamada (versão antiga ou iPhone)']);
+  assert.equal(rec('unreachable').sub, 'sem conexão com o contato');
+  assert.equal(rec().sub, 'direto pelo Wi-Fi', 'sem resposta comum continua igual');
+});
+
+test('Wi-Fi Direct (Nearby, `bt` no fio com a marca wifiDirect) aparece como Wi-Fi Direct, não como Bluetooth', () => {
+  const nb: CallState = { ...active, route: 'bt', wifiDirect: true };
+  assert.deepEqual(routeChip(t, nb, 30), { icon: 'wifi_tethering', text: 'Direto · Wi-Fi Direct', q: '30 ms' });
+  assert.equal(routeChip(t, { ...nb, switching: { from: 'bt', since: 0 } }).text, 'Wi-Fi Direct fora de alcance · mudando');
+  assert.equal(routeVia(t, 'bt', true), 'direto por Wi-Fi Direct');
+  assert.equal(routeVia(t, 'bt'), 'direto por Bluetooth', 'Bluetooth de verdade continua Bluetooth');
+  assert.equal(routeVia(t, 'direct', true), 'direto pelo Wi-Fi', 'a marca só vale para bt');
+  assert.equal(statusLine(t, { ...IDLE, phase: 'calling', stage: 'searching', route: 'bt', wifiDirect: true }, marina, 0), 'Procurando Marina por Wi-Fi Direct…');
+  assert.equal(statusLine(t, { ...IDLE, phase: 'ringing', route: 'bt', wifiDirect: true }, marina, 0), 'direto por Wi-Fi Direct');
+  assert.equal(routeChip(t, { ...active, route: 'bt' }).icon, 'bluetooth');
+  assert.equal(recordCard(t, { callId: 'c', peer: 'm', dir: 'in', outcome: 'declined', at: 0, route: 'bt', wifiDirect: true }, marina).sub, 'direto por Wi-Fi Direct');
+  assert.equal(ROUTE_ICON.bt, 'bluetooth');
+});
+
+test('diagrama da malha: um nó por salto quando se sabe; sem saber, nenhum número inventado', () => {
+  assert.equal(meshNodes(undefined), 0);
+  assert.equal(meshNodes(0), 0);
+  assert.equal(meshNodes(2), 2);
+  assert.equal(meshNodes(9), 5);
+  assert.equal(meshNodes(undefined, true), 2, 'LoRa (5a): o rádio e um nó depois dele');
 });

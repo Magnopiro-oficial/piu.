@@ -18,6 +18,9 @@ import { sanitizePrefsPatch } from './prefs';
 import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
 import { isSecretScreen, screenSecurityFor, type SecretScreen } from '../shared/screenSecurity';
 import { alertText, type AlertNoticeLevel, type AlertSummary, badgeCount, notifKindOf, shouldNotify, shouldNotifyAlert } from '../shared/notifyPolicy';
+import { callNoticeText, missedCallsText, ringingCall, shouldNotifyCall } from '../shared/callNotify';
+import type { CallSnapshot } from '../shared/callBridge';
+import type { CallRecord } from '../../../mobile/src/calls/callMachine';
 import type { AppLockState, ContactInfo, PiuEventName, Prefs, TempMode } from '../shared/types';
 import { fmtLunes, planckToNumber } from '../renderer/walletSend';
 import { AppLock, type LockEvent, lockTrigger, reasonOf } from './appLock';
@@ -62,8 +65,11 @@ const asset = (name: string) => join(app.isPackaged ? process.resourcesPath : jo
 const RENDERER_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 // Antes do app ficar pronto: piu-app é padrão (URLs relativas, origem própria) e seguro (módulos ES, fontes).
 protocol.registerSchemesAsPrivileged([{ scheme: RENDERER_SCHEME, privileges: { standard: true, secure: true } }]);
-/** Chamada aberta agora (caixa "pre" até o fim): só então o microfone pode abrir. */
-const inCall = () => { const p = core?.callSnapshot()?.state.phase; return p === 'pre' || p === 'calling' || p === 'ringing' || p === 'active'; };
+/**
+ * Chamada aberta agora (caixa "pre" até o fim): só então o microfone pode abrir. Tocando (ainda não
+ * atendida) não: quem decide abrir o microfone é a pessoa, ao atender.
+ */
+const inCall = () => { const p = core?.callSnapshot()?.state.phase; return p === 'pre' || p === 'calling' || p === 'active'; };
 /** macOS: o sistema pergunta uma vez ("Piu quer usar o microfone"); recusado, a chamada segue sem voz minha. */
 async function micAccess() {
   if (!isMac || systemPreferences.getMediaAccessStatus('microphone') === 'granted') return;
@@ -185,13 +191,45 @@ function notifyIncoming(contact: ContactInfo, text: string, isNew: boolean, forc
     ln.show();
     return;
   }
-  const who = contact.name || (contact.via === 'anon' ? tm('main.notif.anon', { code: contact.id.replace(/^piu:/, '').slice(0, 4).toUpperCase() }) : contact.id.replace(/^piu:/, '').slice(0, 8));
+  const who = whoOf(contact);
   // "Mostrar no aviso": nome e texto, só o nome, ou nada (Ajustes → Notificações).
   const title = p.notifPreview === 'never' ? 'Piu' : isNew ? tm('main.notif.wantsChat', { name: who }) : who;
   const body = p.notifPreview === 'always' ? text.slice(0, 140) : tm('main.notif.newMessage');
   const n = new Notification({ title, body, silent: !p.notifSound });
   n.on('click', () => { showWindow(); send('notice', { text: tm('main.notif.chatWith', { name: who }), kind: 'info' }); });
   n.show();
+}
+
+/** Nome no aviso: o do contato; anônimo sem nome, "Contato anônimo · ABCD"; senão, o começo do id. */
+function whoOf(contact: Pick<ContactInfo, 'id' | 'name' | 'via'>) {
+  return contact.name || (contact.via === 'anon' ? tm('main.notif.anon', { code: contact.id.replace(/^piu:/, '').slice(0, 4).toUpperCase() }) : contact.id.replace(/^piu:/, '').slice(0, 8));
+}
+const whoOfPeer = (peer: string) => whoOf(core.listConversations().find(c => c.contact.id === peer)?.contact ?? { id: peer, name: '', via: 'public' });
+
+/**
+ * Chamada de voz tocando com a janela fora de foco: aviso nativo "Chamada de {nome}" (clicar traz a janela, com o
+ * aviso de atender/recusar na frente). Some quando a chamada é atendida, recusada ou termina, e ao bloquear.
+ * Regras e textos em shared/callNotify.ts (as das mensagens diretas); com o Piu bloqueado, nenhum aviso.
+ */
+let callNotif: { callId: string; n: Notification } | null = null;
+function closeCallNotif() {
+  const c = callNotif; callNotif = null;
+  try { c?.n.close(); } catch { /* já fechado */ }
+}
+function syncCallNotif(snap: CallSnapshot | null) {
+  const r = ringingCall(snap?.state);
+  if (callNotif && callNotif.callId !== r?.callId) closeCallNotif();
+  if (!r || callNotif || !Notification.isSupported()) return;
+  const p = core.prefs();
+  const focused = !!win && win.isVisible() && win.isFocused();
+  if (!shouldNotifyCall(p, { muted: core.isMuted(r.peer), focused, locked: appLock.locked })) return;
+  const txt = callNoticeText(p.notifPreview, whoOfPeer(r.peer), r.route);
+  // Com a janela aberta, o toque sai dela (renderer): o aviso fica mudo para não somar dois sons.
+  const n = new Notification({ title: txt.title, body: txt.body, silent: !!win || !p.notifSound, urgency: 'critical' });
+  n.on('click', () => { if (win?.isMinimized()) win.restore(); showWindow(); });
+  n.show();
+  // Guardado também para o clique continuar valendo (sem referência, o aviso pode ser coletado).
+  callNotif = { callId: r.callId, n };
 }
 
 /** Ajustes → Idioma → Corretor ortográfico. No Linux fica desligado (precisaria baixar dicionários). */
@@ -271,8 +309,15 @@ function applyLoginItem(open: boolean) {
 // Desbloqueia com a senha do Piu (lockPassword.ts) ou Touch ID. Sem a senha criada, nada bloqueia.
 const appLock: AppLock = new AppLock(locked => {
   send('appLock', lockState());
+  // Bloqueou com uma chamada tocando: o aviso "Chamada de {nome}" sai da tela (bloqueado, nada diz de quem).
+  if (locked) closeCallNotif();
   // Ao desbloquear, a janela recarrega o que ficou escondido.
   if (!locked) { send('conversations', undefined); if (core) { send('wallet', core.wallet()); send('walletPayment', core.walletPayment()); } }
+  // Chamada que tocou com o Piu bloqueado (o evento `call` não passa: lockGate.ts) terminou como perdida sem
+  // aviso nenhum; ao desbloquear, a pessoa vê "Chamada perdida de X". Tocar bloqueado: decisão do dono do produto.
+  const missed = appLock.takeMissedCalls();
+  const text = !locked && core ? missedCallsText(missed.map(whoOfPeer)) : null;
+  if (text) send('notice', { text, kind: 'info' });
 });
 let idleLockMin: number | null = null;
 const canTouchId = () => { try { return isMac && systemPreferences.canPromptTouchID(); } catch { return false; } };
@@ -493,6 +538,8 @@ function registerIpc() {
   core.events.on('prefs', applyScreenSecurity);
   core.events.on('incoming', (p: { contact: ContactInfo; text: string; isNew: boolean }) => { appLock.received(); if (appLock.locked) send('appLock', lockState()); notifyIncoming(p.contact, p.text, p.isNew); });
   core.events.on('walletReceived', (p: { planck: string }) => notifyWallet(p.planck));
+  core.events.on('call', syncCallNotif);
+  core.events.on('callRecord', (r: CallRecord) => { if (r.outcome === 'missed' && r.dir === 'in') appLock.missedCall(r.peer); });
   core.events.on('communityAlert', notifyAlert);
   core.events.on('conversations', applyBadge);
   let last = core.prefs();

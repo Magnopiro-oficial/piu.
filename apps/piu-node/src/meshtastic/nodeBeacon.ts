@@ -18,6 +18,8 @@ const LABEL = new TextEncoder().encode('piu/v0/lora-node');
 const sigMsg = (head: Uint8Array) => { const m = new Uint8Array(LABEL.length + head.length); m.set(LABEL); m.set(head, LABEL.length); return m; };
 
 export type NodeBeacon = { pk: Uint8Array; at: number; relay: boolean; gateway: boolean };
+/** Super Node ouvido, para o mapa da rede: `id` = chave em hex, `last` = último anúncio (s). Sem posição: o "PN" não leva. */
+export type HeardNode = { id: string; gateway: boolean; relay: boolean; last: number };
 
 export function encodeNodeBeacon(node: KeyPair, o: { at: number; relay: boolean; gateway: boolean }): Uint8Array {
   const b = new Uint8Array(BEACON_BYTES);
@@ -40,16 +42,28 @@ export function decodeNodeBeacon(b: Uint8Array, now: number): NodeBeacon | null 
 
 const hex = (b: Uint8Array) => Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
 
-/** Super Nodes ouvidos, um por chave (o último anúncio vale), na ordem em que apareceram. */
+/**
+ * Super Nodes ouvidos, um por chave (o último anúncio vale), do calado há mais tempo ao mais recente.
+ * Só um anúncio mais novo (`at` maior) renova: quem grava um anúncio do ar e repete não estica a
+ * presença do nó. Cheia (64), sai o calado há mais tempo, não o nó que segue anunciando.
+ */
 export class NodeSightings {
   private seen = new Map<string, { b: NodeBeacon; last: number }>();
   saw(b: NodeBeacon, now: number) {
-    this.seen.set(hex(b.pk), { b, last: now });
+    const k = hex(b.pk), prev = this.seen.get(k);
+    if (prev && b.at <= prev.b.at) return;
+    this.seen.delete(k);
+    this.seen.set(k, { b, last: now });
     if (this.seen.size > 64) this.seen.delete(this.seen.keys().next().value!);
   }
   near(now: number): NodeBeacon[] {
     for (const [k, v] of this.seen) if (now - v.last > NEAR_SEC) this.seen.delete(k);
     return [...this.seen.values()].map(v => v.b);
+  }
+  /** Os de `near`, com a chave em hex e a hora do último anúncio (mapa da rede). */
+  heard(now: number): HeardNode[] {
+    this.near(now);
+    return [...this.seen].map(([id, v]) => ({ id, gateway: v.b.gateway, relay: v.b.relay, last: v.last }));
   }
   clear() { this.seen.clear(); }
 }

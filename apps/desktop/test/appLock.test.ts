@@ -51,3 +51,19 @@ test('bloqueio: ao abrir só bloqueia com algum bloqueio automático ligado; mot
   assert.equal(await l.unlock(async () => true), true);
   assert.equal(l.newMessages, 0);
 });
+
+test('bloqueio: chamadas perdidas enquanto bloqueado ficam guardadas (sem repetir) para o aviso ao desbloquear', async () => {
+  const seen: string[][] = [];
+  const l = new AppLock(locked => { if (!locked) seen.push(l.takeMissedCalls()); });
+  l.missedCall('piu:ana');
+  l.lock();
+  l.missedCall('piu:ana'); l.missedCall('piu:bia'); l.missedCall('piu:ana');
+  assert.equal(await l.unlock(async () => false), false);
+  assert.equal(await l.unlock(async () => true), true);
+  assert.deepEqual(seen, [['piu:ana', 'piu:bia']], 'desbloqueado não conta; ao desbloquear, cada um uma vez');
+  assert.deepEqual(l.takeMissedCalls(), [], 'lidas uma vez só');
+  l.lock(); l.missedCall('piu:caio');
+  l.lock();
+  assert.equal(await l.unlock(async () => true), true);
+  assert.deepEqual(seen.at(-1), ['piu:caio']);
+});

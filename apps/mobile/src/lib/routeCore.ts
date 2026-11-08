@@ -38,6 +38,8 @@ export interface RouteRec {
   p: Priority;
   /** Quando (ms). */
   at: number;
+  /** LoRa Automático: saiu pelo Meshtastic porque o rádio do Piu estava fora do alcance ou falhou. */
+  w?: 'away' | 'failed';
 }
 /** Rotas por conversa (id da conversa → registros, do mais antigo ao mais novo). */
 export type RouteBook = Record<string, RouteRec[]>;
@@ -80,6 +82,22 @@ export function addRoute(book: RouteBook, chatId: string, r: RouteRec, keep: boo
   return { ...book, [chatId]: list.slice(-(keep ? ROUTE_HISTORY : 1)) };
 }
 
+/**
+ * Meio confirmado pelo transporte depois do envio (o registro nasce com o meio do vizinho). Pelo LoRa
+ * Automático, guarda também por que trocou de rádio. Sem registro ou sem mudança, o mesmo objeto.
+ */
+export function patchRoute(book: RouteBook, chatId: string, msgId: string, via: { medium: Medium; fallback?: 'away' | 'failed' }): RouteBook {
+  const list = book[chatId];
+  const i = list?.findIndex(x => x.m === msgId && x.d === 'out') ?? -1;
+  if (!list || i < 0) return book;
+  const old = list[i]!;
+  const w = via.medium === 'lora' ? via.fallback : undefined;
+  if (old.md === via.medium && old.w === w) return book;
+  const { w: _drop, ...base } = old;
+  const rec: RouteRec = { ...base, md: via.medium, f: fragmentsFor(old.b, via.medium), ...(w ? { w } : {}) };
+  return { ...book, [chatId]: list.map((x, j) => (j === i ? rec : x)) };
+}
+
 export const lastRoute = (book: RouteBook, chatId: string): RouteRec | undefined => book[chatId]?.at(-1);
 export const routeOf = (book: RouteBook, chatId: string, msgId: string): RouteRec | undefined => book[chatId]?.find(x => x.m === msgId);
 
@@ -114,7 +132,7 @@ export function pruneRoutes(book: RouteBook, aliveMsgs: Set<string>, chatIds: Se
   return changed ? out : book;
 }
 
-const MEDIUMS: readonly Medium[] = ['nearby', 'ble', 'lan', 'sim'];
+const MEDIUMS: readonly Medium[] = ['nearby', 'ble', 'lan', 'lora', 'piulora', 'sim'];
 /** Lê o que foi gravado (descarta o que não tiver a forma esperada). */
 export function cleanBook(v: unknown): RouteBook {
   const out: RouteBook = {};
@@ -122,7 +140,7 @@ export function cleanBook(v: unknown): RouteBook {
   for (const [k, l] of Object.entries(v as Record<string, unknown>)) {
     if (!Array.isArray(l)) continue;
     const ok = l.filter((r): r is RouteRec => !!r && typeof r === 'object' && typeof r.m === 'string' && (r.d === 'out' || r.d === 'in')
-      && MEDIUMS.includes(r.md) && Number.isFinite(r.b) && Number.isFinite(r.f) && Number.isInteger(r.p) && r.p >= 0 && r.p <= 3 && Number.isFinite(r.at));
+      && MEDIUMS.includes(r.md) && Number.isFinite(r.b) && Number.isFinite(r.f) && Number.isInteger(r.p) && r.p >= 0 && r.p <= 3 && Number.isFinite(r.at) && (r.w === undefined || r.w === 'away' || r.w === 'failed'));
     if (ok.length) out[k] = ok.slice(-ROUTE_HISTORY);
   }
   return out;

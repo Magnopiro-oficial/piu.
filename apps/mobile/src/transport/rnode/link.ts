@@ -11,7 +11,7 @@ import type { LinkEvent } from '../multi';
 import { AirtimeBudget } from '../meshtastic/budget';
 import { Reassembler, splitEnvelope } from '../meshtastic/fragments';
 import { LORA_PEER, LoraBusyError } from '../meshtastic/link';
-import { decodeNodeBeacon, NodeSightings } from '../meshtastic/nodeBeacon';
+import { decodeNodeBeacon, NodeSightings, type HeardNode } from '../meshtastic/nodeBeacon';
 import { piuRadio, type PiuRadio } from './regions';
 import { CMD, configFrames, KissReader, kissFrame, probeFrames, Reconfigures, RNodeSetup } from './rnode';
 
@@ -191,4 +191,6 @@ export class PiuLoraLink {
     if (n !== this.st.superNodes || g !== this.st.gateways) this.set({ superNodes: n, gateways: g });
   }
   refreshNodes() { this.syncNodes(); }
+  /** Cada Super Node ouvido nos últimos 40 min (mapa da rede). */
+  heard(): HeardNode[] { return this.sightings.heard(Math.floor(this.now() / 1000)); }
 }

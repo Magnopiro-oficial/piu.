@@ -21,7 +21,9 @@ export type CallApi = {
   toast?: { text: string; seq: number } | null;
   /** Tela de toque aberta com o celular bloqueado: vai direto à tela cheia e pede para desbloquear. */
   locked?: boolean;
-  /** "Gravar um áudio" na folha em modo malha (sem isto, só fecha a folha). */
+  /** Chamada aberta pela notificação do sistema (ou que tocou com a tela bloqueada): a tela de toque fica em tela cheia, mesmo depois de desbloquear. */
+  shownCallId?: string;
+  /** "Gravar um áudio" na folha em modo malha. Sem isto (a conversa ainda não grava áudio), o botão não aparece. */
   onRecordAudio?(): void;
   /** Relógio das marcas de tempo do estado (o mesmo `now` das portas do controlador). */
   now?(): number;

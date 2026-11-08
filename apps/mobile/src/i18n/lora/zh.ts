@@ -117,6 +117,11 @@ export const lora: Dict = {
   'piu.howInstall': '如何安装',
   'piu.band.title': '这块开发板属于其他频段',
   'piu.band.d': '它不支持 {freq}。请使用该地区频段的开发板；如果你在其他国家，请更换地区。',
+  'piu.band.d2': '它不支持 {freq}。请使用 {band} 的开发板；如果你在其他国家，请更换地区。',
+  'piu.board': '开发板 · {band}',
+  'piu.superNodes': { other: '附近的 Super Node：{count}' },
+  'piu.gateways': { other: '{count} 个网关' },
+  'piu.btOn': '打开蓝牙',
   'piu.changeRegion': '更换地区',
   'piu.boards': '查看兼容的开发板',
   'piu.code.d': '将开发板关机再开机后重试。如果仍然出错，把这个代码给帮你处理电台的人看。',
@@ -179,4 +184,6 @@ export const lora: Dict = {
   'piu.region.LORA_24': '全球 2.4 GHz',
   'piu.route.via': '经 LoRa（Piu）',
   'piu.route.radio': 'Piu 电台',
+  'piu.why.away': '自动：Piu 电台超出范围，已改用 Meshtastic 发送。',
+  'piu.why.failed': '自动：Piu 电台发送失败，已改用 Meshtastic 发送。',
 };

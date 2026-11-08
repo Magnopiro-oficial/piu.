@@ -90,6 +90,49 @@ test('o mesmo vizinho por Nearby e BLE vira um só, com os dois meios', async ()
   assert.deepEqual(s.sent.map(x => x.medium), ['ble', 'nearby']);
 });
 
+test('o vizinho diz todos os meios por onde é alcançável (mapa da rede), e avisa quando um entra ou sai', () => {
+  const s = setup();
+  const found = () => s.events.flatMap(e => (e.type === 'peerFound' ? [e.peer] : []));
+  s.emit({ type: 'found', medium: 'ble', id: '11:22:33:44:55:66', name: 'piu-aaaaaa' });
+  assert.deepEqual(found().at(-1), { id: 'n:piu-aaaaaa', name: 'piu-aaaaaa', via: 'ble', media: ['ble'] });
+  s.emit({ type: 'found', medium: 'nearby', id: 'AB12', name: 'piu-aaaaaa' });
+  assert.deepEqual(found().at(-1)?.media, ['ble', 'nearby'], 'na ordem em que os enlaces chegaram');
+  const n = found().length;
+  s.emit({ type: 'found', medium: 'nearby', id: 'AB12', name: 'piu-aaaaaa' });
+  assert.equal(found().length, n, 'nada mudou: não repete o aviso');
+  s.emit({ type: 'lost', medium: 'nearby', id: 'AB12' });
+  assert.deepEqual(found().at(-1)?.media, ['ble']);
+});
+
+test('LoRa no Automático: diz por qual rádio saiu e, quando trocou para o Meshtastic, por quê (desenho Piu 17, 5 · M)', async () => {
+  let clock = 0;
+  const f = fakeSource(['lora', 'piulora']);
+  const t = createMultiTransport(f.source, { now: () => clock });
+  const P = 'n:Malha LoRa';
+  // Só o Meshtastic, sem rádio do Piu: não houve troca.
+  f.emit({ type: 'up', medium: 'lora', id: 'lora:mesh', name: 'Malha LoRa' });
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora' });
+  // Os dois: sai pelo rádio do Piu.
+  f.emit({ type: 'up', medium: 'piulora', id: 'lora:mesh', name: 'Malha LoRa' });
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'piulora' });
+  // O rádio do Piu falha no envio: segue pelo Meshtastic, e continua "falhou" enquanto ele está de castigo.
+  f.failing.add('piulora');
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora', fallback: 'failed' });
+  clock = 1000;
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora', fallback: 'failed' });
+  // O rádio do Piu sai do alcance (enlace caiu ou sumiu): "fora do alcance".
+  f.failing.clear(); clock = FAILURE_COOLDOWN_MS * 10;
+  f.emit({ type: 'down', medium: 'piulora', id: 'lora:mesh' });
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora', fallback: 'away' });
+  f.emit({ type: 'lost', medium: 'piulora', id: 'lora:mesh' });
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora', fallback: 'away' });
+  // "Só Meshtastic": a escolha foi da pessoa, sem linha de troca.
+  t.setMediaEnabled?.({ piulora: false });
+  assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora' });
+  // Fora do LoRa, só o meio.
+  f.emit({ type: 'up', medium: 'ble', id: 'X', name: 'piu-z' });
+});
+
 test('se o meio escolhido falha, cai para o outro e lembra da falha', async () => {
   let clock = 0;
   const s = setup({ now: () => clock });

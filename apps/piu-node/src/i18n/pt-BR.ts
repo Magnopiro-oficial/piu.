@@ -9,6 +9,7 @@ import { pontosPtBR } from './pontos/pt-BR.js';
 import { linkDesktopPtBR } from './linkDesktop/pt-BR.js';
 import { callPtBR } from './call/pt-BR.js';
 import { loraPtBR } from './lora/pt-BR.js';
+import { mapPtBR } from './map/pt-BR.js';
 
 export const ptBR = {
   ...piu11PtBR,
@@ -16,6 +17,7 @@ export const ptBR = {
   ...linkDesktopPtBR,
   ...callPtBR,
   ...loraPtBR,
+  ...mapPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',

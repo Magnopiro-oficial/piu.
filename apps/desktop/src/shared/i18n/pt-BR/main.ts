@@ -15,6 +15,10 @@ export const main = {
   'main.notif.lunesBody': '+{amount} LUNES na sua carteira',
   'main.notif.walletUpdated': 'Saldo da carteira atualizado',
   'main.notif.testText': 'Assim chegam as mensagens quando a janela não está em foco.',
+  // Chamada de voz tocando com a janela fora de foco; ao desbloquear, as que tocaram com o Piu bloqueado
+  'main.notif.callFrom': 'Chamada de {name}',
+  'main.notif.missedCall': 'Chamada perdida de {name}',
+  'main.notif.missedCalls': 'Chamadas perdidas de {names}',
   // Menu do app e bandeja
   'main.menu.openPiu': 'Abrir o Piu',
   'main.menu.quit': 'Sair do Piu',

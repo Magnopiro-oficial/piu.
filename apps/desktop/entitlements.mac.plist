@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements do Piu Desktop (macOS, hardened runtime + Developer ID). Os do monorepo
+  (scripts/electron-signing/entitlements.mac.plist) mais o microfone da chamada de voz; o Piu Provider
+  continua com aqueles, sem microfone. Usado só quando há Developer ID (electron-builder.signing.cjs);
+  o build ad-hoc não aplica entitlements. Vale para o app e para os helpers do Electron (entitlementsInherit).
+
+  - allow-jit: o V8 compila JavaScript em tempo de execução (MAP_JIT). Sem isto o hardened runtime
+    derruba o processo principal e os renderers.
+  - device.audio-input: microfone da chamada de voz. Com hardened runtime e sem ele, o macOS entrega o
+    microfone mudo (nem pergunta à pessoa). O texto do pedido vem do Info.plist
+    (NSMicrophoneUsageDescription, electron-builder.yml) e o pedido em si, do processo principal
+    (systemPreferences.askForMediaAccess) antes de abrir o microfone.
+  - Câmera, localização, Bluetooth, USB, allow-unsigned-executable-memory e disable-library-validation:
+    NÃO (ver o arquivo do monorepo).
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <key>com.apple.security.device.audio-input</key>
+    <true/>
+  </dict>
+</plist>

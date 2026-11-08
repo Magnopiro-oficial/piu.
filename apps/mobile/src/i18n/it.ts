@@ -5,6 +5,7 @@ import { pontos } from './pontos/it';
 import { linkDesktop } from './linkDesktop/it';
 import { call } from './call/it';
 import { lora } from './lora/it';
+import { map } from './map/it';
 
 export const dict: Dict = {
   ...piu11,
@@ -12,6 +13,7 @@ export const dict: Dict = {
   ...linkDesktop,
   ...call,
   ...lora,
+  ...map,
   'common.back': 'Indietro',
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',

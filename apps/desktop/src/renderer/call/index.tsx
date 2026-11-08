@@ -15,7 +15,7 @@ import { type DesktopCallHost, useCallHost } from './CallContext';
 export { CallBadge, CallButton, CallTitlePill, WindowTitle } from './CallChrome';
 export { CallRecordCard, CallRequestCard } from './CallCards';
 export { CallContext, useCallHost, type CallDevices, type DesktopCallHost } from './CallContext';
-export { callToastText, inCall, onStage } from './callDesktop';
+export { callToastText, declineDraft, inCall, onStage } from './callDesktop';
 
 /** Atalhos da chamada (Ctrl⇧C · Ctrl⇧A · Ctrl⇧D · Ctrl D · Ctrl⇧E; ⌘ no macOS). `open` liga para `openPeer`. */
 export function useCallKeys(host: DesktopCallHost | null, mac: boolean, only: readonly CallAction[], openPeer?: string | null) {

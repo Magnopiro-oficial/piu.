@@ -197,6 +197,20 @@ test('Chamada de voz: traduzida de verdade em todos os idiomas (não é cópia d
   }
 });
 
+test('Mapa da rede: traduzido de verdade em todos os idiomas (não é cópia do pt-BR)', () => {
+  const keys = Object.keys(ptBR).filter(k => k.startsWith('map.'));
+  assert.ok(keys.length >= 100, 'chaves map.* no pt-BR');
+  for (const lang of ALL) {
+    if (lang === 'pt-BR' || lang === 'pt-PT') continue;
+    const d = dictOf(lang) as Dict;
+    const text = (v: string | Plural) => (typeof v === 'string' ? v : v.other);
+    // Só frases: modelos feitos de variáveis ("{name}, {kind}, {dist}, {state}") são iguais em todo idioma.
+    const words = (v: string) => v.replace(/\{\w+\}/g, '').replace(/[\s,·.:]/g, '');
+    const same = keys.filter(k => text(d[k]!) === text((ptBR as Dict)[k]!) && words(text((ptBR as Dict)[k]!)).length > 20);
+    assert.deepEqual(same, [], `${lang}: iguais ao pt-BR`);
+  }
+});
+
 test('recompensas desligadas: os textos do provider e do convite não prometem pagamento hoje', () => {
   const ref = ptBR as Dict;
   for (const k of ['provIntro.sub', 'provIntro.step3', 'provIntro.note', 'network.provider.pitch', 'wallet.ref.title', 'wallet.ref.desc', 'invite.reward']) {

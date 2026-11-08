@@ -8,7 +8,7 @@ import type { ConversationSummary, MeInfo, Message, NetworkStatus, Prefs, TempMo
 import { canSendToConversation, conversationKind, filterConversationKind } from '../../shared/conversations';
 import { type DialogSpec, F, FM, Sym, fmtTime, initialsOf, shortId } from '../ui';
 import { type Key, t as tNow, useT } from '../i18n';
-import { CallBadge, CallButton, CallLayer, CallRecordCard, CallRequestCard, inCall, onStage, useCallHost, useCallKeys } from '../call';
+import { CallBadge, CallButton, CallLayer, CallRecordCard, CallRequestCard, declineDraft, inCall, onStage, useCallHost, useCallKeys } from '../call';
 import { useTr } from '../call/CallContext';
 import { contactOf, recordCard, requestCard } from '../../../../mobile/src/calls/callView';
 
@@ -32,6 +32,9 @@ interface Props {
   mac?: boolean;
   /** Avisos no fim da lista (atualização pronta, disco quase cheio). */
   footer?: ReactNode;
+  /** Recusou uma chamada com "Mensagem": abrir a conversa de `peer` com o rascunho pronto; `onDraftDone` ao aplicar. */
+  draftFor?: { peer: string; seq: number } | null;
+  onDraftDone?: () => void;
 }
 
 const statusIcon: Record<Message['status'], string> = { criada: 'radio_button_unchecked', aguardando: 'schedule', encaminhada: 'check', entregue: 'done_all', expirada: 'error', recebida: '' };
@@ -44,7 +47,7 @@ const avRadius = (c: ConversationSummary['contact'], large = false) => (conversa
 
 const nameOf = (c: ConversationSummary['contact']) => c.name || tNow(c.via === 'anon' ? 'chats.contact.anon' : 'chats.contact.unnamed', { id: shortId(c.id) });
 
-export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConversationOpen, bus, onPay, onTitle, mac = false, footer }: Props) {
+export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConversationOpen, bus, onPay, onTitle, mac = false, footer, draftFor = null, onDraftDone }: Props) {
   const t = useT();
   const [all, setAll] = useState<ConversationSummary[]>([]);
   const [filter, setFilter] = useState<Filter>('all');
@@ -67,6 +70,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
   const mounted = useRef(Date.now() / 1000);
   const scrollEl = useRef<HTMLDivElement>(null);
   const searchEl = useRef<HTMLInputElement>(null);
+  const composeEl = useRef<HTMLInputElement>(null);
   const activeRef = useRef<string | null>(null);
   activeRef.current = active;
 
@@ -148,8 +152,18 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
   useEffect(() => { if (callPeer && !callMini && mine.some(c => c.contact.id === callPeer)) setActive(callPeer); }, [callPeer, callMini, mine]);
   const pick = (id: string) => {
     if (call && callSt?.phase === 'active' && callPeer) call.controller.dispatch({ type: id === callPeer ? 'restore' : 'minimize' });
+    if (draftFor) onDraftDone?.();
     setActive(id);
   };
+  // Recusou com "Mensagem" (`callDraft`): abre a conversa de quem ligou assim que ela estiver na lista, com o
+  // rascunho do celular no campo e o foco nele. Depois do efeito de `active` (que limpa o campo ao trocar de conversa).
+  useEffect(() => {
+    if (!draftFor || !mine.some(c => c.contact.id === draftFor.peer)) return;
+    if (active !== draftFor.peer) { setActive(draftFor.peer); return; }
+    setDraft(d => declineDraft(tr, d));
+    onDraftDone?.();
+    requestAnimationFrame(() => composeEl.current?.focus());
+  }, [draftFor, mine, active]); // eslint-disable-line react-hooks/exhaustive-deps
   const callable = !!call && !!conv && !collective;
   const startCall = () => { if (call && conv) call.controller.open(conv.contact.id, call.routeTo(conv.contact.id)); };
   useCallKeys(call, mac, ['open'], callable && conv && !(callSt && inCall(callSt.phase)) ? conv.contact.id : null);
@@ -472,7 +486,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
             <div style={{ maxWidth: 760, width: '100%', margin: '0 auto', display: 'flex', alignItems: 'center', gap: 10 }}>
               <button className="h-rot" onClick={() => toast(t('chats.compose.textOnly'), 'attach_file')} title={t('chats.compose.attach')} style={{ width: 42, height: 42, borderRadius: 21, border: 'none', background: 'var(--bg2)', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', transition: 'transform .3s cubic-bezier(.2,.9,.3,1.5)' }}><Sym name="attach_file" size={23} wght={300} /></button>
               <button className="h-flip" onClick={() => onPay(conv.contact.id)} title={t('chats.compose.pay')} style={{ width: 42, height: 42, borderRadius: 21, border: 'none', background: 'var(--bg2)', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', transition: 'transform .35s cubic-bezier(.2,.9,.3,1.5)' }}><Sym name="toll" size={22} wght={300} /></button>
-              <input className="f-ring" value={draft} onChange={e => { setDraft(e.target.value); if (conv && !collective && !linked && e.target.value && Date.now() - lastTyping.current > 3000) { lastTyping.current = Date.now(); void window.piu.typing(conv.contact.id); } }} maxLength={4000} placeholder={t('chats.compose.placeholder', { name: first })} aria-label={t('chats.compose.label')}
+              <input ref={composeEl} className="f-ring" value={draft} onChange={e => { setDraft(e.target.value); if (conv && !collective && !linked && e.target.value && Date.now() - lastTyping.current > 3000) { lastTyping.current = Date.now(); void window.piu.typing(conv.contact.id); } }} maxLength={4000} placeholder={t('chats.compose.placeholder', { name: first })} aria-label={t('chats.compose.label')}
                 onKeyDown={e => { if (e.key !== 'Enter') return; const ok = prefs.enterSends ? !e.shiftKey : (e.metaKey || e.ctrlKey); if (ok) { e.preventDefault(); void send(); } }}
                 style={{ flex: 1, minWidth: 0, height: 44, borderRadius: 22, border: 'none', background: 'var(--bg2)', padding: '0 18px', fontSize: 15, color: 'var(--ink)', outline: 'none', transition: 'box-shadow .2s' }} />
               <button className="a-85" onClick={() => void send()} title={t('chats.compose.send')} aria-label={t('chats.compose.send')} disabled={!draft.trim()} style={{ width: 42, height: 42, borderRadius: 21, border: 'none', background: 'var(--ink)', color: 'var(--invink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flex: 'none', opacity: draft.trim() ? 1 : .35, transform: draft.trim() ? 'scale(1)' : 'scale(.85)', transition: 'opacity .2s,transform .3s cubic-bezier(.2,.9,.3,1.6)' }}><Sym name="arrow_upward" size={22} wght={500} /></button>

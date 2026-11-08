@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { Animated, Easing, Modal, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { fmtNumber, useT } from '../../i18n';
 import { regionRows } from '../../lib/piuLora';
 import { useNetwork } from '../../state/network';
@@ -8,7 +8,6 @@ import type { PiuLoraLink } from '../../transport/rnode/link';
 import { countryFromLocale } from '../../transport/rnode/region';
 import { bandLabel, regionForCountry } from '../../transport/rnode/regions';
 import { Button } from '../Button';
-import { Dialog } from '../Dialog';
 import { Icon } from '../Icon';
 import { Screen } from '../Screen';
 import { T } from '../T';
@@ -25,9 +24,10 @@ function countryNamer(lang: string): (cc: string) => string | undefined {
 /**
  * Região do rádio (desenho Piu 17, 4a–4c): a sugerida pelo país do aparelho, busca sem acento, as 27
  * regiões por continente. `first`: antes da primeira conexão ("Usar esta" ou "Continuar" seguem para
- * a conexão). Senão, trocar pede confirmação, reconfigura o rádio conectado e avisa.
+ * a conexão). Senão, trocar pede confirmação, reconfigura o rádio conectado e avisa. `justSwapped`: abre
+ * com o aviso da troca para essa região (galeria, 4c · depois).
  */
-export function RegionPicker({ link, first, country: cc, onDone, onClose }: { link: PiuLoraLink; first: boolean; country?: string | null; onDone: () => void; onClose: () => void }) {
+export function RegionPicker({ link, first, country: cc, justSwapped, onDone, onClose }: { link: PiuLoraLink; first: boolean; country?: string | null; justSwapped?: string; onDone: () => void; onClose: () => void }) {
   const { c } = useTheme();
   const t = useT();
   const { setPiuRegion } = useNetwork();
@@ -38,7 +38,7 @@ export function RegionPicker({ link, first, country: cc, onDone, onClose }: { li
   const [pending, setPending] = useState<string | null>(null);
   const [q, setQ] = useState('');
   // "Rádio do Piu em …" (4c depois): o aviso fica nesta tela, por cima da lista, por 2,5 s.
-  const [toast, setToast] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(() => (justSwapped ? t('piu.reg.toast', { name: t(regionKey(justSwapped)) }) : null));
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(null), 2500); return () => clearTimeout(id); }, [toast]);
   const country = useMemo(() => countryNamer(locale), [locale]);
   const groups = regionRows(q, { name: id => t(regionKey(id)), country });
@@ -76,7 +76,8 @@ export function RegionPicker({ link, first, country: cc, onDone, onClose }: { li
                   <T size={17} w={700} ls={-0.02}>{t(regionKey(suggested))}</T>
                   <T size={12.5} color={c.ink2}>{bandLabel(suggested)}</T>
                 </View>
-                {current === suggested ? (
+                {/* Desenho 4a: a sugestão escolhida na lista (ou já em uso) vira "✓ Em uso". */}
+                {sel === suggested ? (
                   <View style={{ height: 38, paddingHorizontal: 12, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
                     <Icon name="check" size={18} w={400} color={c.ink2} /><T size={13} w={600} color={c.ink2}>{t('piu.reg.inUse')}</T>
                   </View>
@@ -138,11 +139,47 @@ export function RegionPicker({ link, first, country: cc, onDone, onClose }: { li
           </View>
         ) : null}
         {pending ? (
-          <Dialog icon="settings_input_antenna" title={t('piu.reg.confirm', { name: t(regionKey(pending)) })} body={t('piu.reg.confirm.d')} primary={t('piu.reg.swap')}
+          <SwapDialog title={t('piu.reg.confirm', { name: t(regionKey(pending)) })} body={t('piu.reg.confirm.d')} primary={t('piu.reg.swap')}
             onPrimary={() => { const id = pending; setPending(null); apply(id); setToast(t('piu.reg.toast', { name: t(regionKey(id)) })); }}
             onClose={() => setPending(null)} />
         ) : null}
       </Screen>
+    </Modal>
+  );
+}
+
+/**
+ * 4c: confirmação de troca no formato do desenho (diferente do Dialog do app): cartão de raio 26, título 18
+ * à esquerda, sem ícone, Cancelar e Trocar de 40 px lado a lado à direita. Entra como o Dialog (320 ms, scale .9 → 1).
+ */
+function SwapDialog({ title, body, primary, onPrimary, onClose }: { title: string; body: string; primary: string; onPrimary: () => void; onClose: () => void }) {
+  const { c, reduceMotion } = useTheme();
+  const t = useT();
+  const [v] = useState(() => new Animated.Value(reduceMotion ? 1 : 0));
+  useEffect(() => {
+    if (!reduceMotion) Animated.timing(v, { toValue: 1, duration: 320, easing: Easing.bezier(0.2, 0.9, 0.3, 1.25), useNativeDriver: true }).start();
+  }, [reduceMotion, v]);
+  return (
+    <Modal transparent visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <Pressable style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: c.scrim }} onPress={onClose} accessibilityRole="button" accessibilityLabel={t('common.cancel')} />
+      <View pointerEvents="box-none" style={{ flex: 1, justifyContent: 'center', paddingHorizontal: 22 }}>
+        <Animated.View accessibilityViewIsModal accessibilityRole="alert" style={{
+          backgroundColor: c.bg, borderRadius: 26, paddingTop: 22, paddingHorizontal: 20, paddingBottom: 16, gap: 10,
+          borderWidth: 1, borderColor: c.line2, shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 30, shadowOffset: { width: 0, height: 24 }, elevation: 20,
+          opacity: v, transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }],
+        }}>
+          <T size={18} w={700} ls={-0.025} lh={1.25}>{title}</T>
+          <T size={13} lh={1.5} color={c.ink2}>{body}</T>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingTop: 10 }}>
+            <Pressable onPress={onClose} accessibilityRole="button" style={({ pressed }) => ({ height: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: c.bg2, justifyContent: 'center', transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+              <T size={13.5} w={600}>{t('common.cancel')}</T>
+            </Pressable>
+            <Pressable onPress={onPrimary} accessibilityRole="button" style={({ pressed }) => ({ height: 40, paddingHorizontal: 18, borderRadius: 20, backgroundColor: c.ink, justifyContent: 'center', transform: [{ scale: pressed ? 0.97 : 1 }] })}>
+              <T size={13.5} w={650} color={c.invink}>{primary}</T>
+            </Pressable>
+          </View>
+        </Animated.View>
+      </View>
     </Modal>
   );
 }

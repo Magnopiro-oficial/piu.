@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <!--
-  Entitlements do Piu Desktop e do Piu Provider (macOS, hardened runtime + Developer ID).
+  Entitlements do Piu Provider (macOS, hardened runtime + Developer ID). O Piu Desktop usa
+  apps/desktop/entitlements.mac.plist: estes mais o microfone da chamada de voz.
   Usado só quando há Developer ID (ver index.cjs); o build ad-hoc não aplica entitlements.
   Vale para o app e para os helpers do Electron (entitlementsInherit).
 

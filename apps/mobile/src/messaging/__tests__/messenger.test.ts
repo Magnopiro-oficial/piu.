@@ -50,6 +50,28 @@ const contactOf = (d: ReturnType<typeof device>, name: string, via: 'public' | '
   ({ id: d.ids[via].id, via, pub: toPublic(d.ids[via]), name, invite: d.m.issueInvite(via).code });
 const INV = { code: '0011223344556677', expiresAt: T0 + 24 * 3600 };
 
+test('o transporte diz por qual meio saiu: vira o "routed" da mensagem (desenho Piu 17, 5 · M)', async () => {
+  const seed = newSeed();
+  const routed: [string, unknown][] = [];
+  let reply: unknown = { medium: 'lora', fallback: 'away' };
+  const m = new Messenger({
+    identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node: deriveNodeKey(seed), relay: true, now: () => T0,
+    transmit: async () => reply,
+    events: { message: () => {}, newContact: () => {}, status: () => {}, routed: (id, via) => routed.push([id, via]) },
+  });
+  const beto = deriveIdentity(newSeed(), 'public');
+  m.addContact({ id: beto.id, via: 'public', pub: toPublic(beto), name: 'Beto' });
+  m.peerConnected('lora:x', 'lora');
+  m.sendText(beto.id, 'm1', 'Oi');
+  await new Promise(r => setTimeout(r, 0));
+  assert.deepEqual(routed, [['m1', { medium: 'lora', fallback: 'away' }]]);
+  // Transporte sem resposta (simulado, antigo) ou resposta estranha: nada muda.
+  reply = undefined; m.sendText(beto.id, 'm2', 'Oi');
+  reply = { medium: 'telepatia' }; m.sendText(beto.id, 'm3', 'Oi');
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(routed.length, 1);
+});
+
 test('cartão de contato: ida e volta, assinatura, validade e adulteração', () => {
   const me = deriveIdentity(newSeed(), 'public');
   const code = encodeCard(me, 'Cardeal', INV);

@@ -1,5 +1,5 @@
 import { displayMedium, MEDIA, rankLinks, type LinkInfo } from './select';
-import type { Medium, MediumCaps, Transport, TransportEvent, TransportKind, TransportState } from './types';
+import type { Medium, MediumCaps, SentVia, Transport, TransportEvent, TransportKind, TransportState } from './types';
 
 /**
  * Eventos de enlace (um meio com um vizinho), como o módulo nativo os entrega.
@@ -48,8 +48,12 @@ interface Neighbor {
   id: string;
   name: string;
   links: Set<string>;
+  /** Meios que este vizinho já teve (o rádio do Piu fora do alcance some de `links`, mas fica aqui). */
+  had: Set<Medium>;
   announced: boolean;
   via?: Medium;
+  /** Meios anunciados no último `peerFound` (lista, na ordem dos enlaces). */
+  media?: string;
   connected: boolean;
 }
 
@@ -76,6 +80,14 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
   const ownerOf = (l: Link) => (l.name ? 'n:' + l.name : 'l:' + l.medium + ':' + l.id);
   const linksOf = (n: Neighbor) => [...n.links].map(k => links.get(k)).filter((l): l is Link => !!l);
 
+  /** LoRa Automático: saiu pelo Meshtastic com o rádio do Piu ligado na escolha da pessoa? Então diz por quê. */
+  function sentVia(n: Neighbor, medium: Medium): SentVia {
+    if (medium !== 'lora' || !n.had.has('piulora') || disabled.has('piulora')) return { medium };
+    const piu = linksOf(n).find(l => l.medium === 'piulora');
+    if (!piu?.up) return { medium, fallback: 'away' };
+    return piu.failures > 0 ? { medium, fallback: 'failed' } : { medium };
+  }
+
   function sync(n: Neighbor) {
     const ls = linksOf(n);
     if (!ls.length) {
@@ -85,9 +97,10 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
       return;
     }
     const via = displayMedium(ls)!;
-    if (!n.announced || via !== n.via) {
-      n.announced = true; n.via = via;
-      emit({ type: 'peerFound', peer: { id: n.id, name: n.name, via } });
+    const media = [...new Set(ls.map(l => l.medium))];
+    if (!n.announced || via !== n.via || media.join() !== n.media) {
+      n.announced = true; n.via = via; n.media = media.join();
+      emit({ type: 'peerFound', peer: { id: n.id, name: n.name, via, media } });
     }
     const up = ls.find(l => l.up);
     if (up && !n.connected) { n.connected = true; emit({ type: 'connected', id: n.id, name: n.name, via: up.medium }); }
@@ -103,8 +116,9 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
       if (old) { old.links.delete(l.key); sync(old); }
     }
     let n = neighbors.get(nid);
-    if (!n) { n = { id: nid, name: l.name ?? l.id, links: new Set(), announced: false, connected: false }; neighbors.set(nid, n); }
+    if (!n) { n = { id: nid, name: l.name ?? l.id, links: new Set(), had: new Set(), announced: false, connected: false }; neighbors.set(nid, n); }
     n.links.add(l.key);
+    n.had.add(l.medium);
     l.owner = nid;
     sync(n);
   }
@@ -179,7 +193,7 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
         try {
           await source.sendVia(l.medium, l.id, data);
           l.failures = 0; l.lastFailureAt = undefined;
-          return;
+          return sentVia(n, l.medium);
         } catch (err) {
           l.failures++; l.lastFailureAt = now();
           last = err;

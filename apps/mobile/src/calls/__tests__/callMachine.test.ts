@@ -172,3 +172,62 @@ test('cada sinal sai com o destinatário certo (inclusive "ocupado" para quem li
   const req = run([{ type: 'open', peer: 'ana', route: null }, { type: 'sendRequest', requestId: 'q' }]);
   assert.equal((req.effects.find(f => f.kind === 'send') as Extract<Effect, { kind: 'send' }>).peer, 'ana');
 });
+
+test('"Em 10 min": além do aviso, agenda o lembrete de ligar para quem ligou daqui a 10 min', () => {
+  const later = run([{ type: 'incoming', callId: 'c', peer: 'm', route: 'bt', now: 0 }, { type: 'decline', now: 1, how: 'later' }]);
+  assert.deepEqual(later.effects.filter(f => f.kind === 'remind'), [{ kind: 'remind', peer: 'm', ms: 10 * 60_000 }]);
+  assert.equal(CALL_TIMING.remindMs, 10 * 60_000);
+  const msg = run([{ type: 'incoming', callId: 'c', peer: 'm', route: 'bt', now: 0 }, { type: 'decline', now: 1, how: 'message' }]);
+  assert.ok(!msg.effects.some(f => f.kind === 'remind'), '"Mensagem" não agenda lembrete');
+});
+
+test('contato sem chamada: a oferta saiu e nada voltou (nem "tocando") em 10 s → termina com o motivo, sem esperar 45 s', () => {
+  const calling = run([{ type: 'open', peer: 'm', route: 'direct' }, { type: 'dial', callId: 'c', now: 0 }]);
+  assert.ok(calling.effects.some(f => f.kind === 'timer' && f.name === 'noReply' && f.ms === CALL_TIMING.noReplyMs));
+  assert.equal(CALL_TIMING.noReplyMs, 10_000);
+  const r = reduce(calling.s, { type: 'noReply', now: 10_000 });
+  assert.equal(r.state.phase, 'ending');
+  assert.equal(r.state.end?.reason, 'nocall');
+  assert.deepEqual(sent(r.effects), [{ t: 'cancel', callId: 'c', rangMs: 10_000 }], 'se tocou e o "tocando" se perdeu, o outro para de tocar');
+  assert.equal(records(r.effects)[0].outcome, 'noanswer');
+  assert.equal(records(r.effects)[0].note, 'nocall');
+  assert.ok(r.effects.some(f => f.kind === 'cancelTimer' && f.name === 'ringTimeout'));
+  // Com "tocando" de volta, os 10 s não valem: segue tocando até atender ou 45 s.
+  const ringing = reduce(calling.s, { type: 'peerRinging', callId: 'c' }).state;
+  assert.equal(reduce(ringing, { type: 'noReply', now: 10_000 }).state, ringing);
+  // Chamada de um pedido aceito: o outro tem chamada (respondeu ao pedido); não arma os 10 s.
+  const accepted = reduce(IDLE, { type: 'requestAccepted', requestId: 'q', peer: 'm', route: 'direct', callId: 'c9', now: 0 });
+  assert.ok(!accepted.effects.some(f => f.kind === 'timer' && f.name === 'noReply'));
+  assert.equal(reduce(accepted.state, { type: 'noReply', now: 10_000 }).state, accepted.state);
+});
+
+test('oferta que nem saiu (sem sessão/sem vizinho): termina na hora com "sem conexão", sem sinal e sem esperar', () => {
+  const calling = run([{ type: 'open', peer: 'm', route: 'direct' }, { type: 'dial', callId: 'c', now: 0 }]);
+  // A oferta é o último efeito: se ela falhar, os timers já armados são cancelados pelo fim.
+  assert.equal(calling.effects.at(-1)?.kind, 'send');
+  const r = reduce(calling.s, { type: 'unreachable', callId: 'c', now: 5 });
+  assert.equal(r.state.phase, 'ending');
+  assert.equal(r.state.end?.reason, 'unreachable');
+  assert.deepEqual(sent(r.effects), []);
+  assert.equal(records(r.effects)[0].note, 'unreachable');
+  for (const name of ['ringTimeout', 'noReply'] as const) assert.ok(r.effects.some(f => f.kind === 'cancelTimer' && f.name === name), name);
+  assert.equal(reduce(calling.s, { type: 'unreachable', callId: 'outra', now: 5 }).state, calling.s);
+  const accepted = reduce(IDLE, { type: 'requestAccepted', requestId: 'q', peer: 'm', route: 'direct', callId: 'c9', now: 0 });
+  assert.equal(accepted.effects.at(-1)?.kind, 'send');
+});
+
+test('Wi-Fi Direct (Nearby): na máquina e no fio é o caminho "bt"; o estado e o registro marcam o meio, para o texto', () => {
+  const { s, effects } = run([{ type: 'open', peer: 'm', route: 'bt', wifiDirect: true }, { type: 'dial', callId: 'c', now: 0 }]);
+  assert.equal(s.route, 'bt');
+  assert.equal(s.wifiDirect, true);
+  assert.deepEqual(sent(effects), [{ t: 'invite', callId: 'c', route: 'bt' }], 'o sinal não muda');
+  const active = reduce(reduce(s, { type: 'peerRinging', callId: 'c' }).state, { type: 'connected', callId: 'c', now: 1 }).state;
+  assert.equal(records(reduce(active, { type: 'hangup', now: 5000 }).effects)[0].wifiDirect, true);
+  // O caminho mudou para o Bluetooth LE (ou Wi-Fi): a marca sai.
+  const lost = reduce(active, { type: 'routeLost', now: 2 }).state;
+  assert.equal(reduce(lost, { type: 'routeFound', route: 'bt' }).state.wifiDirect, undefined);
+  assert.equal(reduce(lost, { type: 'routeFound', route: 'direct', wifiDirect: true }).state.wifiDirect, undefined, 'só "bt" tem a variante');
+  const ringing = reduce(IDLE, { type: 'incoming', callId: 'x', peer: 'm', route: 'bt', now: 0, wifiDirect: true }).state;
+  assert.equal(ringing.wifiDirect, true);
+  assert.equal(run([{ type: 'open', peer: 'm', route: 'bt' }]).s.wifiDirect, undefined);
+});

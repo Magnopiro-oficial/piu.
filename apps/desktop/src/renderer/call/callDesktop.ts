@@ -82,6 +82,14 @@ export function callToastText(t: Tr, text: Extract<Effect, { kind: 'toast' }>['t
   return t('call.toast.requestLater', { first: contact?.first ?? '' });
 }
 
+/**
+ * Recusou com "Mensagem": a conversa abre com o rascunho do celular ("Não posso falar agora, te ligo em 10 min.",
+ * `call.declineDraft`), pronto para enviar ou editar. Se a pessoa já tinha escrito algo ali, fica o dela.
+ */
+export function declineDraft(t: Tr, current: string): string {
+  return current.trim() ? current : t('call.declineDraft');
+}
+
 /** Pro celular: a faixa varre em 1,2 s, "Continua no …" aparece em 1,3 s e o painel volta à conversa em 3,2 s. */
 export const HANDOFF = { sweepMs: 1200, doneMs: 1300, closeMs: 3200 } as const;
 /** Atendida no celular: o aviso mostra "Atendida no …" por 2,4 s e some. */

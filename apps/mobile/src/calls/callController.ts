@@ -14,6 +14,8 @@ export type CallPorts = {
   media(on: boolean, state: CallState): void;
   toast?(text: Extract<Effect, { kind: 'toast' }>['text'], peer?: string): void;
   draft?(peer: string): void;
+  /** Lembrete de ligar para `peer` daqui a `ms` (celular: notificação local; sem isto, só o aviso). */
+  remind?(peer: string, ms: number): void;
   setTimer?(fn: () => void, ms: number): unknown;
   clearTimer?(h: unknown): void;
 };
@@ -66,6 +68,7 @@ export class CallController {
       case 'media': p.media(fx.on, this.s); break;
       case 'toast': p.toast?.(fx.text, fx.peer); break;
       case 'draft': p.draft?.(fx.peer); break;
+      case 'remind': p.remind?.(fx.peer, fx.ms); break;
       case 'timer': {
         const old = this.timers.get(fx.name);
         if (old !== undefined) this.clear(old);

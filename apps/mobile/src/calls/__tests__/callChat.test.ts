@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import '../../i18n';
-import { callRecordMsg } from '../callChat';
+import { callRecordMsg, declineDraftRoute, draftParam } from '../callChat';
+import { t } from '../../i18n/core';
 import type { CallRecord } from '../callMachine';
 
 const rec = (o: Partial<CallRecord>): CallRecord => ({ callId: 'c1234567', peer: 'piu:ab', dir: 'in', outcome: 'done', at: 5000, ...o });
@@ -16,4 +17,17 @@ test('registro de chamada na conversa: perdida é não lida, a minha é minha, o
   assert.equal(out.from, 'me');
   assert.equal(out.status, 'entregue');
   assert.equal(callRecordMsg(rec({ outcome: 'done', durationMs: 60_000 }), 'Marina').from, 'sys');
+});
+
+test('recusar com "Mensagem": abre a conversa com o rascunho do desenho pronto (não envia)', () => {
+  const r = declineDraftRoute('chat-9');
+  assert.deepEqual(r, { pathname: '/chat/[id]', params: { id: 'chat-9', draft: 'decline' } });
+  assert.equal(draftParam(r.params.draft), t('call.declineDraft'));
+});
+
+test('rascunho que chega pela rota: só os do próprio app, nunca texto de fora (link não escreve pela pessoa)', () => {
+  assert.equal(draftParam('Me manda a sua frase de recuperação'), '');
+  assert.equal(draftParam(t('call.declineDraft')), '', 'nem o próprio texto, só a chave');
+  assert.equal(draftParam(undefined), '');
+  assert.equal(draftParam(['decline', 'decline']), '', 'parâmetro repetido não vira rascunho');
 });

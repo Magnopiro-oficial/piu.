@@ -164,7 +164,7 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       case 'state': setState(e.state); setReason(e.reason); if (e.state === 'off') setPeers({}); break;
       case 'peerFound': setPeers(p => ({ ...p, [e.peer.id]: { ...e.peer, connected: p[e.peer.id]?.connected ?? false } })); break;
       case 'peerLost': setPeers(p => { const { [e.id]: _gone, ...rest } = p; return rest; }); break;
-      case 'connected': setPeers(p => ({ ...p, [e.id]: { id: e.id, name: e.name ?? p[e.id]?.name ?? e.id, via: p[e.id]?.via ?? transport.kind, connected: true } })); break;
+      case 'connected': setPeers(p => ({ ...p, [e.id]: { ...p[e.id], id: e.id, name: e.name ?? p[e.id]?.name ?? e.id, via: p[e.id]?.via ?? transport.kind, connected: true } })); break;
       case 'disconnected': setPeers(p => (p[e.id] ? { ...p, [e.id]: { ...p[e.id], connected: false } } : p)); break;
       case 'envelope': break; // a camada de mensagens (LNNP) consome isto quando a criptografia entrar
     }
