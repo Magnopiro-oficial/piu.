@@ -39,7 +39,7 @@ jobs:
             apps/site/package-lock.json
             apps/provider-panel/package-lock.json
       - id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
       - run: npm ci
       - name: Build (painel embutido + site)
         run: npm run build
