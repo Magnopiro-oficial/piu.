@@ -1,7 +1,7 @@
 {
   "name": "piu",
   "productName": "Piu",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Piu para computador (macOS, Linux e Windows): o mensageiro da malha Piu, conectado à rede local por LNNP",
   "license": "AGPL-3.0-only",

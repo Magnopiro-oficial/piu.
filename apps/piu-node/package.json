@@ -1,6 +1,6 @@
 {
   "name": "piu-node",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "description": "piu-node (referência): API local do provider (pareamento, sessão, CSRF, pacotes assinados) e motor de retransmissão LNNP v1 (LAN)",
   "type": "module",
