@@ -246,6 +246,12 @@ export const bundleRefHex = (sealed: Uint8Array) => toHex(bundleRef(sealed));
  * Balde de fichas por vizinho só para cargas de gateway (além do limite geral do roteador): uma carga
  * custa a um gateway uma consulta à Mainnet, então um vizinho não pode despejar centenas.
  */
+/**
+ * Teto de cargas da malha aberta (LoRa): todo mundo que está no ar chega como um vizinho só, então o balde
+ * é o de um meio compartilhado (o mesmo de vários celulares atrás de um IP), não o de um vizinho.
+ */
+export const OPEN_MESH_CARRY = { perHour: 120, burst: 30 } as const;
+
 export class CarryLimiter {
   private buckets = new Map<string, { tokens: number; at: number }>();
   constructor(readonly perHour = 30, readonly burst = 10, private maxPeers = 4096) {}

@@ -26,14 +26,21 @@ export function waitingFor(mode: LoraMode, up: Record<LoraWho, boolean>): LoraWh
   return mode !== 'auto' && !up[mode] ? mode : null;
 }
 
-export type PiuProblem = { kind: 'band' } | { kind: 'code'; code: string } | { kind: 'notRNode' } | { kind: 'region' } | { kind: 'other' };
+export type PiuProblem =
+  | { kind: 'band' } | { kind: 'code'; code: string } | { kind: 'notRNode' } | { kind: 'region' }
+  | { kind: 'old'; version: string } | { kind: 'tnc' } | { kind: 'setup' } | { kind: 'silent' } | { kind: 'other' };
 
-/** O motivo do RNodeSetup/PiuLoraLink (texto) no que a tela mostra (3g, 3h, 3i). */
+/** O motivo do RNodeSetup/PiuLoraLink (texto) no que a tela mostra (3g, 3h, 3i e os do mundo real). */
 export function piuProblem(problem: string | null | undefined): PiuProblem {
   const p = problem ?? '';
   const code = /erro do RNode (0x[0-9a-f]{2})/.exec(p);
   if (code) return { kind: 'code', code: code[1]! };
-  if (p.startsWith('frequência diferente')) return { kind: 'band' };
+  if (p.startsWith('frequência diferente') || p.startsWith('frequência fora da faixa')) return { kind: 'band' };
+  const old = /^firmware antigo \(([^)]*)\)/.exec(p);
+  if (old) return { kind: 'old', version: old[1]! };
+  if (p === 'placa em modo TNC') return { kind: 'tnc' };
+  if (p === 'placa sem provisionar' || p === 'o rádio da placa não ligou') return { kind: 'setup' };
+  if (p === 'o rádio não respondeu') return { kind: 'silent' };
   if (p === 'não é um RNode') return { kind: 'notRNode' };
   if (p.startsWith('escolha a região')) return { kind: 'region' };
   return { kind: 'other' };

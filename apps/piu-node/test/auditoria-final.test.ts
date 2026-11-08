@@ -5,7 +5,10 @@ import { createServer } from 'node:http';
 import { test } from 'node:test';
 import { inboxUrlProblem } from '../src/app.js';
 import { loadLnnpConfig } from '../src/config.js';
+import { CarryChain, CarryKind, sealCarry } from '../src/protocol/carry.js';
+import { deriveNodeKey, newSeed } from '../src/protocol/keys.js';
 import { CarryAdmission, sourceHost } from '../src/relay/carryAdmission.js';
+import { RelayEngine } from '../src/relay/engine.js';
 import { bundlePoster } from '../src/relay/gatewayPost.js';
 
 test('M-N1: reconectar (link novo, mesmo vizinho) não renova o balde de cargas; trocar de identidade no mesmo IP também não', () => {
@@ -22,6 +25,24 @@ test('M-N1: reconectar (link novo, mesmo vizinho) não renova o balde de cargas;
   assert.ok(a.take(link('ee', 1, '192.168.1.10'), t));
   // O balde volta a encher com o tempo.
   assert.ok(a.take(link('aa', 100), t + 3600));
+});
+
+// Revisão de segurança do rádio do Piu: pela malha aberta (LoRa) todo mundo no ar é um vizinho só.
+test('M-N1 no LoRa: cópia repetida não gasta a cota; 10 cargas falsas no ar não travam a honesta; o teto continua', () => {
+  const ms = 1_800_000_000_000;
+  const e = new RelayEngine({ node: deriveNodeKey(newSeed()), relay: true, memoryBytes: 1 << 20, now: () => ms });
+  e.attachMesh({ id: 'lora:piu', medium: 'lora', address: 'rnode:/dev/ttyUSB0', since: ms, maxEnvelope: 904, capacity: () => 0, send: () => false });
+  const carry = (n: number) => sealCarry({ item: { kind: CarryKind.Tx, chain: CarryChain.LunesMainnet, extrinsic: Uint8Array.of(n & 0xff, n >> 8, 7) }, now: Math.floor(ms / 1000) }).bytes;
+  const honest = carry(1);
+  e.receiveMesh('lora:piu', honest);
+  for (let i = 0; i < 40; i++) e.receiveMesh('lora:piu', honest);
+  assert.equal(e.counters.duplicates, 40, 'as cópias chegam ao roteador como duplicadas, sem gastar a cota');
+  for (let i = 0; i < 10; i++) e.receiveMesh('lora:piu', carry(100 + i));
+  const before = e.counters.rejected;
+  e.receiveMesh('lora:piu', carry(2));
+  assert.equal(e.counters.rejected, before, 'a carga honesta seguinte ainda passa');
+  for (let i = 0; i < 200; i++) e.receiveMesh('lora:piu', carry(1000 + i));
+  assert.ok(e.counters.rejected - before > 150, `teto: ${e.counters.rejected - before} de 200 recusadas`);
 });
 
 test('M-N1: host da origem sem a porta (IPv4, IPv6, serial)', () => {

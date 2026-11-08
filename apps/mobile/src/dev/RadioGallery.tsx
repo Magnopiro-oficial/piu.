@@ -14,7 +14,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import type { RadioDevice } from '../transport/meshtastic/radio';
 import { PiuLoraLink } from '../transport/rnode/link';
 import { PiuLoraRadio, type RNodeClient } from '../transport/rnode/radio';
-import { CMD, KissReader, kissFrame } from '../transport/rnode/rnode';
+import { RNODE_BOARDS, RNodeEmulator, type EmulatorOptions } from '../transport/rnode/emulator';
 import { ListBox, NavRow } from '../ui/point/parts';
 import { ConnectPiuSheet } from '../ui/lora/ConnectPiuSheet';
 import { LoraBlockView } from '../ui/lora/LoraBlock';
@@ -25,24 +25,22 @@ import { T } from '../ui/T';
 const noop = () => {};
 const DEVS: RadioDevice[] = [{ id: 'AA:00:00:00:3F:2A', name: 'RNode 3F2A', rssi: -55 }, { id: 'AA:00:00:00:77:C1', name: 'RNode 77C1', rssi: -70 }, { id: 'AA:00:00:00:0B:9E', name: 'RNode 0B9E', rssi: -90 }];
 
-/** Rádio de exemplo: `answer` responde a configuração como um RNode; senão fica calado (configurando). */
-function exampleRadio(o: { devices?: RadioDevice[]; connect?: 'ok' | 'bond' | 'TIMEOUT'; answer?: boolean; region?: string | null }) {
+/**
+ * Rádio de exemplo: a placa emulada byte a byte (rnode/emulator.ts). `answer` liga o Bluetooth à placa;
+ * sem ele a placa fica calada (configurando). `board`/`fw`/`tnc`/`provisioned` reproduzem os casos reais.
+ */
+function exampleRadio(o: { devices?: RadioDevice[]; connect?: 'ok' | 'bond' | 'TIMEOUT'; answer?: boolean; region?: string | null } & EmulatorOptions & { board?: string } = {}) {
   const data = new Set<(b: Uint8Array) => void>(), dev = new Set<(d: RadioDevice) => void>(), st = new Set<(s: string, r?: string) => void>();
   const sub = <F,>(s: Set<F>, f: F) => { s.add(f); return { remove: () => { s.delete(f); } }; };
-  const rd = new KissReader();
+  const emu = new RNodeEmulator(RNODE_BOARDS.find(b => b.name === (o.board ?? 'Heltec V3 (915)'))!, o);
+  emu.onOutput(b => { const c = b.slice(); setTimeout(() => data.forEach(fn => fn(c)), 0); });
   const client: RNodeClient = {
     async scan(sec) { (o.devices ?? []).forEach(d => dev.forEach(f => f(d))); await new Promise(r => setTimeout(r, sec * 1000)); },
     async connect() {
       if (o.connect === 'TIMEOUT') throw Object.assign(new Error('timeout'), { code: 'TIMEOUT' });
       if (o.connect === 'bond') { st.forEach(f => f('connecting', 'bond')); await new Promise(() => {}); }
     },
-    async write(b) {
-      if (!o.answer) return;
-      for (const { cmd, data: d } of rd.push(b)) if (cmd !== CMD.DATA) {
-        const f = kissFrame(cmd, cmd === CMD.DETECT ? Uint8Array.of(0x46) : d);
-        setTimeout(() => data.forEach(fn => fn(f)), 0);
-      }
-    },
+    async write(b) { if (o.answer) emu.input(b); },
     disconnect: noop,
     addDeviceListener: f => sub(dev, f), addDataListener: f => sub(data, f), addStateListener: f => sub(st, f),
   };
@@ -90,6 +88,11 @@ const FRAMES: Record<string, () => ReactNode> = {
   '3g': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3g']} onRegion={noop} onClose={noop} />,
   '3h': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3h']} onRegion={noop} onClose={noop} />,
   '3i': () => <ConnectPiuSheet radio={exampleRadio({})} problem={PROBLEM['3i']} onRegion={noop} onClose={noop} />,
+  '3j': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, answer: true, fw: [1, 50] })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
+  '3k': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, answer: true, tnc: { freqHz: 869_525_000, bwHz: 125_000, sf: 8, cr: 5, txDbm: 14 } })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
+  '3l': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, answer: true, provisioned: false })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
+  '3m': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
+  '3n': () => <ConnectPiuSheet radio={exampleRadio({ devices: DEVS, answer: true, board: 'Heltec V3 (433)' })} deviceId={DEVS[0]!.id} onRegion={noop} onClose={noop} />,
   '4a': () => <RegionPicker link={new PiuLoraLink({})} first country="BR" onDone={noop} onClose={noop} />,
   '4b': () => <RegionPicker link={new PiuLoraLink({})} first country="AR" onDone={noop} onClose={noop} />,
   '4c': () => <RegionPicker link={new PiuLoraLink({ region: 'BR_902' })} first={false} country="BR" onDone={noop} onClose={noop} />,

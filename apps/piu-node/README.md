@@ -32,7 +32,7 @@ O que acontece quando o nó sobe:
   - O tempo no ar é calculado com `PIU_LORA_SF`, `PIU_LORA_BW_KHZ` e `PIU_LORA_CR`, que devem ser iguais aos do firmware.
   - O canal não é ocupado acima de `PIU_LORA_DUTY` % por hora.
   - Faixa (no Brasil, 915 MHz) e potência ficam no firmware e precisam seguir a regulamentação.
-  - Firmwares que esperam a configuração do rádio vinda do computador (como o RNode) ainda não são suportados: essa configuração depende da placa escolhida.
+  - Para uma placa com firmware RNode, use o tipo `rnode` (abaixo): o nó manda a configuração do canal.
 - **`usb`**: outro nó ligado por cabo serial/USB, ponto a ponto. Pacotes maiores e mídia permitida.
 - **`meshtastic`**: um rádio com firmware **Meshtastic** no USB (Super Node no canal que os celulares já usam; `docs/transporte/super-node-lora.md`).
   - Fala a API serial de cliente do Meshtastic (quadros `0x94 0xC3`); o rádio fica com a região e o canal configurados no app oficial.
@@ -43,6 +43,7 @@ O que acontece quando o nó sobe:
   - Ainda não testado com placa real.
 - **`rnode`**: um rádio com firmware **RNode** no USB (LoRa próprio do Piu, caminho B; primeira placa: Heltec V3).
   - O nó configura o rádio a cada conexão com o canal da região: `PIU_RNODE_REGION` (padrão `BR_902`; 27 regiões do mundo, tabela em `docs/hardware/placas-lora.md`). Só sobe quando o rádio confirma cada ajuste; se não, tenta de novo a cada minuto.
+  - Antes, confere a placa: firmware 1.52 ou mais novo, provisionada, fora do modo TNC e com a faixa da região; se não, diz o motivo no log e no painel (`docs/hardware/testar-radio-piu.md`). No OpenWrt, a região é `serial.rnode_region` no UCI.
   - Entra no motor como a malha aberta `lora:piu`, com os mesmos pedaços "P1" e o mesmo anúncio "PN" do `meshtastic`, sem o cabeçalho dele.
   - Tempo de rádio proporcional ao limite da região (6 pedaços/min com 10 % no ar; menos onde o limite é menor).
   - Com `meshtastic` e `rnode` ligados juntos, o nó é ponte: cada envelope vai uma vez para cada malha, nunca de volta para a de onde veio.

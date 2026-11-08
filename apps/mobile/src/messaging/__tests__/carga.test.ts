@@ -6,7 +6,7 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { CarryChain, CarryKind, type CarryReceipt, gatewayKindOf, type OpenedCarry } from '../../protocol/carry';
+import { CarryChain, CarryKind, type CarryReceipt, gatewayKindOf, type OpenedCarry, sealCarry } from '../../protocol/carry';
 import { deriveIdentity, deriveNodeKey, newSeed } from '../../protocol/keys';
 import { Router } from '../../protocol/router';
 import { toHex as hex0x } from '../../lib/lunesRpc';
@@ -97,6 +97,33 @@ test('sem o papel de gateway a carga só passa adiante; recibo forjado sobre out
   bia.sendCarryReceipt(arrived[0]!.replyTo, { about: CarryKind.Tx, ref: Uint8Array.from(Buffer.from(t.hash.slice(2), 'hex')), status: 'finalized' });
   net.run();
   assert.equal(receipts.length, 0);
+});
+
+// Pelo LoRa, todo mundo que está no ar chega como um vizinho só (a malha aberta). Revisão de segurança
+// do rádio do Piu: cópias repetidas gastavam a cota, e 10 cargas falsas de quem ouve o ar travavam a de todos.
+test('LoRa: cópia repetida de carga não gasta a cota; 10 cargas falsas no ar não travam a honesta; o teto continua', () => {
+  const net = new Net();
+  const bia = phone(net, 'Bia');
+  const AIR = 'l:piulora:lora:mesh';
+  bia.peerConnected(AIR, 'lora');
+  const carry = (n: number) => sealCarry({ item: { kind: CarryKind.Tx, chain: CarryChain.LunesMainnet, extrinsic: Uint8Array.of(n & 0xff, n >> 8, 7) }, now: net.clock }).bytes;
+  const honest = carry(1);
+  assert.equal(bia.receive(AIR, honest).status, 'stored');
+  // A mesma carga ouvida de novo (outros relays repetem no ar, ou alguém regrava e reenvia).
+  for (let i = 0; i < 40; i++) assert.equal(bia.receive(AIR, honest).status, 'duplicate', `cópia ${i}`);
+  // Quem ouve o ar despeja 10 cargas novas (lixo bem formado: o relay não tem como saber).
+  for (let i = 0; i < 10; i++) bia.receive(AIR, carry(100 + i));
+  const next = bia.receive(AIR, carry(2));
+  assert.equal(next.status, 'stored', 'a carga honesta seguinte ainda passa');
+  // O teto da malha aberta é maior, mas existe (custo de consulta à Mainnet, M-N1).
+  let refused = 0;
+  for (let i = 0; i < 200; i++) if (bia.receive(AIR, carry(1000 + i)).status === 'rejected') refused++;
+  assert.ok(refused > 150, `teto: ${refused} de 200 recusadas`);
+  // Pelo Bluetooth, um vizinho continua com o balde pequeno de sempre.
+  bia.peerConnected('ble:x', 'ble');
+  let ok = 0;
+  for (let i = 0; i < 15; i++) if (bia.receive('ble:x', carry(3000 + i)).status === 'stored') ok++;
+  assert.equal(ok, 10);
 });
 
 test('limite de cargas por vizinho e reabrir o app mantém a espera do recibo', () => {

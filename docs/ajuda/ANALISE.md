@@ -89,10 +89,16 @@ Formato: **id** · título · estado no site. "Protótipo dizia" lista só o que
 - Protótipo dizia: imagem `piu-node-0.4.2-rpi.img.xz`, `.deb` arm64/amd64, `/etc/piu-node/config.toml`, `journalctl -u piu-node`, `piu-node status`, `piu-node pair`.
 - Mudou: imagem, `config.toml` e subcomandos `piu-node …` **não existem**. Agora há `.deb` (`all`, systemd, `/etc/default/piu-node`, `journalctl -u piu-node`): o guia oferece o Piu Provider e, no Raspberry Pi, o `.deb` (publicado: link; antes disso: gerar o `.deb` a partir do código e instalar). O menu do Provider só existe em PT; o guia EN avisa.
 
+**lora-phone** · Conectar um rádio LoRa ao celular · EM TESTE (novo, 08/11/2026)
+- Conferido: nomes de tela em `apps/mobile/src/i18n/lora/pt-BR.ts` e `en.ts` (`piu.row.*`, `piu.type.*`, `piu.reg.*`, `piu.pin.*`, `piu.ok`, `piu.mode.*`, `piu.fail.*`, `lora.pin.body`); seletor de modo só com os dois rádios (`apps/mobile/src/ui/lora/LoraBlock.tsx`, `both`); região sugerida pelo idioma e sem transmissão antes de escolher (`apps/mobile/src/transport/native.ts`, `rnode/region.ts`); canal do Brasil 904,75 MHz, 17 dBm e 10 % no ar (`piuRadio('BR_902')`, `rnode/regions.ts`); 904 bytes em 4 pedaços (`meshtastic/fragments.ts`, `LORA_MAX_ENVELOPE`); firmware mínimo 1.52 e recusas (`rnode/rnode.ts`, `RNodeSetup`); pareamento obrigatório (`PiuRNodeModule.kt`, `BOND_BONDED`); só Android (módulo nativo só em `android/`).
+- Preparação da placa: `rnodeconf` do Reticulum (`--autoinstall`, `--normal`, `--update`, `-i`), igual a `docs/hardware/testar-radio-piu.md`.
+- Testado só com placa emulada (`apps/mobile/src/transport/rnode/emulator.ts`) e simulação no ar: o aviso do guia diz isso.
+
 **lora** · Ligar um rádio LoRa ao Piu Node · EM TESTE
-- Conferido: `apps/piu-node/src/config.ts:51,73` (`PIU_SERIAL`, formato `lora:<porta>@<baud>`), `:83` (SF 9), `:86` (ciclo 10%), `:87` (envelope 1536); modem KISS em `apps/piu-node/README.md:26–29`; UCI `serial.*` lido por `piu-node.init:45–52`.
-- Protótipo dizia: `piu-node radio list`, `piu-node radio enable lora0 --region BR915`; o painel acha o rádio sozinho ("Rádio LoRa encontrado"); ativar pelo celular em Conexões; teste de alcance; "o Piu respeita o limite".
-- Mudou: **`piu-node radio …` não existe** (o piu-node não tem subcomandos). A configuração passou a ser por UCI ou variáveis; não há tela de rádio nem teste de alcance; frequência e potência ficam no firmware do rádio. Aviso de que só foi testado com simulador.
+- Conferido: `apps/piu-node/src/config.ts` (`PIU_SERIAL` com os tipos `rnode`, `meshtastic`, `lora` e `usb`; `PIU_RNODE_REGION` padrão `BR_902`; `PIU_RNODE_TX_DBM` dentro da região; `PIU_MESHTASTIC_PER_MIN`); linha de log `RNode: rádio … pronto` em `apps/piu-node/src/relay/rnode.ts`; nova tentativa a cada minuto; envelope de 904 bytes (rnode/meshtastic) e 1536 (KISS).
+- Mudou (08/11/2026): o guia era só de modem KISS e dizia que o RNode não funcionava. Agora o tipo recomendado é `rnode`. O UCI do OpenWrt ganhou `serial.rnode_region`, `rnode_freq_hz`, `rnode_tx_dbm` e `mesh_per_min` (`packaging/openwrt/files/piu-node.init` e `piu-node.config`; teste em `packaging/openwrt/test/ipk.test.mjs`). O `/etc/default/piu-node` do .deb traz o exemplo `rnode:`.
+- Antes (protótipo): `piu-node radio …` e tela de rádio no painel, que não existem.
+- Antenas: `ant-roof` dizia que o Piu não ajusta a potência; com o rádio do Piu ele usa 17 dBm (abaixo do limite da região), e no Piu Node dá para baixar com `rnode_tx_dbm`. Problemas comuns ganhou "O rádio LoRa não conecta ou é recusado".
 
 ### Antenas
 

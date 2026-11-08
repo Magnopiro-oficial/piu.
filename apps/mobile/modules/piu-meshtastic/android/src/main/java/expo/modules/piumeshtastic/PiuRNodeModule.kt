@@ -53,6 +53,7 @@ class PiuRNodeModule : Module() {
   private var connectTimeout: Runnable? = null
   private var scanCallback: ScanCallback? = null
   private var scanStop: Runnable? = null
+  private var scanPromise: Promise? = null
   private var bondReceiver: BroadcastReceiver? = null
   private var connected = false
 
@@ -123,13 +124,16 @@ class PiuRNodeModule : Module() {
     }
     scanCallback = cb
     if (!connected) state("scanning")
-    val stop = Runnable { stopScan(); if (!connected && gatt == null) state("idle"); promise.resolve(null) }
+    scanPromise = promise
+    val stop = Runnable { stopScan(); if (!connected && gatt == null) state("idle") }
     scanStop = stop
     handler.postDelayed(stop, (seconds.coerceIn(1.0, 60.0) * 1000).toLong())
   }
 
+  /** Encerra a busca e resolve quem esperava por ela (nova busca ou conexão no meio não deixam promessa pendurada). */
   private fun stopScan() {
     scanStop?.let { handler.removeCallbacks(it) }; scanStop = null
+    scanPromise?.resolve(null); scanPromise = null
     val cb = scanCallback ?: return
     scanCallback = null
     runCatching { adapter()?.bluetoothLeScanner?.stopScan(cb) }
@@ -177,7 +181,8 @@ class PiuRNodeModule : Module() {
       g.setCharacteristicNotification(ch, true) && writeDescriptor(g, d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
     }) { r ->
       val e = r.exceptionOrNull()
-      if (e == null) return@Op ready(g)
+      // Só rádio pareado (PIN da tela da placa): um aparelho que se diz "RNode" sem pedir segurança não recebe nada.
+      if (e == null) return@Op if (g.device.bondState == BluetoothDevice.BOND_BONDED) ready(g) else awaitBond(g) { ready(g) }
       val auth = e is GattError && e.code == "AUTH"
       if (auth && bondRetry) awaitBond(g) { enableNotify(g, ch, bondRetry = false) }
       else close("error", if (auth) "bond" else "notify: ${e.message}")

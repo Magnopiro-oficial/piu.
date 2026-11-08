@@ -5,6 +5,8 @@ import { REGIONS, piuRadio } from '../../transport/rnode/regions';
 import { RNodeSetup, CMD } from '../../transport/rnode/rnode';
 import type { PiuLoraStatus } from '../../transport/rnode/link';
 import type { RadioStatus } from '../../transport/meshtastic/radio';
+import { PiuLoraLink } from '../../transport/rnode/link';
+import { bench, settle } from '../../transport/__tests__/support/rnodeBench';
 import { freqLabel, inUse, loraMedia, piuProblem, piuRowState, REGION_GROUPS, regionRows, waitingFor } from '../piuLora';
 
 test('caminho LoRa: a chave desliga os dois; "Só …" desliga o outro rádio', () => {
@@ -24,17 +26,25 @@ test('caminho LoRa: rádio em uso e espera no modo "Só …"', () => {
   assert.equal(waitingFor('auto', { piu: false, mesh: false }), null, 'no Automático não há espera própria');
 });
 
-/** Motivo de verdade, saído do RNodeSetup. */
-function problemOf(cmd: number, data: number[]) {
-  const s = new RNodeSetup(piuRadio('BR_902'));
-  s.push(CMD.DETECT, Uint8Array.of(0x46));
-  s.push(cmd, Uint8Array.from(data));
-  return s.problem;
+/** Motivo de verdade: a placa emulada responde e o enlace diz por que não subiu. */
+async function problemOf(name: string, o: Parameters<typeof bench>[1] = {}, region = 'BR_902') {
+  const { ble } = bench(name, { now: () => 0, ...o });
+  const link = new PiuLoraLink({ now: () => 0, region, answerMs: 40 });
+  await link.attach(ble);
+  await settle();
+  if (link.status().state === 'configuring') await new Promise(r => setTimeout(r, 60));
+  return link.status().problem;
 }
 
-test('motivo do rádio do Piu: faixa errada, código do firmware, firmware errado, sem região', () => {
-  assert.deepEqual(piuProblem(problemOf(CMD.FREQUENCY, [0x19, 0xd1, 0x4a, 0x40])), { kind: 'band' });
-  assert.deepEqual(piuProblem(problemOf(CMD.ERROR, [0x03])), { kind: 'code', code: '0x03' });
+test('motivo do rádio do Piu: cada problema real da placa vira uma tela com o que fazer', async () => {
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (433)')), { kind: 'band' });
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { radioFault: true })), { kind: 'code', code: '0x01' });
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { fw: [1, 50] })), { kind: 'old', version: '1.50' });
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { tnc: { freqHz: 869_525_000, bwHz: 125_000, sf: 8, cr: 5, txDbm: 14 } })), { kind: 'tnc' });
+  assert.deepEqual(piuProblem(await problemOf('Heltec V3 (915)', { provisioned: false })), { kind: 'setup' });
+  assert.deepEqual(piuProblem('o rádio da placa não ligou'), { kind: 'setup' });
+  assert.deepEqual(piuProblem('o rádio não respondeu'), { kind: 'silent' });
+  assert.deepEqual(piuProblem('frequência diferente do pedido (433)'), { kind: 'band' });
   const s = new RNodeSetup(piuRadio('BR_902'));
   s.push(CMD.DETECT, Uint8Array.of(0x00));
   assert.deepEqual(piuProblem(s.problem), { kind: 'notRNode' });

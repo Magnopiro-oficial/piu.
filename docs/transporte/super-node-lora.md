@@ -79,4 +79,13 @@ Região no app: a que a pessoa escolheu; senão a do país do aparelho (`initial
 - Feito: regiões do mundo e plano do rádio (`regions.ts`), núcleo do RNode (KISS e conferência da configuração, `rnode.ts`) e a porta `PIU_SERIAL=rnode:` no piu-node (malha `lora:piu`, anúncio "PN", tempo de rádio pela região, nova tentativa a cada minuto, ponte com a Meshtastic), com testes.
 - Feito no app: o meio `piulora`, o enlace sobre o RNode (`src/transport/rnode/link.ts`), a fonte combinada com os dois LoRa, a região inicial pelo país do aparelho, o módulo Bluetooth do Android (`PiuRNode`, no pacote nativo do `piu-meshtastic`: busca pelo serviço ou pelo nome "RNode …", PIN pelo diálogo do Android, escritas em pedaços do MTU) e o cliente `src/transport/rnode/radio.ts`, ligado em `native.ts`, com testes. A chave "Rádio LoRa" da aba Rede desliga os dois rádios.
 - Feito nas telas (desenho Piu 17): o bloco LoRa da aba Rede com os dois rádios, "em uso", aviso de espera com "enviar pelo outro" e a escolha Automático / Só Piu / Só Meshtastic (guardada); a folha do tipo de rádio; a folha de conexão (busca, PIN, configurando, falhas); a tela de região, com a sugestão pelo país, busca e troca confirmada (guardada); o "via" em cada mensagem. Galeria de desenvolvimento em `/__dev/radio`.
-- Falta: o teste com a placa (Heltec V3) e a linha "por quê" do Automático (o app ainda não registra quando trocou de caminho).
+- Conferência da placa antes de configurar (como o RNodeInterface do Reticulum): detecção, versão do firmware (1.52 ou mais), processador e memória da placa. A placa é recusada com o motivo e o que fazer quando:
+  - o firmware é antigo;
+  - a placa não foi provisionada;
+  - está em modo TNC, em que devolve a configuração mas não aplica;
+  - a região está fora da faixa do modelo gravado pelo rnodeconf.
+- Sem resposta completa em 12 s, o app desiste ("o rádio não respondeu"). Com o rádio no ar, falha de transmissão reconfigura a placa; fila cheia, memória e modem só contam.
+- Testes sem placa (`docs/hardware/testar-radio-piu.md`): placa emulada byte a byte a partir do firmware, as 41 versões de placa da documentação contra as 27 regiões, simulação no ar e testes de segurança.
+- Falta:
+  - o teste com placas de verdade (guia para a comunidade em `docs/hardware/testar-radio-piu.md`);
+  - a linha "por quê" do Automático (o app ainda não registra quando trocou de caminho).

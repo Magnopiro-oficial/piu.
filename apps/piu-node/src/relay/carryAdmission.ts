@@ -8,12 +8,16 @@
  * - pelo endereço de rede de onde ele fala (IP, sem a porta), com teto maior: trocar de identidade
  *   na mesma máquina também não renova (vários celulares honestos atrás do mesmo IP cabem no teto maior).
  *
+ * - Malha aberta (LoRa): todo mundo no ar chega como um vizinho só (`lora:piu`, `lora:mesh`); o balde dela é o
+ *   de meio compartilhado (`OPEN_MESH_CARRY`), para que 10 cargas falsas de quem ouve o ar não travem a de todos.
+ *
  * Limite reconhecido: a origem real de uma carga que atravessou relays não é conhecida (o envelope é
  * anônimo por desenho); cada relay aplica o mesmo limite ao vizinho dele.
  */
-import { CarryLimiter } from '../protocol/carry.js';
+import { CarryLimiter, OPEN_MESH_CARRY } from '../protocol/carry.js';
 
-export interface CarrySource { session: { peerId: string }; address: string }
+/** `open`: malha aberta (LoRa), um vizinho virtual para todos no ar. */
+export interface CarrySource { session: { peerId: string }; address: string; open?: boolean }
 
 /** Host de `host:porta`, `[v6]:porta` ou um caminho (serial): o que identifica a origem no meio. */
 export function sourceHost(address: string): string {
@@ -26,11 +30,13 @@ export function sourceHost(address: string): string {
 export class CarryAdmission {
   private byPeer: CarryLimiter;
   private byHost: CarryLimiter;
+  private byMesh = new CarryLimiter(OPEN_MESH_CARRY.perHour, OPEN_MESH_CARRY.burst);
   constructor(o: { perHour?: number; burst?: number; hostPerHour?: number; hostBurst?: number } = {}) {
     this.byPeer = new CarryLimiter(o.perHour ?? 30, o.burst ?? 10);
     this.byHost = new CarryLimiter(o.hostPerHour ?? 120, o.hostBurst ?? 30);
   }
   take(link: CarrySource, now: number): boolean {
+    if (link.open) return this.byMesh.take(`m:${link.session.peerId}`, now);
     if (!this.byPeer.take(`p:${link.session.peerId}`, now)) return false;
     return this.byHost.take(`h:${sourceHost(link.address)}`, now);
   }

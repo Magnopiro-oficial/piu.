@@ -6,7 +6,6 @@ import { combineSources } from './composite';
 import { LoraRadio } from './meshtastic/radio';
 import { PiuLoraLink } from './rnode/link';
 import { PiuLoraRadio } from './rnode/radio';
-import { countryFromLocale, initialRegion } from './rnode/region';
 import { createLanController } from './lan/controller';
 import { createNativeLanApi } from './lan/native';
 import { createMultiTransport, type LinkEvent, type LinkSource } from './multi';
@@ -61,9 +60,10 @@ export function createNativeTransport(): Transport | null {
   // Rádio Meshtastic: o enlace LoRa é mais uma fonte; só existe com o módulo piu-meshtastic (Android).
   const radio = PiuMeshtastic.isAvailable() ? new LoraRadio(PiuMeshtastic) : null;
   const lora = radio ? { subscribe: radio.link.subscribe.bind(radio.link), send: radio.link.send.bind(radio.link) } : undefined;
-  // Rádio próprio do Piu (RNode): a mesma malha LoRa, preferida ao Meshtastic. Região pelo país do aparelho.
-  const country = countryFromLocale(Intl.DateTimeFormat().resolvedOptions().locale);
-  const rnode = PiuRNode.isAvailable() ? new PiuLoraRadio(PiuRNode, new PiuLoraLink({ region: initialRegion({ country }) })) : null;
+  // Rádio próprio do Piu (RNode): a mesma malha LoRa, preferida ao Meshtastic. Sem região até a pessoa
+  // escolher ou confirmar a sugerida pelo país (RegionPicker; a escolha salva chega por state/transport.tsx):
+  // o idioma do aparelho não diz onde ele está, e transmitir na faixa de outro país é ilegal.
+  const rnode = PiuRNode.isAvailable() ? new PiuLoraRadio(PiuRNode, new PiuLoraLink()) : null;
   const piu = rnode ? { subscribe: rnode.link.subscribe.bind(rnode.link), send: rnode.link.send.bind(rnode.link) } : undefined;
   const transport = createMultiTransport(lanApi || lora || piu ? combineSources(source, lan, lora, piu) : source, { lowBattery: watchLowBattery() });
   transport.lan = lan;

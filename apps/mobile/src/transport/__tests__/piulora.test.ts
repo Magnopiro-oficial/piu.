@@ -4,40 +4,24 @@ import { test } from 'node:test';
 import { Reassembler, splitEnvelope } from '../meshtastic/fragments';
 import { encodeNodeBeacon } from '../meshtastic/nodeBeacon';
 import { LORA_PEER } from '../meshtastic/link';
-import { CMD, KissReader, kissFrame } from '../rnode/rnode';
-import { PiuLoraLink, type ByteStream } from '../rnode/link';
+import { PiuLoraLink } from '../rnode/link';
+import { bench, settle } from './support/rnodeBench';
 import { piuRadio } from '../rnode/regions';
-import { countryFromLocale, initialRegion } from '../rnode/region';
+import { countryFromLocale } from '../rnode/region';
 import { isLora, MEDIA, rankLinks, type LinkInfo } from '../select';
 import type { LinkEvent } from '../multi';
 import { deriveNodeKey, newSeed } from '../../protocol/keys';
 
-/** RNode pelo Bluetooth: responde cada ajuste com o valor em vigor e guarda o que foi ao ar. */
-class FakeRNodeBle implements ByteStream {
-  private fn: ((b: Uint8Array) => void) | null = null;
-  private rd = new KissReader();
-  aired: Uint8Array[] = [];
-  override: Partial<Record<number, Uint8Array>> = {};
-  async write(bytes: Uint8Array) {
-    for (const { cmd, data } of this.rd.push(bytes)) {
-      if (cmd === CMD.DATA) { this.aired.push(data); continue; }
-      this.send(cmd, this.override[cmd] ?? (cmd === CMD.DETECT ? Uint8Array.of(0x46) : data));
-    }
-  }
-  onData(fn: (b: Uint8Array) => void) { this.fn = fn; return () => { this.fn = null; }; }
-  send(cmd: number, data: Uint8Array) { const f = kissFrame(cmd, data); this.fn?.(f.subarray(0, 3)); this.fn?.(f.subarray(3)); }
-  hear(p: Uint8Array) { this.send(CMD.DATA, p); }
-}
-
 const T = 1_800_000_000_000;
 
-async function setup(region = 'BR_902') {
+async function setup(region = 'BR_902', boardName = 'Heltec V3 (915)') {
   const now = { t: T };
   const link = new PiuLoraLink({ now: () => now.t, region });
   const ev: LinkEvent[] = [];
   link.subscribe(e => ev.push(e));
-  const radio = new FakeRNodeBle();
-  await link.attach(radio);
+  const radio = bench(boardName, { now: () => now.t });
+  await link.attach(radio.ble);
+  await settle();
   return { now, link, ev, radio };
 }
 
@@ -51,32 +35,34 @@ test('meio piulora: o seletor prefere o LoRa próprio ao Meshtastic para o mesmo
 });
 
 test('enlace piulora: configura o rádio da região e sobe como a malha LoRa', async () => {
-  const { link, ev } = await setup();
+  const { link, ev, radio } = await setup();
   assert.equal(link.status().state, 'up');
   assert.equal(link.status().region, 'BR_902');
+  assert.equal(link.status().board, 'Heltec LoRa32 v3', 'a placa diz o modelo pela memória');
+  assert.deepEqual(radio.emu.phy(), { freqHz: 904_750_000, bwHz: 125_000, sf: 9, cr: 5, txDbm: 17 }, 'no ar com o canal do Brasil');
   assert.deepEqual(ev.filter(e => e.type === 'up').map(e => [e.medium, (e as { id: string }).id]), [['piulora', LORA_PEER]]);
 });
 
-test('enlace piulora: rádio que recusa o ajuste não sobe e diz o motivo', async () => {
-  const now = { t: T };
-  const link = new PiuLoraLink({ now: () => now.t, region: 'BR_902' });
-  const radio = new FakeRNodeBle();
-  radio.override[CMD.FREQUENCY] = Uint8Array.of(0, 0, 0, 1);
-  await link.attach(radio);
+test('enlace piulora: placa de outra faixa não sobe e diz o motivo', async () => {
+  const { link, radio } = await setup('BR_902', 'Heltec V3 (433)');
   assert.equal(link.status().state, 'failed');
-  assert.match(link.status().problem ?? '', /frequência/);
+  assert.match(link.status().problem ?? '', /fora da faixa da placa \(420–520 MHz\)/);
+  assert.equal(radio.emu.online, false, 'nem chega a ligar o rádio');
 });
 
 test('enlace piulora: envia em pedaços KISS dentro do tempo de rádio; recebe e conta Super Nodes', async () => {
   const { link, ev, radio } = await setup();
   const env = Uint8Array.from({ length: 300 }, (_, i) => i & 0xff);
   await link.send(LORA_PEER, env);
+  await settle();
   const re = new Reassembler();
   assert.deepEqual([...radio.aired.map(p => re.push(p, T)).find(Boolean)!], [...env]);
   await assert.rejects(link.send(LORA_PEER, new Uint8Array(3000)), 'grande demais para o LoRa');
   for (const p of splitEnvelope(env.map(x => x ^ 1), 5)) radio.hear(p);
+  await settle();
   assert.equal(ev.filter(e => e.type === 'data').length, 1);
   radio.hear(encodeNodeBeacon(deriveNodeKey(newSeed()), { at: Math.floor(T / 1000), relay: true, gateway: true }));
+  await settle();
   assert.equal(link.status().superNodes, 1);
   assert.equal(link.status().gateways, 1);
   let busy = 0;
@@ -87,10 +73,13 @@ test('enlace piulora: envia em pedaços KISS dentro do tempo de rádio; recebe e
 test('enlace piulora: trocar de região reconfigura o rádio; desconectar derruba o vizinho', async () => {
   const { link, ev, radio } = await setup();
   await link.setRegion('EU_868');
+  await settle();
   assert.equal(link.status().region, 'EU_868');
   assert.equal(link.status().state, 'up');
+  assert.equal(radio.emu.phy()?.freqHz, 869_525_000, 'o rádio já está no canal novo');
   const before = radio.aired.length;
   await link.send(LORA_PEER, new Uint8Array(100));
+  await settle();
   assert.equal(radio.aired.length, before + 1, 'segue enviando depois de reconfigurar');
   link.detach();
   assert.equal(link.status().state, 'off');
@@ -98,14 +87,17 @@ test('enlace piulora: trocar de região reconfigura o rádio; desconectar derrub
   assert.throws(() => new PiuLoraLink({ region: 'XX' }), /região/i);
 });
 
-test('região inicial: a escolhida pela pessoa; senão a do país; senão nenhuma (a pessoa escolhe)', () => {
-  assert.equal(initialRegion({ saved: 'EU_433', country: 'BR' }), 'EU_433');
-  assert.equal(initialRegion({ saved: 'XX', country: 'BR' }), 'BR_902', 'salva inválida é ignorada');
-  assert.equal(initialRegion({ country: 'de' }), 'EU_868');
-  assert.equal(initialRegion({ country: 'AR' }), null);
-  assert.equal(initialRegion({}), null);
+test('região: o idioma só sugere; sem a escolha da pessoa o rádio não liga nem transmite', async () => {
   assert.equal(piuRadio('BR_902').freqHz, 904_750_000);
   assert.deepEqual(['pt-BR', 'en_US', 'de-Latn-DE', 'pt', '', undefined].map(countryFromLocale), ['BR', 'US', 'DE', null, null, null]);
+  const link = new PiuLoraLink({ now: () => T });
+  const radio = bench('Heltec V3 (915)', { now: () => T });
+  await link.attach(radio.ble); await settle();
+  assert.equal(link.status().state, 'failed');
+  assert.match(link.status().problem ?? '', /escolha a região/);
+  assert.equal(radio.emu.online, false, 'nenhum comando de rádio foi mandado');
+  await link.setRegion('BR_902'); await settle();
+  assert.equal(link.status().state, 'up');
 });
 
 // ---- Rádio (rnode/radio.ts): busca, conexão pelo Nordic UART e queda ----
@@ -113,14 +105,14 @@ test('região inicial: a escolhida pela pessoa; senão a do país; senão nenhum
 import { PiuLoraRadio, type RNodeClient } from '../rnode/radio';
 import type { RadioDevice } from '../meshtastic/radio';
 
-/** Módulo nativo falso: o Nordic UART entrega as respostas do RNode (FakeRNodeBle) como notificações. */
+/** Módulo nativo de teste: o Nordic UART liga a placa emulada (support/rnodeBench.ts). */
 function fakeNus(fail?: string) {
-  const ble = new FakeRNodeBle();
+  const b = bench(), ble = Object.assign(b.ble, { aired: b.aired, hear: b.hear });
   const dev = new Set<(d: RadioDevice) => void>(), st = new Set<(s: string, r?: string) => void>();
   const data = new Set<(b: Uint8Array) => void>();
   const sub = <T,>(s: Set<T>, f: T) => { s.add(f); return { remove: () => { s.delete(f); } }; };
   ble.onData(b => data.forEach(f => f(b)));
-  const client: RNodeClient & { state(s: string, r?: string): void; ble: FakeRNodeBle } = {
+  const client: RNodeClient & { state(s: string, r?: string): void; ble: typeof ble } = {
     ble,
     async scan() { dev.forEach(f => f({ id: 'A', name: 'RNode 3F2A', rssi: -90 })); dev.forEach(f => f({ id: 'B', name: 'RNode 77C1', rssi: -60 })); },
     async connect() { if (fail) throw Object.assign(new Error(fail), { code: fail }); },
@@ -138,9 +130,11 @@ test('rádio RNode: busca ordena pelo sinal; conecta, configura e a malha sobe; 
   await r.scan(1);
   assert.deepEqual(r.status().devices.map(d => d.id), ['B', 'A']);
   await r.connect('B');
+  await settle();
   assert.equal(r.status().phase, 'connected');
   assert.equal(r.link.status().state, 'up', 'o RNode confirmou cada ajuste pelo Bluetooth');
   await r.link.send(LORA_PEER, new Uint8Array(50));
+  await settle();
   assert.equal(c.ble.aired.length, 1);
   c.state('disconnected');
   assert.equal(r.status().phase, 'away', 'mantém o rádio para reconectar');
@@ -149,6 +143,7 @@ test('rádio RNode: busca ordena pelo sinal; conecta, configura e a malha sobe; 
   const got: LinkEvent[] = [];
   r.link.subscribe(e => got.push(e));
   for (const p of splitEnvelope(new Uint8Array(40), 3)) c.ble.hear(p);
+  await settle();
   assert.equal(got.filter(e => e.type === 'data').length, 0, 'depois da queda nada mais chega ao enlace');
 });
 

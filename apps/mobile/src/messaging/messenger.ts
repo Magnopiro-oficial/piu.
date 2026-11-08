@@ -21,7 +21,7 @@ import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { sha256 } from '@noble/hashes/sha2.js';
 import { random } from '../protocol/suite';
 import { DEFAULT_HOPS, directDest, envelopeId, type Header, HOP_OFFSET, openDirect, parseHeader, Priority } from '../protocol/envelope';
-import { type CarryItem, CarryKind, CarryLimiter, carryOf, type CarryReceipt, decodeCarryReceipt, GATEWAY_INBOX_IDENTITY, GATEWAY_TX_IDENTITY, gatewayKindOf, type OpenedCarry, RECEIPT_TTL_SEC, returnIdentity, sealCarry, sealCarryReceipt } from '../protocol/carry';
+import { type CarryItem, CarryKind, CarryLimiter, carryOf, OPEN_MESH_CARRY, type CarryReceipt, decodeCarryReceipt, GATEWAY_INBOX_IDENTITY, GATEWAY_TX_IDENTITY, gatewayKindOf, type OpenedCarry, RECEIPT_TTL_SEC, returnIdentity, sealCarry, sealCarryReceipt } from '../protocol/carry';
 import { decodeProofV2Frame, encodeProofV2Frame, isProofV2Frame, makeDeliveryProof, MAX_PROOFS_PER_FRAME, sealDeliveryProof, SEALED_PROOF_BYTES, VALIDATOR_PROOF_PK } from '../protocol/proof';
 import { identityId, type Identity, type IdentityKind, type KeyPair, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { randomDelaySec, Router, type TransportClass } from '../protocol/router';
@@ -1878,6 +1878,8 @@ export class Messenger {
   private carries = new Map<string, CarryOut>();
   private gatewayRoles = { tx: false, inbox: false };
   private carryLimit = new CarryLimiter();
+  /** Malha aberta (LoRa): um vizinho virtual para todos no ar, com o teto de meio compartilhado. */
+  private carryLimitAir = new CarryLimiter(OPEN_MESH_CARRY.perHour, OPEN_MESH_CARRY.burst);
 
   /**
    * Põe na malha uma carga para "qualquer gateway" (transação assinada ou pacote selado para o
@@ -2048,7 +2050,11 @@ export class Messenger {
     if (isProofV2Frame(bytes)) { this.onProofsV2(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }
     // Cargas para gateway têm teto próprio por vizinho (cada uma custa a um gateway uma consulta à Mainnet).
-    if (gatewayKindOf(bytes) !== null && !this.carryLimit.take(peerId, this.o.now())) return { status: 'rejected' as const, reason: 'limite de cargas' };
+    // Só a carga nova gasta: cópia repetida ou regravada o roteador descarta de graça.
+    if (gatewayKindOf(bytes) !== null && this.router.isNew(bytes, this.o.now())) {
+      const limit = this.peers.get(peerId) === 'lora' ? this.carryLimitAir : this.carryLimit;
+      if (!limit.take(peerId, this.o.now())) return { status: 'rejected' as const, reason: 'limite de cargas' };
+    }
     const r = this.router.ingest(bytes, peerId, this.o.now());
     this.rx = null;
     if (r.status === 'delivered') {

@@ -382,7 +382,7 @@ export class RelayEngine {
     const p = this.meshes.get(id);
     if (!p) return;
     this.seen(id);
-    this.ingest({ session: { peerId: p.id }, address: p.address }, envelope);
+    this.ingest({ session: { peerId: p.id }, address: p.address, open: true }, envelope);
   }
 
   /** Entrega à malha o que cabe no tempo de rádio dela agora (o resto fica para a próxima rodada). */
@@ -465,8 +465,9 @@ export class RelayEngine {
     // Política do operador: sem mídia de terceiros (o roteador ainda deixaria passar).
     if (bulk && !this.settings.media && !this.o.identities?.length) { this.counters.rejected++; return; }
     // Cargas para gateway: teto próprio por vizinho (identidade e endereço; reconectar não renova), porque
-    // cada uma custa a um gateway uma consulta à Mainnet (auditoria final, M-N1).
-    if (gatewayKindOf(bytes) !== null && !this.carryLimit.take(link, this.sec())) { this.counters.rejected++; return; }
+    // cada uma custa a um gateway uma consulta à Mainnet (auditoria final, M-N1). Só a carga nova gasta:
+    // cópia repetida ou regravada o roteador descarta de graça.
+    if (gatewayKindOf(bytes) !== null && this.router.isNew(bytes, this.sec()) && !this.carryLimit.take(link, this.sec())) { this.counters.rejected++; return; }
     const r = this.router.ingest(bytes, link.session.peerId, this.sec());
     if (r.status === 'delivered' && r.message.type === MsgType.Carry) {
       const c = carryOf(r.message, bytes);

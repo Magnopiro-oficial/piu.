@@ -50,6 +50,10 @@ piu_env_map() {
 	piu_env opt  serial lora_duty       PIU_LORA_DUTY
 	piu_env opt  serial max_envelope    PIU_LORA_MAX_ENVELOPE
 	piu_env opt  serial beacon_ms       PIU_LORA_BEACON_MS
+	piu_env opt  serial rnode_region    PIU_RNODE_REGION
+	piu_env opt  serial rnode_freq_hz   PIU_RNODE_FREQ_HZ
+	piu_env opt  serial rnode_tx_dbm    PIU_RNODE_TX_DBM
+	piu_env opt  serial mesh_per_min    PIU_MESHTASTIC_PER_MIN
 	# Leitura da Lunes Mainnet (seção `lunes`). Sem `endpoint`: os 4 de produção.
 	piu_env list lunes  endpoint        PIU_LUNES_ENDPOINTS
 }

@@ -10,7 +10,7 @@ import { AirtimeBudget } from '../meshtastic/budget.js';
 import { decodeNodeBeacon, encodeNodeBeacon, NodeSightings } from '../meshtastic/nodeBeacon.js';
 import type { KeyPair } from '../protocol/keys.js';
 import type { PiuRadio } from '../rnode/regions.js';
-import { CMD, configFrames, KissReader, kissFrame, RNodeSetup, type RNodeState } from '../rnode/rnode.js';
+import { CMD, configFrames, KissReader, kissFrame, probeFrames, Reconfigures, RNodeSetup, type RNodeState } from '../rnode/rnode.js';
 import type { MeshPort, RelayEngine } from './engine.js';
 import type { Modem } from './serial.js';
 
@@ -34,7 +34,11 @@ export interface RNodeOptions {
 
 export interface RNodeStats {
   kind: 'rnode'; path: string; region: string; freqHz: number; state: RNodeState; problem: string | null;
+  /** Placa pelo modelo gravado na memória (ex.: "LilyGO T-Beam"). */
+  board?: string;
   superNodes: number; sent: number; received: number; busy: number;
+  /** Erros passageiros do firmware com o rádio no ar (fila, memória, modem, transmissão). */
+  hwErrors: number;
 }
 
 export class RNodeAdapter {
@@ -87,11 +91,15 @@ export class RNodeAdapter {
     if (this.now() - this.configuredAt >= (this.o.retryMs ?? 60_000)) this.configure();
   }
 
+  /** Pergunta quem é a placa (firmware, modelo, modo); a configuração vai quando ela responde. */
   private configure() {
+    this.hwErrors += this.setup.hwErrors;
     this.setup = new RNodeSetup(this.o.radio);
     this.configuredAt = this.now();
-    for (const f of configFrames(this.o.radio)) this.o.modem.write(f);
+    for (const f of probeFrames()) this.o.modem.write(f);
   }
+  private hwErrors = 0;
+  private readonly reconf = new Reconfigures();
 
   private down() { this.engine.detachMesh(PIU_PEER); }
 
@@ -120,10 +128,28 @@ export class RNodeAdapter {
   private onCommand(cmd: number, data: Uint8Array) {
     if (cmd !== CMD.DATA) {
       const was = this.setup.state;
-      this.setup.push(cmd, data);
+      const next = this.setup.push(cmd, data);
+      if (next === 'probed') {
+        for (const f of configFrames(this.o.radio)) this.o.modem.write(f);
+        return;
+      }
+      if (next === 'reconfigure') {
+        this.down();
+        if (this.reconf.allow(this.now())) {
+          this.o.log?.(`RNode: ${this.o.modem.label}: falha de transmissão, configurando o rádio de novo`);
+          this.configure();
+        } else {
+          // Placa que falha toda transmissão: para e tenta de novo no tick, depois de `retryMs`.
+          this.setup = new RNodeSetup(this.o.radio);
+          this.setup.push(CMD.ERROR, Uint8Array.of(0x02));
+          this.o.log?.(`RNode: ${this.o.modem.label}: falhas de transmissão seguidas; nova tentativa depois`);
+        }
+        return;
+      }
       if (was !== 'up' && this.up) {
         const r = this.o.radio;
-        this.o.log?.(`RNode: rádio ${this.o.modem.label} pronto (${r.region}, ${(r.freqHz / 1e6).toFixed(3)} MHz, ${r.txDbm} dBm)`);
+        const board = this.setup.board.product ? `${this.setup.board.product}, ` : '';
+        this.o.log?.(`RNode: rádio ${this.o.modem.label} pronto (${board}${r.region}, ${(r.freqHz / 1e6).toFixed(3)} MHz, ${r.txDbm} dBm)`);
         this.engine.attachMesh(this.port);
         this.beacon();
       } else if (was !== 'failed' && this.setup.state === 'failed') {
@@ -150,7 +176,8 @@ export class RNodeAdapter {
     const r = this.o.radio;
     return {
       kind: 'rnode', path: this.o.modem.label, region: r.region, freqHz: r.freqHz, state: this.setup.state, problem: this.setup.problem,
-      superNodes: this.sightings.near(Math.floor(this.now() / 1000)).length, ...this.st,
+      ...(this.setup.board.product ? { board: this.setup.board.product } : {}),
+      superNodes: this.sightings.near(Math.floor(this.now() / 1000)).length, ...this.st, hwErrors: this.hwErrors + this.setup.hwErrors,
     };
   }
 }

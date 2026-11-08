@@ -58,6 +58,12 @@ export function ConnectPiuSheet({ radio, problem, deviceId, onRegion, onClose }:
     ) : fail.kind === 'notRNode' ? (
       <Result tone="neutral" icon="memory" title={t('piu.fail.notRNode')} desc={t('piu.notRNode.d')}
         link={[t('piu.howInstall'), () => { void Linking.openURL(RNODE_INSTALL_URL).catch(() => {}); }]} secondary={[t('lora.other'), other]} />
+    ) : fail.kind === 'old' || fail.kind === 'tnc' || fail.kind === 'setup' ? (
+      <Result tone="neutral" icon="memory" title={fail.kind === 'old' ? t('piu.fail.old', { version: fail.version }) : t(`piu.fail.${fail.kind}`)}
+        desc={fail.kind === 'old' ? t('piu.old.d', { version: fail.version }) : t(`piu.${fail.kind}.d`)}
+        link={[t('piu.howInstall'), () => { void Linking.openURL(RNODE_INSTALL_URL).catch(() => {}); }]} primary={[t('lora.retry'), retry]} secondary={[t('lora.other'), other]} />
+    ) : fail.kind === 'silent' ? (
+      <Result tone="err" icon="error" title={t('piu.fail.silent')} desc={t('piu.silent.d')} primary={[t('lora.retry'), retry]} secondary={[t('lora.other'), other]} />
     ) : fail.kind === 'code' ? (
       <Result tone="err" icon="error" title={t('piu.fail.code', { code: fail.code })} desc={t('piu.code.d')} primary={[t('lora.retry'), retry]} secondary={[t('lora.other'), other]} />
     ) : (

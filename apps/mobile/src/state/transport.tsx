@@ -85,8 +85,8 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   useEffect(() => { transport.setDiscoveryInterval?.(DISCOVERY_INTERVAL_SEC[bat.disc]); }, [transport, bat.disc]);
   // Meios ligados na aba Rede (BLE e Wi-Fi Direct/Nearby).
   useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble && granted.ble, nearby: tx.direct && granted.nearby, ...loraMedia(loraMode, tx.lora) }); }, [transport, tx.ble, tx.direct, tx.lora, loraMode, granted]);
-  // Região do rádio do Piu escolhida pela pessoa (sem escolha, vale a do país do aparelho, native.ts).
-  useEffect(() => { if (piuRegion && transport.piulora?.link.status().region !== piuRegion) void transport.piulora?.link.setRegion(piuRegion); }, [transport, piuRegion]);
+  // Região do rádio do Piu escolhida pela pessoa (sem escolha, o rádio não transmite: native.ts).
+  useEffect(() => { if (piuRegion && transport.piulora?.link.status().region !== piuRegion) transport.piulora?.link.setRegion(piuRegion).catch(() => {}); }, [transport, piuRegion]);
   // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando
   // e "Retransmitir em segundo plano" ligado. No iPhone não tem efeito (só com o app aberto).
   // Ponto Piu ativo (state/point.tsx): o serviço fica ligado mesmo só com o Wi-Fi local (sem Bluetooth).

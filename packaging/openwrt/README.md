@@ -101,7 +101,8 @@ uci commit piu-node        # o procd reinicia o serviço (reload trigger)
 | `lnnp.listen`, `lnnp.port`, `lnnp.discovery_port` | `PIU_LNNP_LISTEN`, `PIU_LNNP_PORT`, `PIU_LNNP_DISCOVERY_PORT` | `0.0.0.0`, `8422`, `8423` |
 | `lnnp.broadcast`, `lnnp.peer`, `lnnp.allow` (listas) | `PIU_LNNP_BROADCAST`, `PIU_LNNP_PEERS`, `PIU_LNNP_ALLOW` | `255.255.255.255`, —, — |
 | `lnnp.memory_mb`, `lnnp.beacon_ms` | `PIU_LNNP_MEMORY_MB`, `PIU_LNNP_BEACON_MS` | `16`, `5000` |
-| `serial.device` (lista) | `PIU_SERIAL` (`lora:/dev/ttyUSB0@115200`; experimental) | (seção comentada) |
+| `serial.device` (lista) | `PIU_SERIAL` (`rnode:/dev/ttyUSB0`, `meshtastic:…`, `lora:…@115200`, `usb:…`; experimental) | (seção comentada) |
+| `serial.rnode_region`, `serial.rnode_freq_hz`, `serial.rnode_tx_dbm`, `serial.mesh_per_min` | `PIU_RNODE_REGION`, `PIU_RNODE_FREQ_HZ`, `PIU_RNODE_TX_DBM`, `PIU_MESHTASTIC_PER_MIN` | `BR_902`, canal e potência da região, `6` (seção comentada) |
 | `lunes.endpoint` (lista) | `PIU_LUNES_ENDPOINTS` | os 4 de produção (seção comentada) |
 | `serial.lora_sf`, `serial.lora_bw_khz`, `serial.lora_cr`, `serial.lora_duty`, `serial.max_envelope` | `PIU_LORA_SF`, `PIU_LORA_BW_KHZ`, `PIU_LORA_CR`, `PIU_LORA_DUTY`, `PIU_LORA_MAX_ENVELOPE` | (seção comentada) |
 
@@ -109,7 +110,7 @@ Listas aceitam `list` do UCI ou uma `option` com valores separados por vírgula.
 
 Descoberta: com mais de uma rede no roteador (ex.: `lan` e uma rede só do Piu), acrescente o broadcast de cada sub-rede a `lnnp.broadcast` (ex.: `uci add_list piu-node.lnnp.broadcast='192.168.50.255'`). O broadcast da sub-rede sai pela interface certa; em teste com contêineres Linux, o anúncio para `255.255.255.255` não formou enlace e o da sub-rede formou (`docs/ajuda/ANALISE.md`, §3 item 7). Num roteador de verdade, a confirmar.
 
-Rádio LoRa (seção `serial`, experimental): `option device 'lora:/dev/ttyUSB0@115200'` (o formato do `PIU_SERIAL`; o teste compila o `parseSerialSpec` do piu-node e confere o exemplo da config). Várias portas: uma `list device` por porta. Para uma variável nova: uma linha em `piu_env_map` no `files/piu-node.init` e a opção comentada em `files/piu-node.config`; o teste confere que toda variável lida em `apps/piu-node/src/config.ts` tem opção UCI e que toda opção da config é usada pelo init.
+Rádio LoRa (seção `serial`, experimental): `option device 'rnode:/dev/ttyUSB0'`, com `option rnode_region` fora do Brasil (o formato do `PIU_SERIAL`; o teste compila o `parseSerialSpec` do piu-node e confere o exemplo da config). Várias portas: uma `list device` por porta. Para uma variável nova: uma linha em `piu_env_map` no `files/piu-node.init` e a opção comentada em `files/piu-node.config`; o teste confere que toda variável lida em `apps/piu-node/src/config.ts` tem opção UCI e que toda opção da config é usada pelo init.
 
 No Node 20 o init acrescenta `--experimental-websocket` (a leitura da Lunes Mainnet usa WebSocket); no Node 22 ele já vem ligado.
 

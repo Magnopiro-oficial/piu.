@@ -6,41 +6,47 @@ import { utf8 } from '../src/protocol/bytes.js';
 import { envelopeId, MsgType, sealDirect } from '../src/protocol/envelope.js';
 import { deriveIdentity, deriveNodeKey, newSeed, toPublic } from '../src/protocol/keys.js';
 import { CMD, KissReader, kissFrame } from '../src/rnode/rnode.js';
+import { RNODE_BOARDS, RNodeEmulator, type EmulatorOptions } from '../../mobile/src/transport/rnode/emulator';
 import { piuRadio, type PiuRadio } from '../src/rnode/regions.js';
 import { RelayEngine } from '../src/relay/engine.js';
 import { PIU_PEER, RNodeAdapter } from '../src/relay/rnode.js';
 import { parseSerialSpec } from '../src/relay/serial.js';
 import { loadLnnpConfig } from '../src/config.js';
 
-/** RNode pela serial: responde cada ajuste com o valor em vigor e guarda os pacotes que foram ao ar. */
-class FakeRNode {
+/**
+ * RNode no USB: a placa emulada byte a byte do app (apps/mobile/src/transport/rnode/emulator.ts), com a
+ * serial entregando os quadros partidos. `silent`: cabo sem placa respondendo.
+ */
+class SerialRNode {
   label = '/dev/ttyUSB0';
   private cb: ((b: Uint8Array) => void) | null = null;
   private rd = new KissReader();
   aired: Uint8Array[] = [];
   configs = 0;
-  /** Muda o que o rádio responde (ex.: placa que não aceita a frequência). */
-  override: Partial<Record<number, Uint8Array>> = {};
   silent = false;
+  readonly emu: RNodeEmulator;
+  constructor(boardName = 'LILYGO T-Beam SX1276', o: EmulatorOptions = {}) {
+    this.emu = new RNodeEmulator(RNODE_BOARDS.find(b => b.name === boardName)!, { now: () => clock.t, ...o });
+    this.emu.onOutput(b => { if (!this.silent) { this.cb?.(b.subarray(0, 2)); this.cb?.(b.subarray(2)); } });
+    this.emu.onTransmit(p => this.aired.push(p));
+  }
   write(bytes: Uint8Array) {
-    for (const { cmd, data } of this.rd.push(bytes)) {
-      if (cmd === CMD.DATA) { this.aired.push(data); continue; }
-      if (cmd === CMD.DETECT) this.configs++;
-      if (this.silent) continue;
-      this.send(cmd, this.override[cmd] ?? (cmd === CMD.DETECT ? Uint8Array.of(0x46) : data));
-    }
+    for (const { cmd } of this.rd.push(bytes)) if (cmd === CMD.DETECT) this.configs++;
+    this.emu.input(bytes);
   }
   onData(cb: (b: Uint8Array) => void) { this.cb = cb; }
   close() {}
-  /** O rádio entrega um quadro (partido em dois, como chega pela serial). */
-  send(cmd: number, data: Uint8Array) { const f = kissFrame(cmd, data); this.cb?.(f.subarray(0, 2)); this.cb?.(f.subarray(2)); }
-  hear(packet: Uint8Array) { this.send(CMD.DATA, packet); }
+  /** Um quadro solto vindo da placa (ex.: erro do firmware). */
+  send(cmd: number, data: Uint8Array) { this.cb?.(kissFrame(cmd, data)); }
+  hear(packet: Uint8Array) { this.emu.receive(packet); }
 }
 
+const clock = { t: 0 };
 const T = 1_800_000_000_000;
 
-function setup(radio: PiuRadio = piuRadio('BR_902'), fake = new FakeRNode()) {
-  const now = { t: T };
+function setup(radio: PiuRadio = piuRadio('BR_902'), fake = new SerialRNode()) {
+  clock.t = T;
+  const now = clock;
   const bob = deriveIdentity(newSeed(), 'public');
   const node = deriveNodeKey(newSeed());
   const engine = new RelayEngine({ node, relay: true, memoryBytes: 1 << 20, identities: [bob], now: () => now.t });
@@ -73,24 +79,48 @@ test('rnode: configura o rádio da região, entra como malha lora:piu e se anunc
   assert.deepEqual(b.pk, node.pk);
 });
 
-test('rnode: rádio que não aceita o ajuste não entra na malha; tenta de novo depois', () => {
-  const fake = new FakeRNode();
-  fake.override[CMD.FREQUENCY] = Uint8Array.of(0x36, 0x89, 0xca, 0xc0); // 915 MHz
+test('rnode: placa calada não entra na malha; quando volta a responder, a nova tentativa sobe', () => {
+  const fake = new SerialRNode();
+  fake.silent = true;
   const { engine, a, now } = setup(piuRadio('BR_902'), fake);
-  assert.equal(a.stats().state, 'failed');
-  assert.match(a.stats().problem ?? '', /frequência/);
+  assert.equal(a.stats().state, 'detecting');
   assert.equal(engine.meshCount, 0);
-  delete fake.override[CMD.FREQUENCY];
+  fake.silent = false;
   now.t += 61_000;
   a.tick();
   assert.equal(fake.configs, 2);
   assert.equal(a.stats().state, 'up');
+  assert.equal(a.stats().board, 'LilyGO T-Beam');
   assert.equal(engine.meshCount, 1);
 });
 
-test('rnode: erro do firmware derruba a malha', () => {
+test('rnode: placa de outra faixa, em modo TNC ou com firmware antigo não entra; o motivo fica no painel', () => {
+  for (const [fake, why] of [
+    [new SerialRNode('LILYGO T-Beam SX1278'), /fora da faixa da placa/],
+    [new SerialRNode('LILYGO T-Beam SX1276', { tnc: { freqHz: 869_525_000, bwHz: 125_000, sf: 8, cr: 5, txDbm: 14 } }), /modo TNC/],
+    [new SerialRNode('LILYGO T-Beam SX1276', { fw: [1, 40] }), /firmware antigo/],
+    [new SerialRNode('ATmega1284p montada em casa', { provisioned: false }), /sem provisionar/],
+  ] as const) {
+    const { engine, a } = setup(piuRadio('BR_902'), fake);
+    assert.equal(a.stats().state, 'failed');
+    assert.match(a.stats().problem ?? '', why);
+    assert.equal(engine.meshCount, 0);
+    if (String(why).includes('TNC')) assert.equal(fake.emu.phy()?.freqHz, 869_525_000, 'TNC fica no canal salvo; o Piu não manda nada por ele');
+    else assert.equal(fake.emu.online, false, 'o rádio não liga');
+    assert.equal(fake.aired.length, 0);
+  }
+});
+
+test('rnode: falha de transmissão reconfigura e volta; fila cheia só conta; erro do rádio derruba', () => {
   const { engine, fake, a } = setup();
-  fake.send(CMD.ERROR, Uint8Array.of(0x03));
+  fake.send(CMD.ERROR, Uint8Array.of(0x02));
+  assert.equal(a.stats().state, 'up', 'reconfigurou na hora');
+  assert.equal(fake.configs, 2);
+  assert.equal(engine.meshCount, 1);
+  fake.send(CMD.ERROR, Uint8Array.of(0x04));
+  assert.equal(a.stats().state, 'up');
+  assert.equal(a.stats().hwErrors, 2);
+  fake.send(CMD.ERROR, Uint8Array.of(0x01));
   assert.equal(a.stats().state, 'failed');
   assert.equal(engine.meshCount, 0);
 });
@@ -152,4 +182,18 @@ test('ponte: o que chega pelo Meshtastic sai pelo rádio próprio e vice-versa, 
   for (const p of splitEnvelope(fromPiu, 9)) fake.hear(p);
   engine.flushAll();
   assert.deepEqual(sent.map(id), [id(fromPiu)], 'rádio próprio → Meshtastic');
+});
+
+test('rnode: placa que falha toda transmissão para de reconfigurar e tenta de novo só no tick', () => {
+  const fake = new SerialRNode('LILYGO T-Beam SX1276', { txFault: () => true });
+  const { a, engine, now } = setup(piuRadio('BR_902'), fake);
+  for (let i = 0; i < 6; i++) fake.send(CMD.ERROR, Uint8Array.of(0x02));
+  assert.ok(fake.configs <= 3, `${fake.configs} configurações`);
+  assert.equal(a.stats().state, 'failed');
+  assert.equal(engine.meshCount, 0);
+  const before = fake.configs;
+  now.t += 61_000;
+  a.tick();
+  assert.ok(fake.configs > before && fake.configs <= before + 3, 'depois do tempo de espera, tenta de novo, no máximo 3 vezes por minuto');
+  assert.equal(a.stats().state, 'failed');
 });

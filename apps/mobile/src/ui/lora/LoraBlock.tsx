@@ -144,7 +144,8 @@ export function LoraBlockView({ first, on, onToggle, noPerm, askPermission, mode
 /** Uma linha do problema do rádio do Piu (1g). */
 export function problemText(t: ReturnType<typeof useT>, p: PiuProblem): string {
   return p.kind === 'band' ? t('piu.fail.band') : p.kind === 'code' ? t('piu.fail.code', { code: p.code }) : p.kind === 'notRNode' ? t('piu.fail.notRNode')
-    : p.kind === 'region' ? t('piu.fail.region') : t('piu.fail.other');
+    : p.kind === 'region' ? t('piu.fail.region') : p.kind === 'old' ? t('piu.fail.old', { version: p.version })
+    : p.kind === 'tnc' || p.kind === 'setup' || p.kind === 'silent' ? t(`piu.fail.${p.kind}`) : t('piu.fail.other');
 }
 
 function RadioLine({ name, state, inUse: use, children }: { name: string; state: 'ok' | 'warn' | 'err' | 'lost' | 'busy'; inUse: boolean; children: ReactNode }) {

@@ -13,7 +13,10 @@ import { Reassembler, splitEnvelope } from '../meshtastic/fragments';
 import { LORA_PEER, LoraBusyError } from '../meshtastic/link';
 import { decodeNodeBeacon, NodeSightings } from '../meshtastic/nodeBeacon';
 import { piuRadio, type PiuRadio } from './regions';
-import { CMD, configFrames, KissReader, kissFrame, RNodeSetup } from './rnode';
+import { CMD, configFrames, KissReader, kissFrame, probeFrames, Reconfigures, RNodeSetup } from './rnode';
+
+/** Sem resposta completa do rádio neste tempo, desiste (o Reticulum espera 5 s pela detecção no BLE). */
+export const RNODE_ANSWER_MS = 12_000;
 
 /** Bytes crus com o RNode (no app, o serviço Nordic UART do Bluetooth). */
 export interface ByteStream {
@@ -28,6 +31,8 @@ export type PiuLoraStatus = {
   region: string | null;
   /** Por que o rádio não subiu (ajuste recusado, erro do firmware). */
   problem?: string;
+  /** Placa conhecida pelo modelo gravado na memória (ex.: "Heltec LoRa32 v3"). */
+  board?: string;
   sent: number; received: number;
   busyUntil?: number;
   superNodes: number; gateways: number;
@@ -52,7 +57,7 @@ export class PiuLoraLink {
   private readonly re = new Reassembler();
   private readonly sightings = new NodeSightings();
 
-  constructor(private readonly o: { now?: () => number; random32?: () => number; region?: string | null } = {}) {
+  constructor(private readonly o: { now?: () => number; random32?: () => number; region?: string | null; answerMs?: number } = {}) {
     this.radio = o.region ? piuRadio(o.region) : null;
     this.budget = this.radio ? budgetFor(this.radio) : new AirtimeBudget();
     this.st = { state: 'off', region: this.radio?.region ?? null, sent: 0, received: 0, superNodes: 0, gateways: 0 };
@@ -85,16 +90,26 @@ export class PiuLoraLink {
     if (this.port) await this.configure();
   }
 
+  private timer: ReturnType<typeof setTimeout> | null = null;
+  private readonly reconf = new Reconfigures();
+
+  /** Pergunta quem é a placa; a configuração vai quando ela responde (onCommand, 'probed'). */
   private async configure() {
     if (!this.port) return;
     if (!this.radio) { this.fail('escolha a região do rádio'); return; }
     this.down();
     this.setup = new RNodeSetup(this.radio);
     this.set({ state: 'configuring', problem: undefined });
-    for (const f of configFrames(this.radio)) await this.port.write(f);
+    this.clearTimer();
+    const setup = this.setup;
+    this.timer = setTimeout(() => { if (this.setup === setup && setup.state !== 'up' && setup.state !== 'failed') this.fail('o rádio não respondeu'); }, this.o.answerMs ?? RNODE_ANSWER_MS);
+    for (const f of probeFrames()) await this.port.write(f);
   }
 
+  private clearTimer() { if (this.timer) clearTimeout(this.timer); this.timer = null; }
+
   private fail(problem: string) {
+    this.clearTimer();
     this.down();
     this.set({ state: 'failed', problem });
   }
@@ -108,6 +123,7 @@ export class PiuLoraLink {
 
   detach() {
     this.down();
+    this.clearTimer();
     this.off?.(); this.off = null; this.port = null; this.setup = null;
     if (this.st.state !== 'off') this.set({ state: 'off', problem: undefined });
     this.emit({ type: 'state', state: 'off' });
@@ -138,8 +154,20 @@ export class PiuLoraLink {
     if (!s) return;
     if (cmd !== CMD.DATA) {
       const was = s.state;
-      s.push(cmd, data);
+      const next = s.push(cmd, data);
+      if (next === 'probed' && this.port && this.radio) {
+        if (s.board.product) this.set({ board: s.board.product });
+        const port = this.port;
+        void (async () => { for (const f of configFrames(this.radio!)) await port.write(f); })().catch(() => {});
+        return;
+      }
+      if (next === 'reconfigure') {
+        if (this.reconf.allow(this.now())) void this.configure().catch(() => {});
+        else this.fail('erro do RNode 0x02');
+        return;
+      }
       if (was !== 'up' && s.state === 'up') {
+        this.clearTimer();
         this.set({ state: 'up' });
         this.emit({ type: 'state', state: 'running' });
         this.emit({ type: 'found', medium: 'piulora', id: LORA_PEER, name: 'Malha LoRa' });

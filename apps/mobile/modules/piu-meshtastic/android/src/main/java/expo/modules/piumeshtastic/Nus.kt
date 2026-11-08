@@ -19,9 +19,9 @@ object Nus {
   const val WRITE_NO_RESPONSE = 1
   const val WRITE_DEFAULT = 2
 
-  /** Pedaços de uma escrita que cabem no MTU (3 bytes do cabeçalho ATT). */
+  /** Pedaços de uma escrita que cabem no MTU (3 bytes do cabeçalho ATT; valor de atributo até 512). */
   fun chunks(bytes: ByteArray, mtu: Int): List<ByteArray> {
-    val n = (mtu - 3).coerceAtLeast(20)
+    val n = (mtu - 3).coerceIn(20, 512)
     return (bytes.indices step n).map { bytes.copyOfRange(it, minOf(it + n, bytes.size)) }
   }
 

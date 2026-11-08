@@ -106,6 +106,18 @@ export class Router {
     return r;
   }
 
+  /**
+   * O envelope entraria como novo (cabeçalho válido, no prazo, nunca visto)? Não gasta o limite do
+   * vizinho nem muda nada: serve para cobrar cotas só do que é novo (cópia repetida ou regravada é de graça).
+   */
+  isNew(bytes: Uint8Array, now: number): boolean {
+    if (bytes.length > this.limits.maxEnvelopeBytes) return false;
+    let h: Header;
+    try { h = parseHeader(bytes); } catch { return false; }
+    if (h.expiresAt <= now || h.expiresAt > now + MAX_TTL_SEC + CLOCK_SKEW_SEC) return false;
+    return !this.seen.has(envelopeId(bytes));
+  }
+
   /** Envelope que chegou de um vizinho (`from`), ou criado aqui (`from = null`). */
   ingest(bytes: Uint8Array, from: string | null, now: number): IngestResult {
     if (from !== null && !this.take(from, now)) return { status: 'rejected', reason: 'limite do vizinho' };

@@ -24,7 +24,8 @@ export class PiuLoraRadio {
 
   constructor(private readonly client: RNodeClient, readonly link: PiuLoraLink = new PiuLoraLink()) {
     client.addDeviceListener(d => {
-      const devices = [...this.st.devices.filter(x => x.id !== d.id), d].sort((a, b) => b.rssi - a.rssi);
+      // Teto de 32 (os de sinal mais forte): anúncios falsos em massa não incham a lista nem a tela.
+      const devices = [...this.st.devices.filter(x => x.id !== d.id), d].sort((a, b) => b.rssi - a.rssi).slice(0, 32);
       this.set({ devices });
     });
     client.addStateListener((state, reason) => {

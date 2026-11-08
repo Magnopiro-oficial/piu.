@@ -17,6 +17,16 @@ class NusTest {
     assertTrue(Nus.chunks(ByteArray(0), mtu = 512).isEmpty())
   }
 
+  @Test fun mtuEstranhoNaoQuebraAEscrita() {
+    // MTU zero ou negativo (callback com erro): 20 bytes, o mínimo do BLE.
+    assertEquals(listOf(20, 20, 10), Nus.chunks(ByteArray(50), mtu = 0).map { it.size })
+    assertEquals(listOf(20, 20, 10), Nus.chunks(ByteArray(50), mtu = -5).map { it.size })
+    // Valor de atributo tem no máximo 512 bytes, mesmo que o MTU informado seja maior.
+    assertEquals(listOf(512, 488), Nus.chunks(ByteArray(1000), mtu = 1000).map { it.size })
+    val big = ByteArray(5000) { (it * 7).toByte() }
+    assertArrayEquals(big, Nus.chunks(big, mtu = 247).reduce { a, x -> a + x })
+  }
+
   @Test fun escritaComRespostaQuandoORadioAceita() {
     assertEquals(Nus.WRITE_DEFAULT, Nus.writeType(Nus.PROP_WRITE or Nus.PROP_WRITE_NR))
     assertEquals(Nus.WRITE_NO_RESPONSE, Nus.writeType(Nus.PROP_WRITE_NR))

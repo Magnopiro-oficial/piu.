@@ -33,9 +33,13 @@
 #PIU_RELAY_SAMPLE_MS=300000
 #PIU_RELAY_PERSIST_MS=30000
 
-# Rádio LoRa ou cabo USB (EXPERIMENTAL: testado com rádio simulado e pseudo-terminais, não com placa real).
-# tipo:caminho@velocidade, tipo lora ou usb, várias portas separadas por vírgula.
-#PIU_SERIAL=lora:/dev/ttyUSB0@115200
+# Rádio LoRa ou cabo USB (EXPERIMENTAL: testado com placa emulada e rádio simulado, não com placa real).
+# tipo:caminho[@velocidade], várias portas separadas por vírgula. Tipos: rnode (rádio do Piu: o nó ajusta
+# o canal pela região), meshtastic, lora (modem KISS: canal no firmware) e usb.
+#PIU_SERIAL=rnode:/dev/ttyUSB0
+#PIU_RNODE_REGION=BR_902
+#PIU_MESHTASTIC_PER_MIN=6
+# Só para o tipo lora (modem KISS):
 #PIU_LORA_SF=9
 #PIU_LORA_BW_KHZ=125
 #PIU_LORA_CR=5
