@@ -457,9 +457,12 @@ export async function openSerialModem(path: string, baud: number): Promise<Modem
   };
 }
 
+/** Porta de `PIU_SERIAL`: os dois modos deste arquivo ou um rádio Meshtastic (relay/meshtastic.ts). */
+export type SerialPortKind = SerialKind | 'meshtastic' | 'rnode';
+
 /** `lora:/dev/ttyUSB0@115200` → tipo, caminho e velocidade. */
-export function parseSerialSpec(s: string): { kind: SerialKind; path: string; baud: number } {
-  const m = /^(lora|usb):([^@]+)(?:@(\d+))?$/.exec(s.trim());
+export function parseSerialSpec(s: string): { kind: SerialPortKind; path: string; baud: number } {
+  const m = /^(lora|usb|meshtastic|rnode):([^@]+)(?:@(\d+))?$/.exec(s.trim());
   if (!m) throw new Error(`PIU_SERIAL: use tipo:caminho@velocidade, ex.: lora:/dev/ttyUSB0@115200 (recebido: ${s})`);
-  return { kind: m[1] as SerialKind, path: m[2]!, baud: Number(m[3] ?? 115200) };
+  return { kind: m[1] as SerialPortKind, path: m[2]!, baud: Number(m[3] ?? 115200) };
 }

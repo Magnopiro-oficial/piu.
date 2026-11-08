@@ -83,6 +83,7 @@ button{letter-spacing:inherit}
 .h-x3:hover{transform:translateX(3px)}
 .h-up1:hover{transform:translateY(-1px)}
 .h-scale108:hover{transform:scale(1.08)!important}
+.h-s106:hover{transform:scale(1.06)}
 .h-rot:hover{transform:rotate(-20deg)!important}
 .h-flip:hover{transform:rotateY(180deg)!important}
 .f-ring:focus{box-shadow:0 0 0 2px var(--ink)!important}

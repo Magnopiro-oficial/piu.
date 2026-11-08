@@ -3,6 +3,9 @@
  * Nada daqui toca Node nem Electron.
  */
 
+import type { CallRecord } from '../../../mobile/src/calls/callMachine';
+import type { RequestStep } from '../../../mobile/src/calls/callView';
+import type { CallAct, CallAudioCmd, CallSnapshot } from './callBridge';
 import type { LangPref, Region } from './i18n/core';
 
 export type IdentityKind = 'public' | 'anon';
@@ -39,6 +42,10 @@ export interface Message {
   deliveredAt?: number;
   /** Mensagem temporária: some deste computador neste instante (s). */
   expiresAt?: number;
+  /** Registro de chamada de voz (sem texto): o chat mostra o cartão no lugar do balão. */
+  call?: CallRecord;
+  /** Cartão "Pedido de chamada" (pela malha), com a etapa atual. */
+  callRequest?: { requestId: string; step: RequestStep };
 }
 
 /** Prazo das mensagens temporárias de uma conversa. */
@@ -303,6 +310,14 @@ export interface PiuEvents {
   update: UpdateState;
   /** Ponto Piu deste computador (guardião, E4/E5). */
   guardian: GuardianState;
+  /** Chamada de voz: estado novo (`null` = este computador não faz chamadas, ex.: espelhando o celular). */
+  call: CallSnapshot | null;
+  /** Chamada de voz: abrir/fechar o microfone e tocar a voz que chegou (Web Audio no renderer). */
+  callAudio: CallAudioCmd;
+  /** Chamada de voz: aviso curto ("Lembrete criado", "Pedido enviado"…). */
+  callToast: { text: 'verified' | 'remindLater' | 'requestLater'; peer?: string };
+  /** Recusou "com mensagem": abrir a conversa com o campo de texto em foco. */
+  callDraft: { peer: string };
 }
 
 /**
@@ -463,6 +478,10 @@ export interface PiuApi {
   /** Copia uma imagem PNG (data URL do QR do ponto) para a área de transferência. */
   copyImage(dataUrl: string): Promise<void>;
 
+  /** Chamada de voz (shared/callBridge.ts). `callFrame`: um pedaço codificado do microfone. */
+  callState(): Promise<CallSnapshot | null>;
+  callAct(act: CallAct): Promise<void>;
+  callFrame(codec: 'opus' | 'pcmu', payload: Uint8Array): Promise<void>;
   on<K extends PiuEventName>(event: K, cb: (payload: PiuEvents[K]) => void): () => void;
 }
 

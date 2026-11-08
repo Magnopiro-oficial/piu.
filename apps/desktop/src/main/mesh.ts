@@ -17,6 +17,17 @@ import type { ContactInfo, Route } from '../shared/types';
 import type { Transport, TransportEvent } from '../transport/types';
 import type { DerivedKeys } from './identity';
 import { tm } from './i18n';
+import { CallService, type CallServicePorts } from '../../../mobile/src/calls/callService';
+import { LIVE_SIGNAL_TTL_SEC, REQUEST_TTL_SEC } from '../../../mobile/src/calls/callSignals';
+import { routeOfMedium } from '../../../mobile/src/calls/callMedia';
+import type { LiveRoute } from '../../../mobile/src/calls/callMachine';
+
+/** Portas da chamada que dependem do aparelho (áudio, registro na conversa, avisos). */
+export type MeshCallPorts = Pick<CallServicePorts, 'audio' | 'record' | 'requestUpdate' | 'toast' | 'draft'> & {
+  newId(): string;
+  /** Contato bloqueado neste aparelho: o sinal de chamada dele é ignorado (não toca). */
+  blocked?(peer: string): boolean;
+};
 
 export interface MeshEvents {
   /** Texto de um contato (novo ou conhecido). `isNew`: apareceu como pedido de conversa. */
@@ -40,6 +51,8 @@ export interface MeshEvents {
   communityAlert(a: { id: string; contactId: string; sev: AlertView['sev']; cat: AlertView['cat']; title: string; area: string; communityName: string }, notice: AlertNotice | null): void;
   /** O contato leu estas mensagens minhas (recibo `r`, só se o ajuste dele estiver ligado). */
   read(contactId: string, msgIds: string[]): void;
+  /** O estado da chamada de voz mudou. */
+  call(): void;
 }
 
 export interface MeshOptions {
@@ -55,6 +68,10 @@ export interface MeshOptions {
   /** Privacidade → Metadados (lidos a cada envio, como no celular): atraso aleatório e preenchimento. */
   randomDelay?: () => boolean;
   pad?: () => boolean;
+  /**
+   * Chamada de voz (src/calls do celular): sem isto, o nó não atende nem liga.
+   */
+  call?: MeshCallPorts;
   /**
    * Computador como gateway da carga pela malha (docs/carteira/transacoes-pela-malha.md), opcional: com
    * rota até a Lunes, envia as transações assinadas que chegam e devolve o recibo. Ausente: desligado.
@@ -73,6 +90,9 @@ export class MeshNode {
   private unsubs: (() => void)[] = [];
   private timer: NodeJS.Timeout | null = null;
   private seq = 0;
+  /** Vizinhos com enlace aberto e o meio de cada um (para a voz ir direto). */
+  private links = new Map<string, 'lan' | 'ble'>();
+  readonly call: CallService | null = null;
 
   constructor(private o: MeshOptions) {
     const now = o.now ?? (() => Math.floor(Date.now() / 1000));
@@ -86,6 +106,7 @@ export class MeshNode {
       peerWallet: (contactId, address) => o.events.peerWallet?.(contactId, address),
       typing: contactId => o.events.typing?.(contactId),
       read: (contactId, msgIds) => o.events.read?.(contactId, msgIds),
+      callSignal: (contactId, payload) => { if (!o.call?.blocked?.(contactId)) this.call?.onSignal(contactId, payload); },
       communityAlert: (v, notice) => o.events.communityAlert?.({ id: v.id, contactId: `group:${v.community}`, sev: v.sev, cat: v.cat, title: v.title, area: v.area ?? '', communityName: v.communityName }, notice),
       gatewayCarry: c => { void this.carryGateway?.handle(c).then(r => o.log?.(`gateway: carga ${c.id.slice(0, 8)}… → ${r}`)); },
     };
@@ -101,6 +122,7 @@ export class MeshNode {
       pad: o.pad,
     });
     this.messenger.displayName = o.displayName;
+    if (o.call) this.call = this.makeCall(o.call);
     if (o.gateway) {
       const g = o.gateway, rpc = g.rpc ?? (() => new LunesRpc());
       const post = bundlePoster(g.inboxUrl ?? null);
@@ -145,15 +167,41 @@ export class MeshNode {
     for (const t of this.gatewayTimers.splice(0)) clearInterval(t);
     this.messenger.setGateway({});
     for (const u of this.unsubs.splice(0)) u();
+    this.call?.dispose();
+    this.links.clear();
     await Promise.all(this.o.transports.map(t => t.stop()));
     this.messenger.clearPeers();
   }
 
+  private makeCall(c: MeshCallPorts): CallService {
+    const svc = new CallService({
+      ...c,
+      now: () => Date.now(),
+      sendSignal: (peer, wire, live) => this.messenger.sendCallSignal(peer, wire, live
+        ? { live: true, ttlSec: LIVE_SIGNAL_TTL_SEC }
+        : { live: false, ttlSec: REQUEST_TTL_SEC, msgId: wire.s.t === 'request' ? wire.s.requestId : undefined }),
+      liveRouteTo: peer => this.liveRouteTo(peer),
+      links: () => [...this.links].map(([peerId, medium]) => ({ peerId, medium })),
+      sendFrame: (peerId, frame) => { void this.transmit(peerId, frame).catch(() => {}); },
+    });
+    svc.subscribe(() => this.o.events.call?.());
+    return svc;
+  }
+
+  /** Caminho ao vivo até o contato agora: vizinho direto visto nos últimos 2 min, ainda conectado. */
+  liveRouteTo(peer: string): LiveRoute | null {
+    const link = this.messenger.directLink(peer, 120);
+    const medium = link ? this.links.get(link) : undefined;
+    return medium ? routeOfMedium(medium, false) : null;
+  }
+
   private onTransport(t: Transport, e: TransportEvent) {
     switch (e.type) {
-      case 'connected': this.messenger.peerConnected(e.id, 'eth'); this.o.events.peers?.(); break;
-      case 'disconnected': this.messenger.peerDisconnected(e.id); this.o.events.peers?.(); break;
+      case 'connected': this.links.set(e.id, t.kind); this.messenger.peerConnected(e.id, 'eth'); this.o.events.peers?.(); this.call?.tryWaiting(); break;
+      case 'disconnected': this.links.delete(e.id); this.messenger.peerDisconnected(e.id); this.o.events.peers?.(); break;
       case 'envelope': {
+        // Voz da chamada: quadros 'V' vão direto para a chamada, nunca para o roteador.
+        if (this.call?.onFrame(e.from, t.kind, e.data)) break;
         try { this.messenger.receive(e.from, e.data); }
         catch (err) { this.o.log?.(`mesh: envelope de ${e.from} recusado (${(err as Error).message})`); }
         break;

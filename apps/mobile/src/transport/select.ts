@@ -1,4 +1,5 @@
 import type { Medium, MediumCaps } from './types';
+import { FRAGMENT_BYTES, LORA_MAX_ENVELOPE } from './meshtastic/fragments';
 
 /**
  * Características de cada meio (INF-005). Números conservadores, só para ordenar meios:
@@ -14,8 +15,16 @@ export const MEDIA: Record<Medium, MediumCaps> = {
   nearby: { medium: 'nearby', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 500_000, energyCost: 3 },
   ble: { medium: 'ble', maxEnvelopeBytes: 32 * 1024, mtuBytes: 512, approxBytesPerSec: 10_000, energyCost: 1 },
   lan: { medium: 'lan', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 2_000_000, energyCost: 2 },
+  // LoRa (Meshtastic): ~1 kbps compartilhado por todos; custo 4 o põe atrás de qualquer outro meio.
+  lora: { medium: 'lora', maxEnvelopeBytes: LORA_MAX_ENVELOPE, mtuBytes: FRAGMENT_BYTES, approxBytesPerSec: 30, energyCost: 4 },
+  // LoRa próprio (RNode): mesma malha e mesmos pedaços, sem o cabeçalho e o canal público do Meshtastic;
+  // custo 3 o põe à frente do Meshtastic, que fica de reserva (docs/transporte/super-node-lora.md).
+  piulora: { medium: 'piulora', maxEnvelopeBytes: LORA_MAX_ENVELOPE, mtuBytes: FRAGMENT_BYTES, approxBytesPerSec: 30, energyCost: 3 },
   sim: { medium: 'sim', maxEnvelopeBytes: 32 * 1024, mtuBytes: 32 * 1024, approxBytesPerSec: 1_000_000, energyCost: 1 },
 };
+
+/** Os dois rádios LoRa (Meshtastic e o próprio): mesma malha, mesmas regras (nunca mídia, envelope pequeno). */
+export const isLora = (m: Medium | undefined) => m === 'lora' || m === 'piulora';
 
 /** Até este tamanho o envelope é "pequeno": cabe em poucos blocos BLE (~0,2 s). */
 export const SMALL_ENVELOPE_BYTES = 2048;

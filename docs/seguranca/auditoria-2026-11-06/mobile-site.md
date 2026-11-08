@@ -347,6 +347,7 @@ Método: TDD (teste falhando primeiro, depois a correção). Nada no fio mudou (
 - **ANTES:** release com `RECORD_AUDIO`, `SYSTEM_ALERT_WINDOW` e `com.google.android.c2dm.permission.RECEIVE`.
 - **DEPOIS:** as três removidas no manifesto final de release (conferido em `processReleaseManifest`: nenhuma das três; `POST_NOTIFICATIONS`, `VIBRATE`, `MODIFY_AUDIO_SETTINGS` presentes). `src/debug` mantém `SYSTEM_ALERT_WINDOW` (menu de desenvolvimento). `usesCleartextTraffic` não foi tocado. `READ_MEDIA_IMAGES` não foi removida (fora do pedido).
 - **Testes:** `src/lib/__tests__/androidPermissions.test.ts` (2).
+- **Revisto em 2026-11-07 (chamada de voz, decisão do dono do produto):** `RECORD_AUDIO` volta, só para a chamada. Sai de `blockedPermissions` e é declarada apenas pelo módulo `modules/piu-voice`; o app pede a permissão em tempo de execução ao conectar uma chamada (`src/state/calls.tsx`), nunca antes nem fora dela. No Piu Desktop, o pedido `media` do Chromium só é aceito para áudio, da janela do Piu e com chamada aberta (`mediaAllowed` em `apps/desktop/src/main/security.ts`). `SYSTEM_ALERT_WINDOW` e `c2dm.RECEIVE` continuam fora. Testes: `androidPermissions.test.ts` (3) e `apps/desktop/test/security.test.ts`. O `android/` gerado precisa de novo `prebuild` para perder o `tools:node="remove"` do microfone.
 
 ### B-04 — site: hash do APK escrito à mão e truncado
 - **Arquivos:** `apps/site/src/lib/androidRelease.ts` (novo), `src/lib/desktopRelease.ts` (exporta `REPO`), `src/i18n/pt.ts`, `src/i18n/en.ts`, `src/components/SitePage.astro`.

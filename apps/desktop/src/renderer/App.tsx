@@ -6,6 +6,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { AppLockState, NetworkStatus, Prefs, SessionInfo, UpdateState } from '../shared/types';
 import icon192 from './brand/icon-192.png';
+import { CallContext, CallOverlay, CallTitlePill, callToastText, WindowTitle } from './call';
+import { useTr } from './call/CallContext';
+import { useDesktopCall } from './call/useDesktopCall';
+import { contactOf } from '../../../mobile/src/calls/callView';
 import { applyLangPref, useT } from './i18n';
 import { Auth } from './screens/Auth';
 import { Chats } from './screens/Chats';
@@ -47,6 +51,8 @@ export function App() {
   const [lowFree, setLowFree] = useState<number | null>(null);
   const toastSeq = useRef(0);
   const locked = !!lock?.locked;
+  /** Nome de cada contato (palco e avisos da chamada mostram quem é). */
+  const [names, setNames] = useState<Record<string, string>>({});
   const bus = useMemo(() => new EventTarget(), []);
 
   const showToast = useCallback((text: string, icon = 'check') => {
@@ -68,7 +74,7 @@ export function App() {
     void window.piu.getSession().then(setSession);
     void window.piu.getPrefs().then(setPrefs);
     void window.piu.networkStatus().then(setNet);
-    const refreshUnread = () => { void window.piu.listConversations().then(l => setUnread(l.reduce((a, c) => a + c.unread, 0))).catch(() => {}); };
+    const refreshUnread = () => { void window.piu.listConversations().then(l => { setUnread(l.reduce((a, c) => a + c.unread, 0)); setNames(Object.fromEntries(l.map(c => [c.contact.id, c.contact.name]))); }).catch(() => {}); };
     void window.piu.appLockState().then(setLock).catch(() => {});
     void window.piu.updateState().then(setUpdate).catch(() => {});
     refreshUnread();
@@ -141,13 +147,28 @@ export function App() {
 
   const mac = session?.platform === 'darwin';
   const linked = session?.state === 'linked';
+  // Chamada de voz: só com identidade própria, app aberto e desbloqueado (espelhando o celular, não há).
+  const callHost = useDesktopCall(phase === 'app' && session?.state === 'ready' && !locked, peer => names[peer] ?? '', text => showToast(text, 'error'));
+  const tr = useTr();
+  const nameRef = useRef(names);
+  nameRef.current = names;
+  useEffect(() => {
+    const offs = [
+      window.piu.on('callToast', n => showToast(callToastText(tr, n.text, n.peer ? contactOf(nameRef.current[n.peer] ?? '') : undefined), 'check')),
+      window.piu.on('callDraft', () => setNav('chats')),
+    ];
+    return () => offs.forEach(f => f());
+  }, [showToast, tr]); // eslint-disable-line react-hooks/exhaustive-deps
+  // O palco vive em Conversas: ligar ou atender estando em Carteira/Ajustes leva para lá.
+  const callPhase = callHost?.scene?.state.phase;
+  useEffect(() => { if ((callPhase === 'calling' || callPhase === 'active') && nav !== 'chats') setNav('chats'); }, [callPhase]); // eslint-disable-line react-hooks/exhaustive-deps
   // Vinculado ao celular, o "eu" é o do celular (chega com o snapshot); até lá, um espaço reservado.
   const me = session?.me ?? (linked ? { publicId: 'piu:', anonId: 'piu:', name: '', nodePk: '' } : null);
   const pub = (prefs?.identity ?? 'public') === 'public';
   const links = net?.lan.links ?? 0;
   const winTitle = phase !== 'app' || locked ? 'Piu' : nav === 'settings' ? t('app.nav.settings') : nav === 'wallet' ? t('app.nav.wallet') : nav === 'guardian' ? t('app.nav.guardian') : (chatTitle ?? 'Piu');
-  // Linux e Windows usam a barra de título do sistema: o título dela acompanha o do protótipo.
-  useEffect(() => { document.title = winTitle; }, [winTitle]);
+  // Linux e Windows usam a barra de título do sistema: o título dela acompanha o do protótipo
+  // (<WindowTitle>, que em chamada vira "{nome} · mm:ss").
 
   const askLogout = () => setDialog(linked
     ? { icon: 'phonelink_off', title: t('app.logout.linked.title'), body: t('app.logout.linked.body'), primary: t('app.logout.disconnect'),
@@ -164,10 +185,11 @@ export function App() {
 
   const ready = !!session && !!prefs;
   return (
+    <CallContext.Provider value={callHost}>
     <div data-piu-theme={document.documentElement.dataset.piuTheme} style={{ width: '100%', height: '100%', position: 'relative', overflow: 'hidden', background: 'var(--bg)', color: 'var(--ink)', fontFamily: F, letterSpacing: '-0.005em', display: 'flex', flexDirection: 'column', transition: 'background-color .4s,color .4s' }}>
       {mac && (
         <div className="drag" style={{ height: 40, flex: 'none', display: 'flex', alignItems: 'center', padding: '0 14px', background: 'var(--side)', borderBottom: '1px solid var(--line)', position: 'relative', zIndex: 3 }}>
-          <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: 13, fontWeight: 600, color: 'var(--ink2)', whiteSpace: 'nowrap' }}>{winTitle}</div>
+          <div style={{ position: 'absolute', left: '50%', transform: 'translateX(-50%)', fontSize: 13, fontWeight: 600, color: 'var(--ink2)', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 8 }}>{winTitle}<CallTitlePill /></div>
         </div>
       )}
       {(phase === 'splash' || !ready) && <Splash out={splashOut} />}
@@ -211,9 +233,12 @@ export function App() {
           {nav === 'settings' && <Settings onGuardian={() => setNav('guardian')} page={page} setPage={setPage} me={me} session={session!} prefs={prefs!} net={net} updatePrefs={updatePrefs} toast={showToast} setDialog={setDialog} onLogout={askLogout} lock={lock} update={update} onUpdateDialog={() => setUpdDialog(true)} />}
         </div>
       )}
+      <WindowTitle base={winTitle} />
+      {phase === 'app' && ready && me && !locked && <CallOverlay mac={mac} top={mac ? 40 : 0} />}
       {toast && <Toast text={toast.text} icon={toast.icon} />}
       {dialog && !locked && <Dialog d={dialog} onClose={closeDialog} />}
       {updDialog && !locked && update.state === 'ready' && <UpdateDialog s={update} top={mac ? 40 : 0} onClose={() => setUpdDialog(false)} onInstall={() => void window.piu.installUpdate().catch(e => { setUpdDialog(false); showToast((e as Error).message, 'error'); })} />}
     </div>
+    </CallContext.Provider>
   );
 }

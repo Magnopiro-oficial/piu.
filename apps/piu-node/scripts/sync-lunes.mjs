@@ -24,8 +24,8 @@ export const DST = join(here, '../src/lunes');
 /** Nada de react-native nesses módulos. */
 export const I18N_SRC = join(here, '../../mobile/src/i18n');
 export const I18N_DST = join(here, '../src/i18n');
-// pt-BR do app junta dicionários de subpastas (Piu 11 "modo nó", Piu 13 "Pontos" e "Conectar ao computador"): vêm junto.
-export const I18N_FILES = ['core', 'pt-BR', 'piu11/pt-BR', 'pontos/pt-BR', 'linkDesktop/pt-BR'];
+// pt-BR do app junta dicionários de subpastas (Piu 11 "modo nó", Piu 13 "Pontos" e "Conectar ao computador", chamada de voz e LoRa): vêm junto.
+export const I18N_FILES = ['core', 'pt-BR', 'piu11/pt-BR', 'pontos/pt-BR', 'linkDesktop/pt-BR', 'call/pt-BR', 'lora/pt-BR'];
 export const FILES = ['xxhash', 'ss58', 'lunesRpc', 'walletKey', 'extrinsic', 'walletCore', 'lunesHistory', 'carryGateway'];
 
 /**

@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
-import { DISCOVERY_INTERVAL_SEC, getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
+import { loraMedia } from '../lib/piuLora';
+import type { MediaGrants } from '../transport/grants';
+import { askTransportPermissionsAgain, DISCOVERY_INTERVAL_SEC, getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
 import type { LanStatus } from '../transport/lan/controller';
 import type { LanCheckResult } from '../transport/lan/lanCheck';
 import { lanLowPower, lanWanted, type LanOffReason } from '../transport/lan/policy';
@@ -18,7 +20,12 @@ interface TransportCtx {
   kind: TransportKind;
   state: TransportState;
   reason?: string;
-  permission: 'unknown' | 'granted' | 'denied';
+  /** `partial`: só parte dos meios liberada (ex.: Bluetooth sim, Wi-Fi Direct não). */
+  permission: 'unknown' | 'granted' | 'partial' | 'denied';
+  /** Meios que as permissões do sistema liberam agora (a aba Rede mostra "Sem permissão" na linha). */
+  granted: MediaGrants;
+  /** Pede as permissões de novo (ou abre os ajustes do app) e religa o transporte com o que vier. */
+  askPermission(): Promise<void>;
   peers: Peer[];
   /** Identificador curto deste nó, anunciado aos vizinhos (não é a identidade pública). */
   nodeName: string;
@@ -58,7 +65,7 @@ const randomNodeName = () => 'piu-' + Math.floor(Math.random() * 0xffffff).toStr
  */
 export function TransportProvider({ children }: { children: ReactNode }) {
   const { onboarded, showToast } = useStore();
-  const { tx, toggleTx, relay, relayPaused, battery: userBattery } = useNetwork();
+  const { tx, toggleTx, relay, relayPaused, battery: userBattery, loraMode, piuRegion } = useNetwork();
   const { nodeKeyFor } = useKeys();
   const battery = useRelayBattery(userBattery); // modo nó do celular: pausa em 30% no mínimo
   const { bat } = useSettings();
@@ -69,11 +76,17 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const [permission, setPermission] = useState<TransportCtx['permission']>('unknown');
   const [peers, setPeers] = useState<Record<string, Peer>>({});
   const enabled = onboarded && (tx.ble || tx.direct);
+  /** Meios que as permissões do sistema liberam (cada um à parte: negar o Wi-Fi não desliga o Bluetooth). */
+  const [granted, setGranted] = useState<MediaGrants>({ ble: true, nearby: true });
+  /** Muda quando a pessoa libera a permissão pela aba Rede: o transporte religa. */
+  const [permEpoch, setPermEpoch] = useState(0);
 
   // "Procurar vizinhos" (Bateria e limites → DESCOBERTA): intervalo de varredura no transporte (NFR-004).
   useEffect(() => { transport.setDiscoveryInterval?.(DISCOVERY_INTERVAL_SEC[bat.disc]); }, [transport, bat.disc]);
   // Meios ligados na aba Rede (BLE e Wi-Fi Direct/Nearby).
-  useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble, nearby: tx.direct }); }, [transport, tx.ble, tx.direct]);
+  useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble && granted.ble, nearby: tx.direct && granted.nearby, ...loraMedia(loraMode, tx.lora) }); }, [transport, tx.ble, tx.direct, tx.lora, loraMode, granted]);
+  // Região do rádio do Piu escolhida pela pessoa (sem escolha, vale a do país do aparelho, native.ts).
+  useEffect(() => { if (piuRegion && transport.piulora?.link.status().region !== piuRegion) void transport.piulora?.link.setRegion(piuRegion); }, [transport, piuRegion]);
   // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando
   // e "Retransmitir em segundo plano" ligado. No iPhone não tem efeito (só com o app aberto).
   // Ponto Piu ativo (state/point.tsx): o serviço fica ligado mesmo só com o Wi-Fi local (sem Bluetooth).
@@ -161,17 +174,26 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     if (!enabled) return;
     let cancelled = false;
     (async () => {
-      const perm = await requestTransportPermissions();
+      const g = await requestTransportPermissions();
       if (cancelled) return;
-      setPermission(perm);
-      if (perm !== 'granted') { setState('unavailable'); setReason('Permissões de Bluetooth e Wi-Fi negadas.'); return; }
+      setGranted(g);
+      // Liga o que foi liberado e está ligado na aba Rede; só fica indisponível se nenhum dos dois puder.
+      const usable = (tx.ble && g.ble) || (tx.direct && g.nearby);
+      setPermission(g.ble && g.nearby ? 'granted' : g.ble || g.nearby ? 'partial' : 'denied');
+      if (!usable) { setState('unavailable'); setReason(g.ble ? 'Permissão de dispositivos Wi-Fi por perto negada (Wi-Fi Direct). Ligue o Bluetooth LE na aba Rede.' : 'Permissões de Bluetooth negadas.'); return; }
+      transport.setMediaEnabled?.({ ble: tx.ble && g.ble, nearby: tx.direct && g.nearby, ...loraMedia(loraMode, tx.lora) });
       await transport.start(nodeName, SERVICE_ID).catch((err: unknown) => { setState('unavailable'); setReason(String((err as Error)?.message ?? err)); });
     })();
     return () => { cancelled = true; void transport.stop(); };
-  }, [enabled, nodeName, transport]);
+  }, [enabled, nodeName, transport, permEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
+  const askPermission = useCallback(async () => {
+    const g = await askTransportPermissionsAgain();
+    setGranted(g);
+    setPermEpoch(e => e + 1);
+  }, []);
 
-  const value = useMemo<TransportCtx>(() => ({ kind: transport.kind, state, reason, permission, peers: Object.values(peers), nodeName }),
-    [transport.kind, state, reason, permission, peers, nodeName]);
+  const value = useMemo<TransportCtx>(() => ({ kind: transport.kind, state, reason, permission, granted, askPermission, peers: Object.values(peers), nodeName }),
+    [transport.kind, state, reason, permission, granted, askPermission, peers, nodeName]);
   const lanValue = useMemo<LanCtx>(() => {
     const st: LanStatus = lanStatus ?? { available: false, state: 'unavailable', wifi: wifi ?? { connected: false, internet: false, ip: null, prefix: null, gateway: null }, port: 0, peers: [], manual: [], stats: { broadcast: 0, mdns: 0, scan: 0, links: 0, scanning: false, lastScanAt: null } };
     return {

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
+import { isLora } from '../transport/select';
 import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
 import { forgetPersisted, persistNow, readPersisted, usePersisted } from '../lib/persist';
@@ -56,6 +57,9 @@ import { useStore } from './store';
 import { useWallet } from './wallet';
 import { DesktopLinkBridge } from '../lib/desktopLinkSession';
 import { DesktopPayment } from '../ui/DesktopPayment';
+import PiuVoice from '../../modules/piu-voice';
+import { onlyLora } from '../lib/loraChat';
+import { CallServiceCtx, CallsProvider, makePhoneCall, type PhoneCall } from './calls';
 
 const STATE_KEY = 'msg.state';
 /** Último aviso de troca de aparelho aceito de cada contato (contra repetição). */
@@ -155,6 +159,8 @@ interface Messaging {
   routeFor: (chatId: string, msgId: string) => RouteRec | undefined;
   /** Última rota da conversa (rodapé e "Última rota" do contato). */
   lastRouteOf: (chatId: string) => RouteRec | undefined;
+  /** Os vizinhos de agora são só a malha LoRa (Meshtastic): nenhum outro meio alcança ninguém. */
+  onlyLora: boolean;
   /** Prioridade com que a conversa envia (canal com "Prioridade Alta" definida pelo admin). */
   chatPriority: (chatId: string) => Priority;
   /**
@@ -235,7 +241,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const { identities, node, nodeKeyFor, phoneOperator } = useKeys();
   const phonePkRef = useRef<string | null>(null);
   phonePkRef.current = phoneOperator ? toHex(phoneOperator.pk) : null;
-  const { profile, onboarded, setOutbound, receive, setMsgStatus, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping, removeChat } = useStore();
+  const { profile, onboarded, setOutbound, receive, setMsgStatus, patchMsg, addChat, chats, showToast, patchFile, setFileOps, patchChat, setIdentity, blocked, setPreviewMode, setSignals, setTyping, removeChat } = useStore();
   const { relay: relayOn, relayPaused, storage, gateway: gatewaySetting } = useNetwork();
   // Ponto Piu ativo (state/point.tsx): guardião guarda e repassa com os limites do ponto; nível gateway liga o gateway.
   const pointRt = usePointRuntime();
@@ -296,6 +302,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   const [routes, setRoutes] = useState<RouteBook>(() => (priv.noRoutes ? {} : cleanBook(readPersisted(ROUTES_KEY))));
   /** Meio de cada vizinho, como o transporte informa (`via` nos eventos). */
   const peerMedium = useRef(new Map<string, Medium>());
+  // Meios dos vizinhos de agora, para as telas que mudam quando só o LoRa alcança (lib/loraChat.ts).
+  const [linkMedia, setLinkMedia] = useState<Medium[]>([]);
+  const syncMedia = () => setLinkMedia(m => { const n = [...peerMedium.current.values()]; return n.length === m.length && n.every((x, i) => x === m[i]) ? m : n; });
+  /** Chamada de voz (state/calls.tsx): só com o módulo de áudio nativo (Android com o app instalado). */
+  const callRef = useRef<PhoneCall | null>(null);
+  const [phoneCall, setPhoneCall] = useState<PhoneCall | null>(null);
   const recordRoute = useCallback((chatId: string, msgId: string, dir: 'out' | 'in', r: RouteInfo) => {
     const medium = peerMedium.current.get(r.peer) ?? (r.via === 'direct' ? 'nearby' : transportKindRef.current === 'sim' ? 'sim' : 'ble');
     const rec = makeRoute({ msgId, dir, medium, bytes: r.bytes, hops: r.hops, priority: r.priority, at: Date.now() });
@@ -325,8 +337,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     saveTimer.current = setTimeout(() => { void saveNow().catch(() => {}); }, SAVE_DELAY);
   }, [saveNow]);
 
-  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping });
-  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping };
+  const handlers = useRef({ receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping, patchMsg });
+  handlers.current = { receive, setMsgStatus, addChat, showToast, patchFile, patchChat, setTyping, patchMsg };
   const putPayRef = useRef(putPay); putPayRef.current = putPay;
 
   /** Lê o saldo livre do endereço na Mainnet, uma vez, para servir de base ao pedido criado agora. */
@@ -377,6 +389,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       },
       events: {
         changed: saveSoon,
+        // Chamada de voz: sinais dentro da sessão cifrada (bloqueados já são descartados pelo mensageiro).
+        callSignal: (contactId, payload) => callRef.current?.svc.onSignal(contactId, payload),
         // Carga pela malha (docs/carteira/transacoes-pela-malha.md): recibos vão para a carteira; como gateway, entrega.
         carryReceipt: (id, rc) => carryBridge.receipt(id, rc),
         gatewayCarry: c => { void gatewayRef.current?.handle(c); },
@@ -676,17 +690,35 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       if (e.type === 'connected') {
         const md = e.via ?? transport.kind;
         peerMedium.current.set(e.id, md);
-        messenger.peerConnected(e.id, md === 'nearby' ? 'direct' : md === 'lan' ? 'eth' : 'ble'); // rede local = classe Ethernet/LAN do roteador
-      } else if (e.type === 'disconnected' || e.type === 'peerLost') { messenger.peerDisconnected(e.id); peerMedium.current.delete(e.id); }
+        // Rede local = classe Ethernet/LAN do roteador; LoRa = classe própria (o roteador nunca manda mídia por ela).
+        messenger.peerConnected(e.id, md === 'nearby' ? 'direct' : md === 'lan' ? 'eth' : isLora(md) ? 'lora' : 'ble');
+        callRef.current?.svc.tryWaiting();
+        syncMedia();
+      } else if (e.type === 'disconnected' || e.type === 'peerLost') { messenger.peerDisconnected(e.id); peerMedium.current.delete(e.id); syncMedia(); }
       else if (e.type === 'envelope') {
         // Meio por onde este envelope chegou (pode ser outro enlace do mesmo vizinho).
         if (e.via) peerMedium.current.set(e.from, e.via);
+        // Voz da chamada: quadros 'V' vão direto para a chamada, nunca para o roteador.
+        if (callRef.current?.svc.onFrame(e.from, e.via ?? transport.kind, e.data)) return;
         messenger.receive(e.from, e.data);
       }
-      else if (e.type === 'state' && e.state === 'off') messenger.clearPeers(); // vizinhos somem com o transporte
+      else if (e.type === 'state' && e.state === 'off') { messenger.clearPeers(); peerMedium.current.clear(); syncMedia(); } // vizinhos somem com o transporte
     });
     const tick = setInterval(() => messenger.tick(), 5000);
     return () => { off(); clearInterval(tick); };
+  }, [messenger, transport]);
+
+  // Chamada de voz: um serviço por mensageiro; registros e pedidos viram cartões na conversa.
+  useEffect(() => {
+    if (!messenger || !PiuVoice.isAvailable()) return;
+    const call = makePhoneCall({
+      messenger, send: (peerId, bytes) => transport.send(peerId, bytes), media: peerMedium.current, chatIdFor,
+      receive: (cid, m, o) => handlers.current.receive(cid, m, o),
+      patchMsg: (cid, mid, p) => handlers.current.patchMsg(cid, mid, p),
+      nameOf: id => chatsRef.current.find(c => c.peer === id)?.name ?? '',
+    });
+    callRef.current = call; setPhoneCall(call);
+    return () => { call.svc.dispose(); callRef.current = null; setPhoneCall(null); };
   }, [messenger, transport]);
 
   // Store → mensageiro (arquivos reais).
@@ -754,6 +786,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     return () => { detach(); td.stop(); setTestDevice(null); };
   }, [transport, messenger]);
 
+  const lora = onlyLora(linkMedia);
   const value = useMemo<Messaging>(() => ({
     ready: !!messenger,
     myCard: (kind, fresh) => (identities && messenger ? encodeCard(identities[kind], kind === 'public' ? profile.name : '', messenger.issueInvite(kind, fresh)) : ''),
@@ -863,6 +896,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     } : null,
     routeFor: (chatId, msgId) => routeOf(routes, chatId, msgId),
     lastRouteOf: chatId => lastRoute(routes, chatId),
+    onlyLora: lora,
     chatPriority: chatId => {
       const gid = chats.find(c => c.id === chatId)?.group;
       return gid && messenger ? messenger.groupPriority(gid) : Priority.Normal;
@@ -948,10 +982,15 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       all: () => Object.values(pays),
       epoch: payEpoch,
     },
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet, lora]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
-  return <Ctx.Provider value={value}>{children}<DesktopLinkBridge /><DesktopPayment /></Ctx.Provider>;
+  return (
+    <Ctx.Provider value={value}>
+      <CallServiceCtx.Provider value={phoneCall}><CallsProvider chats={chats} onlyLora={lora}>{children}</CallsProvider></CallServiceCtx.Provider>
+      <DesktopLinkBridge /><DesktopPayment />
+    </Ctx.Provider>
+  );
 }
 
 /** Banner e notificação de um alerta da comunidade (com a rota para a tela do alerta). */

@@ -8,7 +8,7 @@
  */
 import { toHex } from '../protocol/bytes.js';
 import { envelopeId, MsgType, openDirect, parseHeader } from '../protocol/envelope.js';
-import { CarryAdmission } from './carryAdmission.js';
+import { CarryAdmission, type CarrySource } from './carryAdmission.js';
 import { CarryKind, carryOf, type CarryReceipt, GATEWAY_INBOX_IDENTITY, GATEWAY_TX_IDENTITY, gatewayKindOf, type OpenedCarry, sealCarryReceipt } from '../protocol/carry.js';
 import type { PublicIdentity } from '../protocol/keys.js';
 import { fragment, Reassembler } from '../protocol/fragment.js';
@@ -51,6 +51,25 @@ export interface LinkPort {
   capacity?(): number;
   /** Maior envelope que este meio leva (LoRa: só mensagens pequenas). */
   maxEnvelope?: number;
+}
+
+/**
+ * Malha aberta (canal público do Meshtastic, docs/transporte/super-node-lora.md): um "vizinho" sem
+ * sessão LNNP. Entram e saem só envelopes inteiros, já selados ponta a ponta; o roteador a trata como
+ * qualquer vizinho (deduplicação, prazo, limites, nada de mídia, só até `maxEnvelope`).
+ */
+export interface MeshPort {
+  /** Id do vizinho para o roteador (ex.: `lora:mesh`). */
+  id: string;
+  medium: TransportClass;
+  /** Origem para o operador e para o teto das cargas (ex.: o caminho da serial). */
+  address: string;
+  since: number;
+  maxEnvelope: number;
+  /** Bytes que o rádio aceita agora (tempo de rádio). */
+  capacity(): number;
+  /** `false`: não saiu (sem tempo de rádio); volta a ficar pendente para esta malha. */
+  send(envelope: Uint8Array, id: string): boolean;
 }
 
 export interface EngineOptions {
@@ -342,6 +361,47 @@ export class RelayEngine {
     return true;
   }
 
+  private meshes = new Map<string, MeshPort>();
+
+  /** Malha aberta pronta (rádio configurado). */
+  attachMesh(p: MeshPort) {
+    this.meshes.set(p.id, p);
+    this.seen(p.id);
+    this.log(`LNNP: malha aberta ${p.id} (${p.address})`);
+    this.flushMesh(p);
+  }
+
+  detachMesh(id: string) {
+    if (!this.meshes.delete(id)) return;
+    this.seen(id);
+    this.log(`LNNP: malha aberta ${id} desligada`);
+  }
+
+  /** Envelope inteiro que chegou pela malha aberta (já remontado dos pedaços). */
+  receiveMesh(id: string, envelope: Uint8Array) {
+    const p = this.meshes.get(id);
+    if (!p) return;
+    this.seen(id);
+    this.ingest({ session: { peerId: p.id }, address: p.address }, envelope);
+  }
+
+  /** Entrega à malha o que cabe no tempo de rádio dela agora (o resto fica para a próxima rodada). */
+  flushMesh(p: MeshPort) {
+    if (!this.meshes.has(p.id)) return;
+    const room = p.capacity();
+    if (room <= 0) return;
+    const out = this.router.outgoing(p.id, p.medium, this.sec(), { thirdPartyBudget: Math.min(this.budget(), room), maxBytes: p.maxEnvelope });
+    if (out.length) this.changes++;
+    for (const env of out) {
+      const id = envelopeId(env), own = this.router.isOwn(id);
+      if (!p.send(env, id)) { this.router.unsent(p.id, id); continue; }
+      if (!own) { this.bucket.tokens -= env.length; this.counters.forwarded++; }
+    }
+    for (const r of this.router.receipts.splice(0)) { this.counters.receipts++; this.keepReceipt(r); }
+  }
+
+  get meshCount() { return this.meshes.size; }
+
   detach(id: string) {
     const l = this.links.get(id);
     if (!l) return;
@@ -397,7 +457,7 @@ export class RelayEngine {
     }
   }
 
-  private ingest(link: LinkPort, bytes: Uint8Array) {
+  private ingest(link: CarrySource, bytes: Uint8Array) {
     this.counters.received++;
     this.changes++;
     let bulk = false;
@@ -448,7 +508,10 @@ export class RelayEngine {
     return Math.floor(this.bucket.tokens);
   }
 
-  flushAll() { for (const l of [...this.links.values()]) this.flush(l); }
+  flushAll() {
+    for (const l of [...this.links.values()]) this.flush(l);
+    for (const m of [...this.meshes.values()]) this.flushMesh(m);
+  }
 
   /** Entrega ao vizinho o que o roteador tem para ele, respeitando banda, MTU e recursos negociados. */
   flush(link: LinkPort) {

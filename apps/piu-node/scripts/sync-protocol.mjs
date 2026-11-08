@@ -21,6 +21,23 @@ export const DST = join(here, '../src/protocol');
 export const FILES = ['bytes', 'suite', 'keys', 'envelope', 'receipts', 'router', 'fragment', 'lnnp', 'phrase', 'phoneNode', 'carry'];
 
 /**
+ * Cliente Meshtastic do app (apps/mobile/src/transport/meshtastic): o Super Node fala com o rádio pela
+ * serial com o mesmo protobuf, os mesmos pedaços "P1", o mesmo balde de tempo de rádio e o anúncio "PN"
+ * (docs/transporte/super-node-lora.md). Vão para src/meshtastic/.
+ */
+export const MESH_SRC = join(here, '../../mobile/src/transport/meshtastic');
+export const MESH_DST = join(here, '../src/meshtastic');
+export const MESH_FILES = ['proto', 'fragments', 'budget', 'nodeBeacon'];
+
+/**
+ * Rádio próprio do Piu (apps/mobile/src/transport/rnode, caminho B): regiões do mundo, plano do rádio e
+ * KISS do RNode, os mesmos no app e no Super Node. Vão para src/rnode/.
+ */
+export const RNODE_SRC = join(here, '../../mobile/src/transport/rnode');
+export const RNODE_DST = join(here, '../src/rnode');
+export const RNODE_FILES = ['regions', 'rnode'];
+
+/**
  * Ajustes só de tipo (o comportamento é idêntico) para compilar com `noUncheckedIndexedAccess`,
  * que o piu-node usa e o app não. Quando o app adotar a mesma forma, o ajuste vira no-op.
  */
@@ -32,14 +49,20 @@ const TYPE_PATCHES = {
   router: [['(r[0] << 24 | r[1] << 16 | r[2] << 8 | r[3])', '(r[0]! << 24 | r[1]! << 16 | r[2]! << 8 | r[3]!)']],
 };
 
-export function generate(name) {
-  let src = readFileSync(join(SRC, `${name}.ts`), 'utf8');
-  for (const [from, to] of TYPE_PATCHES[name] ?? []) {
+/** Ajustes só de tipo nos arquivos do Meshtastic (mesma regra de TYPE_PATCHES). */
+const MESH_PATCHES = {};
+
+/** `group`: `false` protocolo, `true` Meshtastic, `'rnode'` rádio próprio. */
+export function generate(name, group = false) {
+  const rnode = group === 'rnode', mesh = group === true;
+  let src = readFileSync(join(rnode ? RNODE_SRC : mesh ? MESH_SRC : SRC, `${name}.ts`), 'utf8');
+  for (const [from, to] of (rnode || mesh ? MESH_PATCHES[name] : TYPE_PATCHES[name]) ?? []) {
     if (src.includes(from)) src = src.replace(from, to);
     else if (!src.includes(to)) throw new Error(`Ajuste de tipo não se aplica mais em ${name}.ts: revise TYPE_PATCHES.`);
   }
-  const body = src.replace(/(from\s+'\.\/[a-z0-9-]+)'/g, "$1.js'");
-  return `// GERADO por scripts/sync-protocol.mjs a partir de apps/mobile/src/protocol/${name}.ts. Não edite aqui.\n${body}`;
+  const body = src.replace(/(from\s+'\.\/[A-Za-z0-9-]+)'/g, "$1.js'").replace(/from\s+'\.\.\/\.\.\/protocol\/([a-z0-9-]+)'/g, "from '../protocol/$1.js'");
+  const origin = rnode ? `apps/mobile/src/transport/rnode/${name}.ts` : mesh ? `apps/mobile/src/transport/meshtastic/${name}.ts` : `apps/mobile/src/protocol/${name}.ts`;
+  return `// GERADO por scripts/sync-protocol.mjs a partir de ${origin}. Não edite aqui.\n${body}`;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -49,15 +72,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     process.exit(check ? 0 : 1);
   }
   let stale = 0;
-  mkdirSync(DST, { recursive: true });
-  for (const f of FILES) {
-    const out = generate(f);
-    const path = join(DST, `${f}.ts`);
-    const cur = existsSync(path) ? readFileSync(path, 'utf8') : '';
-    if (cur === out) continue;
-    stale++;
-    if (check) console.error(`Desatualizado: src/protocol/${f}.ts`);
-    else writeFileSync(path, out);
+  for (const [dir, files, group] of [[DST, FILES, false], [MESH_DST, MESH_FILES, true], [RNODE_DST, RNODE_FILES, 'rnode']]) {
+    mkdirSync(dir, { recursive: true });
+    for (const f of files) {
+      const out = generate(f, group);
+      const path = join(dir, `${f}.ts`);
+      const cur = existsSync(path) ? readFileSync(path, 'utf8') : '';
+      if (cur === out) continue;
+      stale++;
+      if (check) console.error(`Desatualizado: ${path}`);
+      else writeFileSync(path, out);
+    }
   }
   if (check && stale) process.exit(1);
   console.log(check ? 'Protocolo em dia.' : `Protocolo sincronizado (${stale} arquivo(s) atualizado(s)).`);

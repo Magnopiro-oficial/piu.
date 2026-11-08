@@ -27,6 +27,7 @@ import { Toast } from '../ui/Toast';
 import { UpdateWatch } from '../ui/UpdateWatch';
 import { PhoneNodeWatch } from '../ui/PhoneNodeWatch';
 import { PointWatch } from '../ui/point/PointWatch';
+import { CallOverlay } from '../ui/call/CallOverlay';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -103,6 +104,8 @@ function Navigator() {
       <StatusBar style={scheme === 'dark' ? 'light' : 'dark'} />
       <Stack screenOptions={{ headerShown: false, contentStyle: { backgroundColor: c.bg }, animation: 'fade', animationDuration: 260 }} />
       <OnboardingGuard />
+      {/* Chamada de voz por cima do app (folha, tela cheia, avisos, pílula); sem provedor, não monta nada. */}
+      <CallOverlay />
       <Toast />
       <PhoneNodeWatch />
       <PointWatch />

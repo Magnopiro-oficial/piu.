@@ -3,11 +3,15 @@ import type { Dict } from './core';
 import { piu11 } from './piu11/ja';
 import { pontos } from './pontos/ja';
 import { linkDesktop } from './linkDesktop/ja';
+import { call } from './call/ja';
+import { lora } from './lora/ja';
 
 export const dict: Dict = {
   ...piu11,
   ...pontos,
   ...linkDesktop,
+  ...call,
+  ...lora,
   'common.back': '戻る',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
@@ -1368,6 +1372,7 @@ export const dict: Dict = {
   "prov.lunes.empty": "アカウントにまだ残高はありません",
   "tx.ble": "Bluetooth LE",
   "tx.ble.desc": "検出と短いテキスト",
+  "tx.noPermission": "システムの許可がありません · タップして許可",
   "tx.direct": "Wi-Fi Direct",
   "tx.direct.desc": "ルーターなしで端末間通信",
   "tx.mesh": "ローカル Wi-Fi",

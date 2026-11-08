@@ -1,7 +1,10 @@
 // Deutsch. Mesmas chaves e {vars} do pt-BR (test/i18n.test.ts). Piu, LUNES, LNNP, Lunes e Mainnet são nomes do produto.
-import type { FullDict } from './core';
+import { call } from '../../../../mobile/src/i18n/call/de';
+import type { CallDict, FullDict } from './core';
 
 export const dict: FullDict = {
+  // Chamada de voz: os textos do celular (apps/mobile/src/i18n/call), as mesmas chaves `call.*`.
+  ...(call as CallDict),
   'common.back': 'Zurück',
   'common.close': 'Schließen',
   'common.cancel': 'Abbrechen',
@@ -1065,6 +1068,8 @@ export const dict: FullDict = {
   'main.core.groupMembers': 'Wähle angenommene Kontakte derselben Identität.',
   'main.core.writeSomething': 'Schreib etwas, bevor du sendest.',
   'main.core.contactBlocked': 'Kontakt blockiert. Entsperre ihn unter Einstellungen → Datenschutz, um zu chatten.',
+  'main.core.callUnavailable': 'Anruf gerade nicht möglich.',
+  'main.call.micDenied': 'Piu hat keinen Zugriff aufs Mikrofon. Erlaube ihn in Systemeinstellungen → Datenschutz → Mikrofon.',
   'main.core.unknownChat': 'Unbekannter Chat.',
   'main.core.blockOnPhone': 'Blockiere über das Handy; der Computer spiegelt nur dessen Chats.',
   'main.core.blockDirectOnly': 'Nur ein Kontakt aus einem Direktchat lässt sich blockieren.',

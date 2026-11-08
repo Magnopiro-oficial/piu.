@@ -1,7 +1,10 @@
 // 日本語. Mesmas chaves e {vars} do pt-BR (test/i18n.test.ts). Piu, LUNES, LNNP, Lunes e Mainnet são nomes do produto.
-import type { FullDict } from './core';
+import { call } from '../../../../mobile/src/i18n/call/ja';
+import type { CallDict, FullDict } from './core';
 
 export const dict: FullDict = {
+  // Chamada de voz: os textos do celular (apps/mobile/src/i18n/call), as mesmas chaves `call.*`.
+  ...(call as CallDict),
   'common.back': '戻る',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
@@ -1065,6 +1068,8 @@ export const dict: FullDict = {
   'main.core.groupMembers': '同じアイデンティティの承認済み連絡先を選んでください。',
   'main.core.writeSomething': '送信する前に何か入力してください。',
   'main.core.contactBlocked': 'ブロック中の連絡先です。チャットするには 設定 → プライバシー で解除してください。',
+  'main.core.callUnavailable': '今は通話できません。',
+  'main.call.micDenied': 'Piu はマイクを使えません。システム設定 → プライバシー → マイク で許可してください。',
   'main.core.unknownChat': '不明なチャットです。',
   'main.core.blockOnPhone': 'スマートフォンでブロックしてください。パソコンはスマートフォンのチャットをミラーリングしているだけです。',
   'main.core.blockDirectOnly': 'ブロックできるのは個人チャットの連絡先だけです。',

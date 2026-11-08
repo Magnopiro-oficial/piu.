@@ -1,4 +1,6 @@
 import type { LanController } from './lan/controller';
+import type { LoraRadio } from './meshtastic/radio';
+import type { PiuLoraRadio } from './rnode/radio';
 
 /** Transporte P2P: descobre vizinhos e troca envelopes (bytes já cifrados). Sem servidor. */
 export type TransportKind = 'nearby' | 'ble' | 'sim';
@@ -7,9 +9,12 @@ export type TransportState = 'off' | 'starting' | 'running' | 'unavailable';
 /**
  * Meio físico de um enlace com um vizinho. `nearby` = Nearby Connections no Android
  * (Bluetooth clássico + Wi-Fi Direct, alta banda); `ble` = Bluetooth LE GATT (Android e iPhone);
+ * `lora` = malha Meshtastic pelo rádio LoRa da pessoa (pouquíssima banda, último recurso);
+ * `piulora` = a mesma malha LoRa pelo rádio próprio do Piu (RNode, docs/transporte/super-node-lora.md),
+ * preferido ao Meshtastic quando os dois estão ligados;
  * `lan` = LNNP pela rede Wi-Fi em que o celular está (UDP + TCP, o mesmo do Desktop e do piu-node).
  */
-export type Medium = 'nearby' | 'ble' | 'lan' | 'sim';
+export type Medium = 'nearby' | 'ble' | 'lan' | 'lora' | 'piulora' | 'sim';
 
 /**
  * Características declaradas de cada meio (INF-005). Usadas pela seleção de transporte
@@ -24,7 +29,7 @@ export interface MediumCaps {
   /** Banda útil aproximada (bytes/s), só para ordenar meios; não é garantia. */
   approxBytesPerSec: number;
   /** Custo de energia relativo: 1 = baixo (BLE), 3 = alto (Wi-Fi Direct). */
-  energyCost: 1 | 2 | 3;
+  energyCost: 1 | 2 | 3 | 4;
 }
 
 /** `via`: o meio pelo qual o vizinho foi visto/conectado (o melhor disponível, se houver mais de um). */
@@ -66,6 +71,10 @@ export interface Transport {
    * por conta própria (state/transport.tsx, `useLanTransport`), sem mexer em Bluetooth/Nearby.
    */
   lan?: LanController;
+  /** Rádio Meshtastic pelo Bluetooth (meshtastic/radio.ts). Só no Android com o módulo piu-meshtastic. */
+  lora?: LoraRadio;
+  /** Rádio próprio do Piu (RNode) pelo Bluetooth (rnode/radio.ts). Só no Android com o módulo PiuRNode. */
+  piulora?: PiuLoraRadio;
 }
 
 /**

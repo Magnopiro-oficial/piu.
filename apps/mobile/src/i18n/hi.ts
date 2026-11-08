@@ -3,11 +3,15 @@ import type { Dict } from './core';
 import { piu11 } from './piu11/hi';
 import { pontos } from './pontos/hi';
 import { linkDesktop } from './linkDesktop/hi';
+import { call } from './call/hi';
+import { lora } from './lora/hi';
 
 export const dict: Dict = {
   ...piu11,
   ...pontos,
   ...linkDesktop,
+  ...call,
+  ...lora,
   'common.back': 'वापस',
   'common.close': 'बंद करें',
   'common.cancel': 'रद्द करें',
@@ -1415,6 +1419,7 @@ export const dict: Dict = {
   "prov.lunes.ok": "Lunes Mainnet पर: {free} LUNES · {where}",
   "prov.lunes.empty": "खाते में अभी बैलेंस नहीं",
   "tx.ble.desc": "खोज और छोटा पाठ",
+  "tx.noPermission": "सिस्टम अनुमति नहीं है · अनुमति देने के लिए टैप करें",
   "tx.direct.desc": "डिवाइस से डिवाइस, बिना राउटर",
   "tx.mesh.desc": "फ़ोन जिस Wi-Fi नेटवर्क पर है उसके ज़रिए: फ़ोन, Desktop और Piu Node",
   "tx.lora": "LoRa रेडियो",

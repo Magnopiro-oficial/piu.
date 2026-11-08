@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { FRAME_HEADER_BYTES, frameHeader, helloFrame, MAX_PARTIAL_MESSAGES, nextMessageId, PARTIAL_TIMEOUT_MS, Reassembler, toFrames } from '../frames';
 import { createMultiTransport, type LinkEvent, type LinkSource } from '../multi';
-import { FAILURE_COOLDOWN_MS, MEDIA, rankLinks, SMALL_ENVELOPE_BYTES, type LinkInfo } from '../select';
+import { FAILURE_COOLDOWN_MS, isLora, MEDIA, rankLinks, SMALL_ENVELOPE_BYTES, type LinkInfo } from '../select';
 import { DISCOVERY_INTERVAL_SEC, type Medium, type TransportEvent } from '../types';
 
 const bytes = (n: number, seed = 1) => Uint8Array.from({ length: n }, (_, i) => (i * 31 + seed) & 0xff);
@@ -41,7 +41,8 @@ test('enlace que falhou há pouco vai para o fim e volta depois do resfriamento'
 
 test('cada meio declara MTU, tamanho máximo, banda e custo de energia (INF-005)', () => {
   for (const m of Object.values(MEDIA)) {
-    assert.ok(m.maxEnvelopeBytes >= 32 * 1024);
+    // LoRa (Meshtastic e o próprio) é a exceção de propósito: só texto curto e recibos (meshtastic/fragments.ts).
+    assert.ok(isLora(m.medium) ? m.maxEnvelopeBytes >= 512 : m.maxEnvelopeBytes >= 32 * 1024);
     assert.ok(m.mtuBytes > FRAME_HEADER_BYTES && m.approxBytesPerSec > 0);
   }
   assert.ok(MEDIA.nearby.approxBytesPerSec > MEDIA.ble.approxBytesPerSec);

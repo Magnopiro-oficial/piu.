@@ -137,3 +137,26 @@ test('controle do app: liga com a chave do nó, vizinho manual validado, estado 
   assert.equal(createLanController(null).available, false);
   assert.equal(createLanController(null).status().state, 'unavailable');
 });
+
+test('fonte combinada com os dois LoRa: a malha é um vizinho só; sai pelo rádio do Piu e, sem ele, pelo Meshtastic', async () => {
+  const p = fakePrimary(), l = fakeLanLinks(), mt = fakeLanLinks(), piu = fakeLanLinks();
+  const t = createMultiTransport(combineSources(p.src, l.links, mt.links, piu.links));
+  const ev: TransportEvent[] = [];
+  t.subscribe(e => ev.push(e));
+  await t.start('eu', 'piu');
+  assert.ok(t.media.some(m => m.medium === 'piulora') && t.media.some(m => m.medium === 'lora'));
+  for (const [src, medium] of [[mt, 'lora'], [piu, 'piulora']] as const) {
+    src.emit({ type: 'found', medium, id: 'lora:mesh', name: 'Malha LoRa' });
+    src.emit({ type: 'up', medium, id: 'lora:mesh', name: 'Malha LoRa' });
+  }
+  const conn = ev.filter(e => e.type === 'connected');
+  assert.equal(conn.length, 1, 'um vizinho só');
+  const mesh = (conn[0] as { id: string }).id;
+  await t.send(mesh, new Uint8Array(300));
+  assert.equal(mt.sent.length, 0);
+  assert.equal(piu.sent.length, 1, 'o rádio do Piu primeiro');
+  piu.emit({ type: 'down', medium: 'piulora', id: 'lora:mesh' });
+  await t.send(mesh, new Uint8Array(300));
+  assert.equal(mt.sent.length, 1, 'o Meshtastic de reserva');
+  assert.ok(!ev.some(e => e.type === 'disconnected'), 'a malha segue conectada pelo Meshtastic');
+});

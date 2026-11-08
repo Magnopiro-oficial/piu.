@@ -3,11 +3,15 @@ import type { Dict } from './core';
 import { piu11 } from './piu11/en';
 import { pontos } from './pontos/en';
 import { linkDesktop } from './linkDesktop/en';
+import { call } from './call/en';
+import { lora } from './lora/en';
 
 export const dict: Dict = {
   ...piu11,
   ...pontos,
   ...linkDesktop,
+  ...call,
+  ...lora,
   'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -1367,6 +1371,7 @@ export const dict: Dict = {
   'prov.lunes.empty': 'account has no balance yet',
   'tx.ble': 'Bluetooth LE',
   'tx.ble.desc': 'Discovery and short text',
+  'tx.noPermission': 'No system permission · tap to allow',
   'tx.direct': 'Wi-Fi Direct',
   'tx.direct.desc': 'Device to device, no router',
   'tx.mesh': 'Local Wi-Fi',

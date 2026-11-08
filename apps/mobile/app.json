@@ -3,7 +3,7 @@
     "name": "Piu",
     "slug": "piu",
     "scheme": "piu",
-    "version": "0.1.3",
+    "version": "0.1.4",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
@@ -15,7 +15,7 @@
       }
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#0A0A0A",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -25,7 +25,6 @@
       "predictiveBackGestureEnabled": false,
       "allowBackup": false,
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.SYSTEM_ALERT_WINDOW",
         "com.google.android.c2dm.permission.RECEIVE"
       ],
@@ -57,7 +56,7 @@
         {
           "cameraPermission": "O Piu usa a câmera só para ler o QR de contato de alguém que está com você.",
           "microphonePermission": false,
-          "recordAudioAndroid": false,
+          "recordAudioAndroid": true,
           "barcodeScannerEnabled": true
         }
       ],
@@ -75,7 +74,7 @@
         "expo-audio",
         {
           "microphonePermission": false,
-          "recordAudioAndroid": false,
+          "recordAudioAndroid": true,
           "enableBackgroundPlayback": false
         }
       ],

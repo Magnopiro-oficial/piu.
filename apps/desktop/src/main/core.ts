@@ -17,13 +17,16 @@ import { DesktopLinkServer } from './desktopLink';
 import { createIdentityBackup } from './backup';
 import { createIdentity, type DerivedKeys, identityFromPhrase, suggestWords } from './identity';
 import { MeshNode } from './mesh';
+import { RemoteAudio } from './callHost';
+import { randomBytes } from 'node:crypto';
+import { type CallAct, type CallSnapshot, readCallAct, readCallFrame } from '../shared/callBridge';
 import { migratePrefs } from './prefs';
 import { type AppState, Store } from './store';
 import type { SafeStorageLike } from './vault';
 import { Vault, VaultLockedError } from './vault';
 import { emptyWallet, pickWalletAddress, validateAddress, WalletReader } from './wallet';
 import {
-  applyStatus, appendOutgoing, type ConversationsState, dropExpired, emptyState, expireSecOf, markRead, messagesOf, receiveIncoming, removeConversation, summaries, TEMP_MODES,
+  applyStatus, appendCallRecord, appendOutgoing, type ConversationsState, upsertCallRequest, dropExpired, emptyState, expireSecOf, markRead, messagesOf, receiveIncoming, removeConversation, summaries, TEMP_MODES,
 } from '../shared/conversations';
 import {
   type BlockedContact, type ContactInfo, type ConversationSummary, DEFAULT_PREFS, type StorageDetail, type StorageUsage, type TempMode, type IdentityKind, type LinkState, type MeInfo, type Message, type NetworkStatus, type PiuEventName, type PiuEvents, type Prefs, type SessionInfo, type WalletState,
@@ -45,6 +48,8 @@ export interface CoreOptions {
   link?: { host?: string; listen?: string };
   /** Leitura de saldo na Mainnet (testes: substituto sem rede). */
   walletBalance?: typeof accountBalance;
+  /** Antes de abrir o microfone da chamada: pede a permissão do sistema (macOS). Recusada, rejeita. */
+  micAccess?: () => Promise<void>;
 }
 
 /** Vencimento local de uma temporária recebida: a partir do envio (nunca do futuro), como `expiryOf` no celular. */
@@ -57,6 +62,8 @@ export class PiuCore {
   private keys: DerivedKeys | null = null;
   private mesh: MeshNode | null = null;
   private lan: LnnpLanTransport | null = null;
+  /** Microfone e alto-falante da chamada, no renderer (`callAudio` ↔ `callFrame`). */
+  private readonly callAudio = new RemoteAudio(cmd => this.emit('callAudio', cmd), () => this.o.micAccess?.() ?? Promise.resolve());
   private ble = new BleTransportStub();
   private paymentJournal: PaymentJournal | null = null;
   private linkWasReady = false;
@@ -199,6 +206,19 @@ export class PiuCore {
       // Gateway da carga pela malha (docs/carteira/transacoes-pela-malha.md): opcional, sem tela ainda;
       // liga com PIU_GATEWAY=1 (caixa do validador em PIU_VALIDATOR_INBOX, https://).
       ...(process.env.PIU_GATEWAY === '1' ? { gateway: { inboxUrl: process.env.PIU_VALIDATOR_INBOX?.trim() || null } } : {}),
+      // Chamada de voz (apps/mobile/src/calls): registros e pedidos viram cartões na conversa.
+      call: {
+        audio: this.callAudio,
+        newId: () => randomBytes(16).toString('base64url'),
+        blocked: peer => this.isBlocked(peer),
+        record: rec => { this.setConversations(appendCallRecord(this.state.conversations, rec)); this.emitLast(rec.peer); },
+        requestUpdate: (peer, requestId, step, dir) => {
+          this.setConversations(upsertCallRequest(this.state.conversations, { peer, requestId, step, dir, at: Math.floor(Date.now() / 1000) }));
+          this.emitLast(peer, `callreq-${requestId}`);
+        },
+        toast: (text, peer) => this.emit('callToast', { text, ...(peer ? { peer } : {}) }),
+        draft: peer => this.emit('callDraft', { peer }),
+      },
       events: {
         message: (contact, m, isNew) => {
           const route = m.route ? { peer: m.route.peer, via: m.route.via, bytes: m.route.bytes, hops: m.route.hops, priority: m.route.priority } : undefined;
@@ -241,7 +261,8 @@ export class PiuCore {
           this.knownWallets.set(contactId, address);
           if (address && !prev) this.shareWallet(contactId);
         },
-        peers: () => this.emit('network', this.networkStatus()),
+        peers: () => { this.emit('network', this.networkStatus()); this.emit('call', this.callSnapshot()); },
+        call: () => this.emit('call', this.callSnapshot()),
         typing: contactId => { if (!this.isBlocked(contactId)) this.emit('typing', { contactId }); },
         // Alerta da comunidade: a lista da conversa muda; o aviso nativo é decisão do processo principal.
         communityAlert: (a, notice) => {
@@ -256,6 +277,7 @@ export class PiuCore {
     for (const c of this.mesh.listContacts()) this.knownWallets.set(c.id, c.lunesAddress ?? null);
     if (!this.state.prefs.lan) await this.lan.stop();
     this.emit('session', this.session());
+    this.emit('call', this.callSnapshot());
     this.emit('network', this.networkStatus());
     // Sem endereço informado, a carteira usa o derivado da frase (o mesmo que o celular mostra).
     if (!this.state.prefs.walletAddress) { this.walletState = this.freshWallet(); this.emit('wallet', this.walletState); }
@@ -391,6 +413,7 @@ export class PiuCore {
     this.walletState = emptyWallet(null, DEFAULT_PREFS.hideBalance);
     await this.mesh?.stop();
     this.mesh = null; this.lan = null; this.keys = null; this.knownWallets.clear();
+    this.emit('call', null);
     if (this.walletTimer) clearInterval(this.walletTimer);
     if (this.sweepTimer) { clearInterval(this.sweepTimer); this.sweepTimer = null; }
     this.lastOkWallet = null;
@@ -484,6 +507,55 @@ export class PiuCore {
       try { this.mesh.messenger.sendRead(contactId, unseen); } catch (e) { this.log(`leitura: recibo não enviado (${(e as Error).message})`); }
     }
     this.setConversations(markRead(this.state.conversations, contactId)); this.emit('conversations', undefined);
+  }
+
+  // ── chamada de voz (shared/callBridge.ts) ──
+  /** `null`: este computador não faz chamadas agora (sem identidade própria ou espelhando o celular). */
+  callSnapshot(): CallSnapshot | null {
+    const call = this.mesh?.call;
+    if (!call || this.viaPhone) return null;
+    const routes: CallSnapshot['routes'] = {};
+    for (const c of this.mesh!.listContacts()) {
+      if (c.request || c.kind && c.kind !== 'direct' || this.isBlocked(c.id)) continue;
+      const r = this.mesh!.liveRouteTo(c.id);
+      if (r) routes[c.id] = r;
+    }
+    return { state: call.state, words: call.words, ...(call.latencyMs !== undefined ? { latencyMs: call.latencyMs } : {}), routes };
+  }
+
+  callAct(x: unknown) {
+    const call = this.mesh?.call, act = readCallAct(x);
+    if (!call || this.viaPhone || !act) throw new Error(tm('main.core.callUnavailable'));
+    const ctl = call.controller;
+    switch (act.a) {
+      case 'open': {
+        const c = this.mesh!.listContacts().find(x => x.id === act.peer);
+        if (!c || c.request || this.isBlocked(c.id)) throw new Error(tm('main.core.callUnavailable'));
+        call.open(act.peer);
+        break;
+      }
+      case 'dial': ctl.dial(); break;
+      case 'sendRequest': ctl.sendRequest(); break;
+      case 'answer': ctl.answer(); break;
+      case 'hangup': ctl.hangup(); break;
+      case 'wordsDiffer': ctl.wordsDiffer(); break;
+      case 'requestNow': ctl.requestNow(); break;
+      case 'decline': ctl.decline(act.how); break;
+      case 'event': ctl.dispatch(act.event); break;
+    }
+  }
+
+  callFrame(codec: unknown, payload: unknown) {
+    const f = readCallFrame(codec, payload);
+    if (f) this.callAudio.frame(f.codec, f.payload);
+  }
+
+  /** Avisa a janela da mensagem que entrou (ou mudou) na conversa. */
+  private emitLast(contactId: string, id?: string) {
+    const list = messagesOf(this.state.conversations, contactId);
+    const msg = id ? list.find(m => m.id === id) : list[list.length - 1];
+    if (msg) this.emit('message', { contactId, message: msg });
+    this.emit('conversations', undefined);
   }
 
   /** "digitando…" para o contato (Privacidade → Mostrar quando estou digitando). Sem vizinho, não sai nada. */

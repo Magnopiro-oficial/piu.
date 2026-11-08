@@ -3,11 +3,15 @@ import type { Dict } from './core';
 import { piu11 } from './piu11/zh';
 import { pontos } from './pontos/zh';
 import { linkDesktop } from './linkDesktop/zh';
+import { call } from './call/zh';
+import { lora } from './lora/zh';
 
 export const dict: Dict = {
   ...piu11,
   ...pontos,
   ...linkDesktop,
+  ...call,
+  ...lora,
   'common.back': '返回',
   'common.close': '关闭',
   'common.cancel': '取消',
@@ -1368,6 +1372,7 @@ export const dict: Dict = {
   "prov.lunes.empty": "账户尚无余额",
   "tx.ble": "Bluetooth LE",
   "tx.ble.desc": "发现设备和简短文本",
+  "tx.noPermission": "没有系统权限 · 点按以允许",
   "tx.direct": "Wi-Fi Direct",
   "tx.direct.desc": "设备间直连，无需路由器",
   "tx.mesh": "本地 Wi-Fi",

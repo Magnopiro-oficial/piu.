@@ -99,6 +99,8 @@ export const main = {
   'main.core.groupMembers': 'Selecione contatos aceitos da mesma identidade.',
   'main.core.writeSomething': 'Escreva algo antes de enviar.',
   'main.core.contactBlocked': 'Contato bloqueado. Desbloqueie em Ajustes → Privacidade para conversar.',
+  'main.core.callUnavailable': 'Chamada indisponível agora.',
+  'main.call.micDenied': 'O Piu não tem acesso ao microfone. Libere em Ajustes do Sistema → Privacidade → Microfone.',
   'main.core.unknownChat': 'Conversa desconhecida.',
   'main.core.blockOnPhone': 'Bloqueie pelo celular; o computador só espelha as conversas dele.',
   'main.core.blockDirectOnly': 'Só dá para bloquear um contato de conversa direta.',

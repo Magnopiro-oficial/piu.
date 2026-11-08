@@ -4,6 +4,7 @@
  * Plural: objeto `{ one, other }` escolhido por `{count}`. Nomes do produto (Piu, LUNES, LNNP, Mainnet,
  * Touch ID, Keychain) não se traduzem.
  */
+import { callPtBR } from '../../../../mobile/src/i18n/call/pt-BR';
 import { app } from './pt-BR/app';
 import { auth } from './pt-BR/auth';
 import { chats } from './pt-BR/chats';
@@ -14,4 +15,6 @@ import { settings } from './pt-BR/settings';
 import { updates } from './pt-BR/updates';
 import { wallet } from './pt-BR/wallet';
 
-export const ptBR = { ...common, ...app, ...auth, ...chats, ...wallet, ...settings, ...guardian, ...updates, ...main };
+export const ptBR = { ...common, ...app, ...auth, ...chats, ...wallet, ...settings, ...guardian, ...updates, ...main,
+  // Chamada de voz: textos do celular (apps/mobile/src/i18n/call/pt-BR.ts), iguais nos dois apps.
+  ...callPtBR };

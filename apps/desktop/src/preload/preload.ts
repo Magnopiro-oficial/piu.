@@ -79,6 +79,9 @@ const api: PiuApi = {
   guardianSetWifi: w => call('guardianSetWifi', w),
   guardianEnd: () => call('guardianEnd'),
   copyImage: d => call('copyImage', d),
+  callState: () => call('callState'),
+  callAct: act => call('callAct', act),
+  callFrame: (codec, payload) => call('callFrame', codec, payload),
   on: (event: PiuEventName, cb) => {
     const channel = `piu:${event}`;
     const listener = (_e: unknown, payload: unknown) => cb(payload as never);

@@ -12,7 +12,8 @@
  */
 import { Priority } from '../protocol/envelope';
 import { FRAME_HEADER_BYTES } from '../transport/frames';
-import { MEDIA } from '../transport/select';
+import { FRAGMENT_BYTES } from '../transport/meshtastic/fragments';
+import { isLora, MEDIA } from '../transport/select';
 import type { Medium } from '../transport/types';
 import type { IconName } from '../ui/Icon';
 import { VIA_ICON, viaLabel } from './networkCore';
@@ -52,6 +53,8 @@ export const priorityLabel = (p: Priority, t: Tr = tGlobal) => t(PRIORITY_KEY[p]
 
 /** Blocos em que um envelope de `bytes` vai pelo meio (cabeçalho de bloco de transport/frames.ts). */
 export function fragmentsFor(bytes: number, medium: Medium): number {
+  // LoRa: pedaços próprios de 226 bytes (meshtastic/fragments.ts), sem o cabeçalho de bloco.
+  if (isLora(medium)) return Math.max(1, Math.ceil(bytes / FRAGMENT_BYTES));
   const size = Math.max(1, MEDIA[medium].mtuBytes - FRAME_HEADER_BYTES);
   return Math.max(1, Math.ceil(bytes / size));
 }

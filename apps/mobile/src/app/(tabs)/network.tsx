@@ -14,6 +14,8 @@ import { SectionLabel, Segmented, Toggle } from '../../ui/Controls';
 import { GatewaySection } from '../../ui/NodeViews';
 import { Icon } from '../../ui/Icon';
 import { LanRow, PointsSection } from '../../ui/point/NetworkRows';
+import { LoraBlock } from '../../ui/lora/LoraBlock';
+import { getTransport } from '../../transport';
 import { Screen } from '../../ui/Screen';
 import { T } from '../../ui/T';
 
@@ -23,7 +25,9 @@ export default function Network() {
   const t = useT();
   const diag7 = useStats(5000);
   const n = useNetwork();
-  const { kind, state, peers } = useTransport();
+  const { kind, state, peers, granted, askPermission } = useTransport();
+  // Meio ligado na aba mas sem permissão do sistema: a linha avisa e o toque pede de novo.
+  const blocked = (k: TxKey) => (k === 'ble' && !granted.ble) || (k === 'direct' && !granted.nearby);
   const { nodes } = useProvNodes();
   // Vizinho de um meio desligado na aba Rede aparece apagado (o transporte deixa de usá-lo).
   const live = (p: Peer) => { const k = VIA_TX[p.via]; return k ? n.tx[k] : true; };
@@ -33,6 +37,7 @@ export default function Network() {
   const fg = n.relay ? c.invink : c.ink;
   const txDesc = (k: TxKey, desc: string) => {
     if (!n.tx[k]) return desc;
+    if (blocked(k)) return t('tx.noPermission');
     if (k === 'ble' || k === 'direct') {
       const v = peers.filter(p => p.via === (k === 'ble' ? 'ble' : 'nearby')).length;
       return `${desc} · ${t('network.neighbors', { count: v })}`;
@@ -98,8 +103,11 @@ export default function Network() {
             const name = t(nameKey), desc = t(descKey);
             // Wi-Fi local (rede local, P1): estado real do transporte LAN e os motivos de estar parado.
             if (k === 'mesh') return <LanRow key={k} name={name} first={!i} />;
+            // Rádios LoRa pelo Bluetooth (Android com os módulos): o do Piu e o Meshtastic, desenho Piu 17.
+            if (k === 'lora' && (getTransport().lora || getTransport().piulora)) return <LoraBlock key={k} first={!i} on={n.tx.lora} onToggle={on => { if (on !== n.tx.lora) n.toggleTx('lora'); }} granted={granted.ble} askPermission={() => { void askPermission(); }} />;
             return (
-            <View key={k} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
+            <Pressable key={k} disabled={!(n.tx[k] && blocked(k))} onPress={() => { void askPermission(); }} accessibilityRole={n.tx[k] && blocked(k) ? 'button' : undefined}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 13, paddingHorizontal: 14, borderTopWidth: i ? 1 : 0, borderTopColor: c.line }}>
               <View style={{ width: 36, height: 36, borderRadius: 11, backgroundColor: c.bg, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={20} w={300} /></View>
               <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                 <T size={15} w={550}>{name}</T>
@@ -108,8 +116,9 @@ export default function Network() {
               {/* Meio que nenhum transporte usa nesta versão: sem chave, para não parecer que liga algo. */}
               {UNAVAILABLE_TX[k]
                 ? <T size={12} w={600} color={c.ink2} accessibilityLabel={`${name}: ${t('network.unavailable.a11y')}`}>{t('network.unavailable')}</T>
-                : <Toggle on={n.tx[k]} onChange={() => n.toggleTx(k)} label={name} />}
-            </View>
+                // Ligar um meio que está sem permissão já pede a permissão.
+                : <Toggle on={n.tx[k]} onChange={() => { if (!n.tx[k] && blocked(k)) void askPermission(); n.toggleTx(k); }} label={name} />}
+            </Pressable>
             );
           })}
         </View>

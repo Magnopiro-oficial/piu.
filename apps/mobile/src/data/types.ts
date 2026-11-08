@@ -1,3 +1,5 @@
+import type { CallRecord } from '../calls/callMachine';
+import type { RequestStep } from '../calls/callView';
 export type Kind = 'direct' | 'group' | 'channel' | 'community';
 /** Estados da seção 3.1 do documento, mais `lida` (confirmação de leitura, quando o contato a envia). */
 export type Status = 'criada' | 'aguardando' | 'encaminhada' | 'entregue' | 'lida' | 'expirada' | 'falha';
@@ -29,6 +31,10 @@ export interface Msg {
   expiresAt?: number;
   /** Localização em texto curto (lib/locationCore.ts); `text` é o nome do lugar (pode ser vazio). */
   loc?: { lat: number; lon: number };
+  /** Registro de chamada de voz (cartão no lugar do balão; `text` = título, para prévia e busca). */
+  call?: CallRecord;
+  /** Cartão "Pedido de chamada" pela malha, com a etapa atual. */
+  callReq?: { requestId: string; step: RequestStep };
 }
 /** Conversa (Conversation/Group/Channel/Community no modelo da seção 12). */
 export interface Chat {

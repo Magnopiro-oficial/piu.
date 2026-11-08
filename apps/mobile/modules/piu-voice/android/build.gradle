@@ -1,0 +1,22 @@
+plugins {
+  id 'com.android.library'
+  id 'expo-module-gradle-plugin'
+}
+
+group = 'net.piu'
+version = '0.1.0'
+
+android {
+  namespace "expo.modules.piuvoice"
+  defaultConfig {
+    versionCode 1
+    versionName "0.1.0"
+  }
+}
+
+dependencies {
+  // ContextCompat.checkSelfPermission (o expo-modules-core já traz uma versão maior; o Gradle usa a maior).
+  implementation 'androidx.core:core-ktx:1.13.1'
+  // Testes JVM das partes puras (µ-law, reamostragem, OpusHead, buffer anti-jitter, nível).
+  testImplementation 'junit:junit:4.13.2'
+}

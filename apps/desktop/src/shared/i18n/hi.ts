@@ -1,7 +1,10 @@
 // हिन्दी (Hindi). Mesmas chaves e {vars} do pt-BR (test/i18n.test.ts). Piu, LUNES, LNNP, Lunes e Mainnet são nomes do produto.
-import type { FullDict } from './core';
+import { call } from '../../../../mobile/src/i18n/call/hi';
+import type { CallDict, FullDict } from './core';
 
 export const dict: FullDict = {
+  // Chamada de voz: os textos do celular (apps/mobile/src/i18n/call), as mesmas chaves `call.*`.
+  ...(call as CallDict),
   'common.back': 'वापस',
   'common.close': 'बंद करें',
   'common.cancel': 'रद्द करें',
@@ -1065,6 +1068,8 @@ export const dict: FullDict = {
   'main.core.groupMembers': 'उसी पहचान के स्वीकृत संपर्क चुनें।',
   'main.core.writeSomething': 'भेजने से पहले कुछ लिखें।',
   'main.core.contactBlocked': 'संपर्क ब्लॉक है। चैट के लिए सेटिंग्स → गोपनीयता में अनब्लॉक करें।',
+  'main.core.callUnavailable': 'अभी कॉल उपलब्ध नहीं है।',
+  'main.call.micDenied': 'Piu माइक्रोफ़ोन इस्तेमाल नहीं कर पा रहा। सिस्टम सेटिंग्स → गोपनीयता → माइक्रोफ़ोन में अनुमति दें।',
   'main.core.unknownChat': 'अज्ञात चैट।',
   'main.core.blockOnPhone': 'फ़ोन से ब्लॉक करें; कंप्यूटर सिर्फ़ उसकी चैट मिरर करता है।',
   'main.core.blockDirectOnly': 'सिर्फ़ सीधी चैट का संपर्क ब्लॉक किया जा सकता है।',

@@ -1,7 +1,10 @@
 // 简体中文。与 pt-BR 相同的键和 {vars}（test/i18n.test.ts）。Piu、LUNES、LNNP、Lunes 和 Mainnet 为产品名，不翻译。
-import type { FullDict } from './core';
+import { call } from '../../../../mobile/src/i18n/call/zh';
+import type { CallDict, FullDict } from './core';
 
 export const dict: FullDict = {
+  // Chamada de voz: os textos do celular (apps/mobile/src/i18n/call), as mesmas chaves `call.*`.
+  ...(call as CallDict),
   'common.back': '返回',
   'common.close': '关闭',
   'common.cancel': '取消',
@@ -1065,6 +1068,8 @@ export const dict: FullDict = {
   'main.core.groupMembers': '请选择同一身份下已接受的联系人。',
   'main.core.writeSomething': '发送前请先写点内容。',
   'main.core.contactBlocked': '联系人已被屏蔽。请在 设置 → 隐私 中取消屏蔽后再聊天。',
+  'main.core.callUnavailable': '当前无法通话。',
+  'main.call.micDenied': 'Piu 无法使用麦克风。请在 系统设置 → 隐私 → 麦克风 中允许。',
   'main.core.unknownChat': '未知聊天。',
   'main.core.blockOnPhone': '请在手机上屏蔽；电脑只是镜像手机上的聊天。',
   'main.core.blockDirectOnly': '只能屏蔽单聊中的联系人。',

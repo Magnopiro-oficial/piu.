@@ -1,5 +1,5 @@
 import type { LinkEvent, LinkSource } from './multi';
-import { MEDIA } from './select';
+import { isLora, MEDIA } from './select';
 import type { Medium, TransportState } from './types';
 
 /** Enlaces da rede local (lan/controller.ts), vistos como uma fonte a mais. */
@@ -11,7 +11,8 @@ export interface LanLinks {
 const key = (m: Medium, id: string) => m + '|' + id;
 
 /**
- * Junta a fonte nativa (Bluetooth LE + Nearby, como hoje) e a rede local numa fonte só para `multi.ts`,
+ * Junta a fonte nativa (Bluetooth LE + Nearby, como hoje), a rede local e, se houver, os rádios LoRa
+ * (Meshtastic, meshtastic/link.ts, e o próprio do Piu, rnode/link.ts) numa fonte só para `multi.ts`,
  * que escolhe o meio por vizinho e faz a ponte entre eles (o roteador do mensageiro repassa o que
  * chega por um meio aos vizinhos dos outros).
  *
@@ -20,22 +21,23 @@ const key = (m: Medium, id: string) => m + '|' + id;
  * - Estado: "rodando" se qualquer um roda. Quando uma das fontes para, os enlaces DELA caem (down +
  *   lost) e os da outra seguem: desligar o Bluetooth não derruba os vizinhos da rede local.
  */
-export function combineSources(primary: LinkSource, lan: LanLinks): LinkSource {
+export function combineSources(primary: LinkSource, lan: LanLinks, lora?: LanLinks, piu?: LanLinks): LinkSource {
   const listeners = new Set<(e: LinkEvent) => void>();
   const emit = (e: LinkEvent) => listeners.forEach(fn => fn(e));
-  const st: Record<'p' | 'l', { state: TransportState; reason?: string }> = { p: { state: 'off' }, l: { state: 'off' } };
-  const owned: Record<'p' | 'l', Map<string, { medium: Medium; id: string }>> = { p: new Map(), l: new Map() };
+  type Src = 'p' | 'l' | 'r' | 'q';
+  const st: Record<Src, { state: TransportState; reason?: string }> = { p: { state: 'off' }, l: { state: 'off' }, r: { state: 'off' }, q: { state: 'off' } };
+  const owned: Record<Src, Map<string, { medium: Medium; id: string }>> = { p: new Map(), l: new Map(), r: new Map(), q: new Map() };
   let last: { state: TransportState; reason?: string } = { state: 'off' };
 
   function combined(): { state: TransportState; reason?: string } {
-    const p = st.p, l = st.l;
-    if (p.state === 'running' || l.state === 'running') return { state: 'running', reason: p.state === 'running' ? p.reason : undefined };
-    if (p.state === 'starting' || l.state === 'starting') return { state: 'starting' };
+    const p = st.p, rest = [st.l, st.r, st.q];
+    if (p.state === 'running' || rest.some(x => x.state === 'running')) return { state: 'running', reason: p.state === 'running' ? p.reason : undefined };
+    if (p.state === 'starting' || rest.some(x => x.state === 'starting')) return { state: 'starting' };
     if (p.state === 'off') return { state: 'off' };
     return { state: p.state, reason: p.reason };
   }
 
-  function onEvent(src: 'p' | 'l', e: LinkEvent) {
+  function onEvent(src: Src, e: LinkEvent) {
     if (e.type === 'state') {
       st[src] = { state: e.state, reason: e.reason };
       const now = combined();
@@ -53,13 +55,18 @@ export function combineSources(primary: LinkSource, lan: LanLinks): LinkSource {
   }
   primary.subscribe(e => onEvent('p', e));
   lan.subscribe(e => onEvent('l', e));
+  lora?.subscribe(e => onEvent('r', e));
+  piu?.subscribe(e => onEvent('q', e));
 
   return {
     kind: primary.kind,
-    media: [...primary.media.filter(m => m.medium !== 'lan'), MEDIA.lan],
+    media: [...primary.media.filter(m => m.medium !== 'lan' && !isLora(m.medium)), MEDIA.lan, ...(lora ? [MEDIA.lora] : []), ...(piu ? [MEDIA.piulora] : [])],
     start: (name, serviceId) => primary.start(name, serviceId),
     stop: () => primary.stop(),
-    sendVia: (medium, id, data) => (medium === 'lan' ? lan.send(id, data) : primary.sendVia(medium, id, data)),
+    sendVia: (medium, id, data) => (medium === 'lan' ? lan.send(id, data)
+      : medium === 'lora' ? (lora ? lora.send(id, data) : Promise.reject(new Error('Sem rádio LoRa.')))
+      : medium === 'piulora' ? (piu ? piu.send(id, data) : Promise.reject(new Error('Sem rádio LoRa do Piu.')))
+      : primary.sendVia(medium, id, data)),
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDiscoveryInterval: sec => primary.setDiscoveryInterval?.(sec),
   };

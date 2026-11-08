@@ -46,6 +46,8 @@ mac:
     NSUserNotificationAlertStyle: alert
     # macOS 15+ pede permissão de rede local (LNNP anuncia e conversa na LAN); o texto vem daqui.
     NSLocalNetworkUsageDescription: O Piu conversa com aparelhos na mesma rede para entregar mensagens sem internet.
+    # Só durante a chamada de voz (o microfone fica fechado fora dela).
+    NSMicrophoneUsageDescription: O Piu usa o microfone só durante as chamadas de voz, cifradas de ponta a ponta.
 dmg:
   title: Piu
 linux:

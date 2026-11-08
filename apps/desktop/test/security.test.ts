@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, rendererFileFor, rendererMime, rendererOriginOf,
+  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, rendererFileFor, rendererMime, rendererOriginOf,
 } from '../src/main/security';
 import { join } from 'node:path';
 
@@ -106,4 +106,16 @@ test('PIU_PROFILE: perfil separado (pasta de dados e nome) só com nome curto e 
   assert.equal(profileFromEnv({ PIU_PROFILE: '' }), null);
   assert.equal(profileFromEnv({ PIU_PROFILE: 'smoke-1' }), 'smoke-1');
   for (const bad of ['../x', 'a/b', 'A B', 'x'.repeat(25), '.', 'ção', 'a\\b']) assert.equal(profileFromEnv({ PIU_PROFILE: bad }), null, bad);
+});
+
+test('microfone só para a chamada: áudio, janela do Piu e chamada aberta', () => {
+  const origin = 'piu-app://app/';
+  assert.equal(mediaAllowed({ types: ['audio'], url: 'piu-app://app/index.html', origin, inCall: true }), true);
+  assert.equal(mediaAllowed({ types: ['audio'], url: 'piu-app://app', origin, inCall: true, check: true }), true);
+  assert.equal(mediaAllowed({ types: ['unknown'], url: 'piu-app://app', origin, inCall: true, check: true }), true);
+  assert.equal(mediaAllowed({ types: ['audio'], url: 'piu-app://app/index.html', origin, inCall: false }), false, 'sem chamada, nada');
+  assert.equal(mediaAllowed({ types: ['audio', 'video'], url: 'piu-app://app/index.html', origin, inCall: true }), false, 'câmera nunca');
+  assert.equal(mediaAllowed({ types: ['unknown'], url: 'piu-app://app/index.html', origin, inCall: true }), false);
+  assert.equal(mediaAllowed({ types: [], url: 'piu-app://app/index.html', origin, inCall: true }), false);
+  assert.equal(mediaAllowed({ types: ['audio'], url: 'https://evil.example/', origin, inCall: true }), false, 'outra origem');
 });

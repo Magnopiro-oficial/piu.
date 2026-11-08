@@ -34,6 +34,20 @@ O que acontece quando o nó sobe:
   - Faixa (no Brasil, 915 MHz) e potência ficam no firmware e precisam seguir a regulamentação.
   - Firmwares que esperam a configuração do rádio vinda do computador (como o RNode) ainda não são suportados: essa configuração depende da placa escolhida.
 - **`usb`**: outro nó ligado por cabo serial/USB, ponto a ponto. Pacotes maiores e mídia permitida.
+- **`meshtastic`**: um rádio com firmware **Meshtastic** no USB (Super Node no canal que os celulares já usam; `docs/transporte/super-node-lora.md`).
+  - Fala a API serial de cliente do Meshtastic (quadros `0x94 0xC3`); o rádio fica com a região e o canal configurados no app oficial.
+  - Entra no motor como a malha aberta `lora:mesh`: só envelopes do Piu inteiros, já selados, até 904 bytes, em pedaços "P1" na porta 256. Nada de mídia.
+  - Tempo de rádio: `PIU_MESHTASTIC_PER_MIN` pedaços por minuto (padrão 6, rajada 8).
+  - Anuncia o nó ("PN", assinado pela chave técnica) ao subir e a cada 15 min; o app mostra "Super Node Piu por perto".
+  - `GET /api/relay` traz `meshtastic`, por rádio: estado, nós ouvidos, Super Nodes ouvidos, envelopes enviados e recebidos, envios adiados.
+  - Ainda não testado com placa real.
+- **`rnode`**: um rádio com firmware **RNode** no USB (LoRa próprio do Piu, caminho B; primeira placa: Heltec V3).
+  - O nó configura o rádio a cada conexão com o canal da região: `PIU_RNODE_REGION` (padrão `BR_902`; 27 regiões do mundo, tabela em `docs/hardware/placas-lora.md`). Só sobe quando o rádio confirma cada ajuste; se não, tenta de novo a cada minuto.
+  - Entra no motor como a malha aberta `lora:piu`, com os mesmos pedaços "P1" e o mesmo anúncio "PN" do `meshtastic`, sem o cabeçalho dele.
+  - Tempo de rádio proporcional ao limite da região (6 pedaços/min com 10 % no ar; menos onde o limite é menor).
+  - Com `meshtastic` e `rnode` ligados juntos, o nó é ponte: cada envelope vai uma vez para cada malha, nunca de volta para a de onde veio.
+  - `GET /api/relay` traz `rnode`, por rádio: região, frequência, estado (e o problema, se falhou), Super Nodes ouvidos, envelopes enviados e recebidos, envios adiados.
+  - Ainda não testado com placa real.
 - **Sem dependência nativa**: a porta é configurada com `stty` (no OpenWrt, o do busybox) e lida pelo laço de eventos do Node. O usuário do serviço precisa de acesso ao dispositivo (grupo `dialout`).
 - **Porta ausente** (rádio desconectado) não derruba o nó: o LAN continua, e o log diz o que não abriu.
 - `GET /api/relay` passa a trazer `serial`, com, por porta:
@@ -201,13 +215,17 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_LNNP_ALLOW` | — | só aceita estes nós (chave do nó em hex, 64 caracteres); vazio aceita qualquer nó LNNP |
 | `PIU_LNNP_MEMORY_MB` | `256` | teto de memória para envelopes guardados |
 | `PIU_LNNP_BEACON_MS` | `5000` | intervalo do anúncio e das reconexões |
-| `PIU_SERIAL` | — | portas seriais `tipo:caminho@velocidade`, separadas por vírgula; tipo `lora` ou `usb` (ex.: `lora:/dev/ttyUSB0@115200`) |
+| `PIU_SERIAL` | — | portas seriais `tipo:caminho@velocidade`, separadas por vírgula; tipo `lora`, `usb`, `meshtastic` ou `rnode` (ex.: `lora:/dev/ttyUSB0@115200`) |
 | `PIU_LORA_SF` | `9` | spreading factor do rádio (7–12), igual ao do firmware |
 | `PIU_LORA_BW_KHZ` | `125` | largura de banda (62.5, 125, 250, 500) |
 | `PIU_LORA_CR` | `5` | taxa de código 4/5 a 4/8 (5–8) |
 | `PIU_LORA_DUTY` | `10` | ocupação máxima do canal, % por hora |
 | `PIU_LORA_MAX_ENVELOPE` | `1536` | maior envelope enviado pelo rádio (bytes) |
 | `PIU_LORA_BEACON_MS` | `30000` | intervalo do anúncio pelo rádio |
+| `PIU_MESHTASTIC_PER_MIN` | `6` | tempo de rádio no canal Meshtastic, em pedaços por minuto (`PIU_SERIAL=meshtastic:…`) |
+| `PIU_RNODE_REGION` | `BR_902` | região do rádio próprio (`PIU_SERIAL=rnode:…`): `US`, `EU_868`, `EU_433`, `ANZ`, `IN`, `JP`, `CN`, `LORA_24` etc. |
+| `PIU_RNODE_FREQ_HZ` | meio da faixa | frequência do rádio próprio, em Hz; precisa caber na faixa da região |
+| `PIU_RNODE_TX_DBM` | `17` ou o máximo da região | potência do rádio próprio; nunca acima do limite da região |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
 | `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
 | `PIU_GATEWAY` | `1` | gateway da carga pela malha (transações dos celulares para a Lunes); `0` desliga de vez, e o painel não liga |

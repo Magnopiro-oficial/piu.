@@ -7,11 +7,15 @@
 import { piu11PtBR } from './piu11/pt-BR.js';
 import { pontosPtBR } from './pontos/pt-BR.js';
 import { linkDesktopPtBR } from './linkDesktop/pt-BR.js';
+import { callPtBR } from './call/pt-BR.js';
+import { loraPtBR } from './lora/pt-BR.js';
 
 export const ptBR = {
   ...piu11PtBR,
   ...pontosPtBR,
   ...linkDesktopPtBR,
+  ...callPtBR,
+  ...loraPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',
@@ -1406,6 +1410,7 @@ export const ptBR = {
   // Transportes e catálogo do provider (data/network.ts)
   'tx.ble': 'Bluetooth LE',
   'tx.ble.desc': 'Descoberta e texto curto',
+  'tx.noPermission': 'Sem permissão do sistema · toque para liberar',
   'tx.direct': 'Wi-Fi Direct',
   'tx.direct.desc': 'Aparelho a aparelho, sem roteador',
   'tx.mesh': 'Wi-Fi local',

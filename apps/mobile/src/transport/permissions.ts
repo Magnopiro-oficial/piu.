@@ -1,22 +1,33 @@
-import { PermissionsAndroid, Platform, type Permission } from 'react-native';
+import { Linking, PermissionsAndroid, Platform, type Permission } from 'react-native';
+import { type MediaGrants, mediaGrants, transportPermissions } from './grants';
 
 /**
- * Permissões de tempo de execução para descobrir e conectar vizinhos.
+ * Permissões de tempo de execução para descobrir e conectar vizinhos, por meio (transport/grants.ts):
  * Android 13+: Bluetooth (procurar, anunciar, conectar) e dispositivos Wi-Fi por perto.
- * Android 12: Bluetooth + localização precisa. Até o 11: localização precisa.
+ * Android 12: Bluetooth + localização precisa (só para o Wi-Fi Direct). Até o 11: localização precisa.
+ * Negar a parte do Wi-Fi deixa o Bluetooth ligado.
  * iPhone: o sistema pergunta sozinho ao ligar o Bluetooth (texto em app.json → NSBluetoothAlwaysUsageDescription).
  */
-export async function requestTransportPermissions(): Promise<'granted' | 'denied'> {
-  if (Platform.OS !== 'android') return 'granted';
+export async function requestTransportPermissions(): Promise<MediaGrants> {
+  if (Platform.OS !== 'android') return { ble: true, nearby: true };
   const v = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
-  const P = PermissionsAndroid.PERMISSIONS;
-  const list: Permission[] = v >= 33
-    ? [P.BLUETOOTH_SCAN, P.BLUETOOTH_ADVERTISE, P.BLUETOOTH_CONNECT, P.NEARBY_WIFI_DEVICES]
-    : v >= 31
-      ? [P.BLUETOOTH_SCAN, P.BLUETOOTH_ADVERTISE, P.BLUETOOTH_CONNECT, P.ACCESS_FINE_LOCATION]
-      : [P.ACCESS_FINE_LOCATION];
+  const list = transportPermissions(v) as Permission[];
   const res = await PermissionsAndroid.requestMultiple(list);
-  return list.every(p => res[p] === PermissionsAndroid.RESULTS.GRANTED) ? 'granted' : 'denied';
+  return mediaGrants(v, p => res[p as Permission] === PermissionsAndroid.RESULTS.GRANTED);
+}
+
+/**
+ * Pedido de novo (aba Rede, linha sem permissão). Se o Android não mostra mais o pedido ("não perguntar
+ * de novo"), abre os ajustes do app para a pessoa liberar lá.
+ */
+export async function askTransportPermissionsAgain(): Promise<MediaGrants> {
+  if (Platform.OS !== 'android') return { ble: true, nearby: true };
+  const v = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
+  const list = transportPermissions(v) as Permission[];
+  const res = await PermissionsAndroid.requestMultiple(list);
+  const g = mediaGrants(v, p => res[p as Permission] === PermissionsAndroid.RESULTS.GRANTED);
+  if ((!g.ble || !g.nearby) && list.some(p => res[p] === PermissionsAndroid.RESULTS.NEVER_ASK_AGAIN)) await Linking.openSettings().catch(() => {});
+  return g;
 }
 
 /**

@@ -2,6 +2,8 @@
  * Estado das conversas (mensagens por contato) como funções puras: o processo principal aplica os
  * eventos do Messenger e o renderer só mostra. Testado em test/conversations.test.ts.
  */
+import type { CallRecord } from '../../../mobile/src/calls/callMachine';
+import type { RequestStep } from '../../../mobile/src/calls/callView';
 import type { ContactInfo, ConversationSummary, Message, MessageStatus, Route, TempMode } from './types';
 
 /** Prazos das mensagens temporárias (os do celular e do protótipo). */
@@ -50,6 +52,33 @@ export function receiveIncoming(s: ConversationsState, m: { id: string; contactI
   if (list.some(x => x.id === m.id)) return s;
   const msg: Message = { id: m.id, contactId: m.contactId, dir: 'in', text: m.text, at: m.at, status: 'recebida', ...(m.sender ? { sender: m.sender } : {}), ...(m.route ? { route: m.route } : {}), ...(m.expiresAt ? { expiresAt: m.expiresAt } : {}) };
   return withList(s, m.contactId, [...list, msg]);
+}
+
+/**
+ * Registro de chamada de voz (cartão no lugar do balão). Repetido (mesma chamada) não duplica. Atender,
+ * recusar ou ligar conta como ter visto a conversa; só a chamada perdida fica como não lida.
+ */
+export function appendCallRecord(s: ConversationsState, rec: CallRecord): ConversationsState {
+  const id = `call-${rec.callId}`, list = messagesOf(s, rec.peer);
+  if (list.some(x => x.id === id)) return s;
+  const msg: Message = { id, contactId: rec.peer, dir: rec.dir, text: '', at: Math.floor(rec.at / 1000), status: rec.dir === 'out' ? 'entregue' : 'recebida', call: rec };
+  const next = withList(s, rec.peer, [...list, msg]);
+  if (rec.dir === 'in' && rec.outcome === 'missed') return next;
+  return { ...next, readCount: { ...next.readCount, [rec.peer]: messagesOf(next, rec.peer).length } };
+}
+
+/** Cartão "Pedido de chamada": aparece na primeira etapa e avança no mesmo lugar (a caminho → entregue → aceito…). */
+export function upsertCallRequest(s: ConversationsState, m: { peer: string; requestId: string; step: RequestStep; dir: 'out' | 'in'; at: number }): ConversationsState {
+  const id = `callreq-${m.requestId}`, list = messagesOf(s, m.peer);
+  const i = list.findIndex(x => x.id === id);
+  if (i >= 0) {
+    if (list[i]!.callRequest?.step === m.step) return s;
+    const copy = list.slice();
+    copy[i] = { ...list[i]!, callRequest: { requestId: m.requestId, step: m.step } };
+    return withList(s, m.peer, copy);
+  }
+  const msg: Message = { id, contactId: m.peer, dir: m.dir, text: '', at: m.at, status: m.dir === 'out' ? 'entregue' : 'recebida', callRequest: { requestId: m.requestId, step: m.step } };
+  return withList(s, m.peer, [...list, msg]);
 }
 
 const RANK: Record<MessageStatus, number> = { criada: 0, aguardando: 1, encaminhada: 2, entregue: 3, expirada: 3, recebida: 9 };

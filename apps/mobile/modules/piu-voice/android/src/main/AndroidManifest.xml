@@ -1,0 +1,8 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <!-- Áudio da chamada de voz. RECORD_AUDIO é pedida em tempo de execução pelo app; enquanto o app.json
+       a listar em "blockedPermissions" (tools:node="remove" no manifesto do app), ela é retirada na fusão
+       e start() rejeita com 'PERMISSION'. MODIFY_AUDIO_SETTINGS (normal): modo de comunicação e rota
+       (alto-falante, fone do aparelho, Bluetooth). -->
+  <uses-permission android:name="android.permission.RECORD_AUDIO" />
+  <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+</manifest>

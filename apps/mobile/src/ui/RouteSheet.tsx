@@ -47,9 +47,10 @@ export function RouteSheet({ chat, msg, rec, prio, onClose }: { chat: Chat; msg:
               <T size={15} w={600} color={h.reached ? c.ink : c.ink2}>{h.n}</T>
               <T size={12} mono color={c.ink2}>{h.k}</T>
               {!h.last && (
-                <View style={{ alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 8, backgroundColor: c.bg2 }}>
-                  <Icon name={h.viaIcon} size={14} />
-                  <T size={11.5} w={500} mono>{h.via}</T>
+                // Trecho pelo LoRa em destaque (ink), como no desenho 4b.
+                <View style={{ alignSelf: 'flex-start', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 5, paddingVertical: 4, paddingHorizontal: 9, borderRadius: 8, backgroundColor: h.viaIcon === 'settings_input_antenna' ? c.ink : c.bg2 }}>
+                  <Icon name={h.viaIcon} size={14} color={h.viaIcon === 'settings_input_antenna' ? c.invink : undefined} />
+                  <T size={11.5} w={500} mono color={h.viaIcon === 'settings_input_antenna' ? c.invink : undefined}>{h.via}</T>
                 </View>
               )}
             </View>

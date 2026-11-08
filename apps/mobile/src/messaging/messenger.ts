@@ -99,6 +99,8 @@ export interface MessengerEvents {
   read(contactId: string, msgIds: string[]): void;
   /** O contato está digitando (dura alguns segundos). */
   typing(contactId: string): void;
+  /** Sinal da chamada de voz (`{ t: 'cl' }`, validado em src/calls/callSignals.ts) de um contato aceito. */
+  callSignal(contactId: string, payload: unknown, route?: RouteInfo): void;
   /** Arquivo: progresso de envio (blocos confirmados) ou de recebimento. */
   fileProgress(msgId: string, done: number, total: number, dir: 'out' | 'in'): void;
   /** Arquivo recebido inteiro, com integridade conferida (SHA-256). */
@@ -230,6 +232,8 @@ type Payload =
   | { t: 'r'; i: string[] }
   /** "digitando…": sinal efêmero, sem fila, prazo de segundos e sem prova de entrega. */
   | { t: 'ty' }
+  /** Chamada de voz: sinal (src/calls/callSignals.ts) e chave efêmera. */
+  | { t: 'cl'; s: unknown; k?: string }
   | { t: 'a'; i: string[] }
   /** Oferta de arquivo: nome, tamanho, tipo, total de blocos e SHA-256 do conteúdo. */
   | { t: 'f'; i: string; n: string; s: number; m: string; c: number; h: string; e?: number }
@@ -636,6 +640,26 @@ export class Messenger {
     this.typingAt.set(contactId, now);
     this.enqueue(c, { t: 'ty' }, null, Priority.Low, false, TYPING_TTL_SEC);
     return true;
+  }
+
+  /**
+   * Sinal da chamada de voz. Ao vivo (convite, aceite, recusa…): como o "digitando", sem fila e só com
+   * vizinho por perto, mas com prioridade alta e 30 s de validade. Pedido de chamada e resposta: pela
+   * fila da malha (até 24 h); `msgId` volta como "entregue" quando o contato confirmar.
+   */
+  sendCallSignal(contactId: string, payload: { t: 'cl'; s: unknown; k?: string }, o: { live: boolean; ttlSec: number; msgId?: string }): boolean {
+    const c = this.contacts.get(contactId);
+    if (!c || c.request || !this.managers[c.via].get(contactId)?.established) return false;
+    if (o.live && !this.peers.size) return false;
+    this.enqueue(c, payload, o.live ? null : o.msgId ?? null, o.live ? Priority.High : Priority.Normal, false, o.ttlSec);
+    return true;
+  }
+
+  /** Último vizinho por onde o contato chegou direto (1 salto) e quando; base para "dá para ligar ao vivo?". */
+  private direct = new Map<string, { peer: string; at: number }>();
+  directLink(contactId: string, maxAgeSec: number): string | null {
+    const d = this.direct.get(contactId);
+    return d && this.peers.has(d.peer) && this.o.now() - d.at <= maxAgeSec ? d.peer : null;
   }
 
   private enqueue(c: Contact, p: Payload | Uint8Array, msgId: string | null, priority: Priority, bulk = false, ttlSec = TTL_SEC) {
@@ -2070,6 +2094,17 @@ export class Messenger {
     let p: Payload;
     try { p = JSON.parse(fromUtf8(pt)); } catch { return false; }
     if (p?.t === 'fa' || p?.t === 'fd' || p?.t === 'f' || p?.t === 'fw') { this.onFileControl(m.fromId, p, m.sentAt); return false; }
+    if (this.rx?.hops === 1 && this.contacts.has(m.fromId)) this.direct.set(m.fromId, { peer: this.rx.peer, at: this.o.now() });
+    if (p?.t === 'cl') {
+      const c = this.contacts.get(m.fromId);
+      if (!c || c.request) return true;
+      const s = (p as { s?: { t?: string; requestId?: unknown } }).s;
+      // Pedido de chamada vem pela fila: confirma a entrega (o cartão de quem pediu vira "Entregue").
+      const queued = s?.t === 'request' || s?.t === 'requestAnswer';
+      if (s?.t === 'request' && typeof s.requestId === 'string' && s.requestId.length <= 64) this.enqueue(c, { t: 'a', i: [s.requestId] }, null, Priority.High);
+      this.o.events.callSignal?.(m.fromId, p, this.rx ?? undefined);
+      return !queued;
+    }
     if (p?.t === 'ty') {
       const c = this.contacts.get(m.fromId);
       if (c && !c.request) this.o.events.typing?.(m.fromId);

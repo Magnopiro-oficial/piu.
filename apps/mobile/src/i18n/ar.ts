@@ -4,11 +4,15 @@ import type { Dict } from './core';
 import { piu11 } from './piu11/ar';
 import { pontos } from './pontos/ar';
 import { linkDesktop } from './linkDesktop/ar';
+import { call } from './call/ar';
+import { lora } from './lora/ar';
 
 export const dict: Dict = {
   ...piu11,
   ...pontos,
   ...linkDesktop,
+  ...call,
+  ...lora,
   'common.back': 'رجوع',
   'common.close': 'إغلاق',
   'common.cancel': 'إلغاء',
@@ -1416,6 +1420,7 @@ export const dict: Dict = {
   "prov.lunes.ok": "على Lunes Mainnet: {free} LUNES · {where}",
   "prov.lunes.empty": "الحساب بلا رصيد بعد",
   "tx.ble.desc": "الاكتشاف والنص القصير",
+  "tx.noPermission": "لا يوجد إذن من النظام · المس للسماح",
   "tx.direct.desc": "بين الأجهزة، بلا موجّه",
   "tx.mesh.desc": "عبر شبكة Wi-Fi المتصل بها الهاتف: الهواتف وDesktop وPiu Node",
   "tx.lora": "راديو LoRa",

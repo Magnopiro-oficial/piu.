@@ -31,6 +31,12 @@ import { shareReceivedFile } from '../../lib/openFile';
 import { routeIcon, routeLabel } from '../../lib/routeCore';
 import { receivedFiles, useMessaging } from '../../state/messaging';
 import { useChatScreenSecurity } from '../../ui/ScreenSecurity';
+import { useCall } from '../../ui/call/CallContext';
+import { CallButton, CallRecordCard, CallRequestCard } from '../../ui/call/CallCards';
+import { contactOf } from '../../calls/callView';
+import { loraComposer, loraMsgState, type LoraMsgState } from '../../lib/loraChat';
+import { LoraCard } from '../../ui/lora/LoraCard';
+import { useLora } from '../../ui/lora/useLora';
 
 /** Conversa: balões (enviado = ink, recebido = bub + borda), estados de entrega, rodapé com o transporte atual. */
 export default function ChatScreen() {
@@ -41,10 +47,16 @@ export default function ChatScreen() {
   const { chats, send, retry, verified, sendRealFile, toggleFilePause, showToast, patchChat, typing, notifyTyping } = useStore();
   const { sto } = useSettings();
   useChatScreenSecurity(); // Segurança da tela (Android): FLAG_SECURE só enquanto a conversa está em foco
-  const { lastRouteOf, routeFor, chatPriority, payments } = useMessaging();
+  const { lastRouteOf, routeFor, chatPriority, payments, onlyLora } = useMessaging();
+  // Só o LoRa alcança (desenho 4a/4c): segundos até a próxima vez do rádio, se algo espera.
+  const lora = useLora();
+  const busyUntil = lora?.link.busyUntil;
+  const busySec = onlyLora && busyUntil && lora && busyUntil > lora.now ? Math.ceil((busyUntil - lora.now) / 1000) : undefined;
   const { lunesAddress } = useWallet();
   const chat = chats.find(x => x.id === id);
   useViewingChat(chat ? chat.id : null);
+  // Chamada de voz: o botão só existe quando há um provedor de chamada (sem ele, o cabeçalho fica igual).
+  const call = useCall();
   const [draft, setDraft] = useState('');
   const [routeMsg, setRouteMsg] = useState<string | null>(null);
   const [attachOpen, setAttachOpen] = useState(false);
@@ -73,6 +85,7 @@ export default function ChatScreen() {
   // Grupo, canal ou comunidade: publica quem o estado do grupo permite (`owner` = pode publicar).
   const readOnly = !!chat.group && !chat.owner;
   const canSend = draft.trim().length > 0;
+  const lc = loraComposer(draft, onlyLora);
   const submit = () => { if (!canSend) return; send(chat.id, draft.trim()); setDraft(''); toEnd(); };
   const selected = msgs.find(m => m.id === routeMsg);
   // ⋯ abre o contato (conversa direta), os dados do grupo/canal ou a comunidade.
@@ -137,8 +150,14 @@ export default function ChatScreen() {
             <T size={16} w={650} ls={-0.015} numberOfLines={1} style={{ flexShrink: 1 }} accessibilityRole="header" accessibilityLabel={verified[chat.id] ? `${chat.name}, ${t('chat.verified')}` : chat.name}>{chat.name}</T>
             {verified[chat.id] && <Pop dur={400}><Icon name="verified" size={16} fill /></Pop>}
           </View>
-          <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.kind === 'direct' && waiting.length ? t('chat.queue.sub', { count: waiting.length }) : chat.sub}</T>
+          {onlyLora && !typing[chat.id] ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon name="settings_input_antenna" size={13} color={c.ink2} />
+              <T size={12.5} color={c.ink2} numberOfLines={1}>{t('lora.chat.sub')}</T>
+            </View>
+          ) : <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.kind === 'direct' && waiting.length ? t('chat.queue.sub', { count: waiting.length }) : chat.sub}</T>}
         </View>
+        {call && chat.kind === 'direct' && (call.canCall?.(chat.id) ?? true) && <CallButton onPress={() => call.callChat(chat.id)} />}
         <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? t('chat.info.contact') : chat.kind === 'group' ? t('chat.info.group') : chat.kind === 'community' ? t('chat.info.community') : t('chat.info.channel')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
           <Icon name="more_horiz" size={22} />
         </Pressable>
@@ -147,6 +166,7 @@ export default function ChatScreen() {
       {/* mensagens, sobre o padrão de pontos (18 px) */}
       <View style={{ flex: 1 }}>
         <DotPattern color={c.dot} />
+        {onlyLora && <LoraCard name={chat.name} busySec={waiting.some(m => loraMsgState(m, true, busySec)?.kind === 'turn') ? busySec : undefined} />}
         <ScrollView ref={scroller} onContentSizeChange={toEnd} contentContainerStyle={{ paddingTop: 14, paddingHorizontal: 12, paddingBottom: 10, gap: 4 }} keyboardShouldPersistTaps="handled">
           <View style={{ alignSelf: 'center', flexDirection: 'row', alignItems: 'center', gap: 6, maxWidth: 300, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.bg2, marginBottom: 6 }}>
             <Icon name="lock" size={14} />
@@ -157,7 +177,10 @@ export default function ChatScreen() {
             return (
               <View key={m.id}>
                 {seps[i] && <T size={11.5} w={500} color={c.ink2} align="center" accessibilityRole="header" style={{ marginTop: 10, marginBottom: 6 }}>{seps[i]}</T>}
-                <Bubble msg={m} chat={chat} gap={i > 0 && !seps[i] && msgs[i - 1].from === m.from ? 0 : 8} pay={pay} checking={!!pay && checking === pay.id}
+                {/* Chamada de voz: registro e pedido viram cartão no lugar do balão. */}
+                {m.call ? <CallRecordCard record={m.call} contact={contactOf(chat.name)} time={m.time} onCallBack={call?.canCall?.(chat.id) ? () => call.callChat(chat.id) : undefined} />
+                  : m.callReq ? <CallRequestCard step={m.callReq.step} contact={contactOf(chat.name)} time={m.time} />
+                  : <Bubble msg={m} chat={chat} lora={loraMsgState(m, onlyLora, busySec)} gap={i > 0 && !seps[i] && msgs[i - 1].from === m.from ? 0 : 8} pay={pay} checking={!!pay && checking === pay.id}
                   onPress={() => setRouteMsg(m.id)}
                   // Pedido de pagamento: reenviar manda o pedido de novo (não o texto do resumo).
                   onRetry={() => { if (pay) { try { payments.resend(pay.id); } catch (e) { fail(t('chat.resendFail'), e); } } else retry(chat.id, m.id); }}
@@ -165,12 +188,13 @@ export default function ChatScreen() {
                   onOpenFile={m.file?.incoming && receivedFiles.has(m.id) ? () => openFile(m) : undefined}
                   onCopied={() => showToast({ icon: 'content_copy', title: pay ? t('wallet.addressCopied') : t('chat.coordsCopied'), body: pay ? pay.address : '' })}
                   onPaid={pay && pay.dir === 'in' ? () => setPaidFor(pay.id) : undefined}
-                  onCheck={pay && pay.dir === 'out' ? () => checkPay(pay) : undefined} />
+                  onCheck={pay && pay.dir === 'out' ? () => checkPay(pay) : undefined} />}
               </View>
             );
           })}
           {chat.kind === 'direct' && <EndorseRequestCard chatId={chat.id} />}
-          {waiting.length > 0 && (
+          {/* Só pelo LoRa, o cartão fixo do topo e o estado de cada balão já dizem o que espera. */}
+          {waiting.length > 0 && !onlyLora && (
             <Pressable onPress={() => setRouteMsg(waiting[0].id)} accessibilityRole="button" accessibilityLabel={t('chats.queued', { count: waiting.length })}
               style={{ alignSelf: 'center', width: '100%', maxWidth: 310, marginTop: 12, paddingVertical: 14, paddingHorizontal: 16, borderRadius: 18, borderWidth: 1, borderStyle: 'dashed', borderColor: c.line2, backgroundColor: c.bg, gap: 6 }}>
               {/* Design `queue`: "{nome} está fora de alcance" e onde a mensagem está guardada, com o prazo real (48 h do envelope). */}
@@ -201,10 +225,17 @@ export default function ChatScreen() {
         </View>
       ) : (
         <View style={{ paddingTop: 8, paddingHorizontal: 10, paddingBottom: Math.max(insets.bottom, 12), borderTopWidth: 1, borderTopColor: c.line, backgroundColor: c.bg, gap: 6 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-            <Icon name={viaIcon} size={13} color={c.ink2} />
-            <T size={11} mono color={c.ink2}>{viaText}</T>
-          </View>
+          {lc.hint ? (
+            <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 14, borderWidth: 1.5, borderColor: c.ink }} accessibilityLiveRegion="polite">
+              <Icon name="settings_input_antenna" size={16} style={{ marginTop: 1 }} />
+              <T size={12} lh={1.4} style={{ flex: 1 }}>{t('lora.composer.hint')}</T>
+            </View>
+          ) : (
+            <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <Icon name={viaIcon} size={13} color={c.ink2} />
+              <T size={11} mono color={c.ink2}>{viaText}</T>
+            </View>
+          )}
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <Pressable onPress={() => setAttachOpen(true)} accessibilityRole="button" accessibilityLabel={t('chat.attach')} style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}>
               <Icon name="add" size={24} w={300} />
@@ -212,8 +243,14 @@ export default function ChatScreen() {
             <TextInput value={draft} onChangeText={v => { setDraft(v); if (v.trim()) notifyTyping(chat.id); }} placeholder={t('chat.message')} placeholderTextColor={c.ink3} accessibilityLabel={t('chat.message')}
               onSubmitEditing={submit} returnKeyType="send" blurOnSubmit={false}
               style={{ flex: 1, minWidth: 0, height: 42, borderRadius: 21, backgroundColor: c.bg2, paddingHorizontal: 16, fontSize: 15.5, color: c.ink, fontFamily: fontFamily(400) }} />
-            <SendButton enabled={canSend} onPress={submit} />
+            <SendButton enabled={canSend} onPress={submit} icon={lc.icon} label={lc.hint ? t('lora.composer.later') : undefined} />
           </View>
+          {lc.count && (
+            <View style={{ alignSelf: 'flex-end', marginRight: 58, flexDirection: 'row', alignItems: 'center', gap: 6 }} accessibilityLabel={t('lora.composer.count', { n: lc.count.n, max: lc.count.max })}>
+              {lc.count.over && <View style={{ width: 44, height: 3, borderRadius: 2, backgroundColor: c.ink }} />}
+              <T size={11} w={lc.count.over ? 600 : 500} mono color={lc.count.over ? c.ink : c.ink2}>{lc.count.n} / {lc.count.max}</T>
+            </View>
+          )}
         </View>
       )}
 
@@ -272,8 +309,8 @@ function Tick({ name, color, animate }: { name: IconName; color: string; animate
   return <Animated.View style={{ opacity, transform: [{ scale }] }}><Icon name={name} size={15} color={color} /></Animated.View>;
 }
 
-function Bubble({ msg, chat, gap, pay, checking, onPress, onRetry, onToggleFile, onOpenFile, onCopied, onPaid, onCheck }: {
-  msg: Msg; chat: Chat; gap: number; pay?: PayRecord; checking?: boolean; onPress: () => void; onRetry: () => void; onToggleFile: () => void; onOpenFile?: () => void; onCopied: () => void;
+function Bubble({ msg, chat, lora, gap, pay, checking, onPress, onRetry, onToggleFile, onOpenFile, onCopied, onPaid, onCheck }: {
+  msg: Msg; chat: Chat; lora?: LoraMsgState; gap: number; pay?: PayRecord; checking?: boolean; onPress: () => void; onRetry: () => void; onToggleFile: () => void; onOpenFile?: () => void; onCopied: () => void;
   onPaid?: () => void; onCheck?: () => void;
 }) {
   const { c } = useTheme();
@@ -306,9 +343,18 @@ function Bubble({ msg, chat, gap, pay, checking, onPress, onRetry, onToggleFile,
           {!!msg.text && !msg.loc && !pay && <T size={15.5} lh={1.35} color={me ? c.invink : c.ink}>{msg.text}</T>}
           {me ? (
             <View style={{ alignSelf: 'flex-end', flexDirection: 'row', alignItems: 'center', gap: 4, opacity: 0.72 }}>
-              <T size={11} color={c.invink}>{msg.status ? statusLabel(msg.status, t) : ''} · </T>
-              <T size={11} color={c.invink} tabular>{msg.time}</T>
-              {msg.status && <Tick name={STATUS_ICON[msg.status]} color={c.invink} animate={msg.fresh} />}
+              {lora ? (
+                <>
+                  <Icon name={lora.kind === 'turn' ? 'hourglass_top' : 'schedule'} size={13} color={c.invink} />
+                  <T size={11} mono color={c.invink}>{lora.kind === 'turn' ? t('lora.msg.turn', { sec: lora.sec }) : t('lora.msg.other')}</T>
+                </>
+              ) : (
+                <>
+                  <T size={11} color={c.invink}>{msg.status ? statusLabel(msg.status, t) : ''} · </T>
+                  <T size={11} color={c.invink} tabular>{msg.time}</T>
+                  {msg.status && <Tick name={STATUS_ICON[msg.status]} color={c.invink} animate={msg.fresh} />}
+                </>
+              )}
             </View>
           ) : (
             <T size={11} color={c.ink2} tabular style={{ alignSelf: 'flex-end' }}>{msg.time}</T>
@@ -352,7 +398,8 @@ function Typing() {
   );
 }
 
-function SendButton({ enabled, onPress }: { enabled: boolean; onPress: () => void }) {
+/** `icon`/`label`: só pelo LoRa, texto longo demais vira "agendar" (desenho 4c). */
+function SendButton({ enabled, onPress, icon = 'arrow_upward', label }: { enabled: boolean; onPress: () => void; icon?: IconName; label?: string }) {
   const { c, reduceMotion } = useTheme();
   const t = useT();
   const v = useRef(new Animated.Value(enabled ? 1 : 0)).current;
@@ -361,10 +408,10 @@ function SendButton({ enabled, onPress }: { enabled: boolean; onPress: () => voi
     Animated.spring(v, { toValue: enabled ? 1 : 0, friction: 5, tension: 220, useNativeDriver: true }).start();
   }, [enabled, reduceMotion, v]);
   return (
-    <Pressable onPress={onPress} disabled={!enabled} accessibilityRole="button" accessibilityLabel={t('wallet.send')} accessibilityState={{ disabled: !enabled }}>
+    <Pressable onPress={onPress} disabled={!enabled} accessibilityRole="button" accessibilityLabel={label ?? t('wallet.send')} accessibilityState={{ disabled: !enabled }}>
       <Animated.View style={{ width: 42, height: 42, borderRadius: 21, backgroundColor: c.ink, alignItems: 'center', justifyContent: 'center',
         opacity: v.interpolate({ inputRange: [0, 1], outputRange: [0.35, 1] }), transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1] }) }] }}>
-        <Icon name="arrow_upward" size={22} color={c.invink} />
+        <Icon name={icon} size={icon === 'arrow_upward' ? 22 : 20} color={c.invink} />
       </Animated.View>
     </Pressable>
   );

@@ -5,12 +5,15 @@ export const palettes = {
     ink: '#0C0C0C', ink2: '#5F5F5C', ink3: '#9B9B97', invink: '#FFFFFF',
     line: 'rgba(0,0,0,0.07)', line2: 'rgba(0,0,0,0.16)', dot: 'rgba(0,0,0,0.055)',
     knob: '#FFFFFF', scrim: 'rgba(0,0,0,0.32)',
+    // Estado de um rádio (desenho Piu 17): só no ponto e no aviso da linha; o resto segue monocromático.
+    ok: '#1F9D55', warn: '#9A5A00', warnbg: 'rgba(196,120,0,0.11)', err: '#CF3328', errbg: 'rgba(207,51,40,0.09)',
   },
   dark: {
     bg: '#0A0A0A', bg2: '#171717', bg3: '#262626', bub: '#1A1A1A',
     ink: '#F4F4F2', ink2: '#A2A29E', ink3: '#6C6C69', invink: '#0A0A0A',
     line: 'rgba(255,255,255,0.08)', line2: 'rgba(255,255,255,0.18)', dot: 'rgba(255,255,255,0.06)',
     knob: '#8C8C88', scrim: 'rgba(0,0,0,0.60)',
+    ok: '#4CC38A', warn: '#F2B545', warnbg: 'rgba(242,181,69,0.13)', err: '#FF6A5C', errbg: 'rgba(255,106,92,0.14)',
   },
 } as const;
 

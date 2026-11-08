@@ -186,6 +186,17 @@ test('Conectar ao computador: traduzido de verdade em todos os idiomas (não é 
   }
 });
 
+test('Chamada de voz: traduzida de verdade em todos os idiomas (não é cópia do pt-BR)', () => {
+  const keys = Object.keys(ptBR).filter(k => k.startsWith('call.'));
+  assert.ok(keys.length >= 100, 'chaves call.* no pt-BR');
+  for (const lang of ALL) {
+    if (lang === 'pt-BR' || lang === 'pt-PT') continue;
+    const d = dictOf(lang) as Dict;
+    const same = keys.filter(k => d[k] === (ptBR as Dict)[k] && ((ptBR as Dict)[k] as string).length > 25);
+    assert.deepEqual(same, [], `${lang}: iguais ao pt-BR`);
+  }
+});
+
 test('recompensas desligadas: os textos do provider e do convite não prometem pagamento hoje', () => {
   const ref = ptBR as Dict;
   for (const k of ['provIntro.sub', 'provIntro.step3', 'provIntro.note', 'network.provider.pitch', 'wallet.ref.title', 'wallet.ref.desc', 'invite.reward']) {

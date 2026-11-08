@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { PiuCore } from './core';
 import { eventAllowed, methodAllowed } from './lockGate';
 import { sanitizePrefsPatch } from './prefs';
-import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
+import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
 import { isSecretScreen, screenSecurityFor, type SecretScreen } from '../shared/screenSecurity';
 import { alertText, type AlertNoticeLevel, type AlertSummary, badgeCount, notifKindOf, shouldNotify, shouldNotifyAlert } from '../shared/notifyPolicy';
 import type { AppLockState, ContactInfo, PiuEventName, Prefs, TempMode } from '../shared/types';
@@ -62,11 +62,24 @@ const asset = (name: string) => join(app.isPackaged ? process.resourcesPath : jo
 const RENDERER_CSP = "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'; connect-src 'none'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-ancestors 'none'";
 // Antes do app ficar pronto: piu-app é padrão (URLs relativas, origem própria) e seguro (módulos ES, fontes).
 protocol.registerSchemesAsPrivileged([{ scheme: RENDERER_SCHEME, privileges: { standard: true, secure: true } }]);
+/** Chamada aberta agora (caixa "pre" até o fim): só então o microfone pode abrir. */
+const inCall = () => { const p = core?.callSnapshot()?.state.phase; return p === 'pre' || p === 'calling' || p === 'ringing' || p === 'active'; };
+/** macOS: o sistema pergunta uma vez ("Piu quer usar o microfone"); recusado, a chamada segue sem voz minha. */
+async function micAccess() {
+  if (!isMac || systemPreferences.getMediaAccessStatus('microphone') === 'granted') return;
+  if (!(await systemPreferences.askForMediaAccess('microphone'))) send('notice', { text: tm('main.call.micDenied'), kind: 'error' });
+}
 function hardenSession() {
   const ses = session.defaultSession;
-  // Nenhuma permissão do navegador, exceto copiar texto e notificações.
-  ses.setPermissionRequestHandler((_wc, permission, cb) => cb(permission === 'clipboard-sanitized-write' || permission === 'notifications'));
-  ses.setPermissionCheckHandler((_wc, permission) => permission === 'clipboard-sanitized-write' || permission === 'notifications');
+  // Nenhuma permissão do navegador, exceto copiar texto, notificações e o microfone durante a chamada.
+  ses.setPermissionRequestHandler((_wc, permission, cb, details) => {
+    if (permission === 'media') return cb(mediaAllowed({ types: (details as { mediaTypes?: string[] }).mediaTypes ?? [], url: details.requestingUrl, origin: rendererOrigin(), inCall: inCall() }));
+    cb(permission === 'clipboard-sanitized-write' || permission === 'notifications');
+  });
+  ses.setPermissionCheckHandler((_wc, permission, requestingOrigin, details) => {
+    if (permission === 'media') return mediaAllowed({ types: [details.mediaType ?? 'unknown'], url: requestingOrigin, origin: rendererOrigin(), inCall: inCall(), check: true });
+    return permission === 'clipboard-sanitized-write' || permission === 'notifications';
+  });
   // Interface por piu-app://app/ (B-04): só arquivos de dentro de dist/renderer, com a CSP no próprio cabeçalho.
   protocol.handle(RENDERER_SCHEME, async req => {
     const file = rendererFileFor(req.url, rendererDir());
@@ -457,6 +470,9 @@ function registerIpc() {
     guardianSetWifi: (w: unknown) => g().setWifi(w),
     guardianEnd: () => g().end(),
     // Só PNG em data URL, pequeno (o QR do ponto): vira imagem nativa na área de transferência.
+    callState: () => core.callSnapshot(),
+    callAct: (act: unknown) => core.callAct(act),
+    callFrame: (codec: unknown, payload: unknown) => core.callFrame(codec, payload),
     copyImage: async (d: unknown) => {
       if (typeof d !== 'string' || d.length > 2_000_000 || !d.startsWith('data:image/png;base64,')) throw new Error(tm('main.err.badImage'));
       const img = nativeImage.createFromDataURL(d);
@@ -473,7 +489,7 @@ function registerIpc() {
     if (!methodAllowed(appLock.locked, method)) throw new Error(tm('main.lock.locked'));
     return methods[method]!(...(args as never[]));
   });
-  for (const ev of ['conversations', 'message', 'network', 'wallet', 'walletPayment', 'session', 'prefs', 'link', 'notice', 'typing'] as PiuEventName[]) core.events.on(ev, p => send(ev, p));
+  for (const ev of ['conversations', 'message', 'network', 'wallet', 'walletPayment', 'session', 'prefs', 'link', 'notice', 'typing', 'call', 'callAudio', 'callToast', 'callDraft'] as PiuEventName[]) core.events.on(ev, p => send(ev, p));
   core.events.on('prefs', applyScreenSecurity);
   core.events.on('incoming', (p: { contact: ContactInfo; text: string; isNew: boolean }) => { appLock.received(); if (appLock.locked) send('appLock', lockState()); notifyIncoming(p.contact, p.text, p.isNew); });
   core.events.on('walletReceived', (p: { planck: string }) => notifyWallet(p.planck));
@@ -544,6 +560,7 @@ if (debugSwitches.length || !app.requestSingleInstanceLock()) {
     core = new PiuCore({
       userData: app.getPath('userData'), safeStorage, platform: process.platform, version: app.getVersion(), hostname: hostname(), lan,
       log: m => { if (!app.isPackaged) console.log(m); },
+      micAccess,
     });
     setupUpdater();
     registerIpc();

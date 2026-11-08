@@ -401,3 +401,28 @@ test('11.4 chave do nó gira na virada do dia; recibos e créditos antigos conti
   assert.equal(again.credits.list().length, list.length);
   assert.ok(again.credits.list().every(c => verifyRelayReceipt(again.credits.receiptOf(c))));
 });
+
+test('chamada de voz: sinal ao vivo só com vizinho; pedido pela fila confirma entrega; vizinho direto lembrado', () => {
+  const net = new Net();
+  const sigs: [string, unknown][] = [], status: [string, string][] = [];
+  const a = device(net, 'Ana', { events: { status: (id, st) => status.push([id, st]) } }), r = device(net, 'Relay');
+  const b = device(net, 'Beto', { events: { callSignal: (c, p) => sigs.push([c, p]) } });
+  know(a, b); know(b, a);
+  a.m.sendText(b.ids.public.id, 'm0', 'firmar a sessão');
+  net.link('Ana', 'Beto'); net.run();
+  b.m.sendText(a.ids.public.id, 'm1', 'ok'); net.run();
+  assert.equal(a.m.directLink(b.ids.public.id, 120), 'Beto', 'Beto chegou direto (1 salto)');
+  net.unlink('Ana', 'Beto');
+  const live = { t: 'cl' as const, s: { t: 'ringing', callId: 'call-0001' } };
+  assert.equal(a.m.sendCallSignal(b.ids.public.id, live, { live: true, ttlSec: 30 }), false, 'sem vizinho, sinal ao vivo não sai');
+  assert.equal(a.m.directLink(b.ids.public.id, 120), null, 'enlace caiu');
+  // Pelo relay (2 saltos): o pedido de chamada chega e a entrega volta confirmada.
+  net.link('Ana', 'Relay'); net.link('Relay', 'Beto');
+  const req = { t: 'cl' as const, s: { t: 'request', requestId: 'req-00001' } };
+  assert.equal(a.m.sendCallSignal(b.ids.public.id, req, { live: false, ttlSec: 24 * 3600, msgId: 'req-00001' }), true);
+  net.run();
+  assert.deepEqual(sigs.map(([c, p]) => [c, (p as typeof req).s.t]), [[a.ids.public.id, 'request']]);
+  assert.ok(status.some(([id, st]) => id === 'req-00001' && st === 'entregue'), 'o cartão de quem pediu vira "Entregue"');
+  assert.equal(b.m.directLink(a.ids.public.id, 120), null, 'pela malha não conta como direto');
+  for (const w of net.wire) assert.ok(!Buffer.from(w).includes(Buffer.from('request')), 'o relay não sabe que é pedido de chamada');
+});

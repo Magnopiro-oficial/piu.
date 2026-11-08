@@ -81,6 +81,8 @@ interface Store {
   /** `quiet`: entra na conversa sem banner nem notificação (ex.: grupo movimentado sem menção). */
   receive: (chatId: string, msg: Msg, opts?: { quiet?: boolean }) => void;
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
+  /** Altera uma mensagem da conversa (ex.: etapa do cartão "Pedido de chamada"). */
+  patchMsg: (chatId: string, msgId: string, p: Partial<Msg>) => void;
   /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
   setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
   /** Pré-visualização escolhida em Notificações (MessagingProvider lê os ajustes e repassa aqui). */
@@ -320,6 +322,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     notifyTyping: cid => { const c = chatsRef.current.find(x => x.id === cid); if (c?.peer && !c.request) signals.current?.typing(cid, c.peer); },
     markChatRead: cid => { setChats(cs => cs.map(c => (c.id === cid && c.unread ? { ...c, unread: 0 } : c))); markRead(cid); },
     receive: (cid, msg, opts) => push(cid, msg, opts),
+    patchMsg: (cid, mid, p) => patchMsg(cid, mid, () => p),
     setMsgStatus: (cid, mid, st) => {
       setStatus(cid, mid, st);
       const c = chatsRef.current.find(x => x.id === cid);

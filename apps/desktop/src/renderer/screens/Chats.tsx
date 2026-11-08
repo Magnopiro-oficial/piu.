@@ -8,6 +8,9 @@ import type { ConversationSummary, MeInfo, Message, NetworkStatus, Prefs, TempMo
 import { canSendToConversation, conversationKind, filterConversationKind } from '../../shared/conversations';
 import { type DialogSpec, F, FM, Sym, fmtTime, initialsOf, shortId } from '../ui';
 import { type Key, t as tNow, useT } from '../i18n';
+import { CallBadge, CallButton, CallLayer, CallRecordCard, CallRequestCard, inCall, onStage, useCallHost, useCallKeys } from '../call';
+import { useTr } from '../call/CallContext';
+import { contactOf, recordCard, requestCard } from '../../../../mobile/src/calls/callView';
 
 type Filter = 'all' | 'direct' | 'group' | 'channel';
 const TEMP_LABEL: Record<TempMode, Key> = { off: 'chats.temp.off', '1h': 'chats.temp.1h', '24h': 'chats.temp.24h', '7d': 'chats.temp.7d' };
@@ -135,6 +138,21 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
   useEffect(() => { onTitle?.(convName); }, [convName, onTitle]);
   useEffect(() => () => onTitle?.(null), [onTitle]);
   const collective = !!conv && conversationKind(conv.contact) !== 'direct';
+  // Chamada de voz (só com provedor de chamada): o palco mostra a conversa de quem está na chamada;
+  // abrir outra conversa minimiza a chamada, voltar à dela restaura (como no protótipo).
+  const call = useCallHost();
+  const tr = useTr();
+  const callSt = call?.scene?.state;
+  const callPeer = callSt && onStage(callSt.phase) ? callSt.peer ?? null : null;
+  const callMini = !!callSt?.mini;
+  useEffect(() => { if (callPeer && !callMini && mine.some(c => c.contact.id === callPeer)) setActive(callPeer); }, [callPeer, callMini, mine]);
+  const pick = (id: string) => {
+    if (call && callSt?.phase === 'active' && callPeer) call.controller.dispatch({ type: id === callPeer ? 'restore' : 'minimize' });
+    setActive(id);
+  };
+  const callable = !!call && !!conv && !collective;
+  const startCall = () => { if (call && conv) call.controller.open(conv.contact.id, call.routeTo(conv.contact.id)); };
+  useCallKeys(call, mac, ['open'], callable && conv && !(callSt && inCall(callSt.phase)) ? conv.contact.id : null);
   const canWrite = !!conv && canSendToConversation(conv.contact);
   const links = net?.lan.links ?? 0;
   const lanOn = net?.lan.state === 'running';
@@ -319,12 +337,14 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 8px 12px', display: 'flex', flexDirection: 'column', gap: 2 }}>
           {list.map((c, i) => {
             const last = c.last; const anon = c.contact.via === 'anon';
-            const preview = last ? (last.dir === 'out' ? t('chats.preview.you', { text: last.text }) : last.sender ? t('chats.preview.sender', { sender: last.sender, text: last.text }) : last.text) : c.contact.request ? t('chats.preview.request') : t('chats.preview.empty');
+            const preview = last?.call ? recordCard(tr, last.call, contactOf(c.contact.name), { desktop: true }).title
+              : last?.callRequest ? requestCard(tr, last.callRequest.step, contactOf(c.contact.name)).title
+              : last ? (last.dir === 'out' ? t('chats.preview.you', { text: last.text }) : last.sender ? t('chats.preview.sender', { sender: last.sender, text: last.text }) : last.text) : c.contact.request ? t('chats.preview.request') : t('chats.preview.empty');
             const kIcon = kindIcon[conversationKind(c.contact)];
             return (
-              <div key={c.contact.id} className="h-x3 a-98 conv" role="button" tabIndex={0} aria-current={c.contact.id === active} onClick={() => setActive(c.contact.id)} onKeyDown={e => { if (e.key === 'Enter') setActive(c.contact.id); }}
+              <div key={c.contact.id} className="h-x3 a-98 conv" role="button" tabIndex={0} aria-current={c.contact.id === active} onClick={() => pick(c.contact.id)} onKeyDown={e => { if (e.key === 'Enter') pick(c.contact.id); }}
                 style={{ display: 'flex', alignItems: 'center', gap: 12, padding: `${dens ? 8 : 11}px 10px`, borderRadius: 14, background: c.contact.id === active ? 'var(--bg2)' : 'transparent', cursor: 'pointer', transition: 'background .2s,transform .2s', animation: `piuUp .45s ${0.18 + i * 0.045}s cubic-bezier(.2,.85,.3,1) both` }}>
-                <div style={{ width: dens ? 38 : 46, height: dens ? 38 : 46, borderRadius: avRadius(c.contact), background: anon ? 'var(--bg3)' : 'var(--ink)', color: anon ? 'var(--ink)' : 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `600 14px ${F}`, flex: 'none', transition: 'width .25s,height .25s' }}>{initialsOf(c.contact.name, c.contact.id)}</div>
+                <div style={{ position: 'relative', width: dens ? 38 : 46, height: dens ? 38 : 46, borderRadius: avRadius(c.contact), background: anon ? 'var(--bg3)' : 'var(--ink)', color: anon ? 'var(--ink)' : 'var(--invink)', display: 'flex', alignItems: 'center', justifyContent: 'center', font: `600 14px ${F}`, flex: 'none', transition: 'width .25s,height .25s' }}>{initialsOf(c.contact.name, c.contact.id)}<CallBadge peer={c.contact.id} /></div>
                 <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                     <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 5 }}>
@@ -354,7 +374,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
         {footer}
       </div>
 
-      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', animation: 'piuUp .6s .2s cubic-bezier(.2,.85,.3,1) both' }}>
+      <div style={{ position: 'relative', overflow: 'clip', flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', animation: 'piuUp .6s .2s cubic-bezier(.2,.85,.3,1) both' }}>
         <div className="drag" style={{ height: 64, flex: 'none', display: 'flex', alignItems: 'center', gap: 12, padding: '0 14px 0 20px', borderBottom: '1px solid var(--line)' }}>
           {conv ? (
             <>
@@ -366,6 +386,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
                 </div>
                 <div style={{ fontSize: 12.5, color: 'var(--ink2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{sub}</div>
               </div>
+              {callable && <CallButton onClick={startCall} mac={mac} />}
               <button className="a-88 nodrag" onClick={toggleMute} title={muted ? t('chats.unmute') : t('chats.mute')} aria-pressed={muted} style={{ width: 38, height: 38, border: 'none', borderRadius: 11, background: 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'transform .2s' }}><Sym name={muted ? 'notifications_off' : 'notifications'} size={21} /></button>
               <button className="a-88 nodrag" onClick={() => { setInfoOpen(o => !o); if (infoOpen) setRouteMsg(null); }} title={t('chats.details')} aria-pressed={infoOpen} style={{ width: 38, height: 38, border: 'none', borderRadius: 11, background: infoOpen ? 'var(--bg3)' : 'transparent', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background .2s,transform .2s' }}><Sym name="side_navigation" size={21} /></button>
             </>
@@ -403,6 +424,17 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
               const anim = fresh.current.has(m.id) ? (m.dir === 'out' ? 'piuMsgIn .38s cubic-bezier(.2,.9,.3,1.3) both' : 'piuMsgIn .4s cubic-bezier(.2,.9,.3,1.3) both') : 'none';
               const ring = routeMsg === m.id ? '0 0 0 2px var(--bg), 0 0 0 4px var(--ink)' : '0 0 0 0 transparent';
               const open = (e: React.MouseEvent) => { e.stopPropagation(); setRouteMsg(m.id); setInfoOpen(true); };
+              // Chamada de voz: registro e pedido viram cartão no lugar do balão.
+              if (m.call || m.callRequest) {
+                const who = contactOf(conv?.contact.name ?? '');
+                return (
+                  <div key={m.id} style={{ display: 'flex', flexDirection: 'column', marginTop: gap, animation: anim }}>
+                    {m.call
+                      ? <CallRecordCard record={m.call} contact={who} time={fmtTime(m.at)} onCallBack={call && conv ? () => call.controller.open(conv.contact.id, call.routeTo(conv.contact.id)) : undefined} />
+                      : <CallRequestCard step={m.callRequest!.step} contact={who} time={fmtTime(m.at)} />}
+                  </div>
+                );
+              }
               return m.dir === 'out' ? (
                 <div key={m.id} className="h-up1 sel" onClick={open} style={{ alignSelf: 'flex-end', maxWidth: '68%', padding: '8px 12px 6px 14px', borderRadius: '20px 20px 6px 20px', background: 'var(--ink)', color: 'var(--invink)', cursor: 'pointer', display: 'flex', flexDirection: 'column', gap: 2, marginTop: gap, animation: anim, transformOrigin: 'bottom right', boxShadow: ring, transition: 'box-shadow .25s,transform .2s' }}>
                   <div style={{ fontSize: msgSize, lineHeight: 1.4, textWrap: 'pretty', whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{m.text}</div>
@@ -451,6 +483,7 @@ export function Chats({ me, prefs, net, linked = false, toast, setDialog, onConv
             </div>
           </div>
         ))}
+        <CallLayer mac={mac} />
       </div>
 
       {conv && infoOpen && (

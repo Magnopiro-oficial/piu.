@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
+import { piuRadio, type PiuRadio, REGIONS } from './rnode/regions.js';
 import { inboxUrlProblem } from './relay/inboxUrl.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
@@ -48,8 +49,15 @@ export interface LnnpConfig {
   sampleMs?: number;
   /** Intervalo para gravar as mensagens guardadas quando mudam (ms): `PIU_RELAY_PERSIST_MS`. */
   persistMs?: number;
-  /** Portas seriais (rádio LoRa ou cabo USB): `PIU_SERIAL`. */
-  serial?: { kind: 'lora' | 'usb'; path: string; baud: number }[];
+  /** Portas seriais (rádio LoRa KISS, cabo USB, rádio Meshtastic ou RNode): `PIU_SERIAL`. */
+  serial?: { kind: 'lora' | 'usb' | 'meshtastic' | 'rnode'; path: string; baud: number }[];
+  /**
+   * Rádio próprio (RNode): canal da região `PIU_RNODE_REGION` (padrão `BR_902`), com `PIU_RNODE_FREQ_HZ`
+   * e `PIU_RNODE_TX_DBM` para casos especiais, sempre dentro da faixa e da potência da região.
+   */
+  rnode?: PiuRadio;
+  /** Tempo de rádio no canal Meshtastic: pedaços por minuto (`PIU_MESHTASTIC_PER_MIN`, padrão 6). */
+  meshtasticPerMin?: number;
   /**
    * Gateway da carga pela malha (docs/carteira/transacoes-pela-malha.md): `PIU_GATEWAY` (padrão ligado;
    * só age com rota até a Lunes). `inboxUrl`: caixa HTTPS do validador para os pacotes de evidências
@@ -87,8 +95,18 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     maxEnvelope: num('PIU_LORA_MAX_ENVELOPE', 1536, n => Number.isInteger(n) && n >= 256 && n <= 16384),
     beaconMs: num('PIU_LORA_BEACON_MS', 30_000, n => n >= 1000),
   };
+  const meshtasticPerMin = num('PIU_MESHTASTIC_PER_MIN', 6, n => n > 0 && n <= 60);
+  const regionId = (env.PIU_RNODE_REGION?.trim() || 'BR_902').toUpperCase();
+  const region = REGIONS.find(r => r.id === regionId);
+  if (!region) throw new Error(`PIU_RNODE_REGION: região desconhecida (${regionId}). Use uma de: ${REGIONS.map(r => r.id).join(', ')}.`);
+  const base = piuRadio(region.id), half = base.bwHz / 2;
+  const rnode: PiuRadio = {
+    ...base,
+    freqHz: num('PIU_RNODE_FREQ_HZ', base.freqHz, n => Number.isInteger(n) && n - half >= region.startMHz * 1e6 && n + half <= region.endMHz * 1e6),
+    txDbm: num('PIU_RNODE_TX_DBM', base.txDbm, n => Number.isInteger(n) && n >= 0 && n <= region.maxDbm),
+  };
   return {
-    serial, lora,
+    serial, lora, meshtasticPerMin, rnode,
     gateway: flag(env.PIU_GATEWAY, true), inboxUrl,
     enabled: flag(env.PIU_LNNP, true),
     relay: flag(env.PIU_LNNP_RELAY, true),

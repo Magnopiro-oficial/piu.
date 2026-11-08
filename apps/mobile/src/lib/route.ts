@@ -1,9 +1,10 @@
 import type { Chat, Msg } from '../data/types';
+import { isLora } from '../transport/select';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 import { Priority } from '../protocol/envelope';
 import type { IconName } from '../ui/Icon';
 import { msgSummary } from './chatCore';
-import { fmtBytes } from './networkCore';
+import { fmtBytes, VIA_ICON, viaLabel } from './networkCore';
 import { priorityLabel, type RouteRec, routeIcon, routeLabel } from './routeCore';
 import { t as tGlobal, type Key, type Vars } from '../i18n/core';
 /** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
@@ -39,12 +40,19 @@ export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority 
   const waiting = mine && !rec && (st === 'criada' || st === 'aguardando');
   const via = rec ? routeLabel(rec, t) : waiting ? t('route.waitingRoute') : '—';
   const icon: IconName = rec ? routeIcon(rec) : 'schedule';
-  const nodes = mine
+  const ends = mine
     ? [{ n: t('common.you'), k: t('route.thisDevice') }, { n: dest, k: t('route.destination') }]
     // Mensagem recebida: a rota vem do outro lado até você.
     : [{ n: msg.sender ?? chat.name, k: chat.kind === 'group' ? t('route.groupMember') : t('route.origin') }, { n: t('common.you'), k: t('route.destination') }];
-  // Enviada: o destino só conta como alcançado com a confirmação de entrega.
-  const reached = !mine || (!bad && si === 3) ? 2 : 1;
+  // LoRa (desenho 4b): o meu rádio LoRa (Meshtastic ou o do Piu) no meio, ligado ao celular por Bluetooth LE. Os rádios
+  // da malha entre os dois lados não se identificam ao Piu, então não aparecem.
+  const lora = isLora(rec?.md);
+  const piu = rec?.md === 'piulora';
+  const nodes = lora ? [ends[0], { n: t(piu ? 'piu.route.radio' : 'lora.route.radio'), k: t('lora.route.yours') }, ends[1]] : ends;
+  const ble = { via: viaLabel('ble', t), icon: VIA_ICON.ble }, air = { via: t(piu ? 'piu.route.via' : 'lora.route.via'), icon: VIA_ICON.lora };
+  const legs = lora ? (mine ? [ble, air] : [air, ble]) : [{ via, icon }];
+  // Enviada: o destino só conta como alcançado com a confirmação de entrega (pelo LoRa, o rádio já recebeu).
+  const reached = !mine || (!bad && si === 3) ? nodes.length : lora ? 2 : 1;
 
   const labels = [t('route.step.created'), t('route.step.waiting'), t('route.step.forwarded'), bad ? (st === 'expirada' ? t('route.step.expired') : t('route.step.failed')) : t('route.step.delivered')];
   // Mensagens temporárias têm prazo menor que o limite da fila (48 h).
@@ -56,7 +64,7 @@ export function buildRoute(chat: Chat, msg: Msg, rec?: RouteRec, prio: Priority 
   return {
     text: msgSummary(msg, t),
     steps: labels.map((label, i) => ({ label, done: i <= si, current: i === si })),
-    hops: nodes.map((x, i) => ({ n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1, via: i === 0 ? via : '', viaIcon: icon, solid: i + 1 < reached })),
+    hops: nodes.map((x, i) => ({ n: x.n, k: x.k, reached: i < reached, last: i === nodes.length - 1, via: legs[i]?.via ?? '', viaIcon: legs[i]?.icon ?? icon, solid: i + 1 < reached && legs[i] !== air })),
     meta: [
       { l: t('route.envelope'), v: rec ? fmtBytes(rec.b) : '—' },
       { l: t('route.fragments'), v: rec ? t('route.fragments.of', { n: rec.f, total: rec.f }) : '—' },

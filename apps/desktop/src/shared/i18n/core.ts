@@ -18,6 +18,8 @@ export type Region = 'auto' | 'br' | 'us';
 /** Formas de plural (categorias CLDR); `other` é obrigatória. */
 export interface Plural { zero?: string; one?: string; two?: string; few?: string; many?: string; other: string }
 export type Dict = Record<string, string | Plural>;
+/** Textos da chamada de voz vindos do celular (tipados lá como `Dict` solto): as chaves `call.*` do pt-BR. */
+export type CallDict = Record<Extract<Key, `call.${string}`>, string>;
 /** Chaves válidas: as do pt-BR. Erro de digitação vira erro de compilação. */
 export type Key = keyof typeof ptBR;
 /** Dicionário completo de um idioma: as mesmas chaves do pt-BR, nem mais nem menos (o compilador cobra). */

@@ -117,3 +117,14 @@ export function profileFromEnv(env: Record<string, string | undefined>): string 
   const p = env.PIU_PROFILE ?? '';
   return /^[a-z0-9-]{1,24}$/.test(p) ? p : null;
 }
+
+/**
+ * Microfone (achado B-02 revisto para a chamada de voz): só áudio, só a janela do Piu e só com uma chamada
+ * aberta (caixa "pre", chamando, tocando ou em curso). Câmera e captura de tela continuam negadas.
+ * `check`: consulta do Chromium (nomes dos aparelhos), que pode vir sem tipo (`unknown`).
+ */
+export function mediaAllowed(p: { types: readonly string[]; url: string; origin: string; inCall: boolean; check?: boolean }): boolean {
+  if (!p.inCall || !p.types.length) return false;
+  if (p.types.some(t => t !== 'audio' && !(p.check && t === 'unknown'))) return false;
+  return isRendererUrl(p.url.endsWith('/') ? p.url : `${p.url}/`, p.origin);
+}

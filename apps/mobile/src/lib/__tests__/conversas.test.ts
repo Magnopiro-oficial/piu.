@@ -98,6 +98,22 @@ test('folha de rota: envelope, blocos e prioridade reais; sem registro, traço',
   assert.equal(inn.hops[0].via, 'Wi-Fi Direct · 2 saltos');
 });
 
+test('rota pelo LoRa (desenho 4b): celular → rádio por Bluetooth LE, depois LoRa; pedaços de 226 bytes', () => {
+  const m: Msg = { id: 'l1', from: 'me', text: 'Oi', time: '', status: 'entregue', at: Date.now() };
+  const out = buildRoute(chat, m, rec('l1', { medium: 'lora', bytes: 593 }));
+  assert.deepEqual(out.hops.map(h => h.n), ['Você', 'Rádio Meshtastic', 'Beto']);
+  assert.deepEqual(out.hops.slice(0, 2).map(h => h.via), ['Bluetooth LE', 'por LoRa (Meshtastic)']);
+  assert.deepEqual(out.hops.slice(0, 2).map(h => h.viaIcon), ['bluetooth', 'settings_input_antenna']);
+  assert.deepEqual(out.hops.map(h => h.reached), [true, true, true]);
+  assert.equal(Object.fromEntries(out.meta.map(x => [x.l, x.v])).Fragmentos, '3 de 3');
+  const inn = buildRoute(chat, { id: 'l2', from: 'them', text: 'Oi', time: '' }, rec('l2', { dir: 'in', medium: 'lora', bytes: 593 }));
+  assert.deepEqual(inn.hops.map(h => h.n), ['Beto', 'Rádio Meshtastic', 'Você']);
+  assert.deepEqual(inn.hops.slice(0, 2).map(h => h.via), ['por LoRa (Meshtastic)', 'Bluetooth LE']);
+  // Ainda sem confirmação: o rádio recebeu, o destino não.
+  const wait = buildRoute(chat, { ...m, status: 'encaminhada' }, rec('l1', { medium: 'lora', bytes: 593 }));
+  assert.deepEqual(wait.hops.map(h => h.reached), [true, true, false]);
+});
+
 test('separador de data: Hoje, Ontem e data por extenso; agrupa por dia', () => {
   const now = new Date(2026, 10, 3, 15, 0).getTime();
   assert.equal(dayLabel(new Date(2026, 10, 3, 0, 5).getTime(), now), 'Hoje');
