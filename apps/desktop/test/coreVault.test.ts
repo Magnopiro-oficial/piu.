@@ -92,3 +92,15 @@ test('PiuCore (A-01): state.bin ilegível com a chave certa vai para quarentena 
   assert.ok(q, 'cópia ilegível guardada');
   assert.deepEqual(readFileSync(join(dir, q!)), raw);
 });
+
+test('PiuCore: QR de "entrar com o celular" aberto e abandonado não impede criar nem restaurar a identidade', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-core-qr-'));
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const core = new PiuCore(opts(dir, vaultSim()));
+  t.after(() => core.close());
+  await core.open();
+  assert.equal((await core.linkStart()).state, 'waiting');
+  await core.createIdentity({ kind: 'public', name: 'Ana' });
+  assert.ok(core.session().me?.publicId, 'a identidade foi criada');
+  assert.equal(core.linkStatus().state, 'off', 'o QR parou de esperar');
+});

@@ -131,6 +131,8 @@ function createWindow() {
     backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
     icon: asset('icon.png'),
     titleBarStyle: isMac ? 'hiddenInset' : 'default',
+    // Linux e Windows: sem a barra de menu dentro da janela (Alt mostra; os atalhos seguem valendo).
+    autoHideMenuBar: !isMac,
     // Semáforos centrados na barra de 40px do protótipo (círculos de 12px em x=14/34/54, centro y=20): medido na tela com o Electron 45.
     trafficLightPosition: { x: 14, y: 12 },
     webPreferences: {

@@ -53,7 +53,8 @@ dmg:
 linux:
   target: [AppImage, deb]
   category: Network
-  icon: assets/icon.png
+  # Pasta com 16…512 px: o tema hicolor do Linux não procura 1024 (o GNOME mostrava a engrenagem).
+  icon: assets/icons
   maintainer: Lunes Network
   synopsis: Mensageiro Piu para computador
   description: Converse pela malha Piu a partir do computador. Entra na rede local como nó LNNP; funciona sem internet.

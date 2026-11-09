@@ -120,6 +120,15 @@ export class PiuCore {
     return this.link.cancel();
   }
 
+  /**
+   * Criar ou restaurar com o QR de "entrar com o celular" ainda na tela (a pessoa voltou sem ler): o QR
+   * para. Com o celular já conectando ou vinculado, recusa: a identidade dele não pode ser trocada assim.
+   */
+  private async releaseIdleLink() {
+    if (this.link.state.state === 'waiting') await this.link.stop();
+    if (!['off', 'dropped'].includes(this.link.state.state)) throw new Error(tm('main.core.disconnectPhone'));
+  }
+
   private log(m: string) { this.o.log?.(m); }
   emit<K extends PiuEventName>(k: K, payload: PiuEvents[K]) { this.events.emit(k, payload); }
 
@@ -373,7 +382,7 @@ export class PiuCore {
     if (this.vault.hasPhrase()) throw new Error(tm('main.core.phraseExistsCreate'));
     this.requireUnlocked();
     if (this.mesh) throw new Error(tm('main.core.identityExists'));
-    if (!['off', 'dropped'].includes(this.link.state.state)) throw new Error(tm('main.core.disconnectPhone'));
+    await this.releaseIdleLink();
     if (!this.vault.secure) throw new Error(tm('main.core.noVault'));
     const { phrase, keys } = createIdentity();
     await this.vault.setPhrase(phrase);
@@ -389,7 +398,7 @@ export class PiuCore {
     if (this.vault.hasPhrase()) throw new Error(tm('main.core.phraseExistsRestore'));
     this.requireUnlocked();
     if (this.mesh) throw new Error(tm('main.core.identityExists'));
-    if (!['off', 'dropped'].includes(this.link.state.state)) throw new Error(tm('main.core.disconnectPhone'));
+    await this.releaseIdleLink();
     if (!this.vault.secure) throw new Error(tm('main.core.noVault'));
     const keys = identityFromPhrase(o.phrase);
     await this.vault.setPhrase(o.phrase.map(w => w.trim().toLowerCase()));
