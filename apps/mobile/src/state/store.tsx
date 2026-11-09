@@ -5,6 +5,7 @@ import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
 import { chirpInApp, notify } from '../lib/notifications';
+import { incomingAlert } from '../lib/piuChirp';
 import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { isStatusBack, tempSeconds } from '../lib/status';
@@ -225,12 +226,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       // Conversa aberta: a mensagem que chegou já foi lida.
       if (viewingIt && msg.id.startsWith('in-')) setTimeout(() => markRead(cid, [msg.id]), 0);
     }
-    if (msg.from === 'them' && !viewingIt && !opts?.quiet) {
-      const c = chatsRef.current.find(x => x.id === cid);
-      // Banner e, com o app em segundo plano, notificação do sistema (showToast chama `notify`).
-      // Comunidade conta como Canais (o mesmo tipo nos dois).
-      const kind = c?.kind === 'group' ? 'group' as const : c?.kind === 'channel' || c?.kind === 'community' ? 'channel' as const : 'msg' as const;
-      if (c && !c.muted) showToast({ kind, av: c.initials, title: c.name, body: msgSummary(msg), href: `/chat/${cid}`,
+    const c = msg.from === 'them' ? chatsRef.current.find(x => x.id === cid) : undefined;
+    const alert = incomingAlert({ fromThem: msg.from === 'them', viewing: viewingIt, exists: !!c, quiet: opts?.quiet, muted: c?.muted });
+    if (c && (alert.banner || alert.chirp)) {
+      // Fora da conversa: banner e, com o app em segundo plano, notificação do sistema (showToast chama
+      // `notify`). Na conversa aberta: só o piu. Comunidade conta como Canais (o mesmo tipo nos dois).
+      const kind = c.kind === 'group' ? 'group' as const : c.kind === 'channel' || c.kind === 'community' ? 'channel' as const : 'msg' as const;
+      if (alert.chirp) chirpInApp(kind);
+      else showToast({ kind, av: c.initials, title: c.name, body: msgSummary(msg), href: `/chat/${cid}`,
         hidden: { title: 'Piu', body: kind === 'channel' ? t('notify.hidden.channel') : t('notify.hidden.msg') }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
     }
     setChats(cs => cs.map(c => (c.id !== cid ? c : {

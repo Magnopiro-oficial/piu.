@@ -155,6 +155,9 @@ class PiuCallAlertModule : Module() {
 
     Function("stopRinging") { main.post { ringer?.stop() }; Unit }
 
+    // O piu do app aberto (src/lib/piuChirp.ts) sai pelo volume de mídia: só toca no modo normal.
+    Function("ringerMode") { ringerName(context) }
+
     // Na thread principal, depois das flags (mesma fila): a tela cheia já encontra a Activity liberada.
     Function("showIncoming") { n: IncomingNote ->
       val ctx = context

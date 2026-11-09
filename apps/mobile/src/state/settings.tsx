@@ -5,6 +5,7 @@ import type { BackupRecord } from '../lib/backupStatus';
 import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 import { type HoursWindow, normHoursChoice } from '../messaging/hours';
 import { UPDATE_NOTIFY_DEFAULT } from '../lib/updateCore';
+import { SOUND_DEFAULTS } from '../lib/piuChirp';
 
 /**
  * `find` ("Quem pode me encontrar", identidade pública): `all` = Por perto anuncia e recebe pedidos;
@@ -68,9 +69,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   // Tipo novo (ex.: Alertas da comunidade) entra com o padrão em quem já tinha os ajustes salvos.
   const notifs = useMemo(() => ({ ...DEFAULT_NOTIFS, ...notifsRaw }), [notifsRaw]);
   const batN = useMemo(() => normBattery(bat), [bat]);
-  const [quiet, setQuiet] = usePersisted('set.quiet', false);
-  const [discreet, setDiscreet] = usePersisted('set.discreet', true);
-  const [piuSound, setPiuSound] = usePersisted('set.piuSound', true);
+  // Padrão de fábrica: o piu nas notificações (quem nunca mexeu segue o padrão; o padrão não é gravado).
+  const [quiet, setQuiet] = usePersisted<boolean>('set.quiet', SOUND_DEFAULTS.quiet);
+  const [discreet, setDiscreet] = usePersisted<boolean>('set.discreet', SOUND_DEFAULTS.discreet);
+  const [piuSound, setPiuSound] = usePersisted<boolean>('set.piuSound', SOUND_DEFAULTS.piu);
   const [backupDone, setBackupDone] = usePersisted('set.backupDone', false);
   const [backupAt, setBackupAt] = usePersisted<BackupRecord | null>('set.backupAt', null);
   const [restoreMode, setRestoreMode] = usePersisted<RestoreMode>('set.restoreMode', 'device');

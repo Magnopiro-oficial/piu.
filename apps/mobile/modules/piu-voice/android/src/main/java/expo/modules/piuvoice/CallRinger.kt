@@ -14,6 +14,19 @@ import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
 
+/** Modo do toque para o JS: "normal", "vibrate" ou "silent" (Não perturbe ligado conta como silencioso). */
+internal fun ringerName(dnd: Boolean, mode: Int): String = when {
+  dnd || mode == AudioManager.RINGER_MODE_SILENT -> "silent"
+  mode == AudioManager.RINGER_MODE_VIBRATE -> "vibrate"
+  else -> "normal"
+}
+
+internal fun ringerName(ctx: Context): String {
+  val nm = ctx.getSystemService(NotificationManager::class.java)
+  val dnd = nm != null && nm.currentInterruptionFilter > NotificationManager.INTERRUPTION_FILTER_ALL
+  return ringerName(dnd, ctx.getSystemService(AudioManager::class.java)?.ringerMode ?: AudioManager.RINGER_MODE_NORMAL)
+}
+
 /**
  * Toque do sistema e vibração da chamada recebida. Respeita o aparelho: silencioso não toca nem vibra,
  * vibrar só vibra, e com Não perturbe ligado fica quieto (o Piu não sabe quais contatos a pessoa deixou

@@ -1,6 +1,6 @@
 /**
  * O "piu": som curto (0,15 s, gerado para o projeto, assets/sounds/piu.wav) que toca quando chega
- * algo com o app aberto. O arquivo começa com 0,3 s de silêncio: no Android o alto-falante leva
+ * algo com o app aberto e ao abrir o app (quando toca: lib/piuChirp.ts). O arquivo começa com 0,3 s de silêncio: no Android o alto-falante leva
  * ~130 ms para ligar e, sem essa folga, o piu inteiro tocava antes (e ninguém ouvia).
  * Notificações com o app fechado usam o mesmo arquivo (lib/notifications.ts).
  * - Respeita o modo silencioso do iPhone e mistura com outros áudios (não pausa música).

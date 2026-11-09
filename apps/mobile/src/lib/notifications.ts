@@ -18,6 +18,8 @@ import type { NotifKey, Preview } from '../data/settings';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { playPiu, preloadPiu } from './piuSound';
+import { canChirp, isQuietHour, notifyMode, type Mode } from './piuChirp';
+import { PiuCallAlert } from '../../modules/piu-voice/alert';
 import { persistNow, readPersisted } from './persist';
 import { badgeAfterOpen, nextBadgeCount } from './badgeCount';
 
@@ -46,8 +48,6 @@ const HIDDEN_BODY: Record<NotifyKind, Key> = {
   wallet: 'notify.hidden.wallet', network: 'notify.hidden.network', alert: 'notify.hidden.alert',
 };
 
-/** Canais do Android (importância e som são fixos depois de criados, por isso um canal por modo). */
-type Mode = 'normal' | 'piu' | 'discreet' | 'quiet' | 'critical';
 /** Nome e descrição saem no idioma em uso quando o canal é criado (ids fixos; o nome só muda se o canal for recriado). */
 const CHANNELS = (): Record<Mode, Notifications.NotificationChannelInput> => ({
   normal: { name: t('channel.normal'), importance: Notifications.AndroidImportance.HIGH, sound: 'default', enableVibrate: true, vibrationPattern: [0, 250, 120, 250], lockscreenVisibility: Notifications.AndroidNotificationVisibility.PRIVATE },
@@ -84,18 +84,18 @@ if (Platform.OS !== 'web') {
   });
 }
 
-export const isQuietHour = (d = new Date()) => d.getHours() >= 22 || d.getHours() < 7;
+export { isQuietHour };
+
+/** O piu ao abrir o app já tocou nesta execução. */
+let launchChirped = false;
 
 /**
- * Com o app aberto: o piu junto do banner. Só para o que já passou pelos filtros (tipo ligado,
- * conversa não silenciada); fica quieto no modo noturno, com "Som de piu" desligado e fora de
- * primeiro plano (aí quem toca é a notificação do sistema).
+ * Com o app aberto: o piu junto do banner, numa conversa aberta ou ao abrir o app (sem `kind`). Só
+ * para o que já passou pelos filtros (tipo ligado, conversa não silenciada); as regras estão em
+ * lib/piuChirp.ts (modo noturno, "Som de piu", primeiro plano, silencioso do Android).
  */
-export function chirpInApp(kind: NotifyKind) {
-  const c = cfg;
-  if (!c?.onboarded || !c.piu || !active || !c.notifs[kind as NotifKey]) return;
-  if (c.quiet && isQuietHour()) return;
-  void playPiu();
+export function chirpInApp(kind?: NotifyKind) {
+  if (canChirp(cfg, { kind, active, ringer: PiuCallAlert.ringerMode() })) void playPiu();
 }
 
 function ensureChannels() {
@@ -185,7 +185,7 @@ async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Pro
   if (key === last.key && Date.now() - last.at < 3000) return null;
   last = { key, at: Date.now() };
 
-  const mode: Mode = critical ? 'critical' : c.quiet && isQuietHour() ? 'quiet' : c.discreet ? 'discreet' : c.piu ? 'piu' : 'normal';
+  const mode: Mode = notifyMode(c, critical);
   const { title, body } = present({ ...n, critical }, c.preview);
   const data = { ...n.data, kind: n.kind };
 
@@ -245,6 +245,20 @@ export function NotificationBridge() {
   cfg = { preview, notifs, quiet, discreet, piu: piuSound, onboarded };
   // Carrega o piu de antemão: o primeiro aviso não espera o arquivo abrir.
   useEffect(() => { if (piuSound && Platform.OS !== 'web') preloadPiu(); }, [piuSound]);
+
+  // O piu ao abrir o app: uma vez por execução, com o cadastro feito e o app na frente. Aberto por
+  // cima do bloqueio (chamada recebida) fica quieto: quem toca é a chamada.
+  useEffect(() => {
+    if (!onboarded || Platform.OS === 'web') return;
+    const hello = () => {
+      if (launchChirped || !active || PiuCallAlert.isLocked()) return;
+      launchChirped = true;
+      chirpInApp();
+    };
+    hello();
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') hello(); });
+    return () => sub.remove();
+  }, [onboarded]);
 
   // Toque na notificação → abre a tela (com o app aberto, em segundo plano ou fechado).
   useEffect(() => {

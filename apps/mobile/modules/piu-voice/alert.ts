@@ -31,6 +31,7 @@ declare class PiuCallAlertNativeModule extends NativeModule<PiuCallAlertEvents> 
   setLockFlags(overLock: boolean, wake: boolean): void;
   startRinging(pattern: number[]): void;
   stopRinging(): void;
+  ringerMode(): 'normal' | 'vibrate' | 'silent';
   showIncoming(n: IncomingNative): void;
   hideIncoming(): void;
   startOngoing(n: OngoingNative): void;
@@ -64,6 +65,10 @@ export const PiuCallAlert = {
   },
   stopRinging(): void {
     native?.stopRinging();
+  },
+  /** Modo do toque agora (Não perturbe conta como silencioso); `null` sem o módulo (iPhone, web). */
+  ringerMode(): 'normal' | 'vibrate' | 'silent' | null {
+    return native ? native.ringerMode() : null;
   },
   showIncoming(n: IncomingNative): void {
     native?.showIncoming(n);
