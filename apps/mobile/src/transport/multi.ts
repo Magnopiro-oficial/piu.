@@ -26,6 +26,8 @@ export interface LinkSource {
   subscribe(fn: (e: LinkEvent) => void): () => void;
   /** Intervalo de descoberta (s), repassado ao módulo nativo. */
   setDiscoveryInterval?(seconds: number): void;
+  /** Meios ligados na aba Rede: o desligado nem anuncia nem procura (o Nearby liga o Wi-Fi sozinho). */
+  setMediaEnabled?(enabled: Partial<Record<Medium, boolean>>): void;
 }
 
 export interface MultiOptions {
@@ -208,6 +210,7 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
       for (const [k, on] of Object.entries(m) as [Medium, boolean | undefined][]) {
         if (on === false) disabled.add(k); else if (on === true) disabled.delete(k);
       }
+      source.setMediaEnabled?.(m);
     },
   };
 }

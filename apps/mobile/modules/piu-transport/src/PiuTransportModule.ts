@@ -24,6 +24,12 @@ declare class PiuTransportNativeModule extends NativeModule<PiuTransportEvents> 
    * Ausente em binários antigos.
    */
   setDiscoveryInterval?(seconds: number): void;
+  /**
+   * Android: liga/desliga um meio ("nearby" = Wi-Fi Direct, "ble") conforme a aba Rede. Desligado, ele
+   * nem anuncia nem procura (o Nearby do Google Play Services liga o Wi-Fi sozinho). Chamado antes do
+   * `start`, vale para ele. Ausente no iPhone e em binários antigos.
+   */
+  setMediumEnabled?(medium: PiuMedium, on: boolean): void;
 }
 
 /**

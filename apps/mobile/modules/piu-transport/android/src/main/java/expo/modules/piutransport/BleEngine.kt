@@ -188,6 +188,9 @@ internal class BleEngine(
   fun stop() {
     handler.post {
       stopped = true
+      // Só o Bluetooth parou (aba Rede) e o Nearby segue: o app precisa saber que estes enlaces caíram.
+      synchronized(up) { up.toList() }.forEach { listener.onDisconnected(it) }
+      (names.keys + clients.keys).forEach { listener.onPeerLost(it) }
       handler.removeCallbacks(scanCycle)
       try { scanner?.stopScan(scanCallback) } catch (_: Exception) {}
       try { advertiser?.stopAdvertising(advertiseCallback) } catch (_: Exception) {}

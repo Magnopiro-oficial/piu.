@@ -69,5 +69,6 @@ export function combineSources(primary: LinkSource, lan: LanLinks, lora?: LanLin
       : primary.sendVia(medium, id, data)),
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDiscoveryInterval: sec => primary.setDiscoveryInterval?.(sec),
+    setMediaEnabled: m => primary.setMediaEnabled?.(m),
   };
 }

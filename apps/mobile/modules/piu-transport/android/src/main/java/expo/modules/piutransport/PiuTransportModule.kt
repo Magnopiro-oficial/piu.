@@ -57,10 +57,16 @@ class PiuTransportModule : Module() {
   private var discoveryIntervalMs = 20_000L
   private val mainHandler = android.os.Handler(android.os.Looper.getMainLooper())
   @Volatile private var discovering = false
+  /**
+   * Meios ligados na aba Rede (Wi-Fi Direct = Nearby, Bluetooth LE). Desligado não anuncia nem procura:
+   * o Nearby do Google Play Services liga o Wi-Fi sozinho, e quem escolheu só Bluetooth não autorizou isso.
+   */
+  @Volatile private var nearbyOn = true
+  @Volatile private var bleOn = true
   /** Nearby: descobre por `NEARBY_WINDOW_MS` a cada intervalo (ou sem parar, se o intervalo for curto). */
   private val discoveryCycle = object : Runnable {
     override fun run() {
-      if (!running) return
+      if (!running || !nearbyOn) return
       if (discovering) {
         client.stopDiscovery(); discovering = false
         mainHandler.postDelayed(this, discoveryIntervalMs - NEARBY_WINDOW_MS)
@@ -91,22 +97,29 @@ class PiuTransportModule : Module() {
       running = true
       synchronized(this@PiuTransportModule) { nearbyOk = null; bleOk = null; nearbyReason = null; bleReason = null }
       state("starting")
-      ble = BleEngine(context, name, bleListener).also { it.setScanInterval(discoveryIntervalMs); it.start() }
-      val strategy = Strategy.P2P_CLUSTER
-      client.startAdvertising(name, serviceId, lifecycle, AdvertisingOptions.Builder().setStrategy(strategy).build())
-        .onSuccessTask { client.startDiscovery(serviceId, discovery, DiscoveryOptions.Builder().setStrategy(strategy).build()) }
-        .addOnSuccessListener {
-          discovering = true
-          medium(NEARBY, true, null); promise.resolve(null)
-          restartDiscoveryCycle()
-        }
-        .addOnFailureListener { e ->
-          // Sem Nearby (ex.: sem Google Play Services) o BLE ainda funciona.
-          try { client.stopAdvertising(); client.stopDiscovery() } catch (_: Exception) {}
-          medium(NEARBY, false, e.message ?: "Falha ao iniciar o Nearby Connections.")
-          promise.resolve(null)
-        }
+      if (bleOn) startBle() else medium(BLE, false, null)
+      if (nearbyOn) startNearby(promise) else { medium(NEARBY, false, null); promise.resolve(null) }
       Unit // o retorno da lambda não importa: a resposta vai pela `promise`
+    }
+
+    // Aba Rede. Antes do `start` só grava a escolha; com o transporte rodando, liga ou desliga o meio.
+    Function("setMediumEnabled") { m: String, on: Boolean ->
+      val changed = when (m) {
+        NEARBY -> (nearbyOn != on).also { nearbyOn = on }
+        BLE -> (bleOn != on).also { bleOn = on }
+        else -> throw UnknownMediumException(m)
+      }
+      if (changed && running) mainHandler.post {
+        // Só o último pedido vale (a pessoa pode ligar e desligar rápido).
+        if (!running || on != (if (m == NEARBY) nearbyOn else bleOn)) return@post
+        when {
+          m == NEARBY && on -> startNearby(null)
+          m == NEARBY -> stopNearby()
+          on -> startBle()
+          else -> stopBle()
+        }
+      }
+      Unit
     }
 
     AsyncFunction("stop") {
@@ -176,6 +189,49 @@ class PiuTransportModule : Module() {
       nearbyOk == false && bleOk == false -> state("unavailable", listOfNotNull(nearbyReason, bleReason).joinToString(" "))
       else -> Unit // o outro meio ainda está iniciando
     }
+  }
+
+  private fun startBle() {
+    synchronized(this) { bleOk = null; bleReason = null }
+    ble = BleEngine(context, localName, bleListener).also { it.setScanInterval(discoveryIntervalMs); it.start() }
+  }
+
+  private fun stopBle() {
+    ble?.stop() // avisa o app de cada enlace que cai
+    ble = null
+    medium(BLE, false, null)
+  }
+
+  private fun startNearby(promise: Promise?) {
+    synchronized(this) { nearbyOk = null; nearbyReason = null }
+    val strategy = Strategy.P2P_CLUSTER
+    client.startAdvertising(localName, serviceId, lifecycle, AdvertisingOptions.Builder().setStrategy(strategy).build())
+      .onSuccessTask { client.startDiscovery(serviceId, discovery, DiscoveryOptions.Builder().setStrategy(strategy).build()) }
+      .addOnSuccessListener {
+        // Desligado na aba Rede enquanto iniciava.
+        if (!nearbyOn) { stopNearby(); promise?.resolve(null); return@addOnSuccessListener }
+        discovering = true
+        medium(NEARBY, true, null); promise?.resolve(null)
+        restartDiscoveryCycle()
+      }
+      .addOnFailureListener { e ->
+        // Sem Nearby (ex.: sem Google Play Services) o BLE ainda funciona.
+        try { client.stopAdvertising(); client.stopDiscovery() } catch (_: Exception) {}
+        medium(NEARBY, false, e.message ?: "Falha ao iniciar o Nearby Connections.")
+        promise?.resolve(null)
+      }
+  }
+
+  /** Desliga o Nearby (anúncio, descoberta e conexões) e avisa o app de cada enlace que cai. */
+  private fun stopNearby() {
+    mainHandler.removeCallbacks(discoveryCycle)
+    discovering = false
+    try { client.stopAdvertising(); client.stopDiscovery(); client.stopAllEndpoints() } catch (_: Exception) {}
+    connected.forEach { sendEvent("onDisconnected", bundleOf("id" to it, "via" to NEARBY)) }
+    names.keys.forEach { sendEvent("onPeerLost", bundleOf("id" to it, "via" to NEARBY)) }
+    connected.clear()
+    names.clear()
+    medium(NEARBY, false, null)
   }
 
   private fun startDiscovery() {

@@ -187,6 +187,15 @@ test('meio desligado pela pessoa não é usado', async () => {
   assert.deepEqual(s.sent.map(x => x.medium), ['nearby', 'ble']);
 });
 
+test('meio desligado pela pessoa também para no rádio (o Nearby liga o Wi-Fi sozinho)', () => {
+  const s = setup();
+  const radio: Partial<Record<Medium, boolean>>[] = [];
+  s.source.setMediaEnabled = m => { radio.push(m); };
+  s.t.setMediaEnabled!({ ble: true, nearby: false });
+  s.t.setMediaEnabled!({ nearby: true });
+  assert.deepEqual(radio, [{ ble: true, nearby: false }, { nearby: true }]);
+});
+
 test('vizinho só some quando o último meio cai; envelope informa o meio', () => {
   const s = setup();
   s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-f' });

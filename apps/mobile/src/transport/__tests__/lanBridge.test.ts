@@ -100,6 +100,15 @@ test('ponte: o que chega pela rede local sai como envelope do vizinho (o roteado
   assert.deepEqual(p.sent, ['ble:CC']);
 });
 
+test('fonte combinada: ligar/desligar Bluetooth e Wi-Fi Direct chega ao módulo nativo', () => {
+  const p = fakePrimary(), l = fakeLanLinks();
+  const radio: Partial<Record<Medium, boolean>>[] = [];
+  p.src.setMediaEnabled = m => { radio.push(m); };
+  const t = createMultiTransport(combineSources(p.src, l.links));
+  t.setMediaEnabled!({ ble: true, nearby: false, lan: true });
+  assert.deepEqual(radio, [{ ble: true, nearby: false, lan: true }]);
+});
+
 test('política: liga só com Wi-Fi, chave ligada, chaves e onboarding; bateria baixa = modo econômico', () => {
   const wifi = { connected: true, internet: false, ip: '192.168.1.2', prefix: 24, gateway: '192.168.1.1' };
   const on = { available: true, onboarded: true, hasNode: true, pref: true, wifi };

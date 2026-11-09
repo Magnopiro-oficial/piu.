@@ -56,6 +56,9 @@ export function createNativeTransport(): Transport | null {
     },
     subscribe: fn => { listeners.add(fn); return () => { listeners.delete(fn); }; },
     setDiscoveryInterval: sec => { mod.setDiscoveryInterval?.(sec); },
+    setMediaEnabled: m => {
+      for (const k of ['nearby', 'ble'] as const) if (m[k] !== undefined && media.some(c => c.medium === k)) mod.setMediumEnabled?.(k, m[k]);
+    },
   };
   // Rádio Meshtastic: o enlace LoRa é mais uma fonte; só existe com o módulo piu-meshtastic (Android).
   const radio = PiuMeshtastic.isAvailable() ? new LoraRadio(PiuMeshtastic) : null;
