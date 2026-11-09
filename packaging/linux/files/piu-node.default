@@ -38,6 +38,9 @@
 # o canal pela região), meshtastic, lora (modem KISS: canal no firmware) e usb.
 #PIU_SERIAL=rnode:/dev/ttyUSB0
 #PIU_RNODE_REGION=BR_902
+# Só em casos especiais, dentro da faixa e da potência da região (vazio: canal e potência da região):
+#PIU_RNODE_FREQ_HZ=
+#PIU_RNODE_TX_DBM=
 #PIU_MESHTASTIC_PER_MIN=6
 # Só para o tipo lora (modem KISS):
 #PIU_LORA_SF=9
