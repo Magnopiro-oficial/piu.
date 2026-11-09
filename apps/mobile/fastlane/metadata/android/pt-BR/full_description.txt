@@ -1,0 +1,36 @@
+O Piu é um mensageiro em que as mensagens viajam de celular em celular, cifradas de ponta a ponta, sem servidor central e sem precisar de internet.
+
+Celulares, roteadores e pequenos computadores formam uma malha por Bluetooth, Wi-Fi Direct, rede Wi-Fi local e rádio LoRa. Cada aparelho leva os envelopes cifrados um pouco mais adiante até chegarem ao destino. Ninguém no meio consegue ler, filtrar ou desligar uma conversa, porque não existe meio.
+
+FUNCIONA SEM INTERNET
+• Em show, protesto, área rural, barco, apagão ou rede derrubada: quem está por perto já forma a rede.
+• Mensagem sem rota fica guardada na malha por até 48 horas e segue quando aparece um caminho.
+• O app escolhe o melhor meio para cada mensagem e troca de meio quando um falha.
+
+PRIVACIDADE DE VERDADE
+• Sem número de telefone, sem e-mail, sem cadastro em servidor.
+• Duas identidades: uma pública, para quem você conhece, e uma anônima, para desconhecidos, com chaves separadas.
+• Criptografia de ponta a ponta (X25519, Ed25519, Double Ratchet). Quem retransmite não vê remetente, conteúdo nem grupo.
+• Seus dados ficam no seu aparelho, cifrados. Sem anúncios.
+
+RECURSOS
+• Conversas, grupos, canais e comunidades, com alertas da comunidade.
+• Chamada de voz cifrada, entre celulares e com o Piu Desktop.
+• Fotos e arquivos.
+• Mapa da rede com os vizinhos e os meios por onde cada um é alcançado.
+• Modo nó: seu celular ajuda a levar as mensagens dos outros.
+• Rádio LoRa (experimental): Meshtastic e o rádio do Piu.
+• Carteira Lunes integrada.
+• Passe o app adiante sem internet: quem já tem o Piu envia para você por Bluetooth ou Wi-Fi Direct.
+
+POR QUE O APP PEDE ESTAS PERMISSÕES
+• Bluetooth e dispositivos Wi-Fi por perto: encontrar e falar com os aparelhos próximos. Você escolhe na aba Rede quais meios ficam ligados.
+• Localização (só Android 12 ou anterior): o sistema exige para procurar aparelhos por Bluetooth. O Piu não lê sua localização.
+• Microfone: chamadas de voz.
+• Câmera: ler o QR de um contato.
+• Notificações e serviço em primeiro plano: avisar de mensagens e chamadas e manter o modo nó ativo.
+
+CÓDIGO ABERTO
+O Piu é software livre (AGPL-3.0). Código, protocolo e auditorias: https://github.com/Magnopiro-oficial/piu.
+
+Versão de teste: pode ter falhas. Relate problemas em https://github.com/Magnopiro-oficial/piu./issues

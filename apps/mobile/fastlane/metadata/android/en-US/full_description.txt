@@ -1,0 +1,36 @@
+Piu is a messenger where messages travel from phone to phone, end-to-end encrypted, with no central server and no need for the internet.
+
+Phones, routers and small computers form a mesh over Bluetooth, Wi-Fi Direct, local Wi-Fi and LoRa radio. Each device carries encrypted envelopes a little further until they reach their destination. Nobody in the middle can read, filter or switch off a conversation, because there is no middle.
+
+WORKS WITHOUT INTERNET
+• At concerts, protests, in rural areas, on boats, during blackouts or when the network is down: the people nearby already are the network.
+• A message with no route waits in the mesh for up to 48 hours and moves on when a path appears.
+• The app picks the best link for each message and switches when one fails.
+
+REAL PRIVACY
+• No phone number, no e-mail, no server account.
+• Two identities: a public one for people you know and an anonymous one for strangers, with separate keys.
+• End-to-end encryption (X25519, Ed25519, Double Ratchet). Relays see neither sender, content nor group.
+• Your data stays on your device, encrypted. No ads.
+
+FEATURES
+• Chats, groups, channels and communities, with community alerts.
+• Encrypted voice calls, between phones and with Piu Desktop.
+• Photos and files.
+• Network map with your neighbors and the links that reach each one.
+• Node mode: your phone helps carry other people's messages.
+• LoRa radio (experimental): Meshtastic and the Piu radio.
+• Built-in Lunes wallet.
+• Share the app without internet: anyone who has Piu can send it to you over Bluetooth or Wi-Fi Direct.
+
+WHY THE APP ASKS FOR THESE PERMISSIONS
+• Bluetooth and nearby Wi-Fi devices: find and talk to nearby devices. You choose in the Network tab which links stay on.
+• Location (Android 12 or older only): the system requires it to scan for Bluetooth devices. Piu does not read your location.
+• Microphone: voice calls.
+• Camera: scan a contact's QR code.
+• Notifications and foreground service: alert you to messages and calls and keep node mode running.
+
+OPEN SOURCE
+Piu is free software (AGPL-3.0). Code, protocol and audits: https://github.com/Magnopiro-oficial/piu.
+
+Test release: it may have bugs. Report issues at https://github.com/Magnopiro-oficial/piu./issues

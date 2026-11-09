@@ -1,0 +1,7 @@
+• End-to-end encrypted voice calls, between phones and with Piu Desktop. With the app closed, calls ring full screen, even on the lock screen.
+• Decline with a quick reply and a "Call back in 10 min" reminder.
+• LoRa radio (experimental): Meshtastic and the Piu radio (RNode), with region selection.
+• Network map: a radar with your neighbors and the links that reach each one.
+• The piu sound plays again when the app opens and when a message arrives.
+• Chose Bluetooth only in the Network tab? The app no longer turns Wi-Fi on by itself.
+• Security fixes in voice calls and in Super Node announcements.

@@ -1,0 +1,7 @@
+• Chamada de voz cifrada de ponta a ponta, entre celulares e com o Piu Desktop. Com o app fechado, a chamada toca em tela cheia, inclusive com a tela bloqueada.
+• Recusar com mensagem pronta e lembrete "Ligar em 10 min".
+• Rádio LoRa (experimental): Meshtastic e o rádio do Piu (RNode), com escolha da região.
+• Mapa da rede: radar com os vizinhos e os meios por onde cada um é alcançado.
+• O som do piu volta a tocar ao abrir o app e quando chega mensagem.
+• Escolheu só Bluetooth na aba Rede? O app não liga mais o Wi-Fi sozinho.
+• Correções de segurança na chamada de voz e no anúncio dos Super Nodes.
