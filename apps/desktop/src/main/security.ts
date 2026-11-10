@@ -108,6 +108,30 @@ export async function reauthForPhrase(d: ReauthDeps): Promise<boolean> {
   } catch { return false; }
 }
 
+export interface BackupExportDeps {
+  /** A mesma reautenticação de mostrar a frase (`reauthForPhrase`). */
+  reauth: () => Promise<boolean>;
+  /** Diálogo nativo de salvar; `null`: cancelado. */
+  choosePath: () => Promise<string | null>;
+  encrypt: () => Promise<string>;
+  write: (path: string, data: string) => Promise<void>;
+}
+
+/**
+ * Exportar o backup da identidade (M-01): o arquivo leva a frase cifrada com uma senha escolhida na hora,
+ * logo vale o mesmo que mostrá-la. Reautentica ANTES do diálogo de salvar e de ler a frase; recusa ou
+ * erro: nada é cifrado nem gravado (falha fechada).
+ */
+export async function exportBackupAfterReauth(d: BackupExportDeps): Promise<'saved' | 'cancelled'> {
+  let ok = false;
+  try { ok = (await d.reauth()) === true; } catch { ok = false; }
+  if (!ok) throw new Error(tm('main.phrase.refused'));
+  const path = await d.choosePath();
+  if (!path) return 'cancelled';
+  await d.write(path, await d.encrypt());
+  return 'saved';
+}
+
 /**
  * `PIU_PROFILE=<nome>`: outro perfil (pasta de dados `Piu-<nome>` e nome do app, logo outro item do cofre do
  * sistema). Para testes do app instalado sem tocar nos dados nem no Keychain de quem usa (com

@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/fr';
 import { call } from './call/fr';
 import { lora } from './lora/fr';
 import { map } from './map/fr';
+import { stored } from './stored/fr';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Retour',
   'common.close': 'Fermer',
   'common.cancel': 'Annuler',
@@ -879,6 +881,8 @@ export const dict: Dict = {
   'devices.scan.path': 'Restaurer → Depuis un autre appareil',
   'devices.scan.after': '. Puis lisez le QR qu’il affiche.',
   'devices.scan.hint': 'Pointez la caméra vers le QR du nouvel appareil. Les clés partent directement, chiffrées, sans serveur.',
+  'devices.scan.noCamera': 'Pas d’autorisation pour la caméra. Autorisez la caméra dans les réglages de l’appareil pour lire le QR du nouvel appareil.',
+  'devices.scan.cameraOnly': 'Par sécurité, ici le code n’entre que par la caméra, les deux appareils côte à côte. N’envoyez jamais vos clés à partir d’un code reçu d’une autre personne.',
   'devices.reply.title': 'Maintenant le nouvel appareil lit ce QR',
   'devices.reply.qr': 'QR de réponse pour le nouvel appareil',
   'devices.reply.prompt': 'Vérifiez que les mêmes mots apparaissent sur le {name} :',

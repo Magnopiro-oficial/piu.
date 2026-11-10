@@ -13,7 +13,7 @@ import { canSendToConversation } from '../shared/conversations';
 import { randomInt } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createServer, type Server } from 'node:https';
-import { hostname, networkInterfaces } from 'node:os';
+import { hostname, type NetworkInterfaceInfo, networkInterfaces } from 'node:os';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { type ConversationsState, emptyState, markRead, messagesOf, summaries } from '../shared/conversations';
 import {
@@ -25,14 +25,31 @@ import type { ContactInfo, LinkState, MeInfo, Message } from '../shared/types';
 import { type LinkTls, loadLinkTls } from './linkTls';
 import { tm } from './i18n';
 
-/** IPv4 da rede local (não interno). Prefere Wi-Fi/Ethernet comuns (en0, eth0, wlan0). */
-export function localHosts(): string[] {
-  const out: string[] = [];
-  for (const [name, list] of Object.entries(networkInterfaces())) {
-    for (const i of list ?? []) if (i.family === 'IPv4' && !i.internal) out.push(/^(en0|eth0|wlan0)$/.test(name) ? `!${i.address}` : i.address);
+/** IPv4 privado/link-local nas mesmas faixas que o celular aceita no QR (isLocalHost em mobile/src/lib/desktopLink.ts). */
+const isPrivateV4 = (ip: string): boolean => {
+  const p = ip.split('.').map(Number);
+  const [a, b] = [p[0]!, p[1]!];
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+};
+
+/**
+ * IPv4 da rede local (não interno) a partir das interfaces. Só endereços privados/link-local (o celular
+ * recusa o resto), para o QR nunca anunciar um IP público quando há um privado. Ordem: Wi-Fi/Ethernet
+ * comuns (en0, eth0, wlan0) primeiro e link-local (169.254) por último. Sem nenhum privado, devolve os
+ * não internos como antes (o celular vai recusar o QR; a tela deve avisar).
+ */
+export function pickLanHosts(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): string[] {
+  const all: { ip: string; common: boolean }[] = [];
+  for (const [name, list] of Object.entries(ifaces)) {
+    for (const i of list ?? []) if (i.family === 'IPv4' && !i.internal) all.push({ ip: i.address, common: /^(en0|eth0|wlan0)$/.test(name) });
   }
-  return out.sort((a, b) => Number(b.startsWith('!')) - Number(a.startsWith('!'))).map(h => h.replace(/^!/, ''));
+  const priv = all.filter(h => isPrivateV4(h.ip));
+  const rank = (h: { ip: string; common: boolean }) => (h.ip.startsWith('169.254.') ? 2 : 0) + (h.common ? 0 : 1);
+  return (priv.length ? priv : all).map((h, n) => ({ h, n })).sort((x, y) => rank(x.h) - rank(y.h) || x.n - y.n).map(x => x.h.ip);
 }
+
+/** IPv4 da rede local para o QR (ver `pickLanHosts`). */
+export const localHosts = (): string[] => pickLanHosts(networkInterfaces());
 
 /** Prazo para o `hello` depois de conectar (o celular manda em milissegundos; folga larga). */
 export const HELLO_TIMEOUT_MS = 10_000;

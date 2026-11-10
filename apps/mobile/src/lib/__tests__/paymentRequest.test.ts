@@ -11,6 +11,7 @@ import {
   readPaidNotice, readPayRequest, wirePayRequest,
 } from '../paymentRequest';
 import { ALICE_42, ALICE_57 } from './lunesFake';
+import { EXTRINSIC, VALUE } from './walletFixture';
 
 const T0 = 1_800_000_000;
 const ID = '0123456789abcdef';
@@ -140,17 +141,19 @@ test('conferência na Mainnet: só marca "recebido" com prova real (saldo subiu 
   // Pedido sem valor: qualquer entrada conta.
   assert.deepEqual(judgePayment({ planck: null, baseline: 10n ** 9n, free: 10n ** 9n + 1n }), { state: 'recebido', via: 'saldo', delta: 1n });
   assert.deepEqual(judgePayment({ planck: null, baseline: 10n ** 9n, free: 10n ** 9n }), { state: 'nada' });
-  // Com a transação conferida no bloco finalizado, é prova mesmo sem base de saldo.
-  const tx = { blockFound: true, blockNumber: 1234, finalized: true, txIndex: 2, endpoint: 'wss://x' };
-  assert.deepEqual(judgePayment({ planck: amount, baseline: null, free: 0n, tx }), { state: 'recebido', via: 'transacao', block: 1234 });
+  // Com a transferência para o endereço do pedido conferida no bloco finalizado (EXTRINSIC: 1 LUNES para a
+  // Alice, execução confirmada), é prova mesmo sem base de saldo. Os outros casos: paymentRequestTx.test.ts.
+  const tx = { blockFound: true, blockNumber: 1234, finalized: true, txIndex: 2, endpoint: 'wss://x', extrinsic: EXTRINSIC, executed: true };
+  const paid = { planck: VALUE, address: ALICE_57 };
+  assert.deepEqual(judgePayment({ ...paid, baseline: null, free: 0n, tx }), { state: 'recebido', via: 'transacao', block: 1234 });
   // Transação no bloco, mas ainda não finalizado: não é prova; bloco sem a transação: nada.
   assert.deepEqual(judgePayment({ planck: amount, baseline: null, free: 0n, tx: { ...tx, finalized: false } }), { state: 'indeterminado', reason: 'nao-finalizado' });
   assert.deepEqual(judgePayment({ planck: amount, baseline: null, free: 0n, tx: { ...tx, txIndex: -1 } }), { state: 'indeterminado', reason: 'transacao-ausente' });
   assert.deepEqual(judgePayment({ planck: amount, baseline: null, free: 0n, tx: { ...tx, blockFound: false, blockNumber: null } }), { state: 'indeterminado', reason: 'bloco-ausente' });
   // Saldo decide antes da transação quando os dois existem e o saldo já prova.
   assert.equal(judgePayment({ planck: amount, baseline: 0n, free: amount, tx: { ...tx, txIndex: -1 } }).state, 'recebido');
-  // Saldo não provou, mas a transação está no bloco finalizado: prova.
-  assert.equal(judgePayment({ planck: amount, baseline: 0n, free: 1n, tx }).state, 'recebido');
+  // Saldo não provou, mas a transferência do pedido está no bloco finalizado: prova.
+  assert.equal(judgePayment({ ...paid, baseline: 0n, free: 1n, tx }).state, 'recebido');
 });
 
 test('texto da conferência: diz "chegou" só com prova e explica o que faltou nos outros casos', () => {

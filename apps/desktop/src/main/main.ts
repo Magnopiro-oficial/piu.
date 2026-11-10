@@ -15,7 +15,7 @@ import { pathToFileURL } from 'node:url';
 import { PiuCore } from './core';
 import { eventAllowed, methodAllowed } from './lockGate';
 import { sanitizePrefsPatch } from './prefs';
-import { externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
+import { exportBackupAfterReauth, externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
 import { isSecretScreen, screenSecurityFor, type SecretScreen } from '../shared/screenSecurity';
 import { alertText, type AlertNoticeLevel, type AlertSummary, badgeCount, notifKindOf, shouldNotify, shouldNotifyAlert } from '../shared/notifyPolicy';
 import { callNoticeText, missedCallsText, ringingCall, shouldNotifyCall } from '../shared/callNotify';
@@ -401,33 +401,38 @@ async function installUpdate() {
 
 // ── IPC ───────────────────────────────────────────────────
 function registerIpc() {
+  // Reautenticação da frase (M-01): Touch ID ou, sem ele, o diálogo nativo `o` no processo principal.
+  const reauthPhrase = (o: MessageBoxOptions) => reauthForPhrase({
+    platform: process.platform,
+    canPromptTouchID: () => systemPreferences.canPromptTouchID(),
+    promptTouchID: reason => systemPreferences.promptTouchID(reason),
+    confirm: async () => (win ? await dialog.showMessageBox(win, o) : await dialog.showMessageBox(o)).response === 1,
+  });
   const methods: Record<string, (...args: never[]) => unknown> = {
     getSession: () => core.session(),
     createIdentity: (o: { kind: 'public' | 'anon'; name: string }) => core.createIdentity(o),
     restoreIdentity: (o: { phrase: string[]; name: string }) => core.restoreIdentity(o),
     // M-01: só depois de Touch ID (ou, sem ele, de uma confirmação nativa que o renderer não clica sozinho).
     revealPhrase: async () => {
-      const ok = await reauthForPhrase({
-        platform: process.platform,
-        canPromptTouchID: () => systemPreferences.canPromptTouchID(),
-        promptTouchID: reason => systemPreferences.promptTouchID(reason),
-        confirm: async () => {
-          const o: MessageBoxOptions = { type: 'warning', buttons: [tm('common.cancel'), tm('main.phrase.show')], defaultId: 0, cancelId: 0, noLink: true, title: tm('main.phrase.title'),
-            message: tm('main.phrase.message'), detail: tm('main.phrase.detail') };
-          return (win ? await dialog.showMessageBox(win, o) : await dialog.showMessageBox(o)).response === 1;
-        },
-      });
+      const ok = await reauthPhrase({ type: 'warning', buttons: [tm('common.cancel'), tm('main.phrase.show')], defaultId: 0, cancelId: 0, noLink: true, title: tm('main.phrase.title'),
+        message: tm('main.phrase.message'), detail: tm('main.phrase.detail') });
       if (!ok) throw new Error(tm('main.phrase.refused'));
       return core.revealPhrase();
     },
+    // M-01: o arquivo leva a frase cifrada com a senha digitada agora; mesma reautenticação de mostrar a frase.
     exportIdentityBackup: async (password: string) => {
       if (typeof password !== 'string') throw new Error(tm('main.err.badPassword'));
-      const options = { title: tm('main.backup.saveTitle'), defaultPath: 'piu-identidade.piu', filters: [{ name: tm('main.backup.filter'), extensions: ['piu'] }] };
-      const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
-      if (result.canceled || !result.filePath) return 'cancelled';
-      const encrypted = await core.exportIdentityBackup(password);
-      await writeFile(result.filePath, encrypted, { encoding: 'utf8', mode: 0o600, flag: 'wx' });
-      return 'saved';
+      return exportBackupAfterReauth({
+        reauth: () => reauthPhrase({ type: 'warning', buttons: [tm('common.cancel'), tm('settings.backup.exportBtn')], defaultId: 0, cancelId: 0, noLink: true, title: tm('main.backup.saveTitle'),
+          message: tm('settings.backup.export'), detail: tm('main.phrase.detail') }),
+        choosePath: async () => {
+          const options = { title: tm('main.backup.saveTitle'), defaultPath: 'piu-identidade.piu', filters: [{ name: tm('main.backup.filter'), extensions: ['piu'] }] };
+          const result = win ? await dialog.showSaveDialog(win, options) : await dialog.showSaveDialog(options);
+          return result.canceled || !result.filePath ? null : result.filePath;
+        },
+        encrypt: () => core.exportIdentityBackup(password),
+        write: (path, data) => writeFile(path, data, { encoding: 'utf8', mode: 0o600, flag: 'wx' }),
+      });
     },
     suggestWords: (p: string) => core.suggestWords(String(p)),
     eraseAll: async () => {

@@ -220,7 +220,15 @@ export const WALLET_EXECUTION_QUERY = `query WalletExecution($id: String!, $bloc
   block(id: $block) { id number hash }
 }`;
 /** Schema público verificado em 05/11/2026. Resultado do indexador, não decoder System.Events. */
-export async function readWalletExecution(record: WalletTransferRecord, block: NonNullable<WalletTransferRecord['block']>, deps: WalletTransferDeps = {}): Promise<WalletExecutionOutcome> {
+export async function readWalletExecution(_record: WalletTransferRecord, block: NonNullable<WalletTransferRecord['block']>, deps: WalletTransferDeps = {}): Promise<WalletExecutionOutcome> {
+  return readBlockExecution(block, deps);
+}
+
+/**
+ * A mesma prova do indexador, só pelo bloco (número, hash e índice do extrínseco): serve para conferir
+ * uma transação que não saiu desta carteira (o hash que o pagador informou num pedido de pagamento).
+ */
+export async function readBlockExecution(block: { number: number; hash: string; index: number }, deps: Pick<WalletTransferDeps, 'fetch' | 'indexer'> = {}): Promise<WalletExecutionOutcome> {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 12_000);
   try {
     const fetcher = deps.fetch ?? globalThis.fetch.bind(globalThis);

@@ -5,6 +5,8 @@
 import type { Msg } from '../data/types';
 import { fmtDate, t as tGlobal, type Key, type Vars } from '../i18n/core';
 import { formatCoords } from './locationCore';
+import { localizeStored } from './storedText';
+import { contactOf, recordCard, type Tr as CallTr } from '../calls/callView';
 /** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
 type Tr = (key: Key, vars?: Vars) => string;
 
@@ -37,9 +39,12 @@ export function daySeparators(msgs: Pick<Msg, 'at'>[], now: number = Date.now(),
 }
 
 /** Texto curto de uma mensagem (lista de conversas, banners, folha de rota). */
-export function msgSummary(m: Pick<Msg, 'text' | 'file' | 'loc'>, t: Tr = tGlobal): string {
+export function msgSummary(m: Pick<Msg, 'text' | 'file' | 'loc' | 'call' | 'callReq'>, t: Tr = tGlobal): string {
   if (m.loc) return t('msg.location', { text: m.text ? m.text : formatCoords(m.loc) });
-  if (m.text) return m.text;
+  // Chamada: o título gravado é do idioma da hora da ligação; refeito no idioma de agora.
+  if (m.call) return recordCard(t as unknown as CallTr, m.call, contactOf('')).title;
+  if (m.callReq) return t('call.rec.request');
+  if (m.text) return localizeStored(m.text, t);
   if (m.file) return m.file.purged ? t('msg.mediaPurged', { name: m.file.name }) : t('msg.file', { name: m.file.name });
   return '';
 }

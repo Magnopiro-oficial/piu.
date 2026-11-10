@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/ja';
 import { call } from './call/ja';
 import { lora } from './lora/ja';
 import { map } from './map/ja';
+import { stored } from './stored/ja';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': '戻る',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
@@ -880,6 +882,8 @@ export const dict: Dict = {
   "devices.scan.path": "復元 → 別の端末から",
   "devices.scan.after": "。その後、表示されたQRを読み取ってください。",
   "devices.scan.hint": "新しい端末のQRにカメラを向けてください。鍵はサーバーを介さず直接暗号化して転送されます。",
+  "devices.scan.noCamera": "カメラの許可がありません。新しい端末のQRを読み取るには、端末の設定でカメラを許可してください。",
+  "devices.scan.cameraOnly": "安全のため、ここではコードはカメラからのみ読み取れます。2台の端末を並べて行ってください。他の人から受け取ったコードで鍵を送信しないでください。",
   "devices.reply.title": "今度は新しい端末でこのQRを読み取ります",
   "devices.reply.qr": "新しい端末への応答QR",
   "devices.reply.prompt": "{name}にも同じ単語が表示されることを確認してください：",

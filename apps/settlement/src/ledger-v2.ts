@@ -2,7 +2,8 @@
  * Livro de contribuições v2 (docs/economia/prova-de-entrega-v2.md, seção 6; auditoria 2026-11-06,
  * C-01 e A-01). Monta, a partir de TODAS as evidências de uma vez, o estado de cada recibo:
  *
- * 1. Recibos: assinatura, uma vez por (envelope, nó), nó registrado sob operador admitido.
+ * 1. Recibos: assinatura (os inválidos saem antes de tudo), uma vez por (envelope, nó), nó registrado
+ *    sob operador admitido.
  * 2. Provas: só a prova v2 selada para o validador, assinada pelo pseudônimo do destino, com
  *    `H(ackSecret)` igual ao `ackHash` do cabeçalho. E só CONTA (inclusive para conflito) a prova cujo
  *    `ackHash` é o de algum recibo de nó registrado daquele envelope: quem forja um cabeçalho com outro
@@ -88,20 +89,33 @@ export class DeliveryLedgerV2 {
     const reject = (r: RelayReceipt, reason: string, state: CreditState = 'rejeitado', extra: Partial<V2Entry> = {}) => { this.list.push({ receipt: r, state, reason, ...extra }); };
 
     // 1. Recibos de nós registrados (uma vez por envelope e nó; dois diferentes do mesmo nó = fora).
+    // Assinatura conferida ANTES de agrupar: recibo forjado (qualquer um monta, envelope e nó são públicos)
+    // não conflita com o honesto nem ocupa o lugar dele; só aparece no relatório se o nó não tiver nenhum
+    // válido naquele envelope. Cópia idêntica não é conferida de novo.
     const byKey = new Map<string, RelayReceipt[]>();
+    const forged = new Map<string, RelayReceipt>();
+    const seenReceipt = new Set<string>();
     for (const r of input.receipts) {
       const k = `${r.envelopeId}:${toHex(r.nodePk)}`;
+      const id = `${k}:${toHex(r.ackHash)}:${r.at}:${toHex(r.sig)}`;
+      if (seenReceipt.has(id)) continue;
+      seenReceipt.add(id);
+      if (!verifyRelayReceipt(r)) {
+        const f = forged.get(k);
+        if (!f || id < `${k}:${toHex(f.ackHash)}:${f.at}:${toHex(f.sig)}`) forged.set(k, r); // o mesmo em qualquer ordem
+        continue;
+      }
       const cur = byKey.get(k) ?? [];
       if (!cur.some(x => toHex(x.sig) === toHex(r.sig))) cur.push(r);
       byKey.set(k, cur);
     }
     const registered: { r: RelayReceipt; op: string }[] = [];
     const regAcks = new Map<string, Set<string>>(); // envelope → ackHashes de recibos registrados
-    for (const k of [...byKey.keys()].sort()) {
-      const rs = byKey.get(k)!;
+    for (const k of [...new Set([...byKey.keys(), ...forged.keys()])].sort()) {
+      const rs = byKey.get(k);
+      if (!rs) { reject(forged.get(k)!, REASON.sig); continue; }
       const r = rs[0]!;
       const node = toHex(r.nodePk);
-      if (!verifyRelayReceipt(r)) { reject(r, REASON.sig); continue; }
       if (rs.length > 1) { reject(r, REASON.dupConflict); continue; }
       const op = o.registry.operatorOf(node, r.at);
       if (!op) { reject(r, o.registry.why(node, r.at)); continue; }

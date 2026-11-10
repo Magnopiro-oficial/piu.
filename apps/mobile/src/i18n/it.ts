@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/it';
 import { call } from './call/it';
 import { lora } from './lora/it';
 import { map } from './map/it';
+import { stored } from './stored/it';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Indietro',
   'common.close': 'Chiudi',
   'common.cancel': 'Annulla',
@@ -880,6 +882,8 @@ export const dict: Dict = {
   "devices.scan.path": "Ripristina → Da un altro dispositivo",
   "devices.scan.after": ". Poi leggi il QR mostrato.",
   "devices.scan.hint": "Inquadra il QR del nuovo dispositivo. Le chiavi vengono inviate direttamente e cifrate, senza server.",
+  "devices.scan.noCamera": "Nessun permesso per la fotocamera. Consenti la fotocamera nelle impostazioni del dispositivo per leggere il QR del nuovo dispositivo.",
+  "devices.scan.cameraOnly": "Per sicurezza, qui il codice entra solo dalla fotocamera, con i due dispositivi uno accanto all’altro. Non inviare mai le tue chiavi a partire da un codice ricevuto da un’altra persona.",
   "devices.reply.title": "Ora il nuovo dispositivo legge questo QR",
   "devices.reply.qr": "QR di risposta per il nuovo dispositivo",
   "devices.reply.prompt": "Controlla che su {name} appaiano le stesse parole:",

@@ -4,6 +4,12 @@ import { CallService, type AudioEngine, type CallServicePorts } from '../callSer
 import type { CallRecord, RouteHint } from '../callMachine';
 import type { RequestStep } from '../callView';
 import type { Codec } from '../callMedia';
+import { newCallKeypair } from '../callCrypto';
+import { b64url } from '../../messaging/card';
+
+/** Chave efêmera válida (para convites injetados) e uma de ordem baixa (32 bytes zero). */
+const KEY = b64url(newCallKeypair().pk);
+const LOW_ORDER = 'A'.repeat(43);
 
 /**
  * Dois aparelhos de verdade (núcleo inteiro), ligados por um "fio" que entrega sinais e quadros.
@@ -148,7 +154,7 @@ test('a resposta de um pedido vale uma vez só', () => {
 
 test('convite com id de chamada já usado não toca de novo (Intent repetida não atende chamada nova)', () => {
   const w = pair();
-  const invite = { t: 'cl', s: { t: 'invite', callId: 'sempre-o-mesmo', route: 'direct' }, k: 'A'.repeat(43) };
+  const invite = { t: 'cl', s: { t: 'invite', callId: 'sempre-o-mesmo', route: 'direct' }, k: KEY };
   w.b.onSignal('alice', invite);
   assert.equal(w.b.state.phase, 'ringing');
   w.b.controller.decline();
@@ -161,13 +167,13 @@ test('quem liga sem parar: do 6º convite em 10 min em diante, responde "ocupado
   const w = pair();
   const sent: string[] = [];
   for (let i = 0; i < 7; i++) {
-    w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: `convite-${i}-abcd`, route: 'direct' }, k: 'A'.repeat(43) });
+    w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: `convite-${i}-abcd`, route: 'direct' }, k: KEY });
     sent.push(w.b.state.phase);
     if (w.b.state.phase === 'ringing') { w.b.controller.decline(); while ((w.b.state.phase as string) !== 'idle') w.fire(w.pending().at(-1)!); }
   }
   assert.deepEqual(sent, ['ringing', 'ringing', 'ringing', 'ringing', 'ringing', 'idle', 'idle']);
   w.tick(10 * 60_000);
-  w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: 'convite-depois-abcd', route: 'direct' }, k: 'A'.repeat(43) });
+  w.b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: 'convite-depois-abcd', route: 'direct' }, k: KEY });
   assert.equal(w.b.state.phase, 'ringing', 'passada a janela, toca de novo');
 });
 
@@ -182,9 +188,9 @@ test('palavras diferentes encerram dos dois lados por segurança', () => {
 test('aceite forjado (outra chamada ou sem chave) não conecta', () => {
   const w = pair();
   w.a.open('bob'); w.a.controller.dial();
-  w.a.onSignal('bob', { t: 'cl', s: { t: 'accept', callId: 'id-x-000999' }, k: 'A'.repeat(43) });
+  w.a.onSignal('bob', { t: 'cl', s: { t: 'accept', callId: 'id-x-000999' }, k: KEY });
   assert.equal(w.a.state.phase, 'calling');
-  w.a.onSignal('mallory', { t: 'cl', s: { t: 'accept', callId: w.a.state.callId }, k: 'A'.repeat(43) });
+  w.a.onSignal('mallory', { t: 'cl', s: { t: 'accept', callId: w.a.state.callId }, k: KEY });
   assert.equal(w.a.state.phase, 'calling');
 });
 
@@ -230,4 +236,34 @@ test('Wi-Fi Direct (Nearby): vai como `bt` com a marca nos dois lados, até o re
   const v = pair('bt');
   v.a.open('bob');
   assert.equal(v.a.state.wifiDirect, undefined, 'Bluetooth de verdade não leva a marca');
+});
+
+test('convite com chave efêmera de ordem baixa: não lança, não toca e responde recusa', () => {
+  const w = pair('direct', { bOld: true });
+  const sent: unknown[] = [];
+  const b = new CallService({
+    now: () => 1000, newId: () => 'id-b-000001',
+    sendSignal: (_p, wire) => { sent.push(wire); return true; },
+    record: () => {}, requestUpdate: () => {}, liveRouteTo: () => 'direct', links: () => [],
+    sendFrame: () => {}, audio: w.audio.b, setTimer: () => 0, clearTimer: () => {}, setInterval: () => 0, clearInterval: () => {},
+  });
+  assert.doesNotThrow(() => b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: 'convite-ruim-abcd', route: 'direct' }, k: LOW_ORDER }));
+  assert.equal(b.state.phase, 'idle');
+  assert.ok(!w.audio.b.on, 'microfone fechado');
+  assert.deepEqual(sent.map(x => (x as { s: { t: string } }).s.t), ['decline']);
+  // Mesmo vindo de um pedido (o aceite sairia dentro do despacho), nada de 'accept'.
+  assert.doesNotThrow(() => b.onSignal('alice', { t: 'cl', s: { t: 'invite', callId: 'convite-ruim-efgh', route: 'direct', requestId: 'pedido-0001' }, k: LOW_ORDER }));
+  assert.ok(!sent.some(x => (x as { s: { t: string } }).s.t === 'accept'));
+  assert.equal(b.words, null);
+});
+
+test('aceite com chave efêmera de ordem baixa: não lança, não conecta e encerra a chamada', () => {
+  const w = pair('direct', { bOld: true });
+  w.a.open('bob'); w.a.controller.dial();
+  const callId = w.a.state.callId;
+  assert.doesNotThrow(() => w.a.onSignal('bob', { t: 'cl', s: { t: 'accept', callId }, k: LOW_ORDER }));
+  assert.notEqual(w.a.state.phase, 'active');
+  assert.equal(w.a.state.phase, 'ending');
+  assert.equal(w.a.words, null);
+  assert.ok(!w.audio.a.on, 'microfone fechado');
 });

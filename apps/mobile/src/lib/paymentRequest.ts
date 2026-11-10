@@ -2,14 +2,16 @@
  * Pedido de pagamento pela malha (regra 7.3 do mapa de regras, adaptada à decisão de produto: o Piu
  * não guarda chave Lunes nem envia LUNES). Quem pede manda, cifrado na sessão, o endereço Lunes dele,
  * o valor (opcional) e uma descrição curta; quem recebe paga pela própria carteira Lunes. A conferência
- * é só leitura na Mainnet (lib/lunesRpc.ts): saldo que subiu ou transação dentro de um bloco finalizado.
+ * é só leitura na Mainnet (lib/lunesRpc.ts): saldo que subiu ou transferência para o endereço do pedido
+ * dentro de um bloco finalizado.
  *
  * TypeScript puro, testado no Node (`__tests__/paymentRequest.test.ts`).
  */
 import { random } from '../protocol/suite';
 import { toHex } from '../protocol/bytes';
 import { stripBidi } from '../messaging/bidi';
-import { formatLunes, isHash, LUNES_DECIMALS, type SettlementCheck } from './lunesRpc';
+import { decodeSignedTransfer } from './extrinsic';
+import { checkSettlement, formatLunes, fromHex, isHash, LUNES_DECIMALS, type LunesRpc, type SettlementCheck } from './lunesRpc';
 import { decodeSs58 } from './ss58';
 import { t as tGlobal, type Key, type Vars } from '../i18n/core';
 /** Tradutor opcional (padrão: idioma em uso no app; pt-BR nos testes). */
@@ -150,23 +152,51 @@ export function payRequestSummary(r: Pick<PaymentRequest, 'planck' | 'desc'>, t:
   return [t('chat.pay.request'), r.planck != null ? `${formatLunes(r.planck)} LUNES` : '', r.desc].filter(Boolean).join(' · ');
 }
 
+/**
+ * Conferência da transação que o pagador informou. O hash sozinho não prova nada (qualquer transação
+ * finalizada da rede tem um): `extrinsic` traz os bytes achados no bloco, para conferir destino e valor,
+ * e `executed` diz se a execução deu certo (indexador, como `readWalletExecution`; `null` = não comprovada).
+ */
+export interface PaymentTxCheck extends SettlementCheck { extrinsic?: string | null; executed?: boolean | null }
+
+/** `checkSettlement` mais os bytes do extrínseco encontrado (`null` se o bloco ou a transação não apareceram). */
+export async function checkPaymentTx(rpc: LunesRpc, o: { blockHash: string; txHash?: string }): Promise<PaymentTxCheck> {
+  const c = await checkSettlement(rpc, o);
+  if (c.txIndex == null || c.txIndex < 0) return { ...c, extrinsic: null };
+  const b = await rpc.call<{ block: { extrinsics: string[] } } | null>('chain_getBlock', [o.blockHash]);
+  return { ...c, extrinsic: b?.block.extrinsics[c.txIndex] ?? null };
+}
+
+/** A transação achada é uma transferência executada para o endereço do pedido, de valor suficiente? */
+function txPays(tx: PaymentTxCheck, address: string | undefined, planck: bigint | null): boolean {
+  if (tx.txIndex == null || tx.txIndex < 0 || !tx.extrinsic || tx.executed !== true || !address) return false;
+  const to = decodeSs58(address);
+  if (!to.ok) return false;
+  let transfer: ReturnType<typeof decodeSignedTransfer>;
+  try { transfer = decodeSignedTransfer(fromHex(tx.extrinsic)); } catch { return false; }
+  if (!transfer || transfer.dest.length !== to.publicKey.length || !transfer.dest.every((x, i) => x === to.publicKey[i])) return false;
+  return transfer.value > 0n && (planck == null || transfer.value >= planck);
+}
+
 export type PaymentJudgement =
-  /** Prova real: o saldo subiu o valor pedido (ou qualquer entrada, sem valor) ou a transação está num bloco finalizado. */
+  /** Prova real: o saldo subiu o valor pedido (ou qualquer entrada, sem valor) ou há uma transferência para o endereço do pedido num bloco finalizado. */
   | { state: 'recebido'; via: 'saldo'; delta: bigint }
   | { state: 'recebido'; via: 'transacao'; block: number }
   /** Entrou menos que o pedido. */
   | { state: 'parcial'; delta: bigint }
   /** O saldo não subiu. */
   | { state: 'nada' }
-  /** Não dá para concluir: sem leitura anterior do saldo, bloco desconhecido, transação fora do bloco ou ainda não finalizada. */
+  /** Não dá para concluir: sem leitura anterior do saldo, bloco desconhecido, transação fora do bloco (ou que não confere com o pedido) ou ainda não finalizada. */
   | { state: 'indeterminado'; reason: 'sem-base' | 'bloco-ausente' | 'transacao-ausente' | 'nao-finalizado' };
 
 /**
  * Julga a conferência. `baseline`: saldo livre quando o pedido foi criado (null se nunca lido);
- * `free`: saldo livre agora; `tx`: resultado de `checkSettlement` quando a pessoa informou os hashes.
- * Nunca diz "recebido" sem prova: o saldo pode subir por outro motivo, mas isso é dinheiro real na conta.
+ * `free`: saldo livre agora; `address`: endereço do pedido; `tx`: resultado de `checkPaymentTx` quando a
+ * pessoa informou os hashes. Nunca diz "recebido" sem prova: o saldo pode subir por outro motivo, mas
+ * isso é dinheiro real na conta. Já a transação informada vem do pagador: só vale se for uma transferência
+ * executada para `address`, de valor igual ou maior que o pedido (sem isso, fica o que o saldo disser).
  */
-export function judgePayment(o: { planck: bigint | null; baseline: bigint | null; free: bigint; tx?: SettlementCheck }): PaymentJudgement {
+export function judgePayment(o: { planck: bigint | null; baseline: bigint | null; free: bigint; address?: string; tx?: PaymentTxCheck }): PaymentJudgement {
   if (o.baseline != null) {
     const delta = o.free - o.baseline;
     if (delta > 0n && (o.planck == null || delta >= o.planck)) return { state: 'recebido', via: 'saldo', delta };
@@ -176,7 +206,11 @@ export function judgePayment(o: { planck: bigint | null; baseline: bigint | null
     if (!o.tx.blockFound || o.tx.blockNumber == null) return { state: 'indeterminado', reason: 'bloco-ausente' };
     if (o.tx.txIndex != null && o.tx.txIndex < 0) return { state: 'indeterminado', reason: 'transacao-ausente' };
     if (!o.tx.finalized) return { state: 'indeterminado', reason: 'nao-finalizado' };
-    return { state: 'recebido', via: 'transacao', block: o.tx.blockNumber };
+    if (txPays(o.tx, o.address, o.planck)) return { state: 'recebido', via: 'transacao', block: o.tx.blockNumber };
+    // Existe, mas não é prova deste pedido (outro destino, valor menor, falhou ou não deu para conferir).
+    if (o.baseline == null) return { state: 'indeterminado', reason: 'transacao-ausente' };
+    const delta = o.free - o.baseline;
+    return delta > 0n ? { state: 'parcial', delta } : { state: 'nada' };
   }
   return { state: 'indeterminado', reason: 'sem-base' };
 }

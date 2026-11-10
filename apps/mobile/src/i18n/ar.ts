@@ -7,6 +7,7 @@ import { linkDesktop } from './linkDesktop/ar';
 import { call } from './call/ar';
 import { lora } from './lora/ar';
 import { map } from './map/ar';
+import { stored } from './stored/ar';
 
 export const dict: Dict = {
   ...piu11,
@@ -15,6 +16,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'رجوع',
   'common.close': 'إغلاق',
   'common.cancel': 'إلغاء',
@@ -946,6 +948,8 @@ export const dict: Dict = {
   "devices.scan.path": "استعادة ← من جهاز آخر",
   "devices.scan.after": ". ثم امسح رمز QR الذي يعرضه.",
   "devices.scan.hint": "وجّه الكاميرا إلى QR الجهاز الجديد. تُنقل المفاتيح مباشرة ومشفّرة بلا خادم.",
+  "devices.scan.noCamera": "لا يوجد إذن لاستخدام الكاميرا. اسمح بالكاميرا من إعدادات الجهاز لقراءة رمز QR الخاص بالجهاز الجديد.",
+  "devices.scan.cameraOnly": "للأمان، يدخل الرمز هنا عبر الكاميرا فقط، والجهازان جنبًا إلى جنب. لا ترسل مفاتيحك أبدًا بناءً على رمز استلمته من شخص آخر.",
   "devices.reply.title": "ليقرأ الجهاز الجديد رمز QR هذا الآن",
   "devices.reply.qr": "رمز QR للرد على الجهاز الجديد",
   "devices.reply.prompt": "تأكد من ظهور الكلمات نفسها على {name}:",

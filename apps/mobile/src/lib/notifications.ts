@@ -22,6 +22,7 @@ import { canChirp, isQuietHour, notifyMode, type Mode } from './piuChirp';
 import { PiuCallAlert } from '../../modules/piu-voice/alert';
 import { persistNow, readPersisted } from './persist';
 import { badgeAfterOpen, nextBadgeCount } from './badgeCount';
+import { showsContent } from './notifyPreview';
 
 export type NotifyKind = NotifKey;
 
@@ -135,13 +136,25 @@ export async function requestNotificationPermission(): Promise<boolean> {
   return p.granted;
 }
 
+/**
+ * Android: tela de bloqueio ativa agora (a mesma consulta das chamadas, modules/piu-voice).
+ * `null` quando não dá para ler (sem o módulo nativo, erro): quem decide trata como bloqueado.
+ */
+function deviceLocked(): boolean | null {
+  if (Platform.OS !== 'android') return null;
+  try {
+    return PiuCallAlert.isAvailable() ? PiuCallAlert.isLocked() : null;
+  } catch {
+    return null;
+  }
+}
+
 /** Conteúdo final conforme a pré-visualização (vale também para os alertas da comunidade). */
-function present(n: NotifyInput, preview: Preview): { title: string; body: string } {
-  if (preview === 'always') return { title: n.title, body: n.body };
-  // "Desbloqueado": o sistema esconde o conteúdo na tela bloqueada (Android: canal PRIVATE;
-  // iPhone: só se as prévias do sistema estiverem em "Quando desbloqueado"). Onde não dá para
-  // garantir (web, iPhone com prévias sempre), vai o texto genérico.
-  if (preview === 'unlocked' && (Platform.OS === 'android' || (Platform.OS === 'ios' && iosPreviewsWhenUnlocked))) return { title: n.title, body: n.body };
+function present(n: NotifyInput, preview: Preview, scheduled: boolean): { title: string; body: string } {
+  // "Desbloqueado": no Android o conteúdo só sai com o aparelho desbloqueado agora (o canal PRIVATE
+  // depende do ajuste do sistema); no iPhone, só se as prévias do sistema estiverem em "Quando
+  // desbloqueado". Onde não dá para garantir, vai o texto genérico (regra em lib/notifyPreview.ts).
+  if (showsContent(preview, { os: Platform.OS, locked: deviceLocked(), scheduled, iosPreviewsWhenUnlocked })) return { title: n.title, body: n.body };
   return { title: 'Piu', body: t(HIDDEN_BODY[n.kind]) };
 }
 
@@ -186,11 +199,11 @@ async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Pro
   last = { key, at: Date.now() };
 
   const mode: Mode = notifyMode(c, critical);
-  const { title, body } = present({ ...n, critical }, c.preview);
   const data = { ...n.data, kind: n.kind };
 
   try {
     if (Platform.OS === 'web') {
+      const { title, body } = present({ ...n, critical }, c.preview, delaySec > 0);
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return null;
       setTimeout(() => {
         const w = new Notification(title, { body, tag: n.data?.href ?? n.kind, silent: mode !== 'normal' && mode !== 'piu' && mode !== 'critical', data });
@@ -200,6 +213,8 @@ async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Pro
     }
     if ((await notificationPermission()) !== 'granted') return null;
     await ensureChannels();
+    // Depois da permissão (atualiza as prévias do iPhone) e o mais perto possível de publicar.
+    const { title, body } = present({ ...n, critical }, c.preview, delaySec > 0);
     // Número no ícone: alertas críticos não contam. `badge` no conteúdo vale quando a notificação
     // chega (iPhone, inclusive a agendada); `setBadgeCountAsync` cobre o launcher do Android agora.
     const badge = countBadge ? nextBadgeCount(badgeCount, { critical }) : badgeCount;

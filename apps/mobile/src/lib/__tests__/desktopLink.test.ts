@@ -37,12 +37,27 @@ test('QR: leitura e escrita do piu-link:1?h=…&k=…&s=…&c=…', () => {
   assert.equal(certPin(o), '33:'.repeat(31) + '33');
   assert.equal(wsUrl(o), 'wss://192.168.0.10:7332');
   assert.ok(QR.startsWith(LINK_PREFIX + '1?'));
-  // Espaços em volta e ordem diferente dos parâmetros não atrapalham; nome de máquina também vale.
+  // Espaços em volta e ordem diferente dos parâmetros não atrapalham.
   const [, qs] = QR.split('?');
   const parts = qs!.split('&');
   assert.deepEqual(parseLinkQr(`  ${LINK_PREFIX}1?${[parts[3], parts[2], parts[0], parts[1]].join('&')}\n`), o);
-  assert.equal(parseLinkQr(QR.replace('192.168.0.10', 'MacBook-de-Lucas.local')).host, 'MacBook-de-Lucas.local');
   assert.equal(wsUrl(parseLinkQr(QR.replace('192.168.0.10', '[fe80::1]'))), 'wss://[fe80::1]:7332');
+});
+
+test('QR: só IP literal de rede local; nome DNS, IP público, loopback e 0.0.0.0 são recusados (QRLjacking)', () => {
+  const withHost = (h: string) => QR.replace('192.168.0.10', h);
+  // O que o desktop anuncia: o IPv4 de uma interface da máquina (privado, link-local ou CGNAT).
+  for (const h of ['10.0.0.5', '10.255.255.254', '172.16.0.1', '172.31.255.254', '192.168.1.20', '169.254.10.20', '100.64.0.1', '100.127.255.254', '[fe80::1]', '[FE80::a1b2:c3d4]', '[febf::1]', '[fc00::1]', '[fd12:3456:789a::1]'])
+    assert.equal(parseLinkQr(withHost(h)).host, h, h);
+  // Servidor de vínculo de um atacante na internet: nome DNS ou IP público.
+  for (const h of ['host-dele.com', 'MacBook-de-Lucas.local', 'localhost', '8.8.8.8', '203.0.113.7', '172.15.0.1', '172.32.0.1', '192.169.0.1', '11.0.0.1', '100.63.255.255', '100.128.0.1', '169.253.0.1', '[2001:db8::1]', '[fec0::1]', '[fe00::1]', '[::ffff:192.168.0.10]'])
+    assert.throws(() => parseLinkQr(withHost(h)), isErr('FORMAT'), h);
+  // Loopback e endereço não especificado: nunca são o computador da pessoa.
+  for (const h of ['127.0.0.1', '127.1.2.3', '0.0.0.0', '[::1]', '[::]'])
+    assert.throws(() => parseLinkQr(withHost(h)), isErr('FORMAT'), h);
+  // Formas que outro leitor de endereço entenderia diferente (octal, hexadecimal, inteiro, curta) ou IPv6 malformado.
+  for (const h of ['010.0.0.5', '192.168.0.010', '0x0a.0.0.5', '3232235530', '192.168.1', '10.0.0.256', '192.168.0.10.evil.com', '10.0.0.5.', '[fe80:::1]', '[fe80::1::2]', '[fe80:1]', '[fe80::12345]', '[fe8::1]', '[fe80::1.2.3.4]'])
+    assert.throws(() => parseLinkQr(withHost(h)), isErr('FORMAT'), h);
 });
 
 test('QR: outro QR, versão diferente, parâmetro faltando ou com tamanho errado são recusados', () => {

@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/en';
 import { call } from './call/en';
 import { lora } from './lora/en';
 import { map } from './map/en';
+import { stored } from './stored/en';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -879,6 +881,8 @@ export const dict: Dict = {
   'devices.scan.path': 'Restore → From another device',
   'devices.scan.after': '. Then read the QR it shows.',
   'devices.scan.hint': 'Point the camera at the new device’s QR. The keys go directly and encrypted, with no server.',
+  'devices.scan.noCamera': 'No camera permission. Allow the camera in the device settings to read the new device’s QR.',
+  'devices.scan.cameraOnly': 'For safety, the code can only come in through the camera here, with both devices side by side. Never send your keys from a code someone else gave you.',
   'devices.reply.title': 'Now the new device reads this QR',
   'devices.reply.qr': 'Reply QR for the new device',
   'devices.reply.prompt': 'Check that the same words appear on the {name}:',

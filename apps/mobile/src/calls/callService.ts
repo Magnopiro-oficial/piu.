@@ -7,6 +7,7 @@
 import { b64url, unb64url as fromB64url } from '../messaging/card';
 import { callKeys, newCallKeypair, voiceTag, type CallKeys } from './callCrypto';
 import { CallController } from './callController';
+import { agree } from '../protocol/suite';
 import { splitRoute, type CallRecord, type CallState, type RouteHint, type Signal } from './callMachine';
 import { VoiceLink, type Codec } from './callMedia';
 import { isLiveSignal, readCallWire, callWire, type WireCall } from './callSignals';
@@ -135,9 +136,16 @@ export class CallService {
           this.p.sendSignal(peer, callWire({ t: 'decline', callId: s.callId, reason: 'busy' }), true);
           return;
         }
+        // Chave efêmera de ordem baixa passa no formato mas não dá segredo: recusa já, sem tocar
+        // (vindo de um pedido, o aceite sairia dentro do despacho e a troca de chaves lançaria).
+        const theirPk = fromB64url(key);
+        if (!agree.valid(theirPk)) {
+          this.p.sendSignal(peer, callWire({ t: 'decline', callId: s.callId, reason: 'declined' }), true);
+          return;
+        }
         // A chave precisa estar aqui antes do despacho (o aceite do pedido sai dentro dele); se a
         // máquina não ficou com esta chamada (ocupado), ela sai na hora.
-        this.theirKey.set(s.callId, fromB64url(key));
+        this.theirKey.set(s.callId, theirPk);
         const h = this.p.liveRouteTo(peer);
         this.controller.dispatch({ type: 'incoming', callId: s.callId, peer, ...(h ? splitRoute(h) : { route: s.route }), now, requestId: s.requestId });
         if (this.controller.state.callId !== s.callId) this.theirKey.delete(s.callId);
@@ -146,7 +154,10 @@ export class CallService {
       case 'ringing': if (st.peer === peer) this.controller.dispatch({ type: 'peerRinging', callId: s.callId }); break;
       case 'accept': {
         if (st.peer !== peer || st.callId !== s.callId || !key || !this.mine || this.mine.callId !== s.callId) return;
-        this.keys = callKeys({ callId: s.callId, role: 'caller', mySk: this.mine.sk, myPk: this.mine.pk, theirPk: fromB64url(key) });
+        const keys = this.deriveKeys({ callId: s.callId, role: 'caller', mySk: this.mine.sk, myPk: this.mine.pk, theirPk: fromB64url(key) });
+        // Aceite com chave efêmera inválida: não conecta sem mídia; encerra a chamada.
+        if (!keys) { this.controller.hangup(); return; }
+        this.keys = keys;
         this.controller.dispatch({ type: 'connected', callId: s.callId, now });
         break;
       }
@@ -201,8 +212,11 @@ export class CallService {
       const theirs = this.theirKey.get(s.callId);
       if (!theirs) return;
       const kp = newCallKeypair();
-      this.keys = callKeys({ callId: s.callId, role: 'callee', mySk: kp.sk, myPk: kp.pk, theirPk: theirs });
+      const keys = this.deriveKeys({ callId: s.callId, role: 'callee', mySk: kp.sk, myPk: kp.pk, theirPk: theirs });
       kp.sk.fill(0);
+      // Não deu segredo (o convite já filtra; isto é a rede de segurança): não manda o aceite e encerra.
+      if (!keys) { this.controller.hangup(); return; }
+      this.keys = keys;
       key = b64url(kp.pk);
     } else if (s.t === 'request') {
       putCapped(this.outgoing, s.requestId, { peer, until: this.p.now() + REQUEST_TTL_MS }, MAX_REQUESTS);
@@ -211,6 +225,12 @@ export class CallService {
     const ok = this.p.sendSignal(peer, callWire(s, key), isLiveSignal(s));
     // A oferta nem saiu (sem sessão com o contato ou sem vizinho): termina já, sem esperar 45 s à toa.
     if (!ok && s.t === 'invite') this.controller.dispatch({ type: 'unreachable', callId: s.callId, now: this.p.now() });
+  }
+
+  /** Troca de chaves que não lança: `null` se a chave do outro for inválida (dado de contato não é confiável). */
+  private deriveKeys(o: Parameters<typeof callKeys>[0]): CallKeys | null {
+    if (!agree.valid(o.theirPk)) return null;
+    try { return callKeys(o); } catch { return null; }
   }
 
   private startMedia(s: CallState) {

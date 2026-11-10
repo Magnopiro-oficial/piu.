@@ -2062,8 +2062,12 @@ export class Messenger {
     if (changed) this.o.events.changed?.();
   }
 
-  /** Bytes que chegaram de um vizinho. */
+  /** Bytes que chegaram de um vizinho. Dado de par não é confiável: nenhuma exceção sai daqui para o transporte. */
   receive(peerId: string, bytes: Uint8Array) {
+    try { return this.receiveUnsafe(peerId, bytes); } catch { this.rx = null; return { status: 'rejected' as const, reason: 'erro ao processar' }; }
+  }
+
+  private receiveUnsafe(peerId: string, bytes: Uint8Array) {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isProofV2Frame(bytes)) { this.onProofsV2(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }

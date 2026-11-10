@@ -9,6 +9,7 @@ import { linkDesktopPtBR } from './linkDesktop/pt-BR';
 import { callPtBR } from './call/pt-BR';
 import { loraPtBR } from './lora/pt-BR';
 import { mapPtBR } from './map/pt-BR';
+import { storedPtBR } from './stored/pt-BR';
 
 export const ptBR = {
   ...piu11PtBR,
@@ -17,6 +18,7 @@ export const ptBR = {
   ...callPtBR,
   ...loraPtBR,
   ...mapPtBR,
+  ...storedPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',
@@ -907,6 +909,8 @@ export const ptBR = {
   'devices.scan.path': 'Restaurar → De outro aparelho',
   'devices.scan.after': '. Depois leia o QR que aparece nele.',
   'devices.scan.hint': 'Aponte a câmera para o QR do aparelho novo. As chaves vão direto e cifradas, sem servidor.',
+  'devices.scan.noCamera': 'Sem permissão para a câmera. Libere a câmera nos ajustes do aparelho para ler o QR do aparelho novo.',
+  'devices.scan.cameraOnly': 'Por segurança, aqui o código só entra pela câmera, com os dois aparelhos lado a lado. Nunca envie as suas chaves a partir de um código recebido de outra pessoa.',
   'devices.reply.title': 'Agora o aparelho novo lê este QR',
   'devices.reply.qr': 'QR de resposta para o aparelho novo',
   'devices.reply.prompt': 'Confira se as mesmas palavras aparecem no {name}:',

@@ -1,7 +1,9 @@
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { usePersisted } from '../lib/persist';
+import { dailyNodeName, newNodeNameSecret } from '../lib/nodeName';
 import { loraMedia } from '../lib/piuLora';
+import { createStopGate } from '../lib/stopGate';
 import type { MediaGrants } from '../transport/grants';
 import { askTransportPermissionsAgain, DISCOVERY_INTERVAL_SEC, getTransport, requestTransportPermissions, SERVICE_ID, type Peer, type TransportKind, type TransportState } from '../transport';
 import type { LanStatus } from '../transport/lan/controller';
@@ -27,7 +29,7 @@ interface TransportCtx {
   /** Pede as permissões de novo (ou abre os ajustes do app) e religa o transporte com o que vier. */
   askPermission(): Promise<void>;
   peers: Peer[];
-  /** Identificador curto deste nó, anunciado aos vizinhos (não é a identidade pública). */
+  /** Identificador curto deste nó, anunciado aos vizinhos (não é a identidade pública). Troca a cada dia UTC. */
   nodeName: string;
 }
 
@@ -57,7 +59,8 @@ export interface LanCtx extends LanStatus {
 
 const LanContext = createContext<LanCtx | null>(null);
 
-const randomNodeName = () => 'piu-' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
+/** Segredo salvo que não serve (formato errado) é trocado por um novo. */
+const validNameSecret = (s: string) => (typeof s === 'string' && /^[0-9a-f]{64}$/.test(s) ? s : newNodeNameSecret());
 
 /**
  * Liga o transporte P2P depois do onboarding, enquanto Bluetooth LE ou Wi-Fi Direct estiverem ativos
@@ -69,8 +72,16 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const { nodeKeyFor } = useKeys();
   const battery = useRelayBattery(userBattery); // modo nó do celular: pausa em 30% no mínimo
   const { bat } = useSettings();
-  const [nodeName] = usePersisted('transport.nodeName', randomNodeName);
+  // Nome anunciado em claro (BLE/Nearby): não é mais fixo. Sai de um segredo local e do dia UTC
+  // (lib/nodeName.ts), como a chave do nó; o segredo fica só no aparelho. Virou o dia, o transporte religa.
+  const [nameSecret] = usePersisted('transport.nameSecret', newNodeNameSecret, validNameSecret);
+  const [nameDay, setNameDay] = useState(() => nodeDayOf(Date.now()));
+  useEffect(() => { const t = setInterval(() => setNameDay(nodeDayOf(Date.now())), 60_000); return () => clearInterval(t); }, []);
+  const nodeName = useMemo(() => dailyNodeName(nameSecret, nameDay), [nameSecret, nameDay]);
   const transport = useMemo(getTransport, []);
+  // Religar (nome novo, outro Wi-Fi): o start espera o stop anterior terminar (lib/stopGate.ts).
+  const stops = useMemo(createStopGate, []);
+  const lanStops = useMemo(createStopGate, []);
   const [state, setState] = useState<TransportState>('off');
   const [reason, setReason] = useState<string>();
   const [permission, setPermission] = useState<TransportCtx['permission']>('unknown');
@@ -117,12 +128,13 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const wifiIp = wifi?.ip ?? null;
   useEffect(() => {
     if (!lan || !lanWant.on || !nodeKeyFor) return;
+    let cancelled = false;
     // Chave técnica do nó do dia (gira à meia-noite UTC, como a do mensageiro): conferida de hora em hora.
-    void lan.start({ node: nodeKeyFor(nodeDayOf(Date.now())), name: nodeName, relay: relayRef.current }).catch(() => {});
+    void lanStops.idle().then(() => { if (!cancelled) return lan.start({ node: nodeKeyFor(nodeDayOf(Date.now())), name: nodeName, relay: relayRef.current }); }).catch(() => {});
     const t = setInterval(() => lan.setNode(nodeKeyFor(nodeDayOf(Date.now()))), 3_600_000);
     // Outro Wi-Fi (IP novo) religa: os soquetes ficam presos à rede em que foram abertos.
-    return () => { clearInterval(t); void lan.stop(); };
-  }, [lan, lanWant.on, nodeKeyFor, nodeName, wifiIp]);
+    return () => { cancelled = true; clearInterval(t); lanStops.stop(() => lan.stop()); };
+  }, [lan, lanStops, lanWant.on, nodeKeyFor, nodeName, wifiIp]);
   // Modo nó pausado (bateria/tomada): anúncio e handshake dizem "não retransmito".
   useEffect(() => { lan?.setRelay(relayNow); }, [lan, relayNow]);
   const lanLow = lanLowPower({ level, charging, limitPct: battery });
@@ -182,9 +194,11 @@ export function TransportProvider({ children }: { children: ReactNode }) {
       setPermission(g.ble && g.nearby ? 'granted' : g.ble || g.nearby ? 'partial' : 'denied');
       if (!usable) { setState('unavailable'); setReason(g.ble ? 'Permissão de dispositivos Wi-Fi por perto negada (Wi-Fi Direct). Ligue o Bluetooth LE na aba Rede.' : 'Permissões de Bluetooth negadas.'); return; }
       transport.setMediaEnabled?.({ ble: tx.ble && g.ble, nearby: tx.direct && g.nearby, ...loraMedia(loraMode, tx.lora) });
+      await stops.idle();
+      if (cancelled) return;
       await transport.start(nodeName, SERVICE_ID).catch((err: unknown) => { setState('unavailable'); setReason(String((err as Error)?.message ?? err)); });
     })();
-    return () => { cancelled = true; void transport.stop(); };
+    return () => { cancelled = true; stops.stop(() => transport.stop()); };
   }, [enabled, nodeName, transport, permEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
   const askPermission = useCallback(async () => {
     const g = await askTransportPermissionsAgain();

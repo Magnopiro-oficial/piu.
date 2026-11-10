@@ -87,15 +87,18 @@ export class NodeRegistry {
     reg.stats.operators = roots.size;
     // Operador admitido continua sendo da classe `node`, mesmo que também tenha registro de celular.
     for (const [pk, w] of phones) { try { const k = pkHex(pk); if (!roots.has(k)) reg.phones.set(k, w); } catch { /* malformado */ } }
-    // Limite por arquivo e sem repetição (pela assinatura) ANTES de conferir: arquivo gigante ou
-    // repetido não custa verificação de assinatura (revisão do modo nó, item 5).
+    // Limite por arquivo e sem repetição ANTES de conferir: arquivo gigante ou repetido não custa
+    // verificação de assinatura (revisão do modo nó, item 5). A repetição é pelo certificado INTEIRO
+    // (campos, assinatura e cadeia), não só pela assinatura: uma cópia com a mesma assinatura e outro
+    // campo trocado (ou sem a cadeia), lida antes, não ocupa o lugar do certificado honesto.
     const certs: CertJson[] = [];
-    const seenSig = new Set<string>();
+    const seenCert = new Set<string>();
     for (const f of files) for (const c of Array.isArray(f?.certs) ? f.certs.slice(0, MAX_CERTS_PER_FILE) : []) {
-      // Forma conferida ANTES da deduplicação: uma cópia com `issuedAt` + 2^32 (mesma assinatura) não pode
-      // ocupar o lugar do certificado honesto (H-1).
-      if (typeof c?.sig !== 'string' || !isU32(c.issuedAt) || seenSig.has(c.sig)) continue;
-      seenSig.add(c.sig);
+      // Forma conferida ANTES da deduplicação (H-1: cópia com `issuedAt` + 2^32).
+      if (typeof c?.sig !== 'string' || !isU32(c.issuedAt)) continue;
+      const k = JSON.stringify([c.operatorPk, c.nodePk, c.issuedAt, c.sig, Array.isArray(c.chain) ? c.chain.slice(0, MAX_CHAIN) : []]);
+      if (seenCert.has(k)) continue;
+      seenCert.add(k);
       certs.push(c);
     }
 

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import {
-  externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, rendererFileFor, rendererMime, rendererOriginOf,
+  exportBackupAfterReauth, externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, rendererFileFor, rendererMime, rendererOriginOf,
 } from '../src/main/security';
 import { join } from 'node:path';
 
@@ -99,6 +99,25 @@ test('M-01: mostrar a frase pede Touch ID quando há; sem Touch ID, confirmaçã
   assert.deepEqual(calls.splice(0), ['confirm', 'confirm', 'confirm']);
   // Erro na própria confirmação também recusa (falha fechada).
   assert.equal(await reauthForPhrase({ ...deps({ platform: 'win32', touch: false }), confirm: async () => { throw new Error('sem janela'); } }), false);
+});
+
+test('M-01: exportar o backup da identidade passa pela mesma reautenticação da frase; recusa não cifra nem grava', async () => {
+  const calls: string[] = [];
+  const deps = (o: { reauth: boolean | Error; path: string | null }) => ({
+    reauth: async () => { calls.push('reauth'); if (o.reauth instanceof Error) throw o.reauth; return o.reauth; },
+    choosePath: async () => { calls.push('path'); return o.path; },
+    encrypt: async () => { calls.push('encrypt'); return 'cifrado'; },
+    write: async (path: string, data: string) => { calls.push(`write:${path}:${data}`); },
+  });
+  await assert.rejects(exportBackupAfterReauth(deps({ reauth: false, path: '/tmp/a.piu' })), /recusada/);
+  assert.deepEqual(calls.splice(0), ['reauth'], 'sem reautenticação: nem diálogo de salvar, nem arquivo');
+  // Erro na reautenticação também recusa (falha fechada).
+  await assert.rejects(exportBackupAfterReauth(deps({ reauth: new Error('sem janela'), path: '/tmp/a.piu' })), /recusada/);
+  assert.deepEqual(calls.splice(0), ['reauth']);
+  assert.equal(await exportBackupAfterReauth(deps({ reauth: true, path: null })), 'cancelled');
+  assert.deepEqual(calls.splice(0), ['reauth', 'path'], 'cancelar o salvar não lê a frase');
+  assert.equal(await exportBackupAfterReauth(deps({ reauth: true, path: '/tmp/a.piu' })), 'saved');
+  assert.deepEqual(calls.splice(0), ['reauth', 'path', 'encrypt', 'write:/tmp/a.piu:cifrado']);
 });
 
 test('PIU_PROFILE: perfil separado (pasta de dados e nome) só com nome curto e seguro; sem ele, o perfil normal', () => {

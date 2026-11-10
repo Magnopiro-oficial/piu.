@@ -165,7 +165,7 @@ export function recordFirstSeen(
 
 // ── leitura dos arquivos ────────────────────────────────────
 
-/** Registros (por operador, sem repetição pela assinatura), saídas (por `regKey`), avais e retiradas, com limites por arquivo. */
+/** Registros (por operador, sem repetição pela assinatura já conferida), saídas (por `regKey`), avais e retiradas, com limites por arquivo. */
 export function collectPhones(files: readonly RegistryFile[]) {
   const regs = new Map<string, PhoneRegistrationJson[]>();
   const regSigs = new Set<string>();
@@ -177,15 +177,16 @@ export function collectPhones(files: readonly RegistryFile[]) {
   for (const f of files) {
     for (const r of Array.isArray(f?.phones) ? f.phones.slice(0, PHONE_FILE_LIMITS.phones) : []) {
       if (typeof r?.sig !== 'string' || regSigs.has(r.sig)) continue;
-      regSigs.add(r.sig);
       if (!verifyPhoneRegistration(r)) { bad.add(typeof r.operatorPk === 'string' ? r.operatorPk : '?'); continue; }
+      // Só depois de conferir: cópia com a mesma assinatura e campo trocado não ocupa o lugar do honesto.
+      regSigs.add(r.sig);
       const list = regs.get(r.operatorPk);
       if (list) list.push(r); else regs.set(r.operatorPk, [r]);
     }
     for (const x of Array.isArray(f?.exits) ? f.exits.slice(0, PHONE_FILE_LIMITS.exits) : []) {
       if (typeof x?.sig !== 'string' || exitSigs.has(x.sig)) continue;
-      exitSigs.add(x.sig);
       if (!verifyPhoneExit(x)) continue;
+      exitSigs.add(x.sig);
       const k = regKey({ operatorPk: x.operatorPk, bond: { txHash: x.txHash } });
       const cur = exitEvents.get(k);
       if (!cur || x.at > cur.at || (x.at === cur.at && x.kind === 'exit')) exitEvents.set(k, { kind: x.kind, at: x.at });

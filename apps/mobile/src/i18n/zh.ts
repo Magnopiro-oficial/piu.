@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/zh';
 import { call } from './call/zh';
 import { lora } from './lora/zh';
 import { map } from './map/zh';
+import { stored } from './stored/zh';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': '返回',
   'common.close': '关闭',
   'common.cancel': '取消',
@@ -880,6 +882,8 @@ export const dict: Dict = {
   "devices.scan.path": "恢复 → 从另一台设备",
   "devices.scan.after": "。然后扫描该设备显示的二维码。",
   "devices.scan.hint": "将相机对准新设备二维码。密钥经加密直接传输，不经过服务器。",
+  "devices.scan.noCamera": "没有相机权限。请在设备设置中允许使用相机，以读取新设备的二维码。",
+  "devices.scan.cameraOnly": "为了安全，这里的代码只能通过相机读取，两台设备需放在一起。切勿根据他人发来的代码发送您的密钥。",
   "devices.reply.title": "现在用新设备扫描此二维码",
   "devices.reply.qr": "给新设备的回复二维码",
   "devices.reply.prompt": "请确认{name}上显示相同词语：",

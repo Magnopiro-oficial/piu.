@@ -5,7 +5,7 @@ import { buildTransferKeepAlive } from '../extrinsic';
 import { extrinsicHash, fromHex, LunesRpc } from '../lunesRpc';
 import { withWalletKey } from '../walletKey';
 import {
-  isActiveWalletTransfer, isWalletTransferRecord, LUNES_GENESIS_HASH, prepareWalletTransfer, readWalletExecution,
+  isActiveWalletTransfer, isWalletTransferRecord, LUNES_GENESIS_HASH, prepareWalletTransfer, readBlockExecution, readWalletExecution,
   retryWalletTransfer, sendWalletTransfer, trackWalletTransfer, WalletTransferError, type WalletQuote, type WalletTransferRecord,
 } from '../walletTransfer';
 import { accountInfoHex, ALICE_57, fakeSockets, hashOf } from './lunesFake';
@@ -176,6 +176,23 @@ test('prova indexer: aceita boolean estrito e bloco/índice exatos, recusa hash 
   data.extrinsic.success = 'true'; assert.equal((await readWalletExecution(r, block, { fetch: fetcher })).ok, null);
   data.extrinsic.success = true; data.block.hash = hashOf('outra cadeia'); assert.equal((await readWalletExecution(r, block, { fetch: fetcher })).ok, null);
   data.block.hash = block.hash; data.extrinsic.extrinsicIndex = 1; assert.equal((await readWalletExecution(r, block, { fetch: fetcher })).ok, null);
+});
+
+test('prova indexer só pelo bloco (pedido de pagamento): mesmo resultado de readWalletExecution, sem registro da carteira', async () => {
+  const block = { number: 101, hash: hashOf('block 101'), index: 2 };
+  const data = { extrinsic: { id: '101-2', blockNumber: '101', extrinsicIndex: 2, success: true as unknown }, block: { id: '101', number: '101', hash: block.hash } };
+  const fetcher: typeof fetch = async (_url, init) => {
+    const body = JSON.parse(init?.body as string); assert.deepEqual(body.variables, { id: '101-2', block: '101' });
+    return new Response(JSON.stringify({ data }), { status: 200 });
+  };
+  assert.deepEqual(await readBlockExecution(block, { fetch: fetcher }), { ok: true });
+  // Hash do bloco em maiúsculas (como o pagador pode colar) confere igual.
+  assert.deepEqual(await readBlockExecution({ ...block, hash: block.hash.toUpperCase().replace('0X', '0x') }, { fetch: fetcher }), { ok: true });
+  data.extrinsic.success = false; assert.equal((await readBlockExecution(block, { fetch: fetcher })).ok, false);
+  data.extrinsic.success = true; data.block.hash = hashOf('outra cadeia'); assert.equal((await readBlockExecution(block, { fetch: fetcher })).ok, null);
+  data.block.hash = block.hash; data.extrinsic.extrinsicIndex = 1; assert.equal((await readBlockExecution(block, { fetch: fetcher })).ok, null);
+  const offline: typeof fetch = async () => { throw new Error('sem rede'); };
+  assert.equal((await readBlockExecution(block, { fetch: offline })).ok, null);
 });
 
 test('guarda de sessão impede assinar após perda antes ou durante biometria', async t => {

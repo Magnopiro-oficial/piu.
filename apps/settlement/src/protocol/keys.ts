@@ -56,5 +56,9 @@ export const deriveWalletSeed = (seed: Uint8Array) => kdf(seed, ROOT_SALT, 'wall
 
 export const toPublic = (i: Identity): PublicIdentity => ({ signPk: i.signPk, agreePk: i.agreePk, binding: i.binding });
 
-/** Confere se a chave de acordo pertence mesmo à chave de assinatura (evita troca de chave por terceiros). */
-export const verifyBinding = (p: PublicIdentity) => sign.verify(p.binding, bindingMessage(p.agreePk), p.signPk);
+/**
+ * Confere se a chave de acordo pertence mesmo à chave de assinatura (evita troca de chave por terceiros).
+ * Chave de acordo inválida ou de ordem baixa não confere, mesmo assinada pelo dono: com ela o acordo
+ * de chaves lança, e uma identidade assim derrubaria quem a recebesse (auditoria 2026-11-09, achado 1).
+ */
+export const verifyBinding = (p: PublicIdentity) => agree.valid(p.agreePk) && sign.verify(p.binding, bindingMessage(p.agreePk), p.signPk);

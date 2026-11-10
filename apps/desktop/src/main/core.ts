@@ -417,6 +417,7 @@ export class PiuCore {
 
   /** Só chamar depois da reautenticação (main.ts → security.ts `reauthForPhrase`). */
   revealPhrase() { return this.vault.getPhrase(); }
+  /** Idem: só depois da reautenticação (main.ts → security.ts `exportBackupAfterReauth`). */
   exportIdentityBackup(password: string) { return createIdentityBackup(this.vault, password); }
   suggestWords(prefix: string) { return suggestWords(prefix, 6); }
 

@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/hi';
 import { call } from './call/hi';
 import { lora } from './lora/hi';
 import { map } from './map/hi';
+import { stored } from './stored/hi';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'वापस',
   'common.close': 'बंद करें',
   'common.cancel': 'रद्द करें',
@@ -945,6 +947,8 @@ export const dict: Dict = {
   "devices.scan.path": "बहाल करें → दूसरे डिवाइस से",
   "devices.scan.after": "। फिर उस पर दिखा QR पढ़ें।",
   "devices.scan.hint": "कैमरा नए डिवाइस के QR पर रखें। कुंजियाँ सीधे, एन्क्रिप्ट होकर, बिना सर्वर के जाती हैं।",
+  "devices.scan.noCamera": "कैमरे की अनुमति नहीं है। नए डिवाइस का QR पढ़ने के लिए डिवाइस की सेटिंग में कैमरे की अनुमति दें।",
+  "devices.scan.cameraOnly": "सुरक्षा के लिए, यहाँ कोड केवल कैमरे से ही लिया जाता है, दोनों डिवाइस पास-पास रखकर। किसी और से मिले कोड के आधार पर अपनी कुंजियाँ कभी न भेजें।",
   "devices.reply.title": "अब नया डिवाइस यह QR पढ़े",
   "devices.reply.qr": "नए डिवाइस के लिए जवाब QR",
   "devices.reply.prompt": "जाँचें कि {name} पर यही शब्द हैं:",
