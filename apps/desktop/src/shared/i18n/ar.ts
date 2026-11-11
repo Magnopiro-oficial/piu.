@@ -806,7 +806,7 @@ export const dict: FullDict = {
   'guardian.pick.appDesc': "يوصل التطبيق لمن لا يملكه",
   'guardian.pick.gatewayDesc': "مع الإنترنت فقط · مُطفأ افتراضيًا",
   'guardian.pick.gatewayNoNet': "يتطلب الإنترنت: لم يجده الاختبار",
-  'guardian.pick.gatewayAsk': "متوقفة افتراضيًا. عند تشغيلها يختبر Piu الإنترنت: يفتح اتصالًا مع 1.1.1.1 و9.9.9.9 ثم يغلقه؛ لا تُرسَل أي بيانات من Piu.",
+  'guardian.pick.gatewayAsk': "مُطفأ افتراضيًا. عند تشغيله يختبر Piu الإنترنت: يفتح اتصالًا مع 1.1.1.1 و9.9.9.9 ثم يغلقه؛ لا تُرسَل أي بيانات من Piu.",
   'guardian.pick.days': "الأيام",
   'guardian.pick.maxNote': "صلاحية الرسالة 7 أيام كحد أقصى في الشبكة المتداخلة؛ الحفظ لمدة أطول لا يفيد.",
   'guardian.pick.energy': "الطاقة",

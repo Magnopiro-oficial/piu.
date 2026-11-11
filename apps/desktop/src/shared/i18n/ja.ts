@@ -806,7 +806,7 @@ export const dict: FullDict = {
   'guardian.pick.appDesc': '持っていない人にアプリを配布',
   'guardian.pick.gatewayDesc': 'インターネットがある場合のみ · 初期設定ではオフ',
   'guardian.pick.gatewayNoNet': 'インターネットが必要です：テストで見つかりませんでした',
-  'guardian.pick.gatewayAsk': 'デフォルトではオフです。オンにすると、Piu はインターネットをテストします：1.1.1.1 と 9.9.9.9 への接続を開いて閉じるだけで、Piu のデータは一切送信されません。',
+  'guardian.pick.gatewayAsk': '初期設定ではオフです。オンにすると、Piu はインターネットをテストします：1.1.1.1 と 9.9.9.9 への接続を開いて閉じるだけで、Piu のデータは一切送信されません。',
   'guardian.pick.days': '日数',
   'guardian.pick.maxNote': 'メッセージがメッシュ上で有効なのは最長 7 日です。それ以上保存しても意味がありません。',
   'guardian.pick.energy': '電力',

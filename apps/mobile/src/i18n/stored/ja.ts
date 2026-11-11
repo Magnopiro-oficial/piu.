@@ -11,7 +11,7 @@ export const stored: Dict = {
   'stored.sys.nearThem': '{name}さんが「近く」の招待を承認しました。チャットはエンドツーエンドで暗号化されています。',
   'stored.sys.nearSomeone': '相手が「近く」の招待を承認しました。チャットはエンドツーエンドで暗号化されています。',
   'stored.sys.revoked': 'この連絡先は紛失または侵害された端末を無効にしました。新しいメッセージを信頼する前にセキュリティコードを直接確認してください。',
-  'stored.sys.leftChannel': 'このチャンネルには参加していません。',
+  'stored.sys.leftChannel': 'このチャンネルにはもう参加していません。',
   'stored.sys.removed': '削除されました。鍵が変更されたため、新しい内容は読めません。',
   'stored.sys.groupRevoked': '端末を無効にしました。グループの鍵が変更されました。',
   'stored.sys.group': 'エンドツーエンド暗号化されたグループです。メンバー一覧にいる人だけが鍵を持っています。',

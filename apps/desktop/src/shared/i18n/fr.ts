@@ -815,7 +815,7 @@ export const dict: FullDict = {
   'guardian.pick.appDesc': 'Fournit l’app à qui ne l’a pas',
   'guardian.pick.gatewayDesc': 'Seulement avec internet · désactivé par défaut',
   'guardian.pick.gatewayNoNet': 'Nécessite internet : le test n’en a pas trouvé',
-  'guardian.pick.gatewayAsk': 'Désactivée par défaut. À l’activation, Piu teste internet : il ouvre et ferme une connexion vers 1.1.1.1 et 9.9.9.9 ; aucune donnée de Piu n’est envoyée.',
+  'guardian.pick.gatewayAsk': 'Désactivé par défaut. À l’activation, Piu teste internet : il ouvre et ferme une connexion vers 1.1.1.1 et 9.9.9.9 ; aucune donnée de Piu n’est envoyée.',
   'guardian.pick.days': 'Jours',
   'guardian.pick.maxNote': 'Un message vaut au maximum 7 jours sur le maillage ; garder plus longtemps ne servirait à rien.',
   'guardian.pick.energy': 'Énergie',

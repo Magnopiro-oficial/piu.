@@ -168,17 +168,42 @@ test('limite: 1 alerta a cada 10 min e no máximo 3 ativos por membro', () => {
   b.m.publishAlert(com.id, draft);
   net.run();
   assert.equal(a.m.communityAlerts(com.id).filter(x => x.active).length, 3);
-  // Do lado de quem recebe, o mesmo limite: um 4º ativo do mesmo autor é recusado.
+  // Do lado de quem recebe, o mesmo limite: o que passa dele fica guardado oculto (fora da lista).
   const book = new AlertBook();
   const roster = [{ id: 'piu:b', role: 'member' as const }];
   const mk = (i: number, at: number) => ({ id: i.toString(16).padStart(32, '0'), community: 'c', author: 'piu:b', authorName: 'B', cat: 'outro' as const, sev: 'info' as const, title: 't', text: '', area: '', at, until: at + 24 * H });
   assert.equal(book.addAlert(mk(1, T0), T0, roster), 'ok');
-  assert.equal(book.addAlert(mk(2, T0 + 60), T0 + 60, roster), 'rejected', '10 min');
+  assert.equal(book.addAlert(mk(2, T0 + 60), T0 + 60, roster), 'hidden', '10 min');
+  assert.equal(book.view(mk(2, 0).id, roster, 'piu:a', T0 + 60), null);
   assert.equal(book.addAlert(mk(3, T0 + 600), T0 + 600, roster), 'ok');
   assert.equal(book.addAlert(mk(4, T0 + 1200), T0 + 1200, roster), 'ok');
-  assert.equal(book.addAlert(mk(5, T0 + 1800), T0 + 1800, roster), 'rejected', '3 ativos');
+  assert.equal(book.addAlert(mk(5, T0 + 1800), T0 + 1800, roster), 'hidden', '3 ativos');
+  assert.equal(book.view(mk(5, 0).id, roster, 'piu:a', T0 + 1800), null);
   assert.equal(book.addAlert(mk(6, T0 + 1800), T0 + 1800, [{ id: 'piu:x', role: 'admin' }]), 'rejected', 'autor fora da comunidade');
   assert.equal(book.addAlert({ ...mk(7, T0 + 3 * H), at: T0 + 3 * H }, T0, roster), 'rejected', 'relógio adiantado demais');
+});
+
+test('encerramento que chega depois: o alerta oculto aparece e notifica uma vez', () => {
+  const { net, a, b, c, com } = vila();
+  net.clock = T0 + H;
+  // Beto publicou A1, A2 e A3, encerrou A1 e publicou A4; para Caio tudo chega fora de ordem.
+  const g = a.m.getGroup(com.id)!;
+  const seal = (body: Uint8Array, at: number) => sealGroup({ from: b.ids.public, group: groupKeyOf(g), type: MsgType.Text, body, now: at, ttlSec: 24 * H }).bytes;
+  const id = (k: number) => k.toString(16).padStart(32, 'b');
+  const alert = (k: number, at: number) => seal(encodeAlertPayload({ kind: 'alert', i: id(k), cat: 'agua', sev: 'grave', title: `A${k}`, text: '', area: '', dur: 24 * H }), at);
+  const close = seal(encodeAlertPayload({ kind: 'close', i: id(9), alert: id(1) }), T0 + 40 * 60);
+  const notified = () => c.log.alerts.filter(([, n]) => n).map(([v]) => v.title);
+  for (const [k, at] of [[2, T0 + 15 * 60], [1, T0], [3, T0 + 30 * 60], [4, T0 + 50 * 60]] as const) c.m.receive('Ana', alert(k, at));
+  // Sem o encerramento, o A4 passa do limite: oculto e sem notificação.
+  assert.equal(c.m.communityAlert(id(4)), null);
+  assert.deepEqual(c.m.communityAlerts(com.id).map(v => v.title).sort(), ['A1', 'A2', 'A3']);
+  assert.ok(!notified().includes('A4'));
+  c.m.receive('Ana', close);
+  assert.equal(c.m.communityAlert(id(4))?.active, true);
+  assert.equal(c.m.communityAlert(id(1))?.status, 'closed');
+  assert.equal(notified().filter(t => t === 'A4').length, 1, 'notifica quando passa a valer');
+  c.m.tick();
+  assert.equal(notified().filter(t => t === 'A4').length, 1, 'uma vez só');
 });
 
 test('voto de quem não é membro é ignorado', () => {

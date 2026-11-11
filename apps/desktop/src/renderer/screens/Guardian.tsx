@@ -15,6 +15,7 @@ import { type CSSProperties, type ReactNode, useCallback, useEffect, useMemo, us
 import { DAYS_OPTIONS, fmtDays, fmtStorage, type GuardianLevel, type GuardianNetwork, type GuardianState, type GuardianTest, levelName, levelSummary, STORAGE_OPTIONS_MB } from '../../shared/guardian';
 import icon192 from '../brand/icon-192.png';
 import { fmtBytes } from '../format';
+import { ProbeButton, probeGateway } from '../guardianGateway';
 import { fmtNumber, t as tNow, useT } from '../i18n';
 import { type DialogSpec, F, FM, motionOff, Sym } from '../ui';
 import { Switch46 } from './Updates';
@@ -234,18 +235,17 @@ function Seg<T extends string | number>({ value, opts, onChange, label: aria }: 
  * E4b: radio dos níveis; Gateway é um papel a mais (caixa), só com internet.
  * O Piu só consulta fora da rede quando a pessoa liga o gateway: a linha diz antes o que será consultado
  * (1.1.1.1 e 9.9.9.9, só abrir e fechar a conexão) e o gateway só fica marcado se o teste achar internet.
+ * `probing` fica com a tela de fora: Salvar/Continuar esperam o teste acabar.
  */
-function LevelPicker({ d, set, apk }: { d: Draft; set: (p: Partial<Draft>) => void; apk: GuardianState['apk'] }) {
+function LevelPicker({ d, set, apk, probing, setProbing }: { d: Draft; set: (p: Partial<Draft>) => void; apk: GuardianState['apk']; probing: boolean; setProbing: (b: boolean) => void }) {
   const t = useT();
-  const [probing, setProbing] = useState(false);
   const [noNet, setNoNet] = useState(false);
+  const live = useRef(true);
+  useEffect(() => { live.current = true; return () => { live.current = false; setProbing(false); }; }, [setProbing]);
   const toggleGateway = async () => {
-    if (d.gateway) { set({ gateway: false }); return; }
     if (probing) return;
-    setProbing(true);
-    try { const ok = await window.piu.guardianTestInternet(); setNoNet(!ok); if (ok) set({ gateway: true }); }
-    catch { setNoNet(true); }
-    finally { setProbing(false); }
+    if (d.gateway) { set({ gateway: false }); return; }
+    await probeGateway({ test: () => window.piu.guardianTestInternet(), alive: () => live.current, setProbing, setNoNet, enable: () => set({ gateway: true }) });
   };
   const Row = ({ k, title, desc, disabled, check, first }: { k: GuardianLevel | 'gateway'; title: string; desc: ReactNode; disabled?: boolean; check?: boolean; first?: boolean }) => {
     const on = k === 'gateway' ? d.gateway : d.level === k;
@@ -299,6 +299,7 @@ function Wizard({ s, hostname, onCancel, onActivated, toast }: { s: GuardianStat
   const [test, setTest] = useState<GuardianTest | null>(null);
   const [d, setD] = useState<Draft>({ level: 'guardian', storageMB: 512, days: 7, gateway: false, name: `Piu · ${hostname}`.slice(0, 40) });
   const [busy, setBusy] = useState(false);
+  const [probing, setProbing] = useState(false);
   const set = useCallback((p: Partial<Draft>) => setD(x => ({ ...x, ...p })), []);
   useEffect(() => { if (step === 2) void window.piu.guardianNetwork().then(setNet).catch(() => setNet(null)); }, [step]);
   const activate = async () => {
@@ -344,8 +345,8 @@ function Wizard({ s, hostname, onCancel, onActivated, toast }: { s: GuardianStat
       )}
       {step === 3 && <TestStep net={net} test={test} setTest={setTest} onBack={() => setStep(2)} onDone={() => setStep(4)} />}
       {step === 4 && (
-        <Page title={t('guardian.howMuch')} actions={<><button className="h-bg2" onClick={() => setStep(3)} style={btnGhost}>{t('common.back')}</button><button className="a-97" onClick={() => setStep(5)} style={btnInk}>{t('common.continue')}</button></>}>
-          <LevelPicker d={d} set={set} apk={s.apk} />
+        <Page title={t('guardian.howMuch')} actions={<><button className="h-bg2" onClick={() => setStep(3)} style={btnGhost}>{t('common.back')}</button><ProbeButton probing={probing} className="a-97" onClick={() => setStep(5)} style={btnInk}>{t('common.continue')}</ProbeButton></>}>
+          <LevelPicker d={d} set={set} apk={s.apk} probing={probing} setProbing={setProbing} />
         </Page>
       )}
       {step === 5 && (
@@ -536,15 +537,17 @@ function EditLevel({ s, onDone, toast }: { s: GuardianState; onDone: () => void;
   const t = useT();
   const p = s.point!;
   const [d, setD] = useState<Draft>({ level: p.level, storageMB: p.storageMB, days: p.days, gateway: p.gateway, name: p.name });
+  const [probing, setProbing] = useState(false);
   // Abrir esta tela não testa nada fora da rede: o teste de internet só roda se a pessoa ligar o gateway.
   const save = async () => {
+    if (probing) return;
     try { await window.piu.guardianUpdate({ name: d.name, level: d.level, storageMB: d.storageMB, days: d.days, gateway: d.gateway }); toast(tNow('guardian.toast.saved'), 'tune'); onDone(); }
     catch (e) { toast((e as Error).message, 'error'); }
   };
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
-      <Page title={t('guardian.howMuch')} sub={`${p.name} · ${p.network.label}`} actions={<><button className="h-bg2" onClick={onDone} style={btnGhost}>{t('common.back')}</button><button className="a-97" onClick={() => void save()} style={btnInk}>{t('common.save')}</button></>}>
-        <LevelPicker d={d} set={x => setD(v => ({ ...v, ...x }))} apk={s.apk} />
+      <Page title={t('guardian.howMuch')} sub={`${p.name} · ${p.network.label}`} actions={<><button className="h-bg2" onClick={onDone} style={btnGhost}>{t('common.back')}</button><ProbeButton probing={probing} className="a-97" onClick={() => void save()} style={btnInk}>{t('common.save')}</ProbeButton></>}>
+        <LevelPicker d={d} set={x => setD(v => ({ ...v, ...x }))} apk={s.apk} probing={probing} setProbing={setProbing} />
         {d.level === 'multiplier' && p.level !== 'multiplier' && <Note icon="info">{t('guardian.edit.multiplierNote')}</Note>}
       </Page>
     </div>

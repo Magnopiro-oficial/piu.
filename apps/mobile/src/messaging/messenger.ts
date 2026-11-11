@@ -1617,6 +1617,20 @@ export class Messenger {
     this.o.events.communityAlert?.(v, noticeFor(prev, v));
   }
 
+  /** Alertas do autor que valem agora (os que passaram do limite ficam ocultos: communityAlerts.ts, `counted`). */
+  private alertsShown(gid: string, author: string): Set<string> {
+    const g = this.groups.get(gid);
+    const out = new Set<string>();
+    if (!g) return out;
+    for (const a of this.alertBook.all()) if (a.community === gid && a.author === author && this.alertBook.isCounted(a.id, g.members)) out.add(a.id);
+    return out;
+  }
+
+  /** Um encerramento ou outro alerta abriu espaço: o oculto aparece e notifica (só se ainda não foi visto). */
+  private emitNowShown(gid: string, author: string, before: Set<string>, skip: string) {
+    for (const id of this.alertsShown(gid, author)) if (id !== skip && !before.has(id)) this.emitAlert(id, !this.alertSeen.has(id));
+  }
+
   private onAlertPayload(g: GroupState, from: string, sentAt: number, w: NonNullable<ReturnType<typeof decodeAlertPayload>>) {
     const key = `${g.id}|${from}|${w.i}`;
     if (this.deliveredSet.has(key)) return;
@@ -1624,18 +1638,21 @@ export class Messenger {
     const now = this.o.now();
     if (w.kind === 'alert') {
       const who = g.members.find(x => x.id === from);
+      const before = this.alertsShown(g.id, from);
       const r = this.alertBook.addAlert({ id: w.i, community: g.id, author: from, authorName: who?.name || 'Membro', cat: w.cat, sev: w.sev, title: w.title, text: w.text, area: w.area, at: sentAt, until: sentAt + w.dur }, now, g.members);
-      if (r !== 'ok') return;
+      if (r === 'dup' || r === 'rejected') return;
       this.o.events.changed?.();
-      if (from !== this.myId(g.via)) this.emitAlert(w.i, true);
+      if (r === 'ok' && from !== this.myId(g.via)) this.emitAlert(w.i, true);
+      this.emitNowShown(g.id, from, before, w.i);
       return;
     }
     const a = this.alertBook.get(w.alert);
     if (a && a.community !== g.id) return; // voto para alerta de outra comunidade
+    const before = a ? this.alertsShown(a.community, a.author) : new Set<string>();
     const ok = w.kind === 'vote' ? this.alertBook.addVote(w.alert, from, w.v, sentAt, w.i, g.members, w.n) : this.alertBook.addClose(w.alert, from, sentAt, g.members);
     if (!ok) return;
     this.o.events.changed?.();
-    if (a) this.emitAlert(a.id, false);
+    if (a) { this.emitAlert(a.id, false); this.emitNowShown(a.community, a.author, before, a.id); }
   }
 
   private sealAlert(g: GroupState, body: Uint8Array, ttlSec: number, priority: Priority) {
@@ -1656,7 +1673,8 @@ export class Messenger {
 
   /**
    * Publica um alerta na comunidade (qualquer membro). Vai no grupo da comunidade, cifrado com a
-   * chave dela e com prioridade Alta. Limite: 3 ativos por membro e 1 a cada 10 min.
+   * chave dela e com prioridade Alta. Limite: 3 ativos por membro e 1 a cada 10 min (o mesmo cálculo
+   * de quem recebe; o que passa dele fica oculto nos outros aparelhos).
    */
   publishAlert(gid: string, d: { cat: AlertCategory; sev: AlertSeverity; title: string; text: string; area?: string; durSec: number }): AlertView {
     const g = this.assertCommunity(gid);

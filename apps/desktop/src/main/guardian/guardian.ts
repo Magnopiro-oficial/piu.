@@ -291,12 +291,11 @@ export class GuardianService {
       try {
         const raw = readSealed(this.storeFile, storeKey(seed), STORE_MAGIC);
         const recs = raw ? unpackRecords(raw) : [];
-        // Formato antigo (ids dos vizinhos em claro): converte para o nome do ponto (pid) e regrava já.
+        // Formatos antigos (ids em claro ou nome fixo do vizinho, sem sal): o nó converte e regravamos já, com sal.
         // No disco, "para quem já foi" sai vazio nessa regravação (ninguém ligado ainda); a memória guarda o convertido.
         const legacy = recs.some(r => r.legacy);
-        const list = recs.map(({ legacy: old, ...r }) => (old ? { ...r, from: r.from === null ? null : node.pid(r.from), sentTo: r.sentTo.map(x => node.pid(x)) } : r));
         // Vencidos descartados na carga: regrava logo (o disco não fica com o que já devia ter sumido).
-        if (raw) purged = node.importStored(list.map(r => ({ ...r, own: false, releaseAt: 0 }))) < recs.length || legacy;
+        if (raw) purged = node.importStored(recs) < recs.length || legacy;
       } catch (e) { this.o.log?.(`ponto: mensagens guardadas ilegíveis (${(e as Error).message}); começando vazio`); }
     } else shred(this.storeFile);
     this.node = node;

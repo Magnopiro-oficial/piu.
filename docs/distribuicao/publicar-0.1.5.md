@@ -54,7 +54,7 @@ npx tsc --noEmit
 
 ## 1. Android: gerar o APK com a sua senha
 
-Não existe script nem workflow que gere o APK. O build é feito no seu computador, com o Gradle do projeto Android (`apps/mobile/android`). Essa pasta é gerada pelo Expo e não vai para o git.
+Não existe workflow que gere o APK. O build é feito no seu computador pelo script `apps/mobile/scripts/build-apk.sh`, que roda o Gradle do projeto Android (`apps/mobile/android`) e confere o APK no fim. A pasta `android` é gerada pelo Expo e não vai para o git.
 
 1. Se o `app.json` ou os plugins mudaram desde o último build, gere a pasta de novo (comando citado em `docs/testes/roteiro-aparelhos.md`):
 
@@ -80,17 +80,22 @@ export PIU_RELEASE_STORE_FILE="$HOME/piu-release-key/piu-release.jks"
 4. Gere o APK:
 
 ```bash
-cd /Users/lucas/Documents/Projetos_DEV/piu/apps/mobile/android
-./gradlew assembleRelease
+cd /Users/lucas/Documents/Projetos_DEV/piu/apps/mobile
+scripts/build-apk.sh
 ```
+
+Não acrescente `-PreactNativeArchitectures=...` nem use `npx expo run:android` para o APK oficial.
 
 Sem as duas variáveis, o build falha de propósito (`apps/mobile/plugins/releaseSigningGradle.js`). Isso evita um APK assinado com a chave de teste.
 
-5. Copie o APK para fora do repositório, com o nome que o site e o app esperam (`Piu-0.1.5.apk`):
+O script também para com erro se o APK tiver bibliotecas fora de `lib/arm64-v8a/` (a 0.1.4 saiu com `lib/x86_64/`). Nesse caso ele renomeia o arquivo para `app-release-REPROVADO.apk`: não publique. Ele para antes de compilar se o `android/` foi gerado sem a trava (`apps/mobile/plugins/withReleaseAbi.js`); rode o passo 1.1 de novo.
+
+5. Copie o APK para fora do repositório, com o nome que o site e o app esperam (`Piu-0.1.5.apk`), e confira de novo, à mão, que não há outra arquitetura (o `grep` não pode mostrar nada):
 
 ```bash
 mkdir -p ~/piu-release-0.1.5
-cp app/build/outputs/apk/release/app-release.apk ~/piu-release-0.1.5/Piu-0.1.5.apk
+cp android/app/build/outputs/apk/release/app-release.apk ~/piu-release-0.1.5/Piu-0.1.5.apk
+unzip -l ~/piu-release-0.1.5/Piu-0.1.5.apk | grep -E 'lib/(x86|x86_64|armeabi-v7a)/'
 ```
 
 6. Confira a assinatura. O `apksigner` não está no PATH deste computador; ele fica na pasta do Android SDK:
