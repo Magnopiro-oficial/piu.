@@ -32,6 +32,16 @@ private class UnknownMediumException(m: String) : CodedException("ERR_MEDIUM", "
 private const val NEARBY = "nearby"
 private const val BLE = "ble"
 private const val NEARBY_WINDOW_MS = 10_000L
+/** Teto de enlaces Nearby (conectados + em negociação): qualquer app com o mesmo serviceId pode pedir. */
+private const val MAX_NEARBY_ENDPOINTS = 8
+/** No máximo `MAX_NEARBY_ACCEPTS` aceites por `NEARBY_ACCEPT_WINDOW_MS`: quem pede sem parar é recusado. */
+private const val MAX_NEARBY_ACCEPTS = 6
+private const val NEARBY_ACCEPT_WINDOW_MS = 10_000L
+/** Quem foi recusado (teto cheio aqui ou lá) ou caiu tenta de novo a cada tanto, até `NEARBY_RETRIES` vezes. */
+private const val NEARBY_RETRY_MS = 15_000L
+private const val NEARBY_RETRIES = 8
+/** Com o teto cheio, um enlace que nunca mandou nada há tanto tempo cede a vaga a quem chega. */
+private const val NEARBY_IDLE_EVICT_MS = 60_000L
 
 /**
  * Transporte P2P no Android com dois meios ao mesmo tempo:
@@ -51,6 +61,16 @@ class PiuTransportModule : Module() {
   // Escritos pelos callbacks do Nearby (thread principal) e lidos nas AsyncFunctions (fila do módulo).
   private val names = ConcurrentHashMap<String, String>()
   private val connected: MutableSet<String> = ConcurrentHashMap.newKeySet()
+  /** Pedidos aceitos que ainda não deram resultado (contam no teto). */
+  private val pendingNearby: MutableSet<String> = ConcurrentHashMap.newKeySet()
+  /** Horário dos aceites recentes (thread principal, callbacks do Nearby). */
+  private val recentAccepts = ArrayDeque<Long>()
+  /** Início de cada enlace Nearby e quem já mandou algum dado (para achar quem só ocupa a vaga). */
+  private val connectedAt = ConcurrentHashMap<String, Long>()
+  private val heard: MutableSet<String> = ConcurrentHashMap.newKeySet()
+  /** Tentativas de reconexão já feitas por vizinho; `nearbyGen` invalida as agendadas antes de um stop. */
+  private val retries = ConcurrentHashMap<String, Int>()
+  @Volatile private var nearbyGen = 0
   private var ble: BleEngine? = null
   private var serviceId = ""
   /** "Procurar vizinhos" (NFR-004): Econômica 60 s, Normal 20 s, Rápida 5 s. */
@@ -230,6 +250,8 @@ class PiuTransportModule : Module() {
     connected.forEach { sendEvent("onDisconnected", bundleOf("id" to it, "via" to NEARBY)) }
     names.keys.forEach { sendEvent("onPeerLost", bundleOf("id" to it, "via" to NEARBY)) }
     connected.clear()
+    pendingNearby.clear()
+    clearNearbyLinks()
     names.clear()
     medium(NEARBY, false, null)
   }
@@ -257,7 +279,49 @@ class PiuTransportModule : Module() {
     ble?.stop()
     ble = null
     connected.clear()
+    pendingNearby.clear()
+    clearNearbyLinks()
     names.clear()
+  }
+
+  private fun clearNearbyLinks() {
+    nearbyGen++
+    connectedAt.clear(); heard.clear(); retries.clear()
+  }
+
+  /** Pede a conexão. Os dois lados se descobrem; só o de nome menor pede, para evitar pedidos cruzados. */
+  private fun requestNearby(endpointId: String) {
+    val name = names[endpointId] ?: return
+    if (localName >= name || endpointId in connected || endpointId in pendingNearby) return
+    client.requestConnection(localName, endpointId, lifecycle).addOnFailureListener { scheduleRetry(endpointId) }
+  }
+
+  /** Nova tentativa mais tarde (antes, só ao reencontrar o vizinho): o teto não deixa ninguém de fora para sempre. */
+  private fun scheduleRetry(endpointId: String) {
+    val name = names[endpointId] ?: return
+    if (localName >= name) return // quem pede é o outro lado
+    val n = retries[endpointId] ?: 0
+    if (n >= NEARBY_RETRIES) return
+    retries[endpointId] = n + 1
+    val gen = nearbyGen
+    mainHandler.postDelayed({ if (running && nearbyOn && gen == nearbyGen) requestNearby(endpointId) }, NEARBY_RETRY_MS)
+  }
+
+  /** Teto cheio: derruba o enlace mais antigo que nunca mandou nada há `NEARBY_IDLE_EVICT_MS`. */
+  private fun evictIdle(now: Long): Boolean {
+    val victim = connected.filter { it !in heard }.minByOrNull { connectedAt[it] ?: now } ?: return false
+    if (now - (connectedAt[victim] ?: now) < NEARBY_IDLE_EVICT_MS) return false
+    try { client.disconnectFromEndpoint(victim) } catch (_: Exception) {}
+    dropNearby(victim)
+    return true
+  }
+
+  /** Tira o enlace e avisa o app uma vez só (a queda pode vir pelo callback e pela nossa desconexão). */
+  private fun dropNearby(endpointId: String): Boolean {
+    if (!connected.remove(endpointId)) return false
+    connectedAt.remove(endpointId); heard.remove(endpointId)
+    sendEvent("onDisconnected", bundleOf("id" to endpointId, "via" to NEARBY))
+    return true
   }
 
   // ---------------------------------------------------------------- Bluetooth LE
@@ -281,35 +345,46 @@ class PiuTransportModule : Module() {
     override fun onEndpointFound(endpointId: String, info: DiscoveredEndpointInfo) {
       names[endpointId] = info.endpointName
       sendEvent("onPeerFound", bundleOf("id" to endpointId, "name" to info.endpointName, "via" to NEARBY))
-      // Os dois lados se descobrem; só o de nome menor pede a conexão, para evitar pedidos cruzados.
-      if (localName < info.endpointName) {
-        client.requestConnection(localName, endpointId, lifecycle)
-      }
+      retries.remove(endpointId)
+      requestNearby(endpointId)
     }
 
     override fun onEndpointLost(endpointId: String) {
       names.remove(endpointId)
+      retries.remove(endpointId)
       sendEvent("onPeerLost", bundleOf("id" to endpointId, "via" to NEARBY))
     }
   }
 
   private val lifecycle = object : ConnectionLifecycleCallback() {
     override fun onConnectionInitiated(endpointId: String, info: ConnectionInfo) {
-      names[endpointId] = info.endpointName
       // Aceita no transporte; a confiança vem depois, pela verificação de chaves do próprio Piu.
+      // Mas com teto de enlaces e de aceites por janela: sem isso, um app por perto ocupava o rádio.
+      val now = android.os.SystemClock.elapsedRealtime()
+      while (recentAccepts.isNotEmpty() && now - recentAccepts.first() > NEARBY_ACCEPT_WINDOW_MS) recentAccepts.removeFirst()
+      // Teto cheio: quem só ocupa a vaga (nunca mandou nada) cede para quem chega.
+      val busy = (connected + pendingNearby).size >= MAX_NEARBY_ENDPOINTS
+      if (recentAccepts.size >= MAX_NEARBY_ACCEPTS || (busy && !evictIdle(now))) {
+        client.rejectConnection(endpointId)
+        return
+      }
+      recentAccepts.addLast(now)
+      pendingNearby += endpointId
+      names[endpointId] = info.endpointName
       client.acceptConnection(endpointId, payloads)
     }
 
     override fun onConnectionResult(endpointId: String, result: ConnectionResolution) {
+      pendingNearby -= endpointId
       if (result.status.statusCode == ConnectionsStatusCodes.STATUS_OK) {
         connected += endpointId
+        connectedAt[endpointId] = android.os.SystemClock.elapsedRealtime()
         sendEvent("onConnected", bundleOf("id" to endpointId, "name" to names[endpointId], "via" to NEARBY))
-      }
+      } else scheduleRetry(endpointId) // recusado (teto cheio aqui ou lá) ou falhou
     }
 
     override fun onDisconnected(endpointId: String) {
-      connected -= endpointId
-      sendEvent("onDisconnected", bundleOf("id" to endpointId, "via" to NEARBY))
+      if (dropNearby(endpointId)) scheduleRetry(endpointId)
     }
   }
 
@@ -317,6 +392,7 @@ class PiuTransportModule : Module() {
     override fun onPayloadReceived(endpointId: String, payload: Payload) {
       if (payload.type != Payload.Type.BYTES) return
       val bytes = payload.asBytes() ?: return
+      heard += endpointId
       sendEvent("onEnvelope", bundleOf("from" to endpointId, "data" to Base64.encodeToString(bytes, Base64.NO_WRAP), "via" to NEARBY))
     }
 

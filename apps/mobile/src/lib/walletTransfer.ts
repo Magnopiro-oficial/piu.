@@ -7,7 +7,7 @@
  */
 import { decodeCompact, encodeSignedExtrinsic, signedExtra, signingPayload, transferKeepAliveCall, type SigningContext } from './extrinsic';
 import { accountBalance, accountNextIndex, extrinsicHash, finalizedHead, findExtrinsicInBlock, fromHex, isHash, LUNES_EXISTENTIAL_DEPOSIT, LunesRpc, paymentQueryInfo, submitExtrinsic, validateTransaction } from './lunesRpc';
-import { LUNES_INDEXER } from './lunesHistory';
+import { fetchLunesHistory, LUNES_INDEXER } from './lunesHistory';
 import { decodeSs58, encodeSs58 } from './ss58';
 import { verifyWalletSignature } from './walletKey';
 
@@ -25,6 +25,8 @@ export interface WalletTransferRecord {
   status: 'signed' | 'submitted' | 'included' | 'finalized' | 'failed';
   createdAt: number; updatedAt: number; block?: { number: number; hash: string; index: number };
   error?: string; scanned?: number; proofSource?: 'indexer';
+  /** Desde quando (ms, relógio do aparelho) o nó RPC diz "não entrou" sem o indexador confirmar. */
+  unconfirmedSince?: number;
   /**
    * Levada pela malha até um gateway (lib/walletCarry.ts): assinada sem internet, com era imortal
    * (`ctx.period` 0). Enquanto `status` for `signed`, está "em trânsito pela malha". `report`: o que um
@@ -43,6 +45,8 @@ export type WalletExecutionOutcome = { ok: true } | { ok: false; error: string }
 export interface WalletTransferDeps {
   rpc?: LunesRpc; now?: () => number; fetch?: typeof fetch; indexer?: string;
   readExecution?: (record: WalletTransferRecord, block: NonNullable<WalletTransferRecord['block']>) => Promise<WalletExecutionOutcome>;
+  /** Blocos com uma saída deste valor para este destino depois do bloco dado (indexador). `null`: indisponível. */
+  outgoingBlocks?: (record: WalletTransferRecord) => Promise<number[] | null>;
 }
 export interface WalletTransferSave { save: (record: WalletTransferRecord) => Promise<void> }
 export interface WalletTransferSend extends WalletTransferSave {
@@ -78,6 +82,41 @@ async function withRpc<T>(deps: WalletTransferDeps, fn: (rpc: LunesRpc) => Promi
 export async function saveRecord(record: WalletTransferRecord, callbacks: WalletTransferSave): Promise<WalletTransferRecord> {
   try { await callbacks.save(record); } catch { throw new WalletTransferError('persistence', 'Não foi possível guardar o pagamento no aparelho. Não crie outro pagamento; confira o histórico.'); }
   return record;
+}
+/**
+ * Segunda fonte antes de dizer "falhou": o indexador Lunes (serviço separado dos nós RPC) lista as saídas
+ * desta conta. `null` quando não respondeu. Um nó RPC sozinho, defeituoso ou comprometido, não pode fazer
+ * o app mostrar "falhou" para um pagamento liquidado (a pessoa pagaria de novo).
+ */
+export async function indexedOutgoing(record: WalletTransferRecord, deps: WalletTransferDeps): Promise<number[] | null> {
+  if (deps.outgoingBlocks) return deps.outgoingBlocks(record);
+  try {
+    const h = await fetchLunesHistory(record.from, { fetch: deps.fetch, indexer: deps.indexer });
+    const dest = normalized(record.dest).address;
+    return h.moves.filter(m => m.direction === 'out' && m.amount === BigInt(record.value) && m.block > record.ctx.blockNumber && normalized(m.counterparty).address === dest).map(m => m.block);
+  } catch { return null; }
+}
+/** Prazo para o indexador confirmar um "não entrou" do nó RPC antes de liberar o envio com aviso. */
+export const UNCONFIRMED_LIMIT_MS = 24 * 3_600_000;
+/**
+ * "Falhou" pedido pelo nó RPC. Com o indexador concordando (nenhuma saída igual até `upTo`), falha já.
+ * Sem ele (fora do ar, ou listando uma saída igual que o nó não confirma), segue acompanhando; depois de
+ * `UNCONFIRMED_LIMIT_MS` falha mesmo assim, com aviso para conferir antes de pagar de novo. Sem esse prazo o
+ * registro ficaria ativo e bloquearia todo envio novo da carteira para sempre.
+ */
+export async function failWithSecondSource(
+  record: WalletTransferRecord, listed: number[] | null, upTo: number, failure: string, waiting: string,
+  callbacks: WalletTransferSave, deps: WalletTransferDeps,
+): Promise<WalletTransferRecord> {
+  const same = listed?.find(n => n <= upTo);
+  const now = nowOf(deps);
+  if (listed !== null && same === undefined) return saveRecord({ ...record, status: 'failed', updatedAt: now, error: failure }, callbacks);
+  const doubt = listed === null ? 'o indexador Lunes não respondeu para confirmar' : `o indexador Lunes lista uma saída igual no bloco #${same}, que o nó não confirmou`;
+  const since = record.unconfirmedSince ?? now;
+  if (now - since >= UNCONFIRMED_LIMIT_MS) {
+    return saveRecord({ ...record, status: 'failed', updatedAt: now, unconfirmedSince: since, error: `${failure} Atenção: há 24 h ${doubt}. O envio foi liberado; antes de pagar de novo, confira no histórico ou no explorador se este pagamento não saiu.` }, callbacks);
+  }
+  return saveRecord({ ...record, updatedAt: now, unconfirmedSince: since, error: `${waiting}, mas ${doubt}. Acompanhando; não refaça o pagamento.` }, callbacks);
 }
 export const isActiveWalletTransfer = (record: WalletTransferRecord | null | undefined): boolean => !!record && record.status !== 'finalized' && record.status !== 'failed';
 
@@ -123,6 +162,7 @@ export function isWalletTransferRecord(value: unknown): value is WalletTransferR
     checkedRuntime(r.ctx, r.ctx.genesisHash);
     if (!isHash(r.hash) || r.id !== r.hash || checkedSigned(r, { hex: r.hex, hash: r.hash }) !== r.hash) return false;
     if (r.scanned !== undefined && (!integer(r.scanned) || r.scanned < r.ctx.blockNumber || r.scanned > r.validUntil)) return false;
+    if (r.unconfirmedSince !== undefined && !integer(r.unconfirmedSince)) return false;
     if (r.block && (!integer(r.block.number) || !integer(r.block.index) || !isHash(r.block.hash))) return false;
     if (r.status === 'included' && !r.block) return false;
     if (r.status === 'finalized' && (!r.block || r.proofSource !== 'indexer')) return false;
@@ -288,7 +328,13 @@ export async function trackWalletTransfer(record: WalletTransferRecord, callback
         scanned = number;
       }
       scanned = Math.min(scanned, fin.number);
-      if (fin.number > record.validUntil && scanned >= record.validUntil) return saveRecord({ ...record, status: 'failed', updatedAt: nowOf(deps), scanned, error: 'A era expirou e o hash não está em nenhum bloco finalizado do período. Nenhum novo pagamento foi criado.' }, callbacks);
+      if (fin.number > record.validUntil && scanned >= record.validUntil) {
+        // O nó RPC não achou o hash; o indexador precisa concordar (sem saída igual no período) para virar "falhou".
+        const listed = await indexedOutgoing(record, deps);
+        return failWithSecondSource({ ...record, scanned }, listed, record.validUntil,
+          'A era expirou e o hash não está em nenhum bloco finalizado do período. Nenhum novo pagamento foi criado.',
+          'A era expirou e o nó não achou o hash', callbacks, deps);
+      }
       return saveRecord({ ...record, scanned, updatedAt: nowOf(deps) }, callbacks);
     } catch (e) {
       if (e instanceof WalletTransferError && e.code === 'persistence') throw e;

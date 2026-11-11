@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { migratePrefs, sanitizePrefsPatch } from '../src/main/prefs';
+import { DEFAULT_PREFS } from '../src/shared/types';
 
 test('B-01: setPrefs vindo da interface aceita só chaves conhecidas com o tipo certo', () => {
   assert.deepEqual(sanitizePrefsPatch({ theme: 'dark', notifications: false, displayName: '  Ana  ', fontSize: 'l', density: 'compact', notifPreview: 'name', identity: 'anon' }),
@@ -40,8 +41,25 @@ test('Ajustes novos (notificações por tipo, privacidade, bloqueio, rede, siste
 
 test('E2: "Automático / Perguntar" virou "Avisar quando sair versão nova" (prefs antigas migram; o ajuste velho é recusado)', () => {
   assert.throws(() => sanitizePrefsPatch({ updateMode: 'auto' }), /updateMode/);
-  assert.deepEqual(migratePrefs({ theme: 'dark', updateMode: 'auto' }), { theme: 'dark', updateNotify: true });
-  assert.deepEqual(migratePrefs({ updateMode: 'ask' }), { updateNotify: false });
-  assert.deepEqual(migratePrefs({ updateMode: 'auto', updateNotify: false }), { updateNotify: false }, 'o novo vale se já existe');
-  assert.deepEqual(migratePrefs({ theme: 'light' }), { theme: 'light' });
+  const share = { shareWalletAddress: true };
+  assert.deepEqual(migratePrefs({ theme: 'dark', updateMode: 'auto', ...share }), { theme: 'dark', updateNotify: true, ...share });
+  assert.deepEqual(migratePrefs({ updateMode: 'ask', ...share }), { updateNotify: false, ...share });
+  assert.deepEqual(migratePrefs({ updateMode: 'auto', updateNotify: false, ...share }), { updateNotify: false, ...share }, 'o novo vale se já existe');
+  assert.deepEqual(migratePrefs({ theme: 'light', ...share }), { theme: 'light', ...share });
+});
+
+test('Compartilhar o endereço Lunes: instalação nova nasce desligada; quem já usava continua como estava', () => {
+  // Instalação nova (sem estado salvo): só os padrões valem.
+  assert.equal(DEFAULT_PREFS.shareWalletAddress, false);
+  // Os outros padrões não mudam.
+  assert.equal(DEFAULT_PREFS.notifPreview, 'always');
+  assert.equal(DEFAULT_PREFS.updateNotify, true);
+  // Estado salvo (instalação existente): o ajuste gravado é respeitado, ligado ou desligado.
+  const load = (saved: Record<string, unknown>) => ({ ...DEFAULT_PREFS, ...migratePrefs(saved) });
+  assert.equal(load({ theme: 'dark', shareWalletAddress: true }).shareWalletAddress, true);
+  assert.equal(load({ theme: 'dark', shareWalletAddress: false }).shareWalletAddress, false);
+  // Estado salvo sem o valor (versão antiga ou valor estragado): continua ligado, como era o padrão.
+  assert.equal(load({ theme: 'dark' }).shareWalletAddress, true);
+  assert.equal(load({ shareWalletAddress: 'sim' }).shareWalletAddress, true);
+  assert.equal(load({}).shareWalletAddress, true);
 });

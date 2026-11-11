@@ -3,6 +3,19 @@
  * - `point.bin`: configuração e a SEMENTE da chave do ponto, com a chave de dados do cofre do sistema;
  * - `store.bin`: envelopes de terceiros guardados, com uma chave derivada da semente do ponto
  *   (apagar a semente ao encerrar torna o que sobrar ilegível, mesmo antes de apagar o arquivo).
+ *
+ * O que fica no `store.bin`, por envelope de terceiro, até ele vencer (no máximo 7 dias):
+ * - os bytes do envelope (já cifrados de ponta a ponta: o ponto não abre);
+ * - quem trouxe (`f`) e para quem já foi (`t`): nunca o id do aparelho, só um nome que o ponto calcula
+ *   (HMAC do id com a chave do ponto, 16 hex). Em `t` só entram os vizinhos ligados na hora da gravação;
+ *   quem já saiu não fica. Toda regravação feita ao ligar o ponto (store.bin antigo, com ids em claro, ou
+ *   vencidos descartados) acontece sem vizinho ligado: `f` do antigo é convertido, mas `t` vai VAZIO para o
+ *   disco e só volta a ter nomes na gravação seguinte (até 1 min) com vizinhos ligados. Se o app cair nesse
+ *   intervalo, o envelope pode ser reenviado uma vez a quem já tinha recebido (o aparelho descarta);
+ * - quando chegou e quando some (`s`, `d`), arredondados à hora; e quantas cópias saíram (`c`).
+ * Limite conhecido: quem abre o cofre do dono do ponto tem a chave do ponto e consegue conferir se um id
+ * de que já suspeita passou por aqui (refaz o HMAC) e ver quais envelopes vieram do mesmo vizinho. Não dá
+ * para tirar `f` sem o ponto devolver o envelope a quem o trouxe depois de reiniciar.
  */
 import { createCipheriv, createDecipheriv, randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -53,12 +66,20 @@ export function shred(file: string) {
 }
 
 // ── envelopes guardados: [u32 tamanho do meta][meta JSON][u32 tamanho][bytes] … ──
-export interface StoredRecord { bytes: Uint8Array; from: string | null; storedAt: number; dropAt: number; sentTo: string[]; copies: number }
+export interface StoredRecord { bytes: Uint8Array; from: string | null; storedAt: number; dropAt: number; sentTo: string[]; copies: number; legacy?: true }
+/** Versão do meta. Sem `v` = formato antigo, com os ids dos vizinhos em claro (`legacy`: converter e regravar). */
+const RECORD_V = 2;
 
+const HOUR = 3600;
+/**
+ * Horários vão ao disco arredondados à hora para baixo (não o segundo em que cada aparelho passou): ao
+ * restaurar, o envelope some no máximo 1 h antes, nunca depois do prazo prometido. `f`/`t` já chegam como HMAC do id do vizinho (guardianNode.pid), nunca o id em claro.
+ */
 export function packRecords(list: StoredRecord[]): Buffer {
   const parts: Buffer[] = [];
   for (const r of list) {
-    const meta = Buffer.from(JSON.stringify({ f: r.from, s: r.storedAt, d: r.dropAt, t: r.sentTo.slice(0, 32), c: r.copies }));
+    const s = Math.floor(r.storedAt / HOUR) * HOUR, d = Math.floor(r.dropAt / HOUR) * HOUR;
+    const meta = Buffer.from(JSON.stringify({ v: RECORD_V, f: r.from, s, d, t: r.sentTo.slice(0, 32), c: r.copies }));
     const h = Buffer.alloc(4); h.writeUInt32BE(meta.length);
     const b = Buffer.alloc(4); b.writeUInt32BE(r.bytes.length);
     parts.push(h, meta, b, Buffer.from(r.bytes));
@@ -72,14 +93,14 @@ export function unpackRecords(buf: Buffer, maxEnvelope = 64 * 1024): StoredRecor
   while (i + 4 <= buf.length) {
     const ml = buf.readUInt32BE(i); i += 4;
     if (ml > 4096 || i + ml + 4 > buf.length) break;
-    let m: { f: string | null; s: number; d: number; t: string[]; c: number };
+    let m: { v?: number; f: string | null; s: number; d: number; t: string[]; c: number };
     try { m = JSON.parse(buf.subarray(i, i + ml).toString('utf8')); } catch { break; }
     i += ml;
     const bl = buf.readUInt32BE(i); i += 4;
     if (bl > maxEnvelope || i + bl > buf.length) break;
     const bytes = new Uint8Array(buf.subarray(i, i + bl)); i += bl;
     if (typeof m.s !== 'number' || typeof m.d !== 'number' || !Array.isArray(m.t)) continue;
-    out.push({ bytes, from: typeof m.f === 'string' ? m.f : null, storedAt: m.s, dropAt: m.d, sentTo: m.t.filter(x => typeof x === 'string'), copies: Number(m.c) || 0 });
+    out.push({ bytes, from: typeof m.f === 'string' ? m.f : null, storedAt: m.s, dropAt: m.d, sentTo: m.t.filter(x => typeof x === 'string'), copies: Number(m.c) || 0, ...(m.v === RECORD_V ? {} : { legacy: true as const }) });
   }
   return out;
 }

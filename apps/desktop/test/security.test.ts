@@ -101,6 +101,21 @@ test('M-01: mostrar a frase pede Touch ID quando há; sem Touch ID, confirmaçã
   assert.equal(await reauthForPhrase({ ...deps({ platform: 'win32', touch: false }), confirm: async () => { throw new Error('sem janela'); } }), false);
 });
 
+test('baixo 27: sem Touch ID e com a senha do Piu enviada, a frase exige a senha (não basta o clique)', async () => {
+  const calls: string[] = [];
+  const base = { platform: 'win32', canPromptTouchID: () => false, promptTouchID: async () => { calls.push('touch'); },
+    confirm: async () => { calls.push('confirm'); return true; } };
+  const lock = (ok: boolean, given: string) => ({ given, check: async (pw: string) => { calls.push(`check:${pw}`); return ok; } });
+  assert.equal(await reauthForPhrase({ ...base, lockPassword: lock(false, 'errada') }), false, 'senha errada não mostra, mesmo que o clique diria sim');
+  assert.deepEqual(calls.splice(0), ['check:errada']);
+  assert.equal(await reauthForPhrase({ ...base, lockPassword: lock(true, 'pato42!') }), true);
+  assert.deepEqual(calls.splice(0), ['check:pato42!']);
+  assert.equal(await reauthForPhrase({ ...base, lockPassword: { given: 'x', check: async () => { throw new Error('falhou'); } } }), false, 'erro na conferência recusa');
+  // Com Touch ID, ele continua sendo o caminho (a senha não é pedida).
+  assert.equal(await reauthForPhrase({ ...base, platform: 'darwin', canPromptTouchID: () => true, lockPassword: lock(false, 'x') }), true);
+  assert.deepEqual(calls.splice(0), ['touch']);
+});
+
 test('M-01: exportar o backup da identidade passa pela mesma reautenticação da frase; recusa não cifra nem grava', async () => {
   const calls: string[] = [];
   const deps = (o: { reauth: boolean | Error; path: string | null }) => ({

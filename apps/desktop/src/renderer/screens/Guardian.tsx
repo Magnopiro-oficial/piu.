@@ -230,12 +230,26 @@ function Seg<T extends string | number>({ value, opts, onChange, label: aria }: 
   );
 }
 
-/** E4b: radio dos níveis; Gateway é um papel a mais (caixa), só com internet. */
-function LevelPicker({ d, set, internet, apk }: { d: Draft; set: (p: Partial<Draft>) => void; internet: boolean; apk: GuardianState['apk'] }) {
+/**
+ * E4b: radio dos níveis; Gateway é um papel a mais (caixa), só com internet.
+ * O Piu só consulta fora da rede quando a pessoa liga o gateway: a linha diz antes o que será consultado
+ * (1.1.1.1 e 9.9.9.9, só abrir e fechar a conexão) e o gateway só fica marcado se o teste achar internet.
+ */
+function LevelPicker({ d, set, apk }: { d: Draft; set: (p: Partial<Draft>) => void; apk: GuardianState['apk'] }) {
   const t = useT();
-  const Row = ({ k, title, desc, disabled, check, first }: { k: GuardianLevel | 'gateway'; title: string; desc: string; disabled?: boolean; check?: boolean; first?: boolean }) => {
+  const [probing, setProbing] = useState(false);
+  const [noNet, setNoNet] = useState(false);
+  const toggleGateway = async () => {
+    if (d.gateway) { set({ gateway: false }); return; }
+    if (probing) return;
+    setProbing(true);
+    try { const ok = await window.piu.guardianTestInternet(); setNoNet(!ok); if (ok) set({ gateway: true }); }
+    catch { setNoNet(true); }
+    finally { setProbing(false); }
+  };
+  const Row = ({ k, title, desc, disabled, check, first }: { k: GuardianLevel | 'gateway'; title: string; desc: ReactNode; disabled?: boolean; check?: boolean; first?: boolean }) => {
     const on = k === 'gateway' ? d.gateway : d.level === k;
-    const click = () => { if (disabled) return; if (k === 'gateway') set({ gateway: !d.gateway }); else set({ level: k }); };
+    const click = () => { if (disabled) return; if (k === 'gateway') void toggleGateway(); else set({ level: k }); };
     return (
       <div role={check ? 'checkbox' : 'radio'} aria-checked={on} aria-disabled={disabled} tabIndex={disabled ? -1 : 0} onClick={click} onKeyDown={e => { if (e.key === ' ' || e.key === 'Enter') { e.preventDefault(); click(); } }}
         style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: first ? '0 0 12px' : '12px 0', borderTop: first ? undefined : '1px solid var(--line)', cursor: disabled ? 'default' : 'pointer', opacity: disabled ? 0.45 : 1 }}>
@@ -257,7 +271,7 @@ function LevelPicker({ d, set, internet, apk }: { d: Draft; set: (p: Partial<Dra
         <Row first k="multiplier" title={t('guardian.level.multiplier')} desc={t('guardian.pick.multiplierDesc')} />
         <Row k="guardian" title={t('guardian.level.guardian')} desc={t('guardian.pick.guardianDesc', { storage: fmtStorage(d.storageMB), days: fmtDays(d.days) })} />
         <Row k="guardian-app" title={t('guardian.level.guardianApp')} desc={apk.available ? t('guardian.pick.appDesc') : apk.reason} disabled={!apk.available} />
-        <Row k="gateway" check title={t('guardian.gateway')} desc={internet ? t('guardian.pick.gatewayDesc') : t('guardian.pick.gatewayNoNet')} disabled={!internet} />
+        <Row k="gateway" check title={t('guardian.gateway')} desc={probing ? t('guardian.test.running') : <>{noNet && <><b style={{ color: 'var(--ink)' }}>{t('guardian.pick.gatewayNoNet')}</b><br /></>}{t('guardian.pick.gatewayAsk')}</>} />
       </div>
       {d.level === 'guardian' && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10, paddingTop: 2 }}>
@@ -287,11 +301,10 @@ function Wizard({ s, hostname, onCancel, onActivated, toast }: { s: GuardianStat
   const [busy, setBusy] = useState(false);
   const set = useCallback((p: Partial<Draft>) => setD(x => ({ ...x, ...p })), []);
   useEffect(() => { if (step === 2) void window.piu.guardianNetwork().then(setNet).catch(() => setNet(null)); }, [step]);
-  const internet = !!test?.internet;
   const activate = async () => {
     if (busy) return;
     setBusy(true);
-    try { await window.piu.guardianActivate({ name: d.name, level: d.level, storageMB: d.storageMB, days: d.days, gateway: d.gateway && internet, autoStart: true }); toast(tNow('guardian.toast.active'), 'hub'); onActivated(); }
+    try { await window.piu.guardianActivate({ name: d.name, level: d.level, storageMB: d.storageMB, days: d.days, gateway: d.gateway, autoStart: true }); toast(tNow('guardian.toast.active'), 'hub'); onActivated(); }
     catch (e) { toast((e as Error).message, 'error'); }
     finally { setBusy(false); }
   };
@@ -332,13 +345,13 @@ function Wizard({ s, hostname, onCancel, onActivated, toast }: { s: GuardianStat
       {step === 3 && <TestStep net={net} test={test} setTest={setTest} onBack={() => setStep(2)} onDone={() => setStep(4)} />}
       {step === 4 && (
         <Page title={t('guardian.howMuch')} actions={<><button className="h-bg2" onClick={() => setStep(3)} style={btnGhost}>{t('common.back')}</button><button className="a-97" onClick={() => setStep(5)} style={btnInk}>{t('common.continue')}</button></>}>
-          <LevelPicker d={d} set={set} internet={internet} apk={s.apk} />
+          <LevelPicker d={d} set={set} apk={s.apk} />
         </Page>
       )}
       {step === 5 && (
         // E4e: antes de ativar; um toque (não move LUNES).
         <Page title={t('guardian.activate.title')} actions={<><button className="h-bg2" onClick={() => setStep(4)} style={btnGhost}>{t('common.back')}</button><button className="a-97" onClick={() => void activate()} disabled={busy || !d.name.trim()} style={{ ...btnInk, opacity: busy || !d.name.trim() ? 0.5 : 1 }}>{busy ? t('guardian.activate.busy') : t('guardian.activate.go')}</button></>}>
-          <Kv rows={[[t('guardian.network'), net?.label ?? '—'], [t('guardian.kv.level'), levelName(d.level)], [t('guardian.space'), d.level === 'multiplier' ? t('guardian.nothingStored') : t('guardian.kv.storageDays', { storage: fmtStorage(d.storageMB), days: fmtDays(d.days) })], [t('guardian.kv.internet'), d.gateway && internet ? t('guardian.kv.gatewayOnly') : t('guardian.kv.off')], [t('guardian.rewards'), t('guardian.rewardsOff')]]} />
+          <Kv rows={[[t('guardian.network'), net?.label ?? '—'], [t('guardian.kv.level'), levelName(d.level)], [t('guardian.space'), d.level === 'multiplier' ? t('guardian.nothingStored') : t('guardian.kv.storageDays', { storage: fmtStorage(d.storageMB), days: fmtDays(d.days) })], [t('guardian.kv.internet'), d.gateway ? t('guardian.kv.gatewayOnly') : t('guardian.kv.off')], [t('guardian.rewards'), t('guardian.rewardsOff')]]} />
           <label style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
             <span style={label}>{t('guardian.activate.nameLabel')}</span>
             <input value={d.name} onChange={e => set({ name: e.target.value.slice(0, 40) })} maxLength={40} aria-label={t('guardian.activate.nameAria')} spellCheck={false}
@@ -523,16 +536,15 @@ function EditLevel({ s, onDone, toast }: { s: GuardianState; onDone: () => void;
   const t = useT();
   const p = s.point!;
   const [d, setD] = useState<Draft>({ level: p.level, storageMB: p.storageMB, days: p.days, gateway: p.gateway, name: p.name });
-  const [internet, setInternet] = useState(p.gateway);
-  useEffect(() => { if (!p.gateway) void window.piu.guardianTest().then(r => setInternet(r.internet)).catch(() => {}); }, [p.gateway]);
+  // Abrir esta tela não testa nada fora da rede: o teste de internet só roda se a pessoa ligar o gateway.
   const save = async () => {
-    try { await window.piu.guardianUpdate({ name: d.name, level: d.level, storageMB: d.storageMB, days: d.days, gateway: d.gateway && internet }); toast(tNow('guardian.toast.saved'), 'tune'); onDone(); }
+    try { await window.piu.guardianUpdate({ name: d.name, level: d.level, storageMB: d.storageMB, days: d.days, gateway: d.gateway }); toast(tNow('guardian.toast.saved'), 'tune'); onDone(); }
     catch (e) { toast((e as Error).message, 'error'); }
   };
   return (
     <div style={{ flex: 1, minWidth: 0, display: 'flex' }}>
       <Page title={t('guardian.howMuch')} sub={`${p.name} · ${p.network.label}`} actions={<><button className="h-bg2" onClick={onDone} style={btnGhost}>{t('common.back')}</button><button className="a-97" onClick={() => void save()} style={btnInk}>{t('common.save')}</button></>}>
-        <LevelPicker d={d} set={x => setD(v => ({ ...v, ...x }))} internet={internet} apk={s.apk} />
+        <LevelPicker d={d} set={x => setD(v => ({ ...v, ...x }))} apk={s.apk} />
         {d.level === 'multiplier' && p.level !== 'multiplier' && <Note icon="info">{t('guardian.edit.multiplierNote')}</Note>}
       </Page>
     </div>

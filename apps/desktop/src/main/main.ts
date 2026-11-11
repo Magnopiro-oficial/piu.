@@ -13,7 +13,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { PiuCore } from './core';
-import { eventAllowed, methodAllowed } from './lockGate';
+import { eventAllowed, lockedView, methodAllowed } from './lockGate';
 import { sanitizePrefsPatch } from './prefs';
 import { exportBackupAfterReauth, externalUrlAllowed, forbiddenDebugSwitches, isRendererUrl, mediaAllowed, isTrustedSender, profileFromEnv, reauthForPhrase, RENDERER_ORIGIN, RENDERER_SCHEME, rendererFileFor, rendererMime } from './security';
 import { isSecretScreen, screenSecurityFor, type SecretScreen } from '../shared/screenSecurity';
@@ -173,7 +173,8 @@ function showWindow() {
 /** Bloqueado, a janela não recebe nada com nome ou conteúdo; ao desbloquear, recarrega a lista. */
 const send = (event: PiuEventName, payload: unknown) => {
   if (!eventAllowed(!!appLock?.locked, event)) return;
-  if (win && !win.isDestroyed()) win.webContents.send(`piu:${event}`, payload);
+  // Bloqueado, sessão, preferências e rede vão sem nome, ids, carteira nem vizinhos (lockGate.ts).
+  if (win && !win.isDestroyed()) win.webContents.send(`piu:${event}`, appLock?.locked ? lockedView(event, payload) : payload);
 };
 
 /**
@@ -310,7 +311,12 @@ function applyLoginItem(open: boolean) {
 // ── bloqueio do app (D1/D1e/D1x) ─────────────────────────
 // Desbloqueia com a senha do Piu (lockPassword.ts) ou Touch ID. Sem a senha criada, nada bloqueia.
 const appLock: AppLock = new AppLock(locked => {
+  // Sessão, preferências e rede: reduzidas ao bloquear; completas ao desbloquear, ANTES do aviso de
+  // desbloqueio, para as telas já abrirem com os dados certos.
+  const refresh = () => { if (core) { send('session', core.session()); send('prefs', core.prefs()); send('network', core.networkStatus()); } };
+  if (!locked) refresh();
   send('appLock', lockState());
+  if (locked) refresh();
   // Bloqueou com uma chamada tocando: o aviso "Chamada de {nome}" sai da tela (bloqueado, nada diz de quem).
   if (locked) closeCallNotif();
   // Ao desbloquear, a janela recarrega o que ficou escondido.
@@ -402,20 +408,23 @@ async function installUpdate() {
 // ── IPC ───────────────────────────────────────────────────
 function registerIpc() {
   // Reautenticação da frase (M-01): Touch ID ou, sem ele, o diálogo nativo `o` no processo principal.
-  const reauthPhrase = (o: MessageBoxOptions) => reauthForPhrase({
+  // `password`: senha do Piu digitada (só vale com senha criada; sem ela, o diálogo nativo).
+  const reauthPhrase = (o: MessageBoxOptions, password?: string) => reauthForPhrase({
     platform: process.platform,
     canPromptTouchID: () => systemPreferences.canPromptTouchID(),
     promptTouchID: reason => systemPreferences.promptTouchID(reason),
     confirm: async () => (win ? await dialog.showMessageBox(win, o) : await dialog.showMessageBox(o)).response === 1,
+    lockPassword: password !== undefined && core.lockConfig().hasPassword ? { given: password, check: async pw => (await core.checkLockPassword(pw)).ok } : undefined,
   });
   const methods: Record<string, (...args: never[]) => unknown> = {
     getSession: () => core.session(),
     createIdentity: (o: { kind: 'public' | 'anon'; name: string }) => core.createIdentity(o),
     restoreIdentity: (o: { phrase: string[]; name: string }) => core.restoreIdentity(o),
     // M-01: só depois de Touch ID (ou, sem ele, de uma confirmação nativa que o renderer não clica sozinho).
-    revealPhrase: async () => {
+    // Baixo 27: com a senha do Piu digitada, ela é conferida aqui (mesmo contador) em vez do clique.
+    revealPhrase: async (password?: unknown) => {
       const ok = await reauthPhrase({ type: 'warning', buttons: [tm('common.cancel'), tm('main.phrase.show')], defaultId: 0, cancelId: 0, noLink: true, title: tm('main.phrase.title'),
-        message: tm('main.phrase.message'), detail: tm('main.phrase.detail') });
+        message: tm('main.phrase.message'), detail: tm('main.phrase.detail') }, typeof password === 'string' ? password : undefined);
       if (!ok) throw new Error(tm('main.phrase.refused'));
       return core.revealPhrase();
     },
@@ -515,6 +524,7 @@ function registerIpc() {
     guardianState: () => g().state(),
     guardianNetwork: () => g().network(),
     guardianTest: () => g().test(),
+    guardianTestInternet: () => g().testInternet(),
     guardianActivate: (c: unknown) => g().activate(c),
     guardianUpdate: (patch: unknown) => g().update(patch),
     guardianPause: (paused: unknown) => g().pause(paused === true),
@@ -539,7 +549,8 @@ function registerIpc() {
     if (!win || win.isDestroyed() || e.sender !== win.webContents || !isTrustedSender(frame ? { url: frame.url, isMain: frame.parent === null } : null, rendererOrigin())) throw new Error(tm('main.err.badOrigin'));
     if (typeof method !== 'string' || !Object.hasOwn(methods, method)) throw new Error(tm('main.err.unknownMethod'));
     if (!methodAllowed(appLock.locked, method)) throw new Error(tm('main.lock.locked'));
-    return methods[method]!(...(args as never[]));
+    const result = await methods[method]!(...(args as never[]));
+    return appLock.locked ? lockedView(method, result) : result;
   });
   for (const ev of ['conversations', 'message', 'network', 'wallet', 'walletPayment', 'session', 'prefs', 'link', 'notice', 'typing', 'call', 'callAudio', 'callToast', 'callDraft'] as PiuEventName[]) core.events.on(ev, p => send(ev, p));
   core.events.on('prefs', applyScreenSecurity);

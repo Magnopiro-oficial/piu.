@@ -97,7 +97,7 @@ test('teste da rede (E4): verde, amarelo (rede de casa alcançável, ninguém re
   const dir = mkdtempSync(join(tmpdir(), 'piu-guardian-check-'));
   try {
     const asked: string[] = [];
-    const green = await runLanCheck(NET, { storageMB: 512, dataDir: dir }, {
+    const green = await runLanCheck(NET, { storageMB: 512, dataDir: dir, external: true }, {
       beacons: async () => 5, freeBytes: async () => 50 * 2 ** 30,
       probe: async (h, p) => { asked.push(`${h}:${p}`); return h === '1.1.1.1' ? 'open' : 'none'; },
     });
@@ -108,7 +108,7 @@ test('teste da rede (E4): verde, amarelo (rede de casa alcançável, ninguém re
     assert.ok(!asked.some(a => a.startsWith('192.168.0.1:') && !a.endsWith(':80') && !a.endsWith(':443')), 'só portas 80/443');
     assert.ok(asked.includes('192.168.1.1:80'), 'roteadores de OUTRAS redes privadas');
     assert.ok(!asked.includes('192.168.0.1:22'));
-    const yellow = await runLanCheck(NET, { storageMB: 512, dataDir: dir }, {
+    const yellow = await runLanCheck(NET, { storageMB: 512, dataDir: dir, external: true }, {
       beacons: async () => 0, freeBytes: async () => 600 * 2 ** 20, probe: async h => (h === '10.0.0.1' ? 'refused' : 'none'),
     });
     assert.equal(yellow.verdict, 'warn');
@@ -123,8 +123,78 @@ test('teste da rede (E4): verde, amarelo (rede de casa alcançável, ninguém re
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
+const EXTERNAL = ['1.1.1.1', '9.9.9.9'];
+
+test('teste da rede sem a ponte: nenhum contato externo; a etapa "internet" é só uma estimativa local (há rota de saída?)', async () => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-guardian-local-'));
+  try {
+    const asked: string[] = [];
+    const deps = { beacons: async () => 3, freeBytes: async () => 50 * 2 ** 30, probe: async (h: string) => { asked.push(h); return 'open' as const; } };
+    const local = await runLanCheck(NET, { storageMB: 512, dataDir: dir }, deps);
+    assert.ok(!asked.some(h => EXTERNAL.includes(h)), 'sem a ponte, 1.1.1.1 e 9.9.9.9 nunca são consultados');
+    assert.ok(asked.includes('192.168.1.1') && asked.includes('192.168.0.1'), 'as etapas da rede local continuam iguais');
+    assert.equal(local.internet, false, 'estimativa não conta como internet confirmada');
+    assert.deepEqual(local.steps.map(s => [s.id, s.level]), [['peers', 'ok'], ['home', 'warn'], ['internet', 'ok'], ['capacity', 'ok']]);
+    assert.match(local.steps[2]!.detail, /Parece ter .*estimativa local/);
+    const noRoute = await runLanCheck({ ...NET, gateway: null }, { storageMB: 512, dataDir: dir }, deps);
+    assert.match(noRoute.steps[2]!.detail, /Parece não ter .*estimativa local/);
+    assert.ok(!asked.some(h => EXTERNAL.includes(h)));
+    // Com a ponte (ou a pedido): aí sim o teste real.
+    const real = await runLanCheck(NET, { storageMB: 512, dataDir: dir, external: true }, deps);
+    assert.deepEqual(EXTERNAL.filter(h => asked.includes(h)), EXTERNAL);
+    assert.equal(real.internet, true);
+    assert.equal(real.steps[2]!.detail, 'Tem · fica desligada para o ponto');
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+});
+
+test('ponto sem a ponte nunca consulta fora da rede; o teste real só roda a pedido ou com a ponte ligada, e só ele libera a ponte', async t => {
+  const { LunesRpc } = await import('../../mobile/src/lib/lunesRpc');
+  const { fakeConnect, substrate } = await import('../../piu-node/test/lunes-fake.js');
+  const { connect } = fakeConnect(substrate({ finalized: 1000, storage: {} }).handle);
+  const dir = mkdtempSync(join(tmpdir(), 'piu-guardian-bridge-'));
+  const asked: string[] = [];
+  const svc = new GuardianService({
+    dir, hostname: 'mac-do-lucas', onState: () => {}, dataKey: async () => Buffer.alloc(32, 7),
+    lan: { port: 0, discoveryPort: null, listen: '127.0.0.1' }, tickMs: 3_600_000, watchMs: 3_600_000,
+    net: { ifaces: () => ({}) as never }, check: { beacons: async () => 2, probe: async h => { asked.push(h); return h === '1.1.1.1' ? 'open' : 'none'; }, freeBytes: async () => 50 * 2 ** 30 },
+    // Lunes falsa: a ponte do teste não fala com ninguém de verdade.
+    gatewayRpc: () => new LunesRpc({ endpoints: ['ws://lunes-falsa'], connect, timeoutMs: 2000 }),
+  });
+  (svc as unknown as { network: () => Promise<GuardianNetwork> }).network = async () => ({ ...NET, address: '127.0.0.1' });
+  t.after(async () => { await svc.close(); rmSync(dir, { recursive: true, force: true }); });
+  const external = () => asked.filter(h => EXTERNAL.includes(h)).length;
+  await svc.init();
+  const first = await svc.test();
+  assert.equal(external(), 0, 'abrir a tela e testar a rede: nada externo');
+  assert.equal(first.internet, false);
+  await assert.rejects(svc.activate({ name: 'Piu · Casa', level: 'guardian', gateway: true }), /internet/, 'estimativa local não libera a ponte');
+  await svc.activate({ name: 'Piu · Casa', level: 'guardian', storageMB: 256, days: 3, gateway: false, autoStart: true });
+  await svc.test();
+  await svc.watch();
+  assert.equal(external(), 0, 'ponto ligado sem a ponte: nada externo');
+  await assert.rejects(svc.update({ gateway: true }), /internet/);
+  // A pessoa liga a ponte: só agora o teste real.
+  assert.equal(await svc.testInternet(), true);
+  assert.equal(external(), 2, 'uma conexão com 1.1.1.1 e outra com 9.9.9.9');
+  assert.equal((await svc.update({ gateway: true })).point!.gateway, true);
+  // Com a ponte ligada, o teste da rede inclui o teste real.
+  asked.length = 0;
+  const withBridge = await svc.test();
+  assert.equal(external(), 2);
+  assert.equal(withBridge.internet, true);
+  // "Testar de novo" do aviso de isolamento só olha a rede local: nada externo, mesmo com a ponte ligada.
+  asked.length = 0;
+  (svc as unknown as { status: string }).status = 'isolating';
+  await svc.test();
+  assert.equal(external(), 0, 'reteste do isolamento não consulta fora da rede');
+  assert.equal(svc.state().status, 'active', 'os aparelhos voltaram a se ver: sai do aviso');
+  await svc.update({ gateway: false });
+  assert.equal((await svc.update({ gateway: true })).point!.gateway, true, 'a internet confirmada antes continua valendo');
+});
+
 test('arquivo dos envelopes guardados: ida e volta; lixo no fim não quebra', () => {
-  const recs = [{ bytes: new Uint8Array([1, 2, 3]), from: 'abcd', storedAt: 10, dropAt: 20, sentTo: ['x'], copies: 1 }];
+  // Horários múltiplos da hora: o disco guarda arredondado à hora (para baixo).
+  const recs = [{ bytes: new Uint8Array([1, 2, 3]), from: 'abcd', storedAt: 7200, dropAt: 10800, sentTo: ['x'], copies: 1 }];
   const back = unpackRecords(Buffer.concat([packRecords(recs), Buffer.from([0, 0, 9])]));
   assert.deepEqual(back, recs);
 });
@@ -301,4 +371,32 @@ test('gateway do ponto (com internet): carga de transação → Lunes falsa → 
   await until(() => got.some(b => openCarryReceipt(b, me, Math.floor(Date.now() / 1000))?.status === 'pool'), 'recibo "pool" voltar ao celular');
   assert.equal(node.gatewaySent, 1);
   assert.equal(node.stats().stored, 1, 'só o recibo (para o celular) ficou guardado; a carga não');
+});
+
+test('ponto: envelopes vencidos descartados ao religar saem do store.bin na hora (não ficam no disco)', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-guardian-purge-'));
+  let nowMs = Date.now();
+  const svc = new GuardianService({
+    dir, hostname: 'mac-do-lucas', onState: () => {}, dataKey: async () => Buffer.alloc(32, 7), now: () => nowMs,
+    lan: { port: 0, discoveryPort: null, listen: '127.0.0.1' }, tickMs: 3_600_000, watchMs: 3_600_000,
+    net: { ifaces: () => ({}) as never }, check: { beacons: async () => 2, probe: async h => (h === '1.1.1.1' ? 'open' : 'none'), freeBytes: async () => 50 * 2 ** 30 },
+  });
+  let net: GuardianNetwork = { ...NET, address: '127.0.0.1' };
+  (svc as unknown as { network: () => Promise<GuardianNetwork> }).network = async () => net;
+  t.after(async () => { await svc.close(); rmSync(dir, { recursive: true, force: true }); });
+  await svc.init();
+  await svc.test();
+  await svc.activate({ name: 'Piu · Casa', level: 'guardian', storageMB: 256, days: 1, gateway: false, autoStart: true });
+  const alice = deriveIdentity(newSeed(), 'public'), bob = deriveIdentity(newSeed(), 'public');
+  const env = sealDirect({ from: alice, to: toPublic(bob), type: MsgType.Text, body: utf8('vence'), now: Math.floor(nowMs / 1000) });
+  (svc as unknown as { node: { receive: (f: string, d: Uint8Array) => void } }).node.receive('a1b2c3d4e5f60718', env.bytes);
+  // A rede cai (o ponto para e grava) e volta depois do prazo: o vigia religa sozinho.
+  net = { ...NET, up: false, cidr: null, ssid: null, label: 'Sem rede local' };
+  await svc.watch();
+  const full = readFileSync(join(dir, 'store.bin')).length;
+  nowMs += 2 * 86400_000; // passou do prazo de 1 dia
+  net = { ...NET, address: '127.0.0.1' };
+  await svc.watch();
+  assert.equal(svc.state().status, 'active');
+  assert.ok(readFileSync(join(dir, 'store.bin')).length < full, 'store.bin regravado sem o vencido');
 });

@@ -187,7 +187,8 @@ class PiuMeshtasticModule : Module() {
       g.setCharacteristicNotification(ch, true) && writeDescriptor(g, d, BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE)
     }) { r ->
       val e = r.exceptionOrNull()
-      if (e == null) return@Op ready()
+      // Mesma regra do RNode: só usa o rádio pareado (enlace BLE cifrado). Rádio sem PIN também pede o pareamento.
+      if (e == null) return@Op awaitBond(g) { ready() }
       val auth = e is GattError && e.code == "AUTH"
       if (auth && bondRetry) awaitBond(g) { enableNotify(g, ch, bondRetry = false) }
       else close("error", if (auth) "bond" else "notify: ${e.message}")

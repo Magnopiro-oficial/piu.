@@ -158,8 +158,45 @@ test('era vencida só libera após conferir todos os blocos finalizados; buraco 
   const unknown = await trackWalletTransfer(r, b.options, { rpc: c.rpc });
   assert.equal(unknown.status, 'submitted'); assert.equal(isActiveWalletTransfer(unknown), true); assert.equal(unknown.scanned, 104);
   c.state.missing.clear();
-  const absent = await trackWalletTransfer(unknown, b.options, { rpc: c.rpc });
+  const absent = await trackWalletTransfer(unknown, b.options, { rpc: c.rpc, outgoingBlocks: async () => [] });
   assert.equal(absent.status, 'failed'); assert.equal(absent.scanned, 164);
+});
+
+test('era vencida: "falhou" só com a segunda fonte (indexador) concordando; sem ela ou com saída igual listada, segue acompanhando', async t => {
+  const c = chain(); t.after(() => c.rpc.close()); const q = await prepareWalletTransfer(input, { rpc: c.rpc }); const b = callbacks();
+  const r = await sendWalletTransfer(q, b.options, { rpc: c.rpc });
+  c.state.fin = 165; c.state.best = 165;
+  // Indexador fora do ar: um nó RPC sozinho não basta para dizer "falhou" (levaria a pagar de novo).
+  const noIndexer = await trackWalletTransfer(r, b.options, { rpc: c.rpc, outgoingBlocks: async () => null });
+  assert.equal(noIndexer.status, 'submitted'); assert.equal(isActiveWalletTransfer(noIndexer), true);
+  assert.match(noIndexer.error ?? '', /não refaça o pagamento/);
+  // Indexador lista uma saída igual (mesmo destino e valor) no período: as fontes discordam, não declara falha.
+  const conflict = await trackWalletTransfer(noIndexer, b.options, { rpc: c.rpc, outgoingBlocks: async () => [120] });
+  assert.equal(conflict.status, 'submitted'); assert.match(conflict.error ?? '', /#120/);
+  // Saída listada fora do período não conta.
+  const outside = await trackWalletTransfer(conflict, b.options, { rpc: c.rpc, outgoingBlocks: async () => [300] });
+  assert.equal(outside.status, 'failed');
+});
+
+test('era vencida sem a segunda fonte por 24 h: libera o envio (falhou) com aviso para conferir antes de pagar de novo', async t => {
+  const c = chain(); t.after(() => c.rpc.close()); const q = await prepareWalletTransfer(input, { rpc: c.rpc }); const b = callbacks();
+  const r = await sendWalletTransfer(q, b.options, { rpc: c.rpc });
+  c.state.fin = 165; c.state.best = 165;
+  const t0 = 1_800_000_000_000, H = 3_600_000;
+  const first = await trackWalletTransfer(r, b.options, { rpc: c.rpc, outgoingBlocks: async () => null, now: () => t0 });
+  assert.equal(first.status, 'submitted'); assert.equal(first.unconfirmedSince, t0);
+  assert.ok(isWalletTransferRecord(structuredClone(first)), 'volta do disco');
+  assert.ok(!isWalletTransferRecord({ ...first, unconfirmedSince: -1 }));
+  // Ainda dentro do prazo: segue acompanhando e não reinicia a contagem.
+  const later = await trackWalletTransfer(first, b.options, { rpc: c.rpc, outgoingBlocks: async () => [120], now: () => t0 + 24 * H - 1 });
+  assert.equal(later.status, 'submitted'); assert.equal(later.unconfirmedSince, t0);
+  // Prazo vencido com as fontes discordando (mesma frase em outro aparelho pagando igual): não trava para sempre.
+  const freed = await trackWalletTransfer(later, b.options, { rpc: c.rpc, outgoingBlocks: async () => [120], now: () => t0 + 24 * H });
+  assert.equal(freed.status, 'failed'); assert.equal(isActiveWalletTransfer(freed), false);
+  assert.match(freed.error ?? '', /#120/); assert.match(freed.error ?? '', /confira/i);
+  // Indexador fora do ar por 24 h: também libera, com o aviso.
+  const down = await trackWalletTransfer(first, b.options, { rpc: c.rpc, outgoingBlocks: async () => null, now: () => t0 + 24 * H });
+  assert.equal(down.status, 'failed'); assert.match(down.error ?? '', /indexador/); assert.match(down.error ?? '', /confira/i);
 });
 
 test('prova indexer: aceita boolean estrito e bloco/índice exatos, recusa hash diferente, string true e resposta incompleta', async t => {

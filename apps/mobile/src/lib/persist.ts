@@ -2,7 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
-import { completePersistedWrite, createResetGuard, missingStoredKeys } from './persistSafety';
+import { completePersistedWrite, createResetGuard, missingStoredKeys, readSealedValue } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -64,17 +64,13 @@ export async function loadPersisted(): Promise<void> {
     const pairs = await AsyncStorage.multiGet(keys);
     for (const k of missingStoredKeys(keys, pairs.map(([key]) => key))) unreadable.add(k.slice(PREFIX.length));
     const next: Record<string, unknown> = {};
-    const migrate: [string, string][] = [];
     for (const [k, v] of pairs) {
       const name = k.slice(PREFIX.length);
       if (v == null) { unreadable.add(name); continue; }
-      const opened = open(name, v);
-      if (opened !== undefined) { next[name] = opened; continue; }
-      if (v.startsWith(MARK)) { unreadable.add(name); continue; } // não confundir corrupção com ausência
-      // Formato antigo (texto puro): lê uma vez e regrava cifrado.
-      try { next[name] = JSON.parse(v); migrate.push([k, seal(name, next[name])]); } catch { unreadable.add(name); }
+      // Só vale o que abre com a chave; texto puro ou adulterado fica ilegível (não confundir com ausência).
+      const r = readSealedValue(v, s => open(name, s));
+      if (r.ok) next[name] = r.value; else unreadable.add(name);
     }
-    if (migrate.length) await AsyncStorage.multiSet(migrate);
     snapshot = next;
     storageReadFailed = false;
   } catch {

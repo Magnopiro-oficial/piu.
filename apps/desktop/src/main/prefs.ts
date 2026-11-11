@@ -47,12 +47,16 @@ export function sanitizePrefsPatch(patch: unknown): Partial<Prefs> {
 }
 
 /**
- * Preferências gravadas por versões antigas: "Atualizar: Automático / Perguntar" (`updateMode`) virou
- * "Avisar quando sair versão nova" (`updateNotify`). Automático → avisar; Perguntar → não avisar.
- * Nada passa a baixar sozinho.
+ * Preferências gravadas por versões antigas (só é chamado quando existe estado salvo):
+ * - "Atualizar: Automático / Perguntar" (`updateMode`) virou "Avisar quando sair versão nova"
+ *   (`updateNotify`). Automático → avisar; Perguntar → não avisar. Nada passa a baixar sozinho.
+ * - "Compartilhar endereço Lunes" (`shareWalletAddress`) nasce desligado só em instalação nova. Estado
+ *   salvo sem esse valor é de quem já usava o Piu com o padrão antigo: continua ligado, sem mandar
+ *   revogação a ninguém por causa da atualização.
  */
-export function migratePrefs<T extends Record<string, unknown>>(saved: T): Omit<T, 'updateMode'> & { updateNotify?: boolean } {
-  const { updateMode, ...rest } = saved as T & { updateMode?: unknown };
+export function migratePrefs<T extends Record<string, unknown>>(saved: T): Omit<T, 'updateMode'> & { updateNotify?: boolean; shareWalletAddress: boolean } {
+  const { updateMode, ...old } = saved as T & { updateMode?: unknown };
+  const rest = { ...old, shareWalletAddress: typeof old.shareWalletAddress === 'boolean' ? old.shareWalletAddress : true };
   if (updateMode === undefined || typeof rest.updateNotify === 'boolean') return rest;
   return { ...rest, updateNotify: updateMode === 'auto' };
 }

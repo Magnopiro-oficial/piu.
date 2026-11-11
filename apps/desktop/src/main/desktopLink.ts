@@ -6,14 +6,17 @@ import { canSendToConversation } from '../shared/conversations';
  * QR, porta aleatória), QR renovado a cada 30 s enquanto ninguém conectou, handshake pela lib
  * compartilhada (`apps/mobile/src/lib/desktopLink.ts`), 3 palavras, `ready` depois da confirmação,
  * quadros de TEXTO base64url (FrameSealer/FrameOpener), `pong` a cada `ping`, keepalive, espelho das conversas.
- * Robustez do pareamento (M-03): quem conecta e não manda `hello` em 10 s perde o slot; falha antes do
- * handshake só troca a oferta (sem 'dropped'); oferta vencida ou já usada é recusada com 1013.
+ * Robustez do pareamento (M-03): quem conecta e não manda `hello` em 5 s é dispensado; até 6 conexões
+ * esperam o hello em paralelo (2 por IP) e a primeira com hello válido vence; falha antes do handshake só
+ * libera a conexão (sem 'dropped' e sem trocar o QR: quem não provou conhecer o QR não o invalida);
+ * oferta vencida ou já usada é recusada com 1013.
  * Confirmação (M-04): a pessoa escolhe a 3ª palavra entre 4; errar cancela e gera QR novo.
  */
 import { randomInt } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { createServer, type Server } from 'node:https';
 import { hostname, type NetworkInterfaceInfo, networkInterfaces } from 'node:os';
+import type { IncomingMessage } from 'node:http';
 import { type WebSocket, WebSocketServer } from 'ws';
 import { type ConversationsState, emptyState, markRead, messagesOf, summaries } from '../shared/conversations';
 import {
@@ -52,7 +55,10 @@ export function pickLanHosts(ifaces: NodeJS.Dict<NetworkInterfaceInfo[]>): strin
 export const localHosts = (): string[] => pickLanHosts(networkInterfaces());
 
 /** Prazo para o `hello` depois de conectar (o celular manda em milissegundos; folga larga). */
-export const HELLO_TIMEOUT_MS = 10_000;
+export const HELLO_TIMEOUT_MS = 5_000;
+/** Conexões esperando o `hello` ao mesmo tempo (no total e por IP): um vizinho da LAN não segura o pareamento. */
+export const MAX_PENDING = 6;
+export const MAX_PENDING_PER_IP = 2;
 /** Quantas opções para a última palavra na confirmação (M-04). */
 export const CONFIRM_OPTIONS = 4;
 
@@ -95,6 +101,8 @@ export class DesktopLinkServer extends EventEmitter {
   private renewTimer: NodeJS.Timeout | null = null;
   private pingTimer: NodeJS.Timeout | null = null;
   private sock: WebSocket | null = null;
+  /** Conexões abertas que ainda não mandaram um `hello` válido (→ IP de origem). */
+  private pending = new Map<WebSocket, string>();
   private sealer: FrameSealer | null = null;
   private opener: FrameOpener | null = null;
   private words: string[] = [];
@@ -125,8 +133,9 @@ export class DesktopLinkServer extends EventEmitter {
     if (this.wss && !this.o.listen && !this.o.host && this.boundHost && !localHosts().includes(this.boundHost)) await this.closeServer();
     if (!this.wss) {
       // wss:// com certificado próprio fixado pelo QR (o Android de release não aceita ws:// em claro).
-      this.tls = await loadLinkTls(this.o.tlsDir, localHosts());
-      const https = createServer({ key: this.tls.key, cert: this.tls.cert, minVersion: 'TLSv1.2' }, (_req, res) => { res.statusCode = 426; res.end('Piu Desktop: vínculo com o celular (WebSocket).'); });
+      this.tls = await loadLinkTls(this.o.tlsDir);
+      // HTTP simples: 426 sem texto (não anuncia o Piu a quem varre a rede).
+      const https = createServer({ key: this.tls.key, cert: this.tls.cert, minVersion: 'TLSv1.2' }, (_req, res) => { res.statusCode = 426; res.end(); });
       // Só no endereço anunciado no QR (M-03): outras interfaces (VPN, Docker…) não alcançam o vínculo.
       const bind = this.o.listen ?? this.o.host ?? localHosts()[0] ?? '127.0.0.1';
       await new Promise<void>((res, rej) => { https.once('error', rej); https.listen(this.o.port ?? 0, bind, () => { https.off('error', rej); res(); }); });
@@ -134,7 +143,7 @@ export class DesktopLinkServer extends EventEmitter {
       const a = https.address();
       this.port = typeof a === 'object' && a ? a.port : 0;
       const wss = new WebSocketServer({ server: https, maxPayload: 6 * 1024 * 1024 });
-      wss.on('connection', s => this.onConnection(s));
+      wss.on('connection', (s, req) => this.onConnection(s, req));
       wss.on('error', e => this.log(`servidor: ${e.message}`));
       this.https = https; this.wss = wss;
     }
@@ -146,7 +155,7 @@ export class DesktopLinkServer extends EventEmitter {
   private renew() {
     if (this.renewTimer) clearInterval(this.renewTimer);
     const fresh = () => {
-      if (this.sock) return; // alguém já conectou: a oferta fica até o fim do handshake
+      if (this.sock) return; // handshake feito: a oferta já foi usada (confirmando ou vinculado)
       this.offer = this.o.offer ? this.o.offer() : newOffer(this.now());
       const host = this.o.host ?? (this.boundHost && this.boundHost !== '0.0.0.0' ? this.boundHost : localHosts()[0]) ?? '127.0.0.1';
       this.setState({ state: 'waiting', uri: offerQr(this.offer, host, this.port, this.tls!.hash), expiresAt: this.offer.createdAt + LINK_RENEW_SEC * 1000, host, port: this.port });
@@ -161,31 +170,44 @@ export class DesktopLinkServer extends EventEmitter {
     this.sock = null; this.sealer = null; this.opener = null; this.words = []; this.pendingSnapshot = null;
     if (this.pingTimer) { clearInterval(this.pingTimer); this.pingTimer = null; }
     if (s) { try { s.close(code ?? 1000, (reason ?? '').slice(0, 120)); } catch { /* já fechado */ } }
-    if (reason && this.state.state !== 'off') { this.me = null; this.contacts = []; this.conv = emptyState(); this.setState({ state: 'dropped', reason }); }
-    if (this.state.state !== 'linked') this.setWalletAddress(null);
+    this.dropPending();
+    // Sempre apaga o espelho do celular (também ao desconectar pelo computador): o próximo vínculo não vê nada dele.
+    this.me = null; this.contacts = []; this.conv = emptyState();
+    this.setWalletAddress(null);
+    if (reason && this.state.state !== 'off') this.setState({ state: 'dropped', reason });
   }
 
-  private onConnection(sock: WebSocket) {
+  /** Dispensa as conexões que ainda esperavam o `hello`. */
+  private dropPending(code = 1013, reason = 'ocupado') {
+    for (const p of [...this.pending.keys()]) { this.pending.delete(p); try { p.close(code, reason); } catch { /* já fechado */ } }
+  }
+
+  private onConnection(sock: WebSocket, req?: IncomingMessage) {
     // Ocupado, sem oferta (já usada) ou oferta vencida: recusa sem tocar no estado.
     if (this.sock || !this.offer || offerExpired(this.offer, this.now())) {
       sock.close(1013, 'ocupado');
       if (!this.sock && this.offer && this.state.state === 'waiting' && offerExpired(this.offer, this.now())) this.renew();
       return;
     }
-    this.sock = sock;
+    // Limite de conexões esperando o hello (total e por IP): recusa só esta, sem tocar no QR.
+    const ip = req?.socket.remoteAddress ?? '';
+    let fromIp = 0;
+    for (const v of this.pending.values()) if (v === ip) fromIp++;
+    if (this.pending.size >= MAX_PENDING || fromIp >= MAX_PENDING_PER_IP) { sock.close(1013, 'ocupado'); return; }
+    this.pending.set(sock, ip);
+    // A oferta vista ao conectar: se o QR renovar enquanto o celular manda o hello, ele ainda vale.
+    const offer = this.offer;
     let hs = false;
-    // Antes do handshake, a falha só libera o slot e troca a oferta (o QR segue renovando, sem 'dropped').
+    // Antes do handshake, a falha só dispensa esta conexão (sem 'dropped' e sem trocar o QR).
     const release = (code: number, reason: string) => {
       clearTimeout(helloTimer);
-      if (this.sock !== sock) return;
-      this.sock = null;
+      if (!this.pending.delete(sock)) return;
       try { sock.close(code, reason.slice(0, 120)); } catch { /* já fechado */ }
-      if (this.wss) this.renew();
     };
     const fail = (reason: string, code?: number) => {
       this.log(`sessão encerrada: ${reason}`);
-      if (this.sock !== sock) return;
       if (!hs) { release(code ?? 1008, reason); return; }
+      if (this.sock !== sock) return;
       this.dropClient(reason, code);
     };
     const helloTimer = setTimeout(() => { if (!hs) fail('tempo esgotado esperando o celular', 1008); }, this.o.helloTimeoutMs ?? HELLO_TIMEOUT_MS);
@@ -195,8 +217,14 @@ export class DesktopLinkServer extends EventEmitter {
         if (isBinary) throw new DesktopLinkError('FORMAT', 'Quadro binário: o protocolo usa texto.');
         const text = data.toString();
         if (!hs) {
+          // Outro celular já venceu (ou a oferta foi usada/cancelada): esta conexão não serve mais.
+          if (!this.pending.has(sock) || this.sock || !this.offer) { release(1013, 'ocupado'); return; }
           // Lib compartilhada: chaves por HKDF e palavras com o certificado na transcrição (wss com pino).
-          const r = desktopHandshake(this.offer!.sk, this.offer!.session, this.tls!.hash, text);
+          const r = desktopHandshake(offer.sk, offer.session, this.tls!.hash, text);
+          // Venceu: vira o cliente; as outras conexões pendentes são dispensadas.
+          this.pending.delete(sock);
+          this.dropPending();
+          this.sock = sock;
           this.sealer = new FrameSealer(r.keys.send); this.opener = new FrameOpener(r.keys.recv);
           this.words = r.words; hs = true;
           clearTimeout(helloTimer);
@@ -218,7 +246,7 @@ export class DesktopLinkServer extends EventEmitter {
     });
     sock.on('close', () => {
       clearTimeout(helloTimer);
-      if (this.sock === sock && !hs) { release(1000, ''); return; }
+      if (!hs) { release(1000, ''); return; }
       if (this.sock === sock) { const linked = this.state.state === 'linked'; this.dropClient(linked ? tm('main.link.dropped') : tm('main.link.leftBeforeConfirm')); } });
     sock.on('error', e => fail(e.message));
   }

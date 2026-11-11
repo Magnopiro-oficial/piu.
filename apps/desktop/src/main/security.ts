@@ -91,6 +91,11 @@ export interface ReauthDeps {
   promptTouchID: (reason: string) => Promise<void>;
   /** Confirmação nativa do sistema (diálogo do processo principal; o renderer não consegue clicar nela). */
   confirm: () => Promise<boolean>;
+  /**
+   * Senha do Piu digitada para mostrar a frase (baixo 27): quando vem, ela substitui o clique e é conferida
+   * no processo principal (`check`: core.checkLockPassword, com o mesmo contador de tentativas).
+   */
+  lockPassword?: { given: string; check: (pw: string) => Promise<boolean> };
 }
 
 /**
@@ -104,6 +109,7 @@ export async function reauthForPhrase(d: ReauthDeps): Promise<boolean> {
       await d.promptTouchID(tm('main.phrase.touchId'));
       return true;
     }
+    if (d.lockPassword) return (await d.lockPassword.check(d.lockPassword.given)) === true;
     return (await d.confirm()) === true;
   } catch { return false; }
 }

@@ -60,6 +60,8 @@ const MAX_SEEN_CALLS = 64;
 /** Quem liga sem parar: até 5 convites do mesmo contato a cada 10 min; os seguintes ouvem "ocupado" sem tocar. */
 const INVITES_PER_WINDOW = 5;
 const INVITE_WINDOW_MS = 10 * 60_000;
+/** Pedido de chamada sem parar: até 3 pedidos novos do mesmo contato a cada 10 min; os seguintes são ignorados. */
+const REQUESTS_PER_WINDOW = 3;
 const TICK_MS = 250;
 
 /** Põe no mapa com teto: passando do teto, sai o mais antigo. */
@@ -83,6 +85,9 @@ export class CallService {
   private seenCalls = new Map<string, true>();
   /** Convites recentes por contato (início da janela e quantos). */
   private invites = new Map<string, { since: number; n: number }>();
+  /** Pedidos de chamada já recebidos (contato|id) e quantos cada contato mandou na janela. */
+  private seenRequests = new Map<string, true>();
+  private requestsIn = new Map<string, { since: number; n: number }>();
   private listeners = new Set<() => void>();
 
   constructor(private readonly p: CallServicePorts) {
@@ -164,10 +169,16 @@ export class CallService {
       case 'decline': if (st.peer === peer) this.controller.dispatch({ type: 'remoteDecline', callId: s.callId, reason: s.reason, now }); break;
       case 'cancel': if (st.peer === peer) this.controller.dispatch({ type: 'remoteCancel', callId: s.callId, rangMs: s.rangMs, now }); break;
       case 'end': if (st.peer === peer) this.controller.dispatch({ type: 'remoteEnd', callId: s.callId, reason: s.reason, now }); break;
-      case 'request':
+      case 'request': {
+        // Mesmo pedido repetido não vira outro cartão; e um contato não enche a conversa de pedidos.
+        const seen = peer + '|' + s.requestId;
+        if (this.seenRequests.has(seen)) return;
+        putCapped(this.seenRequests, seen, true, MAX_SEEN_CALLS);
+        if (!this.windowAllowed(this.requestsIn, peer, now, REQUESTS_PER_WINDOW)) return;
         this.p.requestUpdate(peer, s.requestId, 'delivered', 'in');
         this.controller.dispatch({ type: 'requestIn', requestId: s.requestId, peer });
         break;
+      }
       case 'requestAnswer': {
         // Só a resposta de um pedido que eu mandei a este contato, no prazo, e uma vez só. Sem isto,
         // um contato ao vivo inventava um "pode ligar" e o aparelho ligava sozinho e abria o microfone.
@@ -183,11 +194,16 @@ export class CallService {
 
   /** Conta o convite do contato na janela; falso quando passou do limite. */
   private inviteAllowed(peer: string, now: number): boolean {
-    const w = this.invites.get(peer);
+    return this.windowAllowed(this.invites, peer, now, INVITES_PER_WINDOW);
+  }
+
+  /** Conta um sinal do contato na janela de 10 min; falso quando passou de `max`. */
+  private windowAllowed(m: Map<string, { since: number; n: number }>, peer: string, now: number, max: number): boolean {
+    const w = m.get(peer);
     const cur = w && now - w.since < INVITE_WINDOW_MS ? w : { since: now, n: 0 };
     cur.n++;
-    putCapped(this.invites, peer, cur, MAX_SEEN_CALLS);
-    return cur.n <= INVITES_PER_WINDOW;
+    putCapped(m, peer, cur, MAX_SEEN_CALLS);
+    return cur.n <= max;
   }
 
   /** Chamar quando os vizinhos mudam: um pedido aceito liga assim que houver caminho ao vivo. */

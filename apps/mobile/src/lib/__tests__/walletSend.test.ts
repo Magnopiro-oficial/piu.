@@ -10,7 +10,7 @@ import type { Chat } from '../../data/types';
 import type { PayRecord } from '../../state/messaging';
 import {
   DEFAULT_AMOUNT, OTHER_ID, QUICK_AMOUNTS, QUOTE_DEBOUNCE_MS, amountState, amountText, contactAddresses, holdOpacity, lunesUri, parseWalletQr, receiveAddressLabel, recipientsFrom, sanitizeAmount,
-  transferRow,
+  meshDraft, stashMeshDraft, transferRow,
 } from '../walletSend';
 import type { WalletTransferRecord } from '../walletTransfer';
 import { ALICE_42, ALICE_57 } from './lunesFake';
@@ -138,4 +138,17 @@ test('linha da transferência recém-enviada (design: nova linha no topo da ativ
   assert.equal(transferRow(fin, [{ ...move, block: 2500000, direction: 'in' }], tr as never), null);
   // Ainda não confirmada: aparece mesmo com histórico mais novo (o indexador pode não ter chegado nela).
   assert.ok(transferRow(rec({ status: 'included', block: { number: 2411001, hash: '0x', index: 1 } }), [{ ...move, block: 2500000 }], tr as never));
+});
+
+test('rascunho do Enviar sem internet: só a folha Enviar cria; id desconhecido (link externo) não preenche nada', () => {
+  const id = stashMeshDraft('5Dest', '12');
+  assert.match(id, /^[0-9a-f]{24}$/);
+  assert.deepEqual(meshDraft(id), { dest: '5Dest', amount: '12' });
+  assert.deepEqual(meshDraft(id), { dest: '5Dest', amount: '12' }, 'a tela pode renderizar de novo');
+  assert.equal(meshDraft('0'.repeat(24)), null);
+  assert.equal(meshDraft(undefined), null);
+  assert.equal(meshDraft(['x']), null);
+  const next = stashMeshDraft('5Outro', '1');
+  assert.notEqual(next, id);
+  assert.equal(meshDraft(id), null, 'só o rascunho mais recente vale');
 });

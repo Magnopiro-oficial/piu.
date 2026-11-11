@@ -47,8 +47,9 @@ Uma etapa a cada 1,1 s depois que o resultado real chega (sem movimento: tudo de
    192.168.15.1, 192.168.100.1, 10.0.0.1, 10.0.0.138, 172.16.0.1, menos os da própria sub-rede). Conectou ou
    recusou (= existe alguém ali): esta rede alcança outra rede privada → aviso para usar uma rede de visitantes.
    O painel do roteador desta rede responder é normal e só aparece no texto.
-3. **Internet**: conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (abre e fecha). O ponto não usa a internet; ela só
-   libera o papel de gateway.
+3. **Internet**: sem o gateway ligado, só uma estimativa local (há rota de saída nesta rede?), sem nenhuma
+   consulta externa. Ao ligar o gateway (ou pedir o teste), conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (abre e
+   fecha), com aviso na tela antes. O ponto não usa a internet; ela só libera o papel de gateway.
 4. **Capacidade**: espaço livre no disco diante do menor limite (256 MB).
 
 Sem interface de rede local ou sem espaço: falha e "Continuar" não acende.

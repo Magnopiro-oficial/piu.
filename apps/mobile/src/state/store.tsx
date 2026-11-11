@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { AppState } from 'react-native';
 import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../data/types';
 import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
 import { chirpInApp, notify } from '../lib/notifications';
 import { incomingAlert } from '../lib/piuChirp';
+import { isAppLocked, isViewingNow, onAppLockChange, readOnView } from '../lib/appLockGate';
 import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
 import { isStatusBack, tempSeconds } from '../lib/status';
@@ -186,6 +188,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     const remote = list.map(id => id.replace(/^in-/, ''));
     if (remote.length) signals.current.read(cid, c.peer, remote);
   }, []);
+  // Voltou para a frente (ou destravou) com uma conversa aberta: o que chegou nesse meio-tempo é lido agora.
+  useEffect(() => {
+    const back = () => {
+      const id = viewing.current;
+      if (!id) return;
+      const seen = isViewingNow(id, id, { active: AppState.currentState === 'active', locked: isAppLocked() });
+      const r = readOnView(chatsRef.current.find(c => c.id === id), seen, false);
+      if (!r) return;
+      setChats(cs => cs.map(c => (c.id === id && c.unread ? { ...c, unread: 0 } : c)));
+      if (r.ids?.length) markRead(id, r.ids);
+    };
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') back(); });
+    const off = onAppLockChange(l => { if (!l) back(); });
+    return () => { sub.remove(); off(); };
+  }, [markRead]); // eslint-disable-line react-hooks/exhaustive-deps
   // Configurações do grupo de exemplo das versões antigas: os grupos reais guardam as suas no mensageiro.
   useEffect(() => { void forgetPersisted('group'); }, []);
 
@@ -220,7 +237,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const dismissToast = useCallback(leave, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const push = useCallback((cid: string, msg: Msg, opts?: { quiet?: boolean }) => {
-    const viewingIt = viewing.current === cid;
+    // Conversa aberta só conta com o app em primeiro plano e destravado: em segundo plano ou sob o
+    // bloqueio do app a mensagem fica não lida, notifica e não sai "lida" para o contato.
+    const viewingIt = isViewingNow(viewing.current, cid, { active: AppState.currentState === 'active', locked: isAppLocked() });
     if (msg.from === 'them') {
       stopTyping(cid);
       // Conversa aberta: a mensagem que chegou já foi lida.
@@ -259,6 +278,10 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     chats,
     openChat: id => {
       viewing.current = id;
+      // Aberta por baixo do bloqueio (ex.: toque na notificação) ou em segundo plano: ainda não foi
+      // vista. Fica não lida e sem recibo; ao destravar, o efeito de "voltou para a frente" confirma.
+      const seen = isViewingNow(id, id, { active: AppState.currentState === 'active', locked: isAppLocked() });
+      if (!readOnView(chatsRef.current.find(c => c.id === id), seen, true)) return;
       setChats(cs => cs.map(c => (c.id === id ? { ...c, unread: 0 } : c)));
       markRead(id);
     },

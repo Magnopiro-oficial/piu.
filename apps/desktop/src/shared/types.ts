@@ -272,7 +272,8 @@ export interface Prefs {
 }
 
 export const DEFAULT_PREFS: Prefs = {
-  theme: 'system', notifications: true, animations: true, relay: true, peers: [], walletAddress: null, hideBalance: false, displayName: '', screenSecurity: true, shareWalletAddress: true,
+  // `shareWalletAddress`: instalação nova nasce sem compartilhar o endereço Lunes. Quem já usava continua como estava (main/prefs.ts, `migratePrefs`).
+  theme: 'system', notifications: true, animations: true, relay: true, peers: [], walletAddress: null, hideBalance: false, displayName: '', screenSecurity: true, shareWalletAddress: false,
   lan: true, notifPreview: 'always', notifSound: true, identity: 'public', fontSize: 'm', density: 'comfort', enterSends: true,
   // Mesmos padrões do celular (state/settings.tsx e data/settings.ts).
   notifGroups: true, notifChannels: true, notifWallet: true, notifAlerts: true, badge: true, dnd: false,
@@ -371,8 +372,11 @@ export interface PiuApi {
   /** A frase não volta daqui (M-01): fica em Ajustes → Backup, mostrada só com reautenticação. */
   createIdentity(o: { kind: IdentityKind; name: string }): Promise<void>;
   restoreIdentity(o: { phrase: string[]; name: string }): Promise<void>;
-  /** Frase de recuperação guardada no cofre (Backup → Mostrar frase). Pede Touch ID/confirmação nativa antes; recusado → rejeita. */
-  revealPhrase(): Promise<string[] | null>;
+  /**
+   * Frase de recuperação guardada no cofre (Backup → Mostrar frase). Pede Touch ID/confirmação nativa antes; recusado → rejeita.
+   * `password`: a senha do Piu digitada; com senha criada e sem Touch ID, ela é conferida no lugar do clique.
+   */
+  revealPhrase(password?: string): Promise<string[] | null>;
   /** Cofre bloqueado na abertura (`session.state === 'locked'`): tenta abrir de novo, sem recriar nada. */
   retryVault(): Promise<SessionInfo>;
   exportIdentityBackup(password: string): Promise<'saved' | 'cancelled'>;
@@ -463,8 +467,13 @@ export interface PiuApi {
   guardianState(): Promise<GuardianState>;
   /** Rede em que o computador está agora (nome do Wi-Fi quando o sistema diz; nunca a senha). */
   guardianNetwork(): Promise<GuardianNetwork>;
-  /** Teste automático (E4): aparelhos se veem, rede de casa, internet, espaço. Só sondas de conexão. */
+  /**
+   * Teste automático (E4): aparelhos se veem, rede de casa, internet, espaço. Só sondas de conexão.
+   * Sem a ponte (gateway) ligada, nada sai da rede local: "internet" é uma estimativa (rota de saída).
+   */
   guardianTest(): Promise<GuardianTest>;
+  /** Teste real de internet, a pedido (ligar a ponte): abre e fecha uma conexão com 1.1.1.1 e 9.9.9.9. */
+  guardianTestInternet(): Promise<boolean>;
   /** "Ativar ponto" (E4e): chave própria nova, guardada cifrada neste computador. */
   guardianActivate(config: Partial<GuardianConfig> & { name: string; level: GuardianLevel }): Promise<GuardianState>;
   guardianUpdate(patch: Partial<GuardianConfig>): Promise<GuardianState>;

@@ -41,6 +41,8 @@ export interface LanOptions {
   /** Handshakes de entrada pendentes por IP de origem. */
   maxPendingPerIp?: number;
   maxLinks?: number;
+  /** Enlaces de entrada já abertos por IP de origem (padrão 8): um host só não ocupa o teto global. */
+  maxLinksPerIp?: number;
 }
 
 const HANDSHAKE_MAX = 4096;
@@ -176,6 +178,8 @@ export class LanAdapter {
   private runtime: string[] = [];
   /** Último erro e tentativas por destino fixo. */
   private dialInfo = new Map<string, { error: string | null; errorAt: number | null; attempts: number }>();
+  /** Enlaces de entrada abertos por IP de origem. */
+  private linksPerIp = new Map<string, number>();
   private stopped = false;
   port = 0;
   discoveryPort: number | null = null;
@@ -402,6 +406,10 @@ export class LanAdapter {
             release();
             state = 'open';
             reader.max = MAX_FRAME_BYTES + RECORD_OVERHEAD;
+            // Teto por IP depois do handshake: chaves descartáveis de um host só não lotam o nó.
+            if (inbound && (this.linksPerIp.get(ip) ?? 0) >= (this.o.maxLinksPerIp ?? 8)) {
+              writeFrame(sock, session.seal(0x7e)); state = 'closed'; sock.end(); return;
+            }
             // No teto de enlaces, um vizinho fixo (configuração ou painel) entra no lugar do enlace
             // anônimo mais novo; os outros são recusados como antes (M-04, contra ocupação por Sybil).
             if (this.engine.linkCount >= (this.o.maxLinks ?? 64)) {
@@ -426,6 +434,13 @@ export class LanAdapter {
             });
             if (!this.engine.attach(l)) { state = 'closed'; sock.end(); return; }
             attached = true;
+            if (inbound) {
+              this.linksPerIp.set(ip, (this.linksPerIp.get(ip) ?? 0) + 1);
+              sock.once('close', () => {
+                const n = (this.linksPerIp.get(ip) ?? 1) - 1;
+                if (n > 0) this.linksPerIp.set(ip, n); else this.linksPerIp.delete(ip);
+              });
+            }
             onOpen?.();
             if (!inbound) { const d = this.dialInfo.get(address); if (d) { d.error = null; d.errorAt = null; } }
             continue;

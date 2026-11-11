@@ -49,6 +49,7 @@ import { createDeviceChange, decodeNotice, type DeviceChangeOutbox, encodeDevice
 import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
+import { cleanConfirmed, withConfirmed, type ConfirmedAddresses } from '../lib/walletSend';
 import type { ProfilePhoto } from '../lib/avatar';
 import type { IncomingFile, RouteInfo } from '../messaging/messenger';
 import { attachVirtualPeer } from '../transport/simulated';
@@ -75,6 +76,20 @@ export const deviceChangeText = (who: string, reason: 'phrase' | 'file') =>
 const ROUTES_KEY = 'routes';
 /** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
 export const receivedFiles = new Map<string, IncomingFile>();
+/** Teto do que fica na memória: passando, sai o arquivo mais antigo (abrir fica indisponível nele). */
+const RECEIVED_MAX_BYTES = 128 * 1024 * 1024;
+const RECEIVED_MAX_FILES = 64;
+function keepReceived(key: string, f: IncomingFile) {
+  receivedFiles.delete(key);
+  receivedFiles.set(key, f);
+  let total = 0;
+  for (const x of receivedFiles.values()) total += x.data.length;
+  while (receivedFiles.size > 1 && (receivedFiles.size > RECEIVED_MAX_FILES || total > RECEIVED_MAX_BYTES)) {
+    const [k, old] = receivedFiles.entries().next().value as [string, IncomingFile];
+    receivedFiles.delete(k);
+    total -= old.data.length;
+  }
+}
 const SAVE_DELAY = 300;
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -100,6 +115,10 @@ interface Messaging {
   contactsFor: (via: IdentityKind) => { id: string; name: string }[];
   /** Contatos públicos que compartilharam o endereço Lunes (destinatários da Carteira). */
   walletContacts: () => { chatId: string; id: string; name: string; address: string }[];
+  /** Carteira: endereço já confirmado de cada conversa (o de um envio concluído), salvo no aparelho. */
+  confirmedWallets: ConfirmedAddresses;
+  /** Envio concluído para o contato da conversa: esse endereço passa a ser o confirmado. */
+  confirmWallet: (chatId: string, address: string) => void;
   /** Estado real de um grupo/canal/comunidade da conversa (ou null). */
   groupOf: (chatId: string) => GroupState | null;
   /** Meu id na identidade usada pelo grupo (para saber se sou admin). */
@@ -273,6 +292,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Endereço Lunes que os contatos públicos recebem (`wa`); `null` com o ajuste desligado.
   const sharedWallet = priv.shareWallet !== false ? wallet.lunesAddress : null;
   const [lastShared, setLastShared] = usePersisted<string | null>('wallet.shared', null);
+  // Endereço já confirmado de cada conversa (usado num envio concluído): a folha Enviar avisa quando o contato aparece com outro.
+  const [confirmedWallets, setConfirmedWallets] = usePersisted<ConfirmedAddresses>('wallet.confirmed', {}, cleanConfirmed);
   const paysRef = useRef(pays); paysRef.current = pays;
   const [payEpoch, setPayEpoch] = useState(0);
   const putPay = useCallback((rec: PayRecord) => {
@@ -423,7 +444,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             }
             const cid = chatIdFor(contactId);
             if (!c || !chatsRef.current.some(x => x.id === cid)) return;
-            handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: STORED.sysRevoked });
+            // Uma nota por contato a cada 10 min (pelo meu relógio): avisos em sequência não enchem a conversa.
+            const rvId = `sys-rv-${contactId.slice(-12)}-${Math.floor(now() / 600)}`;
+            if (chatsRef.current.find(x => x.id === cid)?.msgs?.some(x => x.id === rvId)) return;
+            handlers.current.receive(cid, { id: rvId, from: 'sys', time: nowHM(), text: STORED.sysRevoked });
           } catch { /* aviso inválido: ignora */ }
         },
         // Foto do perfil público de um contato (já conferida: JPEG pequeno, só de contato público).
@@ -512,10 +536,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
             file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true, ...(f.held ? { held: true } : {}) } });
         },
-        fileReceived: (contactId, f) => {
-          const cid = msgToChat.current.get('in-' + f.msgId) ?? chatIdFor(contactId);
+        fileReceived: (_contactId, f) => {
+          // Só guarda o que tem mensagem na conversa (a oferta sem conversa não aparece: nada a abrir).
+          const cid = msgToChat.current.get('in-' + f.msgId);
+          if (!cid || !chatsRef.current.some(c => c.id === cid)) return;
           const preview = f.mime.startsWith('image/') && f.data.length <= PREVIEW_MAX_BYTES ? `data:${f.mime};base64,${toBase64(f.data)}` : undefined;
-          receivedFiles.set('in-' + f.msgId, f);
+          keepReceived('in-' + f.msgId, f);
           handlers.current.patchFile(cid, 'in-' + f.msgId, { state: 'verified', done: f.blocks, preview });
         },
         // Confirmação de leitura do contato: só mensagens minhas daquela conversa.
@@ -823,6 +849,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return (peer && messenger?.getContact(peer)?.pub) || null;
     },
     testDeviceCard: testDevice ? testDevice.card : null,
+    confirmedWallets,
+    confirmWallet: (chatId, address) => setConfirmedWallets(m => withConfirmed(m, chatId, address, chats.map(c => c.id))),
     walletContacts: () => (messenger ? messenger.listContacts()
       .filter(c => c.via === 'public' && !c.request && !!c.lunes)
       .map(c => ({ chatId: chatIdFor(c.id), id: c.id, name: c.name || c.id.slice(4, 8).toUpperCase(), address: c.lunes! })) : []),
@@ -997,7 +1025,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       all: () => Object.values(pays),
       epoch: payEpoch,
     },
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet, lora]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet, lora, confirmedWallets, setConfirmedWallets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
   return (

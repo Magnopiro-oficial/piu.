@@ -8,7 +8,10 @@
  *    nos endereços comuns de roteadores de OUTRAS redes privadas (192.168.0.1, 192.168.1.1, 10.0.0.1, …)
  *    nas portas 80/443. Respondeu (conectou ou recusou = existe alguém ali): esta rede alcança outra rede
  *    privada → aviso. O roteador desta rede responder é normal e só aparece no texto.
- * 3. Internet: conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (só abrir e fechar). O ponto não usa a internet.
+ * 3. Internet: sem a ponte (gateway), NENHUM contato fora da rede: só uma estimativa local (o sistema tem
+ *    rota de saída nesta interface?). O teste real, conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (só abrir e
+ *    fechar, nenhum dado do Piu sai), roda apenas com a ponte ligada ou quando a pessoa pede (`external`),
+ *    e só ele vale como internet confirmada (`internet: true`). O ponto em si não usa a internet.
  * 4. Capacidade: espaço livre no disco diante do limite escolhido.
  * Sem interface de rede local: falha (bloqueia "Continuar").
  */
@@ -41,6 +44,11 @@ export function tcpProbe(host: string, port: number, ms = 900): Promise<ProbeRes
 export const HOME_TARGETS = ['192.168.0.1', '192.168.1.1', '192.168.15.1', '192.168.100.1', '10.0.0.1', '10.0.0.138', '172.16.0.1'];
 export const INTERNET_TARGETS: [string, number][] = [['1.1.1.1', 443], ['9.9.9.9', 443]];
 
+/** Teste real de internet: abre e fecha uma conexão com cada alvo. Só com a ponte ligada ou a pedido da pessoa. */
+export async function probeInternet(probe: typeof tcpProbe = tcpProbe): Promise<boolean> {
+  return (await Promise.all(INTERNET_TARGETS.map(([h, p]) => probe(h, p, 2500)))).some(r => r === 'open');
+}
+
 /** Escuta anúncios LNNP por `ms` e devolve quantas etiquetas distintas vieram de outros endereços. */
 export function listenBeacons(port: number, ms: number, own: Set<string>): Promise<number> {
   return new Promise(res => {
@@ -68,7 +76,11 @@ export interface CheckDeps {
   now?: () => number;
 }
 
-export interface CheckOptions { storageMB: number; dataDir: string; discoveryPort?: number; listenMs?: number }
+export interface CheckOptions {
+  storageMB: number; dataDir: string; discoveryPort?: number; listenMs?: number;
+  /** Fazer o teste real de internet (1.1.1.1 e 9.9.9.9). Sem isto, nada sai da rede local. */
+  external?: boolean;
+}
 
 const ownAddresses = () => new Set(Object.values(networkInterfaces()).flatMap(l => (l ?? []).map(a => a.address)));
 
@@ -91,7 +103,7 @@ export async function runLanCheck(net: GuardianNetwork, o: CheckOptions, d: Chec
     beacons().catch(() => 0),
     Promise.all(others.flatMap(ip => [80, 443].map(async port => ({ ip, r: await probe(ip, port) })))),
     net.gateway ? Promise.all([80, 443].map(port => probe(net.gateway!, port))) : Promise.resolve([] as ProbeResult[]),
-    Promise.all(INTERNET_TARGETS.map(([h, p]) => probe(h, p, 2500))),
+    o.external ? probeInternet(probe) : Promise.resolve(null),
     free().catch(() => null),
   ]);
   const steps: CheckStep[] = [];
@@ -103,8 +115,11 @@ export async function runLanCheck(net: GuardianNetwork, o: CheckOptions, d: Chec
   steps.push(reached.length
     ? { id: 'home', level: 'warn', label: tm('main.check.home'), detail: tm('main.check.homeReach', { nets: reached.slice(0, 2).join(', ') }) }
     : { id: 'home', level: 'ok', label: tm('main.check.home'), detail: adminOpen ? tm('main.check.homeAdmin') : tm('main.check.homeOk') });
-  const internet = inet.some(r => r === 'open');
-  steps.push({ id: 'internet', level: 'ok', label: tm('main.check.internet'), detail: internet ? tm('main.check.internetYes') : tm('main.check.internetNo') });
+  // Sem o teste real: estimativa local pela rota de saída (não conta como internet confirmada).
+  const internet = inet === true;
+  steps.push({ id: 'internet', level: 'ok', label: tm('main.check.internet'), detail: inet === null
+    ? tm(net.gateway ? 'main.check.internetLocalYes' : 'main.check.internetLocalNo')
+    : internet ? tm('main.check.internetYes') : tm('main.check.internetNo') });
   const need = o.storageMB * 1024 * 1024;
   steps.push(freeB === null
     ? { id: 'capacity', level: 'warn', label: tm('main.check.capacity'), detail: tm('main.check.diskUnknown') }

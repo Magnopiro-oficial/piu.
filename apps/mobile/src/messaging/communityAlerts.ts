@@ -20,6 +20,7 @@
  * - Guarda: some do aparelho 24 h depois de vencer (histórico curto).
  */
 import { fromUtf8, utf8 } from '../protocol/bytes';
+import { stripBidi } from './bidi';
 import type { GroupMember } from './groups';
 
 export type AlertCategory = 'clima' | 'agua' | 'fogo' | 'via' | 'seguranca' | 'saude' | 'servico' | 'outro';
@@ -121,7 +122,7 @@ export type WireAlert =
   | { kind: 'close'; i: string; alert: string };
 
 const ID_RE = /^[0-9a-f]{32}$/;
-const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const clip = (v: unknown, max: number) => (typeof v === 'string' ? stripBidi(v).trim().slice(0, max) : '');
 
 export function encodeAlertPayload(p: WireAlert): Uint8Array {
   if (p.kind === 'alert') return utf8(JSON.stringify({ i: p.i, ca: { c: p.cat, s: p.sev, t: p.title, x: p.text, ...(p.area ? { r: p.area } : {}), d: p.dur } }));
@@ -245,7 +246,12 @@ export class AlertBook {
     return at;
   }
 
-  /** Alertas do autor nesta comunidade que contam para o limite no instante `at`. */
+  /**
+   * Alertas do autor nesta comunidade que contam para o limite no instante `at`.
+   * Só contam os que começaram até `at`: assim o alerta mais novo que chega antes dos antigos
+   * não faz os antigos serem recusados. A resposta ainda pode variar com a ordem de chegada. Em aberto: quem
+   * retrodata do mais novo para o mais velho ainda passa do teto de 3 ativos.
+   */
   private limitReason(community: string, author: string, at: number, roster: Roster, except?: string): string | null {
     let active = 0;
     for (const x of this.alerts.values()) {

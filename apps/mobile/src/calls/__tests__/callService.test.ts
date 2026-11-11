@@ -77,7 +77,8 @@ test('chamada de ponta a ponta: toca, atende, voz nos dois sentidos, mesmas 4 pa
   assert.ok(w.a.words && w.a.words.length === 4);
   assert.deepEqual(w.a.words, w.b.words);
   assert.ok(w.audio.a.on && w.audio.b.on);
-  w.audio.a.speak(40); w.audio.b.speak(33);
+  // O 1º quadro só procura o caminho (ping, nunca áudio a todos: callMedia.ts); o 2º já vai pelo enlace.
+  w.audio.a.speak(40); w.audio.a.speak(40); w.audio.b.speak(33);
   assert.deepEqual(w.audio.b.played, [40]);
   assert.deepEqual(w.audio.a.played, [33]);
   w.tick(90_000);
@@ -266,4 +267,17 @@ test('aceite com chave efêmera de ordem baixa: não lança, não conecta e ence
   assert.equal(w.a.state.phase, 'ending');
   assert.equal(w.a.words, null);
   assert.ok(!w.audio.a.on, 'microfone fechado');
+});
+
+test('pedidos de chamada sem parar: mesmo id não conta de novo e do 4º pedido em 10 min em diante é ignorado', () => {
+  const w = pair(null);
+  const req = (id: string) => w.b.onSignal('alice', { t: 'cl', s: { t: 'request', requestId: id } });
+  req('pedido-repetido-01');
+  req('pedido-repetido-01');
+  assert.equal(w.reqs.filter(r => r.who === 'b').length, 1, 'id repetido não vira outro cartão');
+  for (let i = 0; i < 5; i++) req(`pedido-novo-${i}-abcd`);
+  assert.equal(w.reqs.filter(r => r.who === 'b').length, 3, 'no máximo 3 pedidos por contato a cada 10 min');
+  w.tick(10 * 60_000);
+  req('pedido-depois-abcd');
+  assert.equal(w.reqs.filter(r => r.who === 'b').length, 4, 'passada a janela, aceita de novo');
 });

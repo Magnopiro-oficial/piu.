@@ -20,6 +20,21 @@ Atualizado em 08/11/2026. Desde a 0.1.0 o APK sai assinado com a chave de releas
 - [ ] Gerar **AAB** para a Play e **APK universal** (uma peça só) para o P2P e para o site: quem instala pela Play recebe o app em partes e não consegue repassar (o app avisa com `ERR_SPLIT_APK`).
 - [ ] Conferir a assinatura do APK e do AAB com a chave de release (item 1).
 - [ ] Anotar o SHA-256 do APK universal.
+- [ ] Conferir que o APK oficial só tem `arm64-v8a` (o comando abaixo não pode mostrar nada). Gerar com `./gradlew assembleRelease` puro, em `apps/mobile/android`: **não** usar `-PreactNativeArchitectures=...` nem `npx expo run:android --variant release`, porque os dois passam a lista de arquiteturas por fora e ela vence o `gradle.properties` (o `expo run` usa as do aparelho ou emulador conectado). O APK 0.1.4 saiu com `arm64-v8a` e `x86_64`, embora o `gradle.properties` da época pedisse as quatro arquiteturas: a lista veio de fora do projeto.
+
+```bash
+unzip -l ~/piu-release-0.1.5/Piu-0.1.5.apk | grep -E 'lib/(x86|x86_64|armeabi-v7a)/'
+```
+- [ ] Depois do `npx expo prebuild`, olhar o `git diff apps/mobile/package.json`: o prebuild troca os scripts `android` e `ios` para `expo run:android` e `expo run:ios`. Desfazer essas duas linhas (`expo start --android` e `expo start --ios`).
+
+### Tamanho do APK (desde a 0.1.5)
+
+Medido em 11/11/2026 com um APK de teste local: 47,0 MB na 0.1.4 e 26,0 MB na 0.1.5. O que mudou, tudo com fonte em `apps/mobile` (o `npx expo prebuild` leva para `android/`):
+
+- **Só `arm64-v8a`** (`buildArchs` do `expo-build-properties` no `app.json`). O `x86_64` só servia a emulador e pesava 14,9 MB. Para testar em emulador x86_64, gere um build à parte com `./gradlew assembleRelease -PreactNativeArchitectures=arm64-v8a,x86_64`. Esse build é só para teste e não pode ser publicado. Na Play, o AAB continua sendo o caminho.
+- **Pacote JS comprimido** (`enableBundleCompression` no `app.json`): de 7,9 MB para 2,9 MB dentro do APK. O custo é abrir o app um pouco mais devagar (o pacote é descomprimido na memória); medir em aparelho antes de publicar.
+- **Sem reanimated, worklets e gesture-handler**: o app não usa. Saem do nativo pelo `expo.autolinking.exclude` do `package.json` e do JS pelo `metro.config.js`. Para voltar a usar um deles, tire o nome dos dois lugares.
+- **`shrinkResources` fica desligado.** Ligado, ele economiza cerca de 1 MB, mas apaga `res/raw/piu.wav` (o som da notificação, que o Android procura pelo nome). Só religar junto com um `keep.xml` que preserve esse som, e com teste de notificação em aparelho.
 
 ## 3. Teste em aparelho real antes de liberar
 

@@ -536,6 +536,12 @@ internal class BleEngine(
         if (newState == BluetoothProfile.STATE_DISCONNECTED) {
           serverMtu.remove(device.address)
           unsubscribe(device.address)
+          // Quem só escreveu o hello (sem se inscrever) também sai: sem isto o nome ficava para sempre.
+          val id = device.address
+          if (!clients.containsKey(id) && !subscribers.containsKey(id)) {
+            reassembler.clear(id)
+            if (names.containsKey(id)) refresh(id)
+          }
         }
       }
     }

@@ -5,6 +5,7 @@ import { meshFunds, readingAgeDays } from '../../lib/carryView';
 import { formatLunes } from '../../lib/lunesRpc';
 import { parseLunesAmount } from '../../lib/paymentRequest';
 import { addrGroups } from '../../lib/phoneNodeView';
+import { meshDraft } from '../../lib/walletSend';
 import { OFFLINE_CONTEXT_MAX_AGE_MS } from '../../lib/walletCarry';
 import { WalletTransferError, type WalletQuote } from '../../lib/walletTransfer';
 import { useWallet } from '../../state/wallet';
@@ -23,7 +24,11 @@ const MAX_DAYS = Math.round(OFFLINE_CONTEXT_MAX_AGE_MS / 86_400_000);
  */
 export default function MeshSend() {
   const t = useT();
-  const { dest = '', amount = '' } = useLocalSearchParams<{ dest?: string; amount?: string }>();
+  const params = useLocalSearchParams<{ draft?: string; dest?: string; amount?: string }>();
+  // Caminho seguro: a folha Enviar guarda o rascunho em memória e passa só o id (`stashMeshDraft`).
+  // `dest`/`amount` na rota ficam aceitos só até a folha Enviar passar a mandar o id; depois, remover.
+  const fromSheet = meshDraft(params.draft);
+  const dest = fromSheet?.dest ?? params.dest ?? '', amount = fromSheet?.amount ?? params.amount ?? '';
   const { offlineContext, quoteCarriedTransfer, carryTransfer } = useWallet();
   const name = useDestName(dest);
   const [holdKey, setHoldKey] = useState(0);

@@ -1,11 +1,12 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { usePersisted } from '../lib/persist';
+import { persistEpoch, persistedReadFailed, readPersisted, usePersisted } from '../lib/persist';
 import { applyLangPref, isLang, isRegion, type LangPref, type Region } from '../i18n';
 import type { BackupRecord } from '../lib/backupStatus';
 import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 import { type HoursWindow, normHoursChoice } from '../messaging/hours';
 import { UPDATE_NOTIFY_DEFAULT } from '../lib/updateCore';
 import { SOUND_DEFAULTS } from '../lib/piuChirp';
+import { shareWalletStartsOff } from '../lib/walletShareDefault';
 
 /**
  * `find` ("Quem pode me encontrar", identidade pública): `all` = Por perto anuncia e recebe pedidos;
@@ -13,7 +14,7 @@ import { SOUND_DEFAULTS } from '../lib/piuChirp';
  * descarta os pedidos pelo código. Aplicado no mensageiro (`Messenger.setDiscovery`).
  */
 export interface Privacy { find: 'all' | 'contacts' | 'none'; near: 'off' | '1h'; read: boolean; typing: boolean; temp: 'off' | '7d' | '24h'; delay: boolean; pad: boolean; noRoutes: boolean; lock: boolean;
-  /** Mandar meu endereço Lunes aos contatos públicos (`wa`). Ausente em ajustes antigos = ligado. */
+  /** Mandar meu endereço Lunes aos contatos públicos (`wa`). Instalação nova nasce com `false` gravado; ausente (quem já usava o app) = ligado. */
   shareWallet?: boolean }
 export interface StorageOpts { auto: 'wifi' | 'always' | 'never'; quality: 'eco' | 'normal' | 'orig'; retention: '24' | '48' | '168' }
 /** `hours`: horário do Modo nó. 'custom' usa a faixa `custom` escolhida pela pessoa (messaging/hours.ts). */
@@ -61,7 +62,12 @@ const Ctx = createContext<Settings | null>(null);
 
 /** Ajustes de segurança, privacidade, armazenamento, bateria e notificações (locais, sem servidor). */
 export function SettingsProvider({ children }: { children: ReactNode }) {
-  const [priv, setPrivS] = usePersisted<Privacy>('set.priv', { find: 'all', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false, shareWallet: true });
+  // Compartilhar o endereço Lunes: instalação nova (entrada ainda não concluída, sem valor salvo) nasce desligada,
+  // e o "desligado" é gravado já, antes de a identidade existir. Quem já usa o app fica como está (lib/walletShareDefault.ts).
+  const [shareOff] = useState(() => shareWalletStartsOff({ saved: readPersisted('set.priv'), onboarded: readPersisted('onboarded'),
+    readFailed: persistedReadFailed('set.priv') || persistedReadFailed('onboarded'), wiped: persistEpoch() > 0 }));
+  const [priv, setPrivS] = usePersisted<Privacy>('set.priv', { find: 'all', near: 'off', read: true, typing: true, temp: 'off', delay: false, pad: true, noRoutes: true, lock: false, shareWallet: !shareOff });
+  useEffect(() => { if (shareOff) setPrivS(s => ({ ...s, shareWallet: false })); }, [shareOff, setPrivS]);
   const [sto, setStoS] = usePersisted<StorageOpts>('set.sto', { auto: 'wifi', quality: 'normal', retention: '48' });
   const [bat, setBatS] = usePersisted<BatteryOpts>('set.bat', { bg: true, hours: 'always', traffic: 200, bw: '5', disc: 'normal' });
   const [preview, setPreview] = usePersisted<Preview>('set.preview', 'always');

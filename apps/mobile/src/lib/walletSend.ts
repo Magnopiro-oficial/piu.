@@ -13,6 +13,7 @@ import type { Chat } from '../data/types';
 import type { IconName } from '../ui/Icon';
 import type { LunesMove } from './lunesHistory';
 import type { WalletTransferRecord } from './walletTransfer';
+import { bytesToHex, randomBytes } from '@noble/hashes/utils.js';
 import { t as tGlobal, type Key, type Vars } from '../i18n/core';
 import { formatLunes } from './lunesRpc';
 import { parseLunesAmount, readPayRequest } from './paymentRequest';
@@ -31,6 +32,20 @@ export const QUOTE_DEBOUNCE_MS = 350;
 /** Esquema usado no rodapé do cartão e aceito pelo leitor de QR: `lunes:<endereço SS58>`. */
 export const LUNES_URI_SCHEME = 'lunes:';
 export const lunesUri = (address: string) => `${LUNES_URI_SCHEME}${address}`;
+
+/**
+ * Rascunho do "Enviar sem internet" (wallet/mesh) só em memória: a folha Enviar guarda destino e valor e
+ * passa à rota apenas um id aleatório. Um link externo (`piu://wallet/mesh?...`) não conhece o id, então
+ * não abre a tela de assinatura já preenchida com destino e valor de outra pessoa. Vale só o mais recente.
+ */
+let meshSlot: { id: string; dest: string; amount: string } | null = null;
+export function stashMeshDraft(dest: string, amount: string): string {
+  meshSlot = { id: bytesToHex(randomBytes(12)), dest, amount };
+  return meshSlot.id;
+}
+export function meshDraft(id: unknown): { dest: string; amount: string } | null {
+  return meshSlot && typeof id === 'string' && id === meshSlot.id ? { dest: meshSlot.dest, amount: meshSlot.amount } : null;
+}
 
 /** O campo de valor aceita só `[0-9,.]` (`inputMode="decimal"` do design). */
 export const sanitizeAmount = (v: string) => v.replace(/[^0-9,.]/g, '').slice(0, 24);
@@ -59,6 +74,51 @@ export function contactAddresses(chats: readonly Chat[], pays: readonly PayLike[
   }
   return new Map([...latest].map(([id, p]) => [id, p.address.trim()]));
 }
+
+/** Endereço já confirmado de cada conversa (usado num envio concluído): id da conversa → endereço Lunes. */
+export type ConfirmedAddresses = Record<string, string>;
+
+const samePk = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((x, i) => x === b[i]);
+
+/**
+ * Compara o endereço proposto agora (o que o contato compartilhou ou pôs no último pedido de pagamento)
+ * com o já confirmado da conversa: `first` = nunca houve envio concluído; `same` = a mesma conta (mesmo
+ * com outro prefixo de rede); `changed` = outra conta, pede o aviso "o endereço deste contato mudou".
+ */
+export function addressTrust(confirmed: string | undefined, proposed: string): 'first' | 'same' | 'changed' {
+  const c = confirmed ? decodeSs58(confirmed) : null;
+  if (!c || !c.ok) return 'first';
+  const p = decodeSs58(proposed);
+  return p.ok && samePk(c.publicKey, p.publicKey) ? 'same' : 'changed';
+}
+
+/** Endereço que mudou só libera o envio depois de a pessoa confirmar aquele endereço (`acked`). */
+export const needsAddressAck = (trust: ReturnType<typeof addressTrust>, acked: string | null, proposed: string) => trust === 'changed' && acked !== proposed;
+
+/**
+ * Grava o endereço de um envio concluído como o confirmado da conversa (no prefixo da Lunes) e tira as
+ * conversas que não existem mais. Sem mudança, devolve o mesmo objeto (nada é regravado).
+ */
+export function withConfirmed(map: ConfirmedAddresses, chatId: string, address: string, chatIds: readonly string[]): ConfirmedAddresses {
+  const d = decodeSs58(address);
+  if (!d.ok || !chatIds.includes(chatId)) return map;
+  const value = encodeSs58(d.publicKey, LUNES_SS58_PREFIX);
+  const keep = Object.entries(map).filter(([id]) => id !== chatId && chatIds.includes(id));
+  if (map[chatId] === value && keep.length === Object.keys(map).length - 1) return map;
+  return Object.fromEntries([...keep, [chatId, value]]);
+}
+
+/** Registro lido do aparelho: só pares conversa → endereço SS58 válido. */
+export function cleanConfirmed(v: unknown): ConfirmedAddresses {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+  const all = Object.entries(v);
+  const good = all.filter(([, a]) => typeof a === 'string' && decodeSs58(a).ok);
+  // Tudo válido: o mesmo objeto, para não regravar a cada abertura.
+  return (good.length === all.length ? v : Object.fromEntries(good)) as ConfirmedAddresses;
+}
+
+/** Endereço em grupos de 4, para conferir ao lado do nome na folha Enviar. */
+export const groupAddress = (address: string) => address.replace(/(.{4})(?=.)/g, '$1 ');
 
 /** Contatos na folha: o design tem 4 círculos; com "Outro" sempre no fim, sobram 3 para contatos reais. */
 export const MAX_RECIPIENTS = 3;

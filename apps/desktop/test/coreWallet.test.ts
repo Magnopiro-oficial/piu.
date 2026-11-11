@@ -63,6 +63,9 @@ test('PiuCore compartilha o endereço derivado com contato público aceito; desl
   await b.createIdentity({ kind: 'public', name: 'Bia' });
   const aAddr = a.wallet().address!, bAddr = b.wallet().address!;
   assert.ok(aAddr && bAddr && aAddr !== bAddr);
+  // Instalação nova nasce sem compartilhar o endereço; as duas ligam o ajuste em Privacidade.
+  assert.equal(a.prefs().shareWalletAddress, false);
+  a.setPrefs({ shareWalletAddress: true }); b.setPrefs({ shareWalletAddress: true });
   a.addPeer(`127.0.0.1:${b.networkStatus().lan.port}`);
   await until(() => a.networkStatus().lan.links > 0 && b.networkStatus().lan.links > 0, 'conexão local');
   // Ana adiciona Bia pelo cartão (contato aceito do lado dela) e escreve; para Bia é um pedido até ela responder.

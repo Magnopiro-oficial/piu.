@@ -1,0 +1,6 @@
+• Security and privacy fixes from the Nov 9 audit.
+• System notices inside chats now show in the app's language.
+• The app is smaller to download and install.
+• Camera photos sent as "Original" no longer carry location or other hidden file data.
+• With app lock on, the screen can't be captured. The recovery phrase screens can't either.
+• The app asks for confirmation before pairing with a Piu Node read from a QR code.

@@ -130,60 +130,60 @@ test('LoRa no Automático: diz por qual rádio saiu e, quando trocou para o Mesh
   t.setMediaEnabled?.({ piulora: false });
   assert.deepEqual(await t.send(P, bytes(100)), { medium: 'lora' });
   // Fora do LoRa, só o meio.
-  f.emit({ type: 'up', medium: 'ble', id: 'X', name: 'piu-z' });
+  f.emit({ type: 'up', medium: 'ble', id: 'X', name: 'piu-0000aa' });
 });
 
 test('se o meio escolhido falha, cai para o outro e lembra da falha', async () => {
   let clock = 0;
   const s = setup({ now: () => clock });
-  s.emit({ type: 'up', medium: 'nearby', id: 'AB12', name: 'piu-b' });
-  s.emit({ type: 'up', medium: 'ble', id: 'X', name: 'piu-b' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'AB12', name: 'piu-bbbbbb' });
+  s.emit({ type: 'up', medium: 'ble', id: 'X', name: 'piu-bbbbbb' });
   s.failing.add('ble');
-  await s.t.send('n:piu-b', bytes(100));
+  await s.t.send('n:piu-bbbbbb', bytes(100));
   assert.deepEqual(s.sent.map(x => x.medium), ['ble', 'nearby']);
   // Durante o resfriamento, o BLE nem é tentado primeiro.
   s.failing.clear(); s.sent.length = 0; clock = 1000;
-  await s.t.send('n:piu-b', bytes(100));
+  await s.t.send('n:piu-bbbbbb', bytes(100));
   assert.deepEqual(s.sent.map(x => x.medium), ['nearby']);
   // Depois do resfriamento, volta a preferir BLE para envelope pequeno.
   s.sent.length = 0; clock = FAILURE_COOLDOWN_MS + 1;
-  await s.t.send('n:piu-b', bytes(100));
+  await s.t.send('n:piu-bbbbbb', bytes(100));
   assert.deepEqual(s.sent.map(x => x.medium), ['ble']);
 });
 
 test('todos os meios falham: o envio falha (o mensageiro mantém na fila)', async () => {
   const s = setup();
-  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-c' });
-  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-c' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-cccccc' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-cccccc' });
   s.failing.add('ble'); s.failing.add('nearby');
-  await assert.rejects(s.t.send('n:piu-c', bytes(10)), /falha em nearby/);
+  await assert.rejects(s.t.send('n:piu-cccccc', bytes(10)), /falha em nearby/);
   await assert.rejects(s.t.send('desconhecido', bytes(10)), /não está conectado/);
-  await assert.rejects(s.t.send('n:piu-c', bytes(40 * 1024)), /maior que 32 KB/);
+  await assert.rejects(s.t.send('n:piu-cccccc', bytes(40 * 1024)), /maior que 32 KB/);
 });
 
 test('bateria baixa (leitura automática e dica manual) prefere BLE', async () => {
   let low = true;
   const s = setup({ lowBattery: () => low });
-  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-d' });
-  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-d' });
-  await s.t.send('n:piu-d', bytes(20_000));
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-dddddd' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-dddddd' });
+  await s.t.send('n:piu-dddddd', bytes(20_000));
   low = false;
-  await s.t.send('n:piu-d', bytes(20_000));
+  await s.t.send('n:piu-dddddd', bytes(20_000));
   s.t.setPowerHint!(true);
-  await s.t.send('n:piu-d', bytes(20_000));
+  await s.t.send('n:piu-dddddd', bytes(20_000));
   s.t.setPowerHint!(null);
-  await s.t.send('n:piu-d', bytes(20_000));
+  await s.t.send('n:piu-dddddd', bytes(20_000));
   assert.deepEqual(s.sent.map(x => x.medium), ['ble', 'nearby', 'ble', 'nearby']);
 });
 
 test('meio desligado pela pessoa não é usado', async () => {
   const s = setup();
-  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-e' });
-  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-e' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-eeeeee' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-eeeeee' });
   s.t.setMediaEnabled!({ ble: false });
-  await s.t.send('n:piu-e', bytes(10));
+  await s.t.send('n:piu-eeeeee', bytes(10));
   s.t.setMediaEnabled!({ ble: true, nearby: false });
-  await s.t.send('n:piu-e', bytes(10_000));
+  await s.t.send('n:piu-eeeeee', bytes(10_000));
   assert.deepEqual(s.sent.map(x => x.medium), ['nearby', 'ble']);
 });
 
@@ -198,38 +198,75 @@ test('meio desligado pela pessoa também para no rádio (o Nearby liga o Wi-Fi s
 
 test('vizinho só some quando o último meio cai; envelope informa o meio', () => {
   const s = setup();
-  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-f' });
-  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-f' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-ffffff' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-ffffff' });
   s.emit({ type: 'data', medium: 'ble', id: 'B', data: bytes(3) });
   const env = s.events.find(e => e.type === 'envelope');
-  assert.deepEqual(env, { type: 'envelope', from: 'n:piu-f', data: bytes(3), via: 'ble' });
+  assert.deepEqual(env, { type: 'envelope', from: 'n:piu-ffffff', data: bytes(3), via: 'ble' });
 
   s.emit({ type: 'down', medium: 'nearby', id: 'A' });
   s.emit({ type: 'lost', medium: 'nearby', id: 'A' });
   assert.equal(s.events.filter(e => e.type === 'disconnected' || e.type === 'peerLost').length, 0);
   s.emit({ type: 'down', medium: 'ble', id: 'B' });
-  assert.deepEqual(s.events.at(-1), { type: 'disconnected', id: 'n:piu-f' });
+  assert.deepEqual(s.events.at(-1), { type: 'disconnected', id: 'n:piu-ffffff' });
   s.emit({ type: 'lost', medium: 'ble', id: 'B' });
-  assert.deepEqual(s.events.at(-1), { type: 'peerLost', id: 'n:piu-f' });
+  assert.deepEqual(s.events.at(-1), { type: 'peerLost', id: 'n:piu-ffffff' });
 });
 
 test('enlace BLE sem nome migra para o vizinho certo quando o hello chega', () => {
   const s = setup();
-  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-g' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'piu-111111' });
   s.emit({ type: 'up', medium: 'ble', id: 'C1' }); // central que conectou em nós: nome ainda desconhecido
   assert.ok(s.events.some(e => e.type === 'connected' && e.id === 'l:ble:C1'));
   s.events.length = 0;
-  s.emit({ type: 'found', medium: 'ble', id: 'C1', name: 'piu-g' }); // hello
+  s.emit({ type: 'found', medium: 'ble', id: 'C1', name: 'piu-111111' }); // hello
   assert.deepEqual(s.events.slice(0, 2), [{ type: 'disconnected', id: 'l:ble:C1' }, { type: 'peerLost', id: 'l:ble:C1' }]);
   // O vizinho piu-g ganha o meio BLE (via de exibição continua a mais rápida).
   assert.ok(!s.events.some(e => e.type === 'connected'));
 });
 
+test('nome fora do formato do app (piu- + 6 hex) no BLE/Nearby não junta enlaces (auditoria 2026-11-09)', () => {
+  const s = setup();
+  s.emit({ type: 'up', medium: 'nearby', id: 'A', name: 'Celular da Ana' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'Celular da Ana' });
+  const ids = s.events.filter(e => e.type === 'connected').map(e => (e as { id: string }).id);
+  assert.deepEqual(ids, ['l:nearby:A', 'l:ble:B'], 'cada enlace vira um vizinho próprio');
+});
+
+test('dois enlaces do mesmo meio com o mesmo nome: o envio vai pelos dois (quem imita o nome não desvia o envelope)', async () => {
+  const s = setup();
+  s.emit({ type: 'up', medium: 'ble', id: 'REAL', name: 'piu-abcdef' });
+  s.emit({ type: 'up', medium: 'ble', id: 'IMITA', name: 'piu-abcdef' });
+  s.emit({ type: 'up', medium: 'nearby', id: 'N', name: 'piu-abcdef' });
+  assert.deepEqual(await s.t.send('n:piu-abcdef', bytes(100)), { medium: 'ble' });
+  assert.deepEqual(s.sent.map(x => x.medium + ':' + x.id).sort(), ['ble:IMITA', 'ble:REAL']);
+  // Um deles falhando não derruba o envio nem passa para o outro meio.
+  s.sent.length = 0;
+  s.failing.add('ble');
+  await s.t.send('n:piu-abcdef', bytes(100));
+  assert.deepEqual(s.sent.map(x => x.medium + ':' + x.id).sort(), ['ble:IMITA', 'ble:REAL', 'nearby:N']);
+});
+
+test('enlace do mesmo meio que trava não atrasa o envio pelo outro (revisão auditoria 2026-11-09)', async () => {
+  const s = setup();
+  s.emit({ type: 'up', medium: 'ble', id: 'IMITA', name: 'piu-abcdef' });
+  s.emit({ type: 'up', medium: 'ble', id: 'REAL', name: 'piu-abcdef' });
+  const orig = s.source.sendVia;
+  // O impostor aceita a conexão e nunca responde à escrita.
+  s.source.sendVia = (medium, id, data) => (id === 'IMITA' ? new Promise<void>(() => {}) : orig(medium, id, data));
+  const r = await Promise.race([
+    s.t.send('n:piu-abcdef', bytes(100)),
+    new Promise(res => setTimeout(() => res('preso'), 200)),
+  ]);
+  assert.deepEqual(r, { medium: 'ble' });
+  assert.ok(s.sent.some(x => x.id === 'REAL'));
+});
+
 test('transporte desligado esquece os vizinhos', async () => {
   const s = setup();
-  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-h' });
+  s.emit({ type: 'up', medium: 'ble', id: 'B', name: 'piu-222222' });
   s.emit({ type: 'state', state: 'off' });
-  await assert.rejects(s.t.send('n:piu-h', bytes(1)), /não está conectado/);
+  await assert.rejects(s.t.send('n:piu-222222', bytes(1)), /não está conectado/);
   assert.deepEqual(s.events.at(-1), { type: 'state', state: 'off' });
 });
 

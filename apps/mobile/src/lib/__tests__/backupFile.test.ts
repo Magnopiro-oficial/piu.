@@ -57,3 +57,12 @@ test('backup: senha curta e frase inválida não geram arquivo', async () => {
   await rejects(sealBackup({ phrase, createdAt: 1 }, 'curta', { N }), 'PASSWORD');
   await rejects(sealBackup({ phrase: ['abc'], createdAt: 1 }, PASS, { N }), 'CONTENT');
 });
+
+test('backup: senha previsível (sequência, teclado, palavra comum + números) é recusada', async () => {
+  const { passwordIssue } = await import('../backupFile');
+  for (const p of ['1234567890', '0987654321', 'abcdefghij', 'qwertyuiop', 'asdfghjkl;', 'senha12345', 'Password2024', 'iloveyou123', 'piupiu2026!', '12345678910', 'admin123456'])
+    assert.equal(passwordIssue(p), 'repetitive', p);
+  for (const p of [PASS, 'cavalo bateria grampo', 'Tq8#vLm2pZ', 'minha avó fazia bolo'])
+    assert.equal(passwordIssue(p), null, p);
+  await rejects(sealBackup({ phrase, createdAt: 1 }, 'senha12345', { N }), 'PASSWORD');
+});

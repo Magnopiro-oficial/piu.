@@ -47,6 +47,8 @@ export default function Scan() {
   const [authing, setAuthing] = useState(false);
   // Re-pareamento do mesmo celular com outro segredo: só salva depois de confirmar (B-05).
   const [repair, setRepair] = useState<{ node: PairedNode; prev: PairedNode } | null>(null);
+  // Pareamento novo: mostra nó, operador, endereço e certificado e só salva depois de confirmar.
+  const [pairAsk, setPairAsk] = useState<{ node: PairedNode; pasted: boolean } | null>(null);
 
   const savePair = async (node: PairedNode) => {
     const list = (await loadApprovalNodes<PairedNode>()).filter(n => n.phoneId !== node.phoneId);
@@ -54,14 +56,14 @@ export default function Scan() {
     setPaired({ node, code: pairCode(node) }); setError(null);
   };
 
-  const fromPanel = async (text: string) => {
+  const fromPanel = async (text: string, pasted: boolean) => {
     setCamera(false); setCard(null); setPaired(null); setApproval(null);
     try {
       if (text.startsWith(PAIR_PREFIX)) {
         const node = parsePair(text);
         const prev = pairingConflict(await loadApprovalNodes<PairedNode>(), node);
         if (prev) { setRepair({ node, prev }); setError(null); return; }
-        await savePair(node);
+        setPairAsk({ node, pasted }); setError(null);
         return;
       }
       const req = parseRequest(text);
@@ -84,9 +86,22 @@ export default function Scan() {
     setApproval({ ...approval, code: approvalCode(approval.node, approval.req) });
   };
 
-  const parse = (text: string) => {
+  const confirmPair = async () => {
+    if (!pairAsk || authing) return;
+    const { node } = pairAsk;
+    setAuthing(true);
+    const r = await confirmDevice(t('scan.panel.pairNew.prompt', { node: node.node }));
+    setAuthing(false);
+    setPairAsk(null);
+    // Recusou o bloqueio do aparelho: nada é salvo. Sem bloqueio configurado, vale a confirmação na tela.
+    if (r === 'denied') return;
+    await savePair(node).catch(e => setError((e as Error).message));
+  };
+
+  /** `pasted`: veio do campo de texto (não da câmera); o aviso de pareamento diz isso. */
+  const parse = (text: string, pasted = false) => {
     const raw = text.trim();
-    if (!target && (raw.startsWith(PAIR_PREFIX) || raw.startsWith(REQUEST_PREFIX))) { void fromPanel(raw); return; }
+    if (!target && (raw.startsWith(PAIR_PREFIX) || raw.startsWith(REQUEST_PREFIX))) { void fromPanel(raw, pasted); return; }
     // QR de Wi-Fi (cartaz de ponto Piu): folha "Ponto Piu por perto" (P8) para entrar só para o Piu.
     if (!target && /^WIFI:/i.test(raw) && point.offerFromQr(raw)) { setCamera(false); router.back(); return; }
     try {
@@ -151,7 +166,7 @@ export default function Scan() {
         <TextInput value={code} onChangeText={v => { setCode(v); setError(null); }} placeholder={t('scan.placeholder')} placeholderTextColor={c.ink3}
           autoCapitalize="none" autoCorrect={false} multiline accessibilityLabel={t('scan.input.a11y')}
           style={{ minHeight: 76, padding: 14, borderRadius: 16, backgroundColor: c.bg2, color: c.ink, fontSize: 13, fontFamily: fontFamily(400, true), textAlignVertical: 'top' }} />
-        <Button label={t('scan.read')} variant="outline" height={46} disabled={!code.trim() || !ready} onPress={() => parse(code)} />
+        <Button label={t('scan.read')} variant="outline" height={46} disabled={!code.trim() || !ready} onPress={() => parse(code, true)} />
         {testDeviceCard && !target && (
           <Button label={t('scan.testDevice')} variant="ghost" height={42} fontSize={13.5}
             onPress={() => { const v = testDeviceCard(); setCode(v); parse(v); }} />
@@ -219,6 +234,12 @@ ${t('scan.transfer.node', { node: approval.req.node })}`}
           </View>
         )}
       </ScrollView>
+      {pairAsk && (
+        <Dialog icon="shield_lock" title={t('scan.panel.pairNew.title')} primary={t('scan.panel.pairNew.confirm')}
+          body={t('scan.panel.pairNew.body', { node: pairAsk.node.node, operator: pairAsk.node.operator || '—', url: pairAsk.node.url ?? '—', pin: pairAsk.node.pin ? pairAsk.node.pin.slice(0, 23) + '…' : '—' })
+            + (pairAsk.pasted ? '\n\n' + t('scan.panel.pairNew.pasted') : '')}
+          onClose={() => setPairAsk(null)} onPrimary={() => { void confirmPair(); }} />
+      )}
       {repair && (
         <Dialog icon="sync_lock" title={t('scan.panel.repair.title')} body={t('scan.panel.repair.body', { node: repair.prev.node })} primary={t('scan.panel.repair.confirm')}
           onClose={() => setRepair(null)} onPrimary={() => {

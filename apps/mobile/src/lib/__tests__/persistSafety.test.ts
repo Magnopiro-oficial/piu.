@@ -85,3 +85,12 @@ test('falha ao apagar o armazenamento não deixa as gravações travadas', async
   assert.equal(guard.resetting(), false);
   assert.doesNotThrow(() => guard.assertWritable());
 });
+
+test('valor salvo só vale se abrir com a chave: texto puro sem o prefixo cifrado é ilegível', async () => {
+  const { readSealedValue } = await import('../persistSafety');
+  const open = (s: string) => (s === 'e1:ok' ? { lock: true } : undefined);
+  assert.deepEqual(readSealedValue('e1:ok', open), { ok: true, value: { lock: true } });
+  assert.deepEqual(readSealedValue('e1:adulterado', open), { ok: false }, 'GCM inválido');
+  assert.deepEqual(readSealedValue('{"lock":false}', open), { ok: false }, 'JSON em claro injetado não é aceito');
+  assert.deepEqual(readSealedValue('', open), { ok: false });
+});

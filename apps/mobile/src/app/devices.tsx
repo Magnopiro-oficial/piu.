@@ -18,6 +18,7 @@ import { Button } from '../ui/Button';
 import { BackHeader, SectionLabel } from '../ui/Controls';
 import { Dialog } from '../ui/Dialog';
 import { Icon, type IconName } from '../ui/Icon';
+import { NoCapture } from '../ui/NoCapture';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
@@ -163,6 +164,8 @@ export default function Devices() {
 
   return (
     <Screen>
+      {/* QR de resposta (frase cifrada para a oferta lida): sem print nem gravação enquanto aparece. */}
+      {pair?.step === 'reply' && <NoCapture k="devices-pair" />}
       <BackHeader title={t('profile.row.devices')} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
         <View style={{ paddingHorizontal: 20, gap: 8 }}>

@@ -61,6 +61,7 @@ export const guardian = {
   'guardian.pick.appDesc': 'Entrega o app a quem não tem',
   'guardian.pick.gatewayDesc': 'Só com internet · desligado por padrão',
   'guardian.pick.gatewayNoNet': 'Precisa de internet: o teste não achou',
+  'guardian.pick.gatewayAsk': 'Desligado por padrão. Ao ligar, o Piu testa a internet: abre e fecha uma conexão com 1.1.1.1 e 9.9.9.9; nenhum dado do Piu é enviado.',
   'guardian.pick.days': 'Dias',
   'guardian.pick.maxNote': 'Uma mensagem vale no máximo 7 dias na malha; guardar por mais tempo não adiantaria.',
   'guardian.pick.energy': 'Energia',

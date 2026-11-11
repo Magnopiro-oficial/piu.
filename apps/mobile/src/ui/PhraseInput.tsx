@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react';
-import { Pressable, TextInput, type TextInputInstance, View } from 'react-native';
+import { Platform, Pressable, TextInput, type TextInputInstance, View } from 'react-native';
+import { phraseFieldProps } from '../lib/phraseField';
 import { PHRASE_WORDS, suggestWords, WORDLIST } from '../protocol';
 import { useT } from '../i18n';
 import { fontFamily } from '../theme/fonts';
@@ -39,7 +40,7 @@ export function PhraseInput({ words, onChange }: { words: string[]; onChange: (w
               borderWidth: 1, borderStyle: bad ? 'dashed' : 'solid', borderColor: focus === i || bad ? c.ink : 'transparent' }}>
               <T size={10.5} w={500} mono color={c.ink2}>{i + 1}</T>
               <TextInput ref={r => { refs.current[i] = r; }} value={w} onChangeText={v => set(i, v)} onFocus={() => setFocus(i)} onBlur={() => setFocus(f => (f === i ? null : f))}
-                autoCapitalize="none" autoCorrect={false} autoComplete="off" spellCheck={false} returnKeyType={i < PHRASE_WORDS - 1 ? 'next' : 'done'}
+                {...phraseFieldProps(Platform.OS)} returnKeyType={i < PHRASE_WORDS - 1 ? 'next' : 'done'}
                 onSubmitEditing={() => refs.current[i + 1]?.focus()} accessibilityLabel={`${t('phrase.word', { n: i + 1 })}${bad ? `, ${t('phrase.notInList')}` : ''}`}
                 style={{ flex: 1, minWidth: 0, height: 38, fontSize: 14.5, color: c.ink, fontFamily: fontFamily(600), paddingVertical: 0, outlineWidth: 0 }} />
             </View>

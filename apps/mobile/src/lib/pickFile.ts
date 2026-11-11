@@ -1,8 +1,12 @@
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
+import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
+import { Platform } from 'react-native';
 import { fitSize, PHOTO_PLAN, type PhotoQuality } from './mediaCore';
-import { fromBase64 } from '../transport/base64';
+import { isJpeg, photoName, stripJpegMetadata } from './photoMeta';
+import { isPickerTemp, PICKER_CACHE_DIRS } from './pickerTemp';
+import { fromBase64, toBase64 } from '../transport/base64';
 
 export interface PickedFile { name: string; mime: string; data: Uint8Array; /** Prévia (data URI) para fotos pequenas. */ preview?: string }
 
@@ -14,9 +18,37 @@ async function readUri(uri: string): Promise<Uint8Array> {
   return new Uint8Array(await r.arrayBuffer());
 }
 
+/** Apaga as cópias em claro que os seletores deixaram no cache (só elas, nunca o original). */
+function dropTemps(...uris: (string | undefined)[]) {
+  if (Platform.OS === 'web') return;
+  for (const u of uris) {
+    try { if (u && isPickerTemp(u, Paths.cache.uri)) { const f = new File(u); if (f.exists) f.delete(); } } catch { /* o sistema limpa o cache */ }
+  }
+}
+
+/** "Apagar dados locais": as pastas de temporários dos seletores (e dos recebidos abertos) saem inteiras. */
+export function clearPickerCache() {
+  if (Platform.OS === 'web') return;
+  for (const n of PICKER_CACHE_DIRS) {
+    try { const d = new Directory(Paths.cache, n); if (d.exists) d.delete(); } catch { /* fica para o sistema */ }
+  }
+}
+
+/** Regrava em JPEG sem reduzir (tira os metadados). */
+async function reencode(uri: string, compress: number, size?: { width: number; height: number }) {
+  let ctx = ImageManipulator.manipulate(uri);
+  if (size) ctx = ctx.resize(size);
+  const out = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress, base64: true });
+  dropTemps(out.uri);
+  if (!out.base64) throw new Error('Não foi possível preparar a foto.');
+  return out.base64;
+}
+
 /**
  * Foto da galeria. `quality` é o ajuste "Qualidade das fotos enviadas": Econômica e Normal reduzem e
- * regravam em JPEG (lib/mediaCore.ts); Original manda o arquivo escolhido sem regravar.
+ * regravam em JPEG (lib/mediaCore.ts); Original manda a imagem sem recomprimir, mas sem metadados
+ * (local, aparelho, data: lib/photoMeta.ts). O nome enviado é sempre neutro (foto-AAAA-MM-DD).
+ * A cópia que o seletor deixa no cache é apagada logo depois de lida.
  * `null` se a pessoa cancelar ou negar o acesso.
  */
 export async function pickImage(quality: PhotoQuality = 'normal'): Promise<PickedFile | null> {
@@ -27,20 +59,28 @@ export async function pickImage(quality: PhotoQuality = 'normal'): Promise<Picke
   const a = r.canceled ? null : r.assets[0];
   if (!a) return null;
   const day = new Date().toISOString().slice(0, 10);
-  if (plan) {
-    const size = fitSize(a.width, a.height, plan.maxSide);
-    let ctx = ImageManipulator.manipulate(a.uri);
-    if (size.width !== a.width || size.height !== a.height) ctx = ctx.resize(size);
-    const out = await (await ctx.renderAsync()).saveAsync({ format: SaveFormat.JPEG, compress: plan.compress, base64: true });
-    if (!out.base64) throw new Error('Não foi possível preparar a foto.');
-    const data = fromBase64(out.base64);
-    const name = (a.fileName ?? `foto-${day}`).replace(/\.[A-Za-z0-9]+$/, '') + '.jpg';
-    return { name, mime: 'image/jpeg', data, preview: data.length <= PREVIEW_MAX_BYTES ? `data:image/jpeg;base64,${out.base64}` : undefined };
+  try {
+    if (plan) {
+      const size = fitSize(a.width, a.height, plan.maxSide);
+      const b64 = await reencode(a.uri, plan.compress, size.width !== a.width || size.height !== a.height ? size : undefined);
+      const data = fromBase64(b64);
+      return { name: photoName(day, 'image/jpeg'), mime: 'image/jpeg', data, preview: data.length <= PREVIEW_MAX_BYTES ? `data:image/jpeg;base64,${b64}` : undefined };
+    }
+    const raw = a.base64 ? fromBase64(a.base64) : await readUri(a.uri);
+    let data: Uint8Array | null = raw;
+    let mime = a.mimeType ?? 'image/jpeg';
+    if (isJpeg(raw)) {
+      // No iPhone o seletor já entrega JPEG (mesmo de uma HEIC): o tipo segue os bytes.
+      mime = 'image/jpeg';
+      data = stripJpegMetadata(raw);
+    } else if (/^image\/(hei[cf]|tiff)/i.test(mime)) {
+      data = null; // HEIC/TIFF levam EXIF: regrava em JPEG sem reduzir
+    }
+    if (!data) { data = fromBase64(await reencode(a.uri, 1)); mime = 'image/jpeg'; }
+    return { name: photoName(day, mime), mime, data, preview: data.length <= PREVIEW_MAX_BYTES ? `data:${mime};base64,${toBase64(data)}` : undefined };
+  } finally {
+    dropTemps(a.uri);
   }
-  const data = a.base64 ? fromBase64(a.base64) : await readUri(a.uri);
-  const mime = a.mimeType ?? 'image/jpeg';
-  const name = a.fileName ?? `foto-${day}.jpg`;
-  return { name, mime, data, preview: data.length <= PREVIEW_MAX_BYTES && a.base64 ? `data:${mime};base64,${a.base64}` : undefined };
 }
 
 /** Documento qualquer. `null` se a pessoa cancelar. */
@@ -48,5 +88,6 @@ export async function pickDocument(): Promise<PickedFile | null> {
   const r = await DocumentPicker.getDocumentAsync({ copyToCacheDirectory: true, multiple: false });
   const a = r.canceled ? null : r.assets[0];
   if (!a) return null;
-  return { name: a.name, mime: a.mimeType ?? 'application/octet-stream', data: await readUri(a.uri) };
+  try { return { name: a.name, mime: a.mimeType ?? 'application/octet-stream', data: await readUri(a.uri) }; }
+  finally { dropTemps(a.uri); }
 }

@@ -42,3 +42,13 @@ export function createResetGuard() {
     },
   };
 }
+
+/**
+ * Lê um valor do armazenamento: só vale o que abre com a chave de dados (AES-GCM).
+ * Texto puro (sem o prefixo cifrado) é ilegível: aceitá-lo deixaria quem escreve no disco,
+ * sem a chave, injetar estado (ex.: desligar o bloqueio). Toda versão publicada já gravava cifrado.
+ */
+export function readSealedValue(stored: string, open: (stored: string) => unknown): { ok: true; value: unknown } | { ok: false } {
+  const value = open(stored);
+  return value === undefined ? { ok: false } : { ok: true, value };
+}

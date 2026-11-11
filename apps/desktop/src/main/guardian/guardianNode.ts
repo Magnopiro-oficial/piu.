@@ -6,7 +6,7 @@
  * (protocol/carry.ts) e as entrega com o mesmo CarryGateway do celular e do piu-node.
  * Estatísticas reais, só contagens: nenhum id de aparelho sai daqui.
  */
-import { createHash } from 'node:crypto';
+import { createHash, createHmac } from 'node:crypto';
 import { CarryGateway } from '../../../../mobile/src/lib/carryGateway';
 import { finalizedHead, LunesRpc } from '../../../../mobile/src/lib/lunesRpc';
 import { carryOf, CarryKind, GATEWAY_TX_IDENTITY, gatewayKindOf, sealCarryReceipt } from '../../../../mobile/src/protocol/carry';
@@ -100,6 +100,12 @@ export class GuardianNode {
     const d = dayKey(this.ms());
     if (d !== this.today.day) { this.today = { day: d, seen: [], bytes: 0 }; this.seenToday = new Set(); }
   }
+  /**
+   * Nome do vizinho para o roteador (e para o store.bin): HMAC do id com a chave deste ponto. Basta para
+   * não devolver nem repetir envio (também depois de reiniciar), sem guardar o id do aparelho em claro.
+   */
+  pid(id: string) { return createHmac('sha256', this.o.key.sk).update(`piu/ponto/vizinho/${id}`).digest('hex').slice(0, 16); }
+
   /** Conta o aparelho no dia sem guardar o id: hash do id com o dia (não liga um dia ao outro). */
   private countPeer(id: string) {
     this.rollDay();
@@ -121,7 +127,13 @@ export class GuardianNode {
     });
     await this.o.transport.start();
     const every = (ms: number, fn: () => void) => { const t = setInterval(fn, ms); t.unref(); this.timers.push(t); };
-    every(this.o.tickMs ?? 2000, () => { this.router.purge(this.sec()); this.flushAll(); });
+    every(this.o.tickMs ?? 2000, () => {
+      const before = this.router.stats().stored;
+      this.router.purge(this.sec());
+      // Expurgo por validade também vai ao disco (sem isto, um ponto ocioso manteria vencidos no store.bin).
+      if (this.router.stats().stored < before) this.o.onChange?.();
+      this.flushAll();
+    });
     if (this.probeGateway && this.gatewayTimers && this.carry) {
       const carry = this.carry;
       void this.probeGateway();
@@ -141,7 +153,7 @@ export class GuardianNode {
   /** Envelope de um vizinho: guarda (se couber) e repassa aos outros conectados. */
   receive(from: string, data: Uint8Array) {
     this.addBytes(data.length);
-    const r = this.router.ingest(data, from, this.sec());
+    const r = this.router.ingest(data, this.pid(from), this.sec());
     if (r.status === 'delivered') {
       // Só o gateway abre (openExtra): carga de transação para a Lunes.
       const c = carryOf(r.message, data);
@@ -156,7 +168,8 @@ export class GuardianNode {
 
   private flush(peer: string) {
     const before = this.router.receipts.length;
-    const out = this.router.outgoing(peer, 'eth', this.sec());
+    const stored = this.router.stats().stored;
+    const out = this.router.outgoing(this.pid(peer), 'eth', this.sec());
     if (this.router.receipts.length > before) {
       this.receipts += this.router.receipts.length - before;
       // Recibos ficam para o validador num ponto com gateway/internet; aqui só a contagem (memória curta).
@@ -165,9 +178,10 @@ export class GuardianNode {
     for (const bytes of out) {
       this.forwarded++;
       this.addBytes(bytes.length);
-      this.o.transport.send(peer, bytes).catch(() => { try { this.router.unsent(peer, envelopeId(bytes)); } catch { /* inválido */ } this.forwarded--; });
+      this.o.transport.send(peer, bytes).catch(() => { try { this.router.unsent(this.pid(peer), envelopeId(bytes)); } catch { /* inválido */ } this.forwarded--; });
     }
-    if (out.length) this.o.onChange?.();
+    // Repassou algo ou o roteador expurgou vencidos ao montar a rodada: gravar.
+    if (out.length || this.router.stats().stored < stored) this.o.onChange?.();
   }
 
   stats() {
@@ -175,7 +189,15 @@ export class GuardianNode {
     return { stored: s.stored, storedBytes: s.bytes, maxBytes: this.router.limits.maxBytes };
   }
 
-  exportStored(): StoredEnvelope[] { return this.router.exportStored().filter(e => !e.own); }
+  /**
+   * O que vai para o store.bin. De "para quem já foi repassado" só ficam os vizinhos ligados agora: quem já
+   * saiu não fica registrado no disco (a memória ainda lembra enquanto o ponto está ligado). Preço: depois de
+   * reiniciar, quem tinha saído e volta pode receber o mesmo envelope uma vez a mais (o aparelho descarta).
+   */
+  exportStored(): StoredEnvelope[] {
+    const here = new Set([...this.peers].map(p => this.pid(p)));
+    return this.router.exportStored().filter(e => !e.own).map(e => ({ ...e, sentTo: e.sentTo.filter(x => here.has(x)) }));
+  }
   importStored(list: StoredEnvelope[]) { return this.router.importStored(list, this.sec()); }
   /** Apaga tudo o que o ponto guarda de outras pessoas (encerrar). */
   wipe() { for (const e of this.router.exportStored()) this.router.forget(envelopeId(e.bytes)); }
