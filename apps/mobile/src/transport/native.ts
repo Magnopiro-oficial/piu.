@@ -75,9 +75,12 @@ export function createNativeTransport(): Transport | null {
   if (rnode) transport.piulora = rnode;
   // `notice`: texto do aviso fixo no idioma da pessoa (sem ele, o do Modo nó). O nativo guarda o texto
   // para religar sozinho (processo morto, reinício do aparelho).
+  // Só o Modo nó pede a permissão de notificação aqui. "Receber com o app fechado" vem ligado de fábrica
+  // e liga no fim do onboarding: o pedido fica com o NotificationBridge (lib/notifications.ts), que não
+  // pede na primeira abertura, e não disputa com o pedido de Bluetooth e Wi-Fi Direct.
   transport.setBackgroundRelay = async (on, notice) => {
     if (!mod.setBackground) return;
-    if (on) await requestRelayNotificationPermission();
+    if (on && !notice) await requestRelayNotificationPermission();
     const n = notice ?? RELAY_NOTIFICATION;
     await mod.setBackground(on, n.title, n.text);
   };

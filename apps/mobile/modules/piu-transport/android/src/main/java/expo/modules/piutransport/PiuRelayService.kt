@@ -40,6 +40,10 @@ import java.lang.ref.WeakReference
  *   `HeadlessJsTaskService` (o wake lock dele ficaria preso enquanto o serviço vive). Com a tarefa ativa,
  *   o React Native não pausa os timers JS em segundo plano; sem runtime (processo morto), `start()` sobe
  *   o JS sem tela. `allowedInForeground`: a pessoa pode reabrir o app com a tarefa rodando.
+ *   Custo: com a tarefa ativa, o `TimerFrameCallback` do JavaTimerManager segue agendado a cada vsync
+ *   (só para com os timers pausados e sem tarefa). Com a tela apagada não há vsync; com a tela acesa em
+ *   outro app, é um callback curto por quadro na thread principal. A medir no aparelho
+ *   (`dumpsys batterystats`) antes de trocar por uma tarefa só enquanto não houver Activity.
  * - A escolha (ligado, título e texto) fica em SharedPreferences: com ela ligada o serviço é
  *   `START_STICKY` e o sistema o recria com `intent == null` depois de matar o processo; o
  *   `BootReceiver` o religa depois de reiniciar o aparelho ou atualizar o app.
@@ -47,6 +51,8 @@ import java.lang.ref.WeakReference
  *   mensageiro faz o `tick` se o timer JS atrasou (evento `onHeartbeat` do PiuTransportModule). Só
  *   enquanto a CPU está acordada: o `postDelayed` conta em `uptimeMillis` e o lock solta antes do
  *   próximo pulso, então com o aparelho dormindo o pulso espera outra coisa acordá-lo (não é alarme).
+ *   O lock de cada pulso é curto (PULSE_LOCK_MS): se outra coisa mantiver a CPU acordada perto do
+ *   próximo pulso, ele ainda soma até 1 s acordado a cada 5 s (vale também no Doze, com o serviço).
  */
 class PiuRelayService : Service() {
   companion object {
@@ -64,8 +70,8 @@ class PiuRelayService : Service() {
     /** Nome registrado em src/core/headless.ts. */
     private const val CORE_TASK = "PiuCore"
     private const val HEARTBEAT_MS = 5_000L
-    /** Wake lock de cada pulso: o bastante para o JS rodar o anúncio e o `tick`. */
-    private const val PULSE_LOCK_MS = 3_000L
+    /** Wake lock de cada pulso: o bastante para o JS rodar o anúncio e o `tick` (trabalho curto). */
+    private const val PULSE_LOCK_MS = 1_000L
 
     @Volatile private var running = false
 
@@ -170,8 +176,10 @@ class PiuRelayService : Service() {
   /** Na thread principal (onStartCommand). Sem runtime JS, sobe o React sem tela e espera o contexto. */
   private fun startCoreTask() {
     val host = reactHost() ?: run { android.util.Log.w(TAG, "Sem ReactHost: tarefa PiuCore não iniciada."); return }
+    // O contexto existe já durante a criação do runtime ("Creating BridgelessReactContext"), antes da
+    // instância: só serve com ela ativa. Antes disso, startTask registraria a tarefa sem entregá-la ao JS.
     val ctx = host.currentReactContext
-    if (ctx != null) { runCoreTask(ctx); return }
+    if (ctx != null && ctx.hasActiveReactInstance()) { runCoreTask(ctx); return }
     if (waiting != null) return
     val l = object : ReactInstanceEventListener {
       override fun onReactContextInitialized(context: ReactContext) {
@@ -184,6 +192,14 @@ class PiuRelayService : Service() {
     }
     waiting = l
     host.addReactInstanceEventListener(l)
+    // Pode ter terminado de subir entre a leitura acima e o add (o aviso não viria mais).
+    val ready = host.currentReactContext
+    if (ready != null && ready.hasActiveReactInstance()) {
+      host.removeReactInstanceEventListener(l)
+      waiting = null
+      runCoreTask(ready)
+      return
+    }
     host.start()
   }
 

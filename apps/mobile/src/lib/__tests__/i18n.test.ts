@@ -245,3 +245,17 @@ test('termos: fr diz "jumeler", it diz "abbinare"/"apparato"/"cifrato" no paream
     if (typeof it[k] === 'string') assert.doesNotMatch(it[k] as string, /crittograf/i, `it ${k}`);
   }
 });
+
+test('idioma salvo sem o SettingsProvider (núcleo sem tela): mesmas regras de leitura de Ajustes', async () => {
+  const { applySavedLangPref, getLang, getRegion } = await import('../../i18n');
+  try {
+    const saved: Record<string, unknown> = { 'set.lang': 'en', 'set.region': 'us' };
+    applySavedLangPref(k => saved[k]);
+    assert.equal(getLang(), 'en');
+    assert.equal(getRegion(), 'us');
+    // Valor estranho no salvo: vale o padrão de Ajustes ('auto').
+    saved['set.lang'] = 'xx'; saved['set.region'] = 42;
+    applySavedLangPref(k => saved[k]);
+    assert.equal(getRegion(), 'auto');
+  } finally { setLang('pt-BR'); setRegion('auto'); }
+});

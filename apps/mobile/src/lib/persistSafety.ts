@@ -56,11 +56,11 @@ export function readSealedValue(stored: string, open: (stored: string) => unknow
 /**
  * Uma execução por processo: a segunda chamada devolve a mesma promessa. Reabrir o app (Activity nova
  * sobre o mesmo runtime JS) não relê o disco por cima do que já está em memória.
- * `fn` que resolve `false` (leitura falhou) é tentada de novo na próxima chamada.
+ * `fn` que resolve `false` (leitura falhou) é tentada de novo na próxima chamada; a promessa diz se leu.
  */
-export function oncePerProcess(fn: () => Promise<boolean | void>): () => Promise<void> {
-  let run: Promise<void> | null = null;
-  return () => (run ??= fn().then(ok => { if (ok === false) run = null; }));
+export function oncePerProcess(fn: () => Promise<boolean | void>): () => Promise<boolean> {
+  let run: Promise<boolean> | null = null;
+  return () => (run ??= fn().then(ok => { if (ok === false) run = null; return ok !== false; }));
 }
 
 /**

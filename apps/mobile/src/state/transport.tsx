@@ -133,6 +133,16 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     if (background === undefined) return; // sem opinião ainda (Wi-Fi não lido): fica como o núcleo deixou
     void transport.setBackgroundRelay?.(background, noticeTitle ? { title: noticeTitle, text: noticeText } : undefined).catch(() => {});
   }, [transport, background, noticeTitle, noticeText]);
+  // Desmontar (deslizar o app dos recentes): sem a tela só o Ponto retransmite (`detach` em messaging.tsx),
+  // então a rede local deixa de anunciar "retransmito" e o aviso do Modo nó passa ao de receber com o app fechado.
+  const detachNotice = useRef<{ title: string; text: string } | null>(null);
+  detachNotice.current = background === true && relayBg && !pointRt.background ? { title: t('network.receiveClosed.notice.title'), text: noticeText } : null;
+  const pointRelay = useRef(pointRt.relay); pointRelay.current = pointRt.relay;
+  useEffect(() => () => {
+    transport.lan?.setRelay(pointRelay.current);
+    const n = detachNotice.current;
+    if (n) void transport.setBackgroundRelay?.(true, n).catch(() => {});
+  }, [transport]);
   const relayNow = relay && !relayPaused;
   const relayRef = useRef(relayNow); relayRef.current = relayNow;
   const wifiIp = wifi?.ip ?? null;

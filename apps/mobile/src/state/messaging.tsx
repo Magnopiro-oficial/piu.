@@ -42,7 +42,7 @@ import { DesktopPayment } from '../ui/DesktopPayment';
 import { onlyLora } from '../lib/loraChat';
 import { CallServiceCtx, CallsProvider } from './calls';
 import { getCallAlerts, getMessengerRuntime } from '../core';
-import { chatFor, chatForGroup, chatIdFor, chatIdForGroup, deviceChangeText, GROUP_LINK, groupSub, nearChat, type PayCheck, type PayRecord, policyOf, receivedFiles } from '../core/messengerRuntime';
+import { chatFor, chatForGroup, chatIdFor, chatIdForGroup, deviceChangeText, GROUP_LINK, groupSub, nearChat, type PayCheck, type PayRecord, policyOf, profileName, receivedFiles } from '../core/messengerRuntime';
 
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -240,15 +240,17 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // pausada pela bateria.
   const pointRelay = useRef(pointRt.relay); pointRelay.current = pointRt.relay;
   useEffect(() => () => rt.detach({ relay: pointRelay.current, keepCall: getCallAlerts().keepCall }), [rt]);
-  // Ajustes → mensageiro (política do roteador, bloqueados, descoberta, retransmissão e gateway).
+  // Ajustes → mensageiro (política do roteador, bloqueados, descoberta, retransmissão, gateway,
+  // "Baixar mídia automaticamente" e o nome público).
   const blockedIds = useMemo(() => blocked.map(b => b.id).filter(id => id.startsWith('piu:')), [blocked]);
+  const displayName = profileName(profile);
   useEffect(() => {
     rt.setPrefs({
-      relay, gateway: gatewayOn, blocked: blockedIds,
+      relay, gateway: gatewayOn, blocked: blockedIds, autoDownload: sto.auto, displayName,
       priv: { find: priv.find, read: priv.read, typing: priv.typing, temp: priv.temp, delay: priv.delay, pad: priv.pad, noRoutes: priv.noRoutes },
       policy: policyOf({ storageMb: storage, retentionH: Number(sto.retention), trafficMb: bat.traffic, bw: bat.bw, hours: bat.hours, custom: bat.custom, phoneNodeActive, point: pointRt }),
     });
-  }, [rt, relay, gatewayOn, blockedIds, priv.find, priv.read, priv.typing, priv.temp, priv.delay, priv.pad, priv.noRoutes, storage, sto.retention, bat.traffic, bat.bw, bat.hours, bat.custom, phoneNodeActive, pointRt]);
+  }, [rt, relay, gatewayOn, blockedIds, sto.auto, displayName, priv.find, priv.read, priv.typing, priv.temp, priv.delay, priv.pad, priv.noRoutes, storage, sto.retention, bat.traffic, bat.bw, bat.hours, bat.custom, phoneNodeActive, pointRt]);
   // Cria o mensageiro quando as chaves existem; as mesmas chaves (a tela remontou) mantêm o mesmo.
   useEffect(() => {
     rt.start(identities && node && onboarded ? { identities, node, nodeKeyFor, phonePk: phoneOperator ? toHex(phoneOperator.pk) : null, rotation: rotationEpoch } : null);
@@ -286,15 +288,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     pointBridge.setHandlers({ stored: () => messenger.router.thirdPartyStats(), dropThirdParty: () => messenger.router.dropThirdParty() });
     return () => pointBridge.setHandlers(null);
   }, [messenger]);
-  // Armazenamento → "Baixar mídia automaticamente".
-  useEffect(() => { messenger?.setAutoDownload(sto.auto); }, [messenger, sto.auto]);
   // Endereço Lunes para os contatos públicos: manda quando muda (ou quando o ajuste muda), uma vez.
   // Contato novo recebe na hora em que entra (addFromCard / Por perto).
   useEffect(() => {
     if (!messenger || sharedWallet === lastShared) return;
     try { messenger.sendWalletAddress(sharedWallet); setLastShared(sharedWallet); } catch { /* endereço inválido: não compartilha */ }
   }, [messenger, sharedWallet, lastShared, setLastShared]);
-  useEffect(() => { if (messenger) messenger.displayName = profile.idType === 'public' ? profile.name.trim() : ''; }, [messenger, profile]);
   // Por perto: anúncio de presença só enquanto visível (até o fim da 1 h), com o perfil PÚBLICO
   // (nome e foto pequena) e a minha taxa. Invisível = retirada do anúncio.
   const { visibleUntil, myFee } = wallet;

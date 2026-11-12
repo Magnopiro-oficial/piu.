@@ -9,6 +9,7 @@ import { router, type Href } from 'expo-router';
 import { AppState, Platform } from 'react-native';
 import PiuVoice from '../../modules/piu-voice';
 import { PiuCallAlert } from '../../modules/piu-voice/alert';
+import { applySavedLangPref } from '../i18n';
 import { isAppLocked } from '../lib/appLockGate';
 import { markRevocationsSent, pendingRevocations } from '../lib/devices';
 import { applySessionRotation, deviceChangeOutbox, saveDeviceChangeOutbox, sessionRotationEpoch, takeDeviceChangeRequest, takeRestoredData } from '../lib/migrationState';
@@ -30,10 +31,16 @@ import { createCore, ensureNameSecret, persistedConfig, type Core, type Persiste
 let core: Core | null = null;
 
 async function load(): Promise<PersistedBoot> {
-  await Promise.all([loadPersisted(), preloadKeys()]);
+  const [read] = await Promise.all([loadPersisted(), preloadKeys()]);
+  const nodeKeyFor = preloadedNodeKeyFor();
+  // Salvo ou cofre indisponível (Keystore no início da tarefa sem tela): o núcleo lê de novo no
+  // próximo `bootCore` (reabrir o app), em vez de seguir até o fim do processo sem dados nem chaves.
+  if (!read || (!nodeKeyFor && readPersisted<boolean>('onboarded') === true)) throw new Error('Piu: salvo ou cofre indisponível.');
+  // Sem tela, o idioma salvo (sem ele, avisos e alertas sairiam no padrão, pt-BR).
+  applySavedLangPref(readPersisted);
   const t = getTransport();
   const wifi = t.lan?.available ? await t.lan.networkInfo().catch(() => null) : null;
-  const r = persistedConfig({ read: readPersisted, grants: await checkTransportPermissions(), nodeKeyFor: preloadedNodeKeyFor(), wifi, lanAvailable: !!t.lan?.available });
+  const r = persistedConfig({ read: readPersisted, grants: await checkTransportPermissions(), nodeKeyFor, wifi, lanAvailable: !!t.lan?.available, pointRelay: pointBridge.runtime.relay });
   // Sem segredo salvo, cria e grava um (o mesmo caminho da tela): o nome não muda ao abrir.
   if (!r.config.nameSecret && readPersisted<boolean>('onboarded') === true) r.config.nameSecret = await nodeNameSecret();
   return r;

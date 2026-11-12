@@ -39,3 +39,16 @@ test('transport.nameSecret tem um dono só: core/index.ts (a tela não guarda o 
   assert.deepEqual(users, [join('core', 'index.ts'), join('core', 'node.ts')]);
   assert.match(src, /nodeNameSecret\(\)/);
 });
+
+test('aviso fixo: "Receber com o app fechado" (ligado de fábrica) não pede a permissão de notificação no onboarding', () => {
+  // Só o aviso do Modo nó (sem `notice`) pede; o de receber com o app fechado deixa o pedido para o
+  // NotificationBridge (lib/notifications.ts), que não pede na primeira abertura nem no meio do onboarding.
+  const native = readFileSync(join(__dirname, '..', '..', 'transport', 'native.ts'), 'utf8');
+  assert.match(native, /if \(on && !notice\) await requestRelayNotificationPermission\(\)/);
+});
+
+test('desmontar com o Modo nó segurando o serviço troca o aviso para o de receber com o app fechado', () => {
+  // Sem a tela só o Ponto retransmite (detach): o aviso não pode seguir dizendo "retransmitindo".
+  assert.match(src, /transport\.lan\?\.setRelay\(pointRelay\.current\);\s+const n = detachNotice\.current;\s+if \(n\) void transport\.setBackgroundRelay\?\.\(true, n\)/);
+  assert.match(src, /background === true && relayBg && !pointRt\.background \?/);
+});

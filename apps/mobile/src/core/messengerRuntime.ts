@@ -37,7 +37,7 @@ import { toHex } from '../protocol/bytes';
 import { unb64url } from '../messaging/card';
 import type { Identity, IdentityKind, KeyPair } from '../protocol';
 import { toBase64 } from '../transport/base64';
-import { PREVIEW_MAX_BYTES } from '../lib/mediaCore';
+import { type AutoDownload, PREVIEW_MAX_BYTES } from '../lib/mediaCore';
 import { isLora } from '../transport/select';
 import type { Medium, Transport } from '../transport/types';
 import type { Privacy } from '../state/settings';
@@ -125,6 +125,10 @@ export interface RuntimePrefs {
   policy: Policy;
   /** Ids dos bloqueados (só contatos reais `piu:…`). */
   blocked: string[];
+  /** Armazenamento → "Baixar mídia automaticamente". */
+  autoDownload: AutoDownload;
+  /** Nome do perfil público anunciado nos grupos (`''` com a identidade anônima). */
+  displayName: string;
 }
 
 /** Política do roteador a partir dos ajustes (o mesmo cálculo de antes no MessagingProvider). */
@@ -146,7 +150,8 @@ const PRIV_DEFAULT: RuntimePriv = { find: 'all', read: true, typing: true, temp:
 
 /**
  * Ajustes a partir do que está salvo, para o mensageiro sem tela (sem `useSettings` nem `useNetwork`).
- * A pausa por bateria não é salva: sem tela, vale a escolha do Modo nó.
+ * A pausa por bateria e "Só retransmitir carregando" são da tela (state/phoneNodeEffects.ts): sem ela,
+ * só o Ponto Piu retransmite para terceiros, o mesmo do `detach`.
  */
 export function persistedPrefs(read: <T>(key: string) => T | undefined, o: { point?: PointRuntime; phoneNodeActive?: boolean } = {}): RuntimePrefs {
   const point = o.point ?? NO_POINT;
@@ -154,12 +159,20 @@ export function persistedPrefs(read: <T>(key: string) => T | undefined, o: { poi
   const sto = { retention: '48', ...read<{ retention?: string }>('set.sto') };
   const bat = { hours: 'always', traffic: 200, bw: '5', ...read<{ hours?: string; custom?: unknown; traffic?: number; bw?: string }>('set.bat') };
   return {
-    relay: (read<boolean>('net.relay') ?? true) || point.relay,
+    relay: point.relay,
     gateway: (read<boolean>('net.gateway') ?? PHONE_GATEWAY_DEFAULT) || point.gateway,
     priv,
     policy: policyOf({ storageMb: read<number>('net.storage') ?? 512, retentionH: Number(sto.retention), trafficMb: bat.traffic, bw: bat.bw, hours: bat.hours, custom: bat.custom, phoneNodeActive: !!o.phoneNodeActive, point }),
     blocked: cleanBlocked<{ id: string }>(read('blocked')).map(b => b.id),
+    autoDownload: read<{ auto?: AutoDownload }>('set.sto')?.auto ?? 'wifi',
+    displayName: profileName(read('profile')),
   };
+}
+
+/** Nome do perfil público (`profile` do StoreProvider) que o mensageiro anuncia; anônimo, nenhum. */
+export function profileName(p: unknown): string {
+  const v = p as { idType?: unknown; name?: unknown } | null | undefined;
+  return v?.idType === 'public' && typeof v.name === 'string' ? v.name.trim() : '';
 }
 
 /** Peças do app que o mensageiro usa (core/index.ts liga as reais; sem elas, nada acontece). */
@@ -291,6 +304,10 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
   // Perfil do backup restaurado é da tela (StoreProvider): sem ela montada, espera o próximo `setHost`.
   let pendingProfile: unknown = null;
   const importProfile = (p: unknown) => { if (host.importProfile === NO_HOST.importProfile) pendingProfile = p; else host.importProfile(p); };
+  // Convite pago aceito com o app fechado: a reserva é da carteira (WalletProvider) e passa a "pago" quando
+  // a tela volta (sem isso, a devolução local de 24 h valeria com a conversa já aberta).
+  const pendingSettles = new Set<string>();
+  const settleInvite = (id: string) => { if (host.settleInvite === NO_HOST.settleInvite) pendingSettles.add(id); else host.settleInvite(id); };
 
   // ── Mensageiro ──
   let m: Messenger | null = null;
@@ -345,6 +362,8 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
     if (!prev || prev.blocked.join('|') !== p.blocked.join('|')) messenger.setBlocked(p.blocked.filter(id => id.startsWith('piu:')));
     // Limites do nó aplicados no roteador.
     if (!prev || JSON.stringify(prev.policy) !== JSON.stringify(p.policy)) messenger.setPolicy(p.policy);
+    if (!prev || prev.autoDownload !== p.autoDownload) messenger.setAutoDownload(p.autoDownload);
+    if (!prev || prev.displayName !== p.displayName) messenger.displayName = p.displayName;
   };
 
   const create = (k: RuntimeKeys) => {
@@ -440,7 +459,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
         nearRequest: r => store.showToast({ kind: 'nearby', href: '/nearby/requests', icon: 'waving_hand', title: `${r.name} quer conversar`, body: `+${fmtLunes(r.fee)} LUNES se você aceitar · expira em 24 h`, action: 'Ver',
           hidden: { title: 'Pedido de conversa', body: 'Abra Por perto para ver.' } }),
         nearAccepted: (c, fee) => {
-          host.settleInvite(c.id);
+          settleInvite(c.id);
           const cid = chatIdFor(c.id);
           if (!list().some(x => x.id === cid)) store.addChat(nearChat(c, prefs.priv.temp, nearAcceptedText(c.name)));
           store.showToast({ kind: 'nearby', href: `/chat/${cid}`, icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
@@ -702,6 +721,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       for (const k of Object.keys(h) as (keyof RuntimeHost)[]) (next as Record<string, unknown>)[k] = h[k] ?? NO_HOST[k];
       host = next;
       if (pendingProfile !== null && host.importProfile !== NO_HOST.importProfile) { const p = pendingProfile; pendingProfile = null; host.importProfile(p); }
+      if (pendingSettles.size && host.settleInvite !== NO_HOST.settleInvite) { const ids = [...pendingSettles]; pendingSettles.clear(); ids.forEach(id => host.settleInvite(id)); }
     },
     /**
      * A tela desmontou (deslizar o app dos recentes). A chamada segue onde o núcleo mostra um aviso

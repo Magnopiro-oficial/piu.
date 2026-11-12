@@ -12,6 +12,7 @@ import type { Transport, TransportEvent } from '../../transport/types';
 import type { Contact } from '../../messaging/messenger';
 import type { Msg } from '../../data/types';
 import type { PhoneCall } from '../../state/calls';
+import { NO_POINT } from '../../lib/pointCore';
 import { createChatStore, SWEEP_MS } from '../chatStore';
 import { chatFor, chatIdFor, createMessengerRuntime, persistedPrefs, type RuntimeHost, type RuntimeKeys } from '../messengerRuntime';
 
@@ -273,4 +274,46 @@ test('pulso nativo do serviço (tela apagada): o mensageiro faz o tick; parado, 
   assert.equal(ticks.mock.callCount(), 1);
   await a.rt.shutdown();
   assert.equal(beats.size, 0);
+});
+
+test('sem tela, valem os ajustes salvos que só a tela aplicava: baixar mídia, nome público e retransmissão', () => {
+  const saved: Record<string, unknown> = { 'set.sto': { auto: 'never' }, profile: { idType: 'public', name: ' Ana ' }, 'net.relay': true };
+  const p = persistedPrefs(k => saved[k] as never);
+  assert.equal(p.autoDownload, 'never');
+  assert.equal(p.displayName, 'Ana');
+  // Sem a pausa por bateria da tela, só o Ponto Piu retransmite (o mesmo do `detach`).
+  assert.equal(p.relay, false);
+  assert.equal(persistedPrefs(k => saved[k] as never, { point: { ...NO_POINT, relay: true } }).relay, true);
+  assert.equal(persistedPrefs(() => undefined).autoDownload, 'wifi', 'padrão de Ajustes → Armazenamento');
+  saved.profile = { idType: 'anon', name: 'Ana' };
+  assert.equal(persistedPrefs(k => saved[k] as never).displayName, '', 'identidade anônima não anuncia nome');
+  // O mensageiro criado sem tela já nasce com eles; a tela muda pelo `setPrefs`.
+  const a = device('A');
+  a.rt.setPrefs({ autoDownload: 'never', displayName: 'Ana' });
+  a.rt.start(a.keys);
+  const m = a.rt.messenger()!;
+  assert.equal((m as unknown as { autoDownload: string }).autoDownload, 'never');
+  assert.equal(m.displayName, 'Ana');
+  a.rt.setPrefs({ autoDownload: 'always', displayName: 'Bia' });
+  assert.equal((m as unknown as { autoDownload: string }).autoDownload, 'always');
+  assert.equal(m.displayName, 'Bia');
+});
+
+test('convite pago aceito com o app fechado: a carteira recebe quando a tela volta (setHost), uma vez', () => {
+  const a = device('A');
+  a.rt.start(a.keys);
+  const m = a.rt.messenger()!;
+  const b = device('B');
+  const c: Contact = { id: b.keys.identities.public.id, via: 'public', pub: toPublic(b.keys.identities.public), name: 'Beto' };
+  (m as unknown as { o: { events: { nearAccepted: (c: Contact, fee: number) => void } } }).o.events.nearAccepted(c, 5);
+  assert.ok(a.chats.getSnapshot().chats.some(x => x.id === chatIdFor(c.id)), 'a conversa abre sem tela');
+  const got: string[] = [];
+  a.rt.setHost({ settleInvite: id => got.push(id) });
+  assert.deepEqual(got, [c.id]);
+  a.rt.setHost({ settleInvite: undefined });
+  a.rt.setHost({ settleInvite: id => got.push(id) });
+  assert.equal(got.length, 1, 'entregue uma vez');
+  // Com a tela montada, vai direto.
+  (m as unknown as { o: { events: { nearAccepted: (c: Contact, fee: number) => void } } }).o.events.nearAccepted(c, 5);
+  assert.equal(got.length, 2);
 });

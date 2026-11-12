@@ -15,7 +15,7 @@ import type { KeyPair } from '../protocol/keys';
 import type { MediaGrants } from '../transport/grants';
 import { lanWanted } from '../transport/lan/policy';
 import type { WifiInfo } from '../transport/lan/types';
-import type { Medium, Peer, Transport, TransportState } from '../transport/types';
+import { DISCOVERY_INTERVAL_SEC, type DiscoveryMode, type Medium, type Peer, type Transport, type TransportState } from '../transport/types';
 
 export interface CoreConfig {
   /** Segredo do nome do nó (lib/nodeName.ts): o núcleo calcula o nome do dia e religa na virada. */
@@ -34,13 +34,22 @@ export interface CoreStatus {
   nodeName: string;
 }
 
-/** Configuração lida do que está salvo (sem tela): `media` vai para `setMediaEnabled` antes de ligar. */
-export interface PersistedBoot { config: CoreConfig; media?: Partial<Record<Medium, boolean>> }
+/**
+ * Configuração lida do que está salvo (sem tela): `media` vai para `setMediaEnabled` e `discoverySec`
+ * para `setDiscoveryInterval` antes de ligar. `lanFor`: a rede local para o Wi-Fi de agora, com o
+ * salvo de agora (sem tela, o núcleo acompanha as trocas de Wi-Fi).
+ */
+export interface PersistedBoot {
+  config: CoreConfig;
+  media?: Partial<Record<Medium, boolean>>;
+  discoverySec?: number;
+  lanFor?: (wifi: WifiInfo | null) => CoreConfig['lan'];
+}
 
 export interface CoreDeps {
   transport: Transport;
   serviceId: string;
-  /** Lê o que está salvo (chamado uma vez, no `boot`). */
+  /** Lê o que está salvo (no `boot`; se falhar, o próximo `boot` lê de novo). */
   load?: () => Promise<PersistedBoot | null>;
   now?: () => number;
   log?: (msg: string) => void;
@@ -97,6 +106,17 @@ export function createCore(deps: CoreDeps): Core {
   });
   // Pulso nativo do serviço (sem tela, CPU acordada): a rede local anuncia mesmo com os timers JS atrasados.
   transport.onHeartbeat?.(() => lan?.heartbeat());
+  // Sem tela (ninguém com `claimRuntime`), o núcleo acompanha o Wi-Fi: liga a LAN quando conecta (reinício
+  // do aparelho antes de associar) e religa com o IP novo. Com a tela, quem faz isso é o TransportProvider.
+  let lanFor: PersistedBoot['lanFor'];
+  let wifiSeen = '';
+  lan?.onChange?.(() => {
+    const w = lan.status().wifi;
+    const k = `${!!w?.connected}|${w?.ip ?? ''}`;
+    if (k === wifiSeen) return; // outros eventos da LAN (vizinhos, estado), mesma rede
+    wifiSeen = k;
+    if (owner === null && lanFor) configure({ lan: lanFor(w) });
+  });
 
   // ── Liga/desliga: compara o que está rodando com o que foi pedido ──
   let p2pOn: string | null = null; // nome com que o P2P foi ligado
@@ -163,9 +183,14 @@ export function createCore(deps: CoreDeps): Core {
     transport,
     boot: () => (booting ??= (async () => {
       const r = await deps.load?.().catch(() => null);
+      // Falhou (salvo ou cofre indisponível no início): o próximo `boot`, ao reabrir o app, lê de novo.
+      if (r === null) { booting = null; return; }
+      if (!r) return;
+      lanFor = r.lanFor;
       // A tela chegou antes (já configurou com o que tem de mais novo): o salvo não passa por cima.
-      if (!r || configured) return;
+      if (configured) return;
       if (r.media) transport.setMediaEnabled?.(r.media);
+      if (r.discoverySec) transport.setDiscoveryInterval?.(r.discoverySec);
       configure(r.config);
     })()),
     configure,
@@ -218,6 +243,9 @@ const TX_DEFAULT = { ble: true, direct: true, mesh: false, lora: false, eth: fal
 /**
  * Configuração inicial a partir do que está salvo, para ligar sem tela (sem `useNetwork` nem
  * `useSettings`). Mesmas regras do TransportProvider; as permissões são as já concedidas.
+ * Retransmissão na rede local: sem tela não há a pausa por bateria nem "Só retransmitir carregando"
+ * (state/phoneNodeEffects.ts), então só o Ponto Piu (`pointRelay`) retransmite, como no `detach` do
+ * mensageiro (core/messengerRuntime.ts).
  */
 export function persistedConfig(i: {
   read: <T>(key: string) => T | undefined;
@@ -225,18 +253,22 @@ export function persistedConfig(i: {
   nodeKeyFor: ((day: number) => KeyPair) | null;
   wifi: WifiInfo | null;
   lanAvailable: boolean;
+  pointRelay?: boolean;
 }): PersistedBoot {
   const onboarded = i.read<boolean>('onboarded') === true;
   const tx = { ...TX_DEFAULT, ...i.read<Partial<typeof TX_DEFAULT>>('net.tx') };
   const secret = i.read<string>('transport.nameSecret');
   const media = { ble: tx.ble && i.grants.ble, nearby: tx.direct && i.grants.nearby, ...loraMedia(i.read<LoraMode>('net.loraMode') ?? 'auto', tx.lora) };
   const lanOn = lanWanted({ available: i.lanAvailable, onboarded, hasNode: !!i.nodeKeyFor, pref: i.read<boolean>('net.lan') ?? true, wifi: i.wifi }).on;
+  const disc = i.read<{ disc?: DiscoveryMode }>('set.bat')?.disc;
   return {
     media,
+    discoverySec: DISCOVERY_INTERVAL_SEC[disc && disc in DISCOVERY_INTERVAL_SEC ? disc : 'normal'],
     config: {
       nameSecret: validSecret(secret) ? secret : null,
       p2p: onboarded && (media.ble || media.nearby),
-      lan: lanOn && i.nodeKeyFor ? { nodeKeyFor: i.nodeKeyFor, wifiIp: i.wifi?.ip ?? null, relay: i.read<boolean>('net.relay') ?? true } : null,
+      lan: lanOn && i.nodeKeyFor ? { nodeKeyFor: i.nodeKeyFor, wifiIp: i.wifi?.ip ?? null, relay: !!i.pointRelay } : null,
     },
+    lanFor: wifi => persistedConfig({ ...i, wifi }).config.lan,
   };
 }

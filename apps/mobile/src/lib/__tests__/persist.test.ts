@@ -41,10 +41,11 @@ test('persist.ts usa a leitura única em loadPersisted', () => {
 test('leitura que falhou é tentada de novo na próxima chamada; a que deu certo, não', async () => {
   let reads = 0, ok = false;
   const load = oncePerProcess(async () => { reads++; return ok; });
-  await load();
+  // Quem chama sabe se leu (o núcleo, core/index.ts, tenta de novo ao reabrir o app).
+  assert.equal(await load(), false);
   ok = true;
-  await load();
-  await load();
+  assert.equal(await load(), true);
+  assert.equal(await load(), true);
   assert.equal(reads, 2);
 });
 

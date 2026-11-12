@@ -19,8 +19,13 @@ const tick = () => new Promise(r => setTimeout(r, 0));
 function fakes() {
   const calls: string[] = [];
   const subs = new Set<(e: TransportEvent) => void>();
+  // Wi-Fi do aparelho: `setWifi` avisa os ouvintes como o PiuLan nativo (evento `network`).
+  let wifi: WifiInfo | null = null;
+  const changes = new Set<() => void>();
   const lan = {
     available: true,
+    status: () => ({ wifi }),
+    onChange: (fn: () => void) => { changes.add(fn); return () => { changes.delete(fn); }; },
     start: async (o: { node: KeyPair; name: string; relay: boolean }) => { calls.push(`lan.start ${o.name} ${o.node.pk[0]} ${o.relay}`); },
     stop: async () => { calls.push('lan.stop'); },
     setNode: (n: KeyPair) => { calls.push(`lan.setNode ${n.pk[0]}`); },
@@ -32,10 +37,12 @@ function fakes() {
     send: async () => {},
     subscribe: (fn: (e: TransportEvent) => void) => { subs.add(fn); return () => subs.delete(fn); },
     setMediaEnabled: (m: unknown) => { calls.push(`media ${JSON.stringify(m)}`); },
+    setDiscoveryInterval: (sec: number) => { calls.push(`disc ${sec}`); },
     lan,
   } as unknown as Transport;
   const emit = (e: TransportEvent) => subs.forEach(fn => fn(e));
-  return { calls, transport, emit, subs };
+  const setWifi = (w: WifiInfo | null) => { wifi = w; changes.forEach(fn => fn()); };
+  return { calls, transport, emit, subs, setWifi };
 }
 
 // Núcleos ligados seguram timers (dia UTC, chave do nó): desligados no fim para o processo sair.
@@ -191,7 +198,7 @@ test('configuração inicial do persistido: mesmos padrões da aba Rede', () => 
   assert.equal(r.config.p2p, true);
   assert.equal(r.config.nameSecret, SECRET);
   assert.equal(r.config.lan?.wifiIp, '10.0.0.2');
-  assert.equal(r.config.lan?.relay, true);
+  assert.equal(r.config.lan?.relay, false, 'sem tela, só o Ponto retransmite');
   assert.deepEqual(r.media, { ble: true, nearby: false, lora: false, piulora: false });
   // Sem onboarding: nada liga.
   store.onboarded = false;
@@ -282,4 +289,93 @@ test('pulso nativo do serviço (tela apagada): o núcleo passa para a rede local
   assert.equal(beats.size, 1, 'assinado ao criar o núcleo');
   beats.forEach(fn => fn());
   assert.equal(lanBeats, 1);
+});
+
+const net = (ip: string | null): WifiInfo => ({ connected: ip !== null, internet: ip !== null, ip, prefix: ip ? 24 : null, gateway: ip ? '10.0.0.1' : null });
+const lanFor = (w: WifiInfo | null) => (w?.connected ? { nodeKeyFor: key, wifiIp: w.ip, relay: false } : null);
+
+test('leitura do salvo ou do cofre falhou: o próximo boot (reabrir o app) tenta de novo', async () => {
+  let loads = 0;
+  const { c, f } = core(undefined, {
+    load: async () => { if (++loads === 1) throw new Error('Keystore indisponível'); return { config: { nameSecret: SECRET, p2p: true, lan: null } }; },
+  });
+  await c.boot();
+  await tick();
+  assert.deepEqual(f.calls, []);
+  await c.boot();
+  await tick();
+  assert.equal(loads, 2);
+  assert.deepEqual(f.calls, [`start ${dailyNodeName(SECRET, DAY)} svc`]);
+  await c.boot();
+  assert.equal(loads, 2, 'leu: não lê de novo');
+});
+
+test('sem tela, o núcleo acompanha o Wi-Fi: liga a LAN ao conectar e religa com o IP novo', async () => {
+  const { c, f } = core(undefined, { load: async () => ({ config: { nameSecret: SECRET, p2p: false, lan: null }, lanFor }) });
+  await c.boot();
+  await tick();
+  assert.deepEqual(f.calls, [], 'reinício do aparelho com o Wi-Fi ainda sem associar');
+  const name = dailyNodeName(SECRET, DAY);
+  f.setWifi(net('10.0.0.2'));
+  await tick();
+  assert.deepEqual(f.calls, [`lan.start ${name} ${DAY % 256} false`]);
+  f.calls.length = 0;
+  f.setWifi(net('10.0.0.2')); // outro evento da LAN, mesma rede: nada
+  f.setWifi(net('10.0.0.9'));
+  await tick();
+  assert.deepEqual(f.calls, ['lan.stop', `lan.start ${name} ${DAY % 256} false`]);
+  f.calls.length = 0;
+  // Com a tela dona do núcleo, quem acompanha o Wi-Fi é ela (TransportProvider).
+  const release = c.claimRuntime('tela')!;
+  f.setWifi(net('10.0.0.5'));
+  await tick();
+  assert.deepEqual(f.calls, []);
+  release();
+  f.setWifi(net(null));
+  await tick();
+  assert.deepEqual(f.calls, ['lan.stop']);
+});
+
+test('a tela configurou antes do salvo: depois de deslizar o app, o Wi-Fi ainda é acompanhado', async () => {
+  let release!: () => void;
+  const { c, f } = core(undefined, {
+    load: () => new Promise(r => { release = () => r({ config: { nameSecret: SECRET, p2p: false, lan: null }, lanFor, discoverySec: 60 }); }),
+  });
+  const booting = c.boot();
+  const own = c.claimRuntime('tela')!;
+  c.configure({ nameSecret: SECRET, p2p: false, lan: null });
+  release();
+  await booting;
+  own();
+  f.setWifi(net('10.0.0.2'));
+  await tick();
+  assert.deepEqual(f.calls, [`lan.start ${dailyNodeName(SECRET, DAY)} ${DAY % 256} false`], 'o intervalo salvo não passa por cima do da tela');
+});
+
+test('sem tela, o intervalo de "Procurar vizinhos" salvo vale antes de ligar', async () => {
+  const { c, f } = core(undefined, { load: async () => ({ config: { nameSecret: SECRET, p2p: true, lan: null }, discoverySec: 60 }) });
+  await c.boot();
+  await tick();
+  assert.deepEqual(f.calls, ['disc 60', `start ${dailyNodeName(SECRET, DAY)} svc`]);
+});
+
+test('salvo sem tela: Wi-Fi depois do boot, "Procurar vizinhos" e retransmissão só pelo Ponto', () => {
+  const store: Record<string, unknown> = { onboarded: true, 'transport.nameSecret': SECRET, 'net.relay': true, 'set.bat': { disc: 'eco' } };
+  const read = <T,>(k: string) => store[k] as T | undefined;
+  const base = { read, grants: { ble: true, nearby: true }, nodeKeyFor: key, wifi: null, lanAvailable: true };
+  const r = persistedConfig(base);
+  assert.equal(r.config.lan, null, 'sem Wi-Fi no boot');
+  assert.equal(r.discoverySec, 60);
+  const l = r.lanFor!(net('10.0.0.7'));
+  assert.equal(l?.wifiIp, '10.0.0.7');
+  // Sem tela não há a pausa por bateria nem "Só retransmitir carregando": só o Ponto Piu retransmite
+  // (o mesmo do `detach` do mensageiro).
+  assert.equal(l?.relay, false);
+  assert.equal(persistedConfig({ ...base, pointRelay: true }).lanFor!(net('10.0.0.7'))?.relay, true);
+  // Lê o salvo de agora (a tela pode ter desligado o "Wi-Fi Mesh" depois do boot).
+  store['net.lan'] = false;
+  assert.equal(r.lanFor!(net('10.0.0.7')), null);
+  assert.equal(r.lanFor!(null), null);
+  store['set.bat'] = undefined;
+  assert.equal(persistedConfig(base).discoverySec, 20);
 });
