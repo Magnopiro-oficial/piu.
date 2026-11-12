@@ -32,6 +32,15 @@ declare class PiuTransportNativeModule extends NativeModule<PiuTransportEvents> 
    * `start`, vale para ele. Ausente no iPhone e em binários antigos.
    */
   setMediumEnabled?(medium: PiuMedium, on: boolean): void;
+  /**
+   * Android: fora da otimização de bateria? E o fabricante/marca (Build.MANUFACTURER/BRAND), para a
+   * Inicialização automática da Xiaomi. Ausente no iPhone e em binários antigos.
+   */
+  powerInfo?(): { ignoringBattery: boolean; manufacturer: string; brand: string };
+  /** Android: pede a isenção de otimização de bateria (ou abre a lista). `false` se nenhuma tela abriu. */
+  openBatteryExemption?(): boolean;
+  /** Android (Xiaomi/HyperOS): abre a Inicialização automática, ou os detalhes do app. `false` se nada abriu. */
+  openAutostart?(): boolean;
 }
 
 /**

@@ -1,5 +1,5 @@
 import { router, type Href } from 'expo-router';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { TRANSPORTS, type TxKey, UNAVAILABLE_TX } from '../../data/network';
 import { fmtNumber, useT } from '../../i18n';
@@ -11,6 +11,7 @@ import { useTransport } from '../../state/transport';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { Peer } from '../../transport';
 import { SectionLabel, Segmented, Toggle } from '../../ui/Controls';
+import { BackgroundSetupDialog, bgStepTitle, useBgSetup } from '../../ui/BackgroundSetup';
 import { GatewaySection } from '../../ui/NodeViews';
 import { Icon } from '../../ui/Icon';
 import { LanRow, PointsSection } from '../../ui/point/NetworkRows';
@@ -33,6 +34,9 @@ export default function Network() {
   const live = (p: Peer) => { const k = VIA_TX[p.via]; return k ? n.tx[k] : true; };
   const connected = peers.filter(p => p.connected && live(p));
   const prov = nodes?.length ?? 0;
+  // Ajustes do aparelho que ainda faltam (ui/BackgroundSetup.tsx): reabre a tela do primeiro uso.
+  const bgSetup = useBgSetup();
+  const [setupOpen, setSetupOpen] = useState(false);
   const stats = relayCard(diag7 ? diag7.metrics : null, n.relay, t);
   const fg = n.relay ? c.invink : c.ink;
   const txDesc = (k: TxKey, desc: string) => {
@@ -87,6 +91,14 @@ export default function Network() {
               </View>
               <Toggle on={n.receiveClosed} onChange={() => n.setReceiveClosed(!n.receiveClosed)} label={t('network.receiveClosed')} />
             </View>
+            {n.receiveClosed && bgSetup.missing.length > 0 && (
+              <View style={{ gap: 8 }}>
+                <T size={13} lh={1.4} w={600}>{t('network.receiveClosed.setup.missing', { list: bgSetup.missing.map(s => t(bgStepTitle(s))).join(' · ') })}</T>
+                <Pressable onPress={() => setSetupOpen(true)} accessibilityRole="button" style={{ alignSelf: 'flex-start', paddingVertical: 8, paddingHorizontal: 14, borderRadius: 14, backgroundColor: c.ink }}>
+                  <T size={13} w={600} color={c.invink}>{t('network.receiveClosed.setup.resume')}</T>
+                </Pressable>
+              </View>
+            )}
             {n.receiveClosed && (
               <View style={{ gap: 6 }}>
                 <T size={13} w={600}>{t('network.receiveClosed.guide')}</T>
@@ -194,6 +206,7 @@ export default function Network() {
           })}
         </View>
       </ScrollView>
+      {setupOpen && <BackgroundSetupDialog onClose={() => setSetupOpen(false)} />}
     </Screen>
   );
 }

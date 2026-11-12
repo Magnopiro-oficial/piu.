@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Animated, Easing, Modal, Pressable, View } from 'react-native';
 import { useT } from '../i18n';
 import { useTheme } from '../theme/ThemeProvider';
@@ -10,9 +10,10 @@ import { Pop } from './motion';
 /**
  * Diálogo de confirmação: entra em 320 ms (scale .9 → 1), ícone com “pop”.
  * Com `hold`, a ação principal só acontece segurando o botão (~1 s), para ações irreversíveis.
+ * `children`: conteúdo extra entre o texto e os botões (ex.: os ajustes de ui/BackgroundSetup.tsx).
  */
-export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary, onClose, hold }: {
-  icon: IconName; title: string; body: string; primary: string; primaryIcon?: IconName; onPrimary: () => void; secondary?: string; onClose: () => void; hold?: boolean;
+export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, secondary, onClose, hold, children }: {
+  icon: IconName; title: string; body: string; primary: string; primaryIcon?: IconName; onPrimary: () => void; secondary?: string; onClose: () => void; hold?: boolean; children?: ReactNode;
 }) {
   const { c, reduceMotion } = useTheme();
   const t = useT();
@@ -33,6 +34,7 @@ export function Dialog({ icon, title, body, primary, primaryIcon, onPrimary, sec
           <Pop delay={100} dur={450} style={{ width: 58, height: 58, borderRadius: 29, backgroundColor: c.bg2, alignItems: 'center', justifyContent: 'center' }}><Icon name={icon} size={28} w={300} /></Pop>
           <T size={20} w={700} ls={-0.025} lh={1.15} align="center">{title}</T>
           <T size={14} lh={1.45} color={c.ink2} align="center" style={{ paddingHorizontal: 4 }}>{body}</T>
+          {children}
           <View style={{ alignSelf: 'stretch', gap: 8, marginTop: 8 }}>
             {hold
               ? <HoldButton label={primary} icon={primaryIcon} onDone={onPrimary} />

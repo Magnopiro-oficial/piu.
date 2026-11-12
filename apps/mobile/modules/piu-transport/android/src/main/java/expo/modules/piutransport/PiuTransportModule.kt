@@ -1,6 +1,12 @@
 package expo.modules.piutransport
 
+import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Base64
 import androidx.core.os.bundleOf
 import com.google.android.gms.nearby.Nearby
@@ -170,12 +176,55 @@ class PiuTransportModule : Module() {
       if (on) PiuRelayService.start(context, title, text) else PiuRelayService.stop(context)
     }
 
+    // "Receber com o app fechado": o sistema não deixa o app ligar estes ajustes sozinho; a tela pede
+    // com um toque cada e confere de novo ao voltar (src/ui/BackgroundSetup.tsx).
+    Function("powerInfo") {
+      val pm = context.getSystemService(Context.POWER_SERVICE) as PowerManager
+      mapOf(
+        "ignoringBattery" to pm.isIgnoringBatteryOptimizations(context.packageName),
+        "manufacturer" to (Build.MANUFACTURER ?: ""),
+        "brand" to (Build.BRAND ?: ""),
+      )
+    }
+
+    // Pedido direto do sistema ("Permitir que o app rode em segundo plano?"); sem ele, a lista da otimização.
+    Function("openBatteryExemption") {
+      openFirst(listOf(
+        Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}")),
+        Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS),
+      ))
+    }
+
+    // Xiaomi/HyperOS: tela de Inicialização automática (sem API oficial nem para ler o estado);
+    // por último, os detalhes do app.
+    Function("openAutostart") {
+      openFirst(listOf(
+        Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.permcenter.autostart.AutoStartManagementActivity")),
+        Intent("miui.intent.action.OP_AUTO_START").addCategory(Intent.CATEGORY_DEFAULT),
+        Intent().setComponent(ComponentName("com.miui.securitycenter", "com.miui.appmanager.ApplicationsDetailsActivity"))
+          .putExtra("package_name", context.packageName).putExtra("package_label", "Piu"),
+        Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")),
+      ))
+    }
+
     OnDestroy {
       PiuRelayService.onHeartbeat = null
       stopAll()
       // Só para agora (reload): a escolha fica, para o reinício do aparelho religar.
       try { PiuRelayService.stop(context, keepChoice = true) } catch (_: Exception) {}
     }
+  }
+
+  /** Abre a primeira tela que o aparelho aceitar (cada fabricante tem as suas); `false` se nenhuma abriu. */
+  private fun openFirst(intents: List<Intent>): Boolean {
+    val activity = appContext.currentActivity
+    for (i in intents) {
+      try {
+        if (activity != null) activity.startActivity(i) else context.startActivity(i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        return true
+      } catch (_: Exception) { /* não existe neste aparelho ou não é exportada: tenta a próxima */ }
+    }
+    return false
   }
 
   private fun sendVia(medium: String, peerId: String, data: String, promise: Promise) {

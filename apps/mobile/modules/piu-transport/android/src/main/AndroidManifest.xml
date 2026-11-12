@@ -20,6 +20,8 @@
   <!-- Pulso do serviço (wake lock curto a cada 5 s) e religar depois de reiniciar o aparelho ou atualizar o app. -->
   <uses-permission android:name="android.permission.WAKE_LOCK" />
   <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+  <!-- "Receber com o app fechado": pedido direto da isenção de otimização de bateria (src/ui/BackgroundSetup.tsx). -->
+  <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 
   <!-- Bluetooth LE é desejável, não obrigatório: sem ele o app usa só o Nearby. -->
   <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />

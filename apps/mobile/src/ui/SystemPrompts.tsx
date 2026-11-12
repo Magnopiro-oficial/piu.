@@ -1,12 +1,17 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
+import { Platform } from 'react-native';
 import { useT } from '../i18n';
+import { isAppLocked, onAppLockChange } from '../lib/appLockGate';
 import { useBattery } from '../lib/battery';
+import { BG_SETUP_ASKED_KEY, shouldAskBgSetup } from '../lib/bgSetupCore';
 import { usePersisted } from '../lib/persist';
+import { useKeys } from '../state/keys';
 import { useNetwork } from '../state/network';
 import { useRelayBattery } from '../state/phoneNodeEffects';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
+import { BackgroundSetupDialog, useBgSetup } from './BackgroundSetup';
 import { Dialog } from './Dialog';
 
 const DAY = 86_400_000;
@@ -14,13 +19,14 @@ const DAY = 86_400_000;
 export const BACKUP_FIRST_REMINDER_MS = DAY;
 
 /**
- * Avisos do sistema que o design mostra fora das telas: bateria e backup. O filtro dos banners por
+ * Avisos do sistema que o design mostra fora das telas: bateria, ajustes do app fechado e backup. O filtro dos banners por
  * tipo é do núcleo (core/toasts.ts), com os ajustes do salvo.
  */
 export function SystemPrompts() {
   return (
     <>
       <BatteryGuard />
+      <BackgroundSetupPrompt />
       <BackupReminder />
     </>
   );
@@ -59,6 +65,33 @@ function BatteryGuard() {
       primary={t('prompt.gotIt')} primaryIcon="check" onPrimary={() => setOpen(false)}
       secondary={t('prompt.adjustLimit')} onClose={() => { setOpen(false); router.push('/(tabs)/network'); }} />
   );
+}
+
+/**
+ * "Receber com o app fechado" vem ligado, mas a isenção de bateria e a Inicialização automática da
+ * Xiaomi só a pessoa liga. Pede uma vez, logo depois do onboarding (com o cofre já criado); quem pular
+ * acha o que falta na aba Rede, que reabre a mesma tela.
+ */
+function BackgroundSetupPrompt() {
+  const { onboarded } = useStore();
+  const { hasKeys } = useKeys();
+  const { receiveClosed } = useNetwork();
+  const { missing } = useBgSetup();
+  const [asked, setAsked] = usePersisted<boolean>(BG_SETUP_ASKED_KEY, false);
+  const [locked, setLocked] = useState(isAppLocked);
+  const [open, setOpen] = useState(false);
+  useEffect(() => onAppLockChange(setLocked), []);
+  const want = shouldAskBgSetup({ android: Platform.OS === 'android', onboarded, hasKeys, receiveClosed, asked, locked, missing });
+
+  useEffect(() => {
+    if (!want) return;
+    // Depois da navegação do fim do onboarding (keys.tsx troca para as abas).
+    const t = setTimeout(() => { setAsked(true); setOpen(true); }, 1200);
+    return () => clearTimeout(t);
+  }, [want, setAsked]);
+
+  if (!open) return null;
+  return <BackgroundSetupDialog onClose={() => setOpen(false)} />;
 }
 
 /**
