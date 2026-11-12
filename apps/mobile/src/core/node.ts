@@ -95,6 +95,8 @@ export function createCore(deps: CoreDeps): Core {
       case 'envelope': break; // a camada de mensagens (LNNP) consome isto
     }
   });
+  // Pulso nativo do serviço (tela apagada): a rede local anuncia mesmo com os timers JS atrasados.
+  transport.onHeartbeat?.(() => lan?.heartbeat());
 
   // ── Liga/desliga: compara o que está rodando com o que foi pedido ──
   let p2pOn: string | null = null; // nome com que o P2P foi ligado

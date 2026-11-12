@@ -35,6 +35,8 @@ export interface LanController {
   setNode(node: KeyPair): void;
   setRelay(relay: boolean): void;
   setLowPower(low: boolean): void;
+  /** Pulso nativo do serviço (tela apagada): anuncia se o timer JS atrasou (engine.ts). */
+  heartbeat(): void;
   /** Vizinho manual (QR do ponto): valida e devolve a forma canônica; lança se inválido. */
   addPeer(raw: string): string;
   removePeer(address: string): boolean;
@@ -98,6 +100,7 @@ export function createLanController(api: LanSocketApi | null, opts: Partial<LanE
     setNode: node => engine?.setNode(node),
     setRelay: r => { relay = r; engine?.setRelay(r); },
     setLowPower: low => { lowPower = low; engine?.setLowPower(low); },
+    heartbeat: () => engine?.heartbeat(),
     addPeer: raw => {
       const a = parseLanPeer(raw);
       if (!a) throw new Error('Endereço inválido: use IP:porta de rede local (ex.: 192.168.1.20:8422).');

@@ -1,6 +1,6 @@
 import { router, type Href } from 'expo-router';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { Animated, Easing, Pressable, ScrollView, View } from 'react-native';
+import { Animated, Easing, Linking, Platform, Pressable, ScrollView, View } from 'react-native';
 import { TRANSPORTS, type TxKey, UNAVAILABLE_TX } from '../../data/network';
 import { fmtNumber, useT } from '../../i18n';
 import { useProvNodes } from '../../lib/approvalNodes';
@@ -75,6 +75,31 @@ export default function Network() {
             ))}
           </View>
         </View>
+
+        {/* Receber com o app fechado (só Android: serviço com aviso fixo; state/background.ts). Ligado, mostra
+            o que configurar no aparelho: nenhum desses ajustes do sistema se resolve por código. */}
+        {Platform.OS === 'android' && (
+          <View style={{ marginTop: 12, marginHorizontal: 20, padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+              <View style={{ flex: 1, gap: 3 }}>
+                <T size={15} w={600}>{t('network.receiveClosed')}</T>
+                <T size={12.5} lh={1.35} color={c.ink2}>{t('network.receiveClosed.desc')}</T>
+              </View>
+              <Toggle on={n.receiveClosed} onChange={() => n.setReceiveClosed(!n.receiveClosed)} label={t('network.receiveClosed')} />
+            </View>
+            {n.receiveClosed && (
+              <View style={{ gap: 6 }}>
+                <T size={13} w={600}>{t('network.receiveClosed.guide')}</T>
+                {(['battery', 'fullScreen', 'xiaomi', 'samsung', 'forceStop'] as const).map(k => (
+                  <T key={k} size={12.5} lh={1.4} color={c.ink2}>{t(`network.receiveClosed.guide.${k}`)}</T>
+                ))}
+                <Pressable onPress={() => { void Linking.openSettings().catch(() => {}); }} accessibilityRole="button" style={{ alignSelf: 'flex-start', marginTop: 4, paddingVertical: 8, paddingHorizontal: 14, borderRadius: 14, borderWidth: 1.5, borderColor: c.ink }}>
+                  <T size={13} w={600}>{t('network.receiveClosed.guide.open')}</T>
+                </Pressable>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* provider */}
         <Pressable onPress={() => router.push(prov ? '/provider' : '/provider/intro')} accessibilityRole="button"

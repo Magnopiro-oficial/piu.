@@ -3,6 +3,7 @@ import type { TxKey } from '../data/network';
 import { PHONE_GATEWAY_DEFAULT } from '../lib/carryConfig';
 import { usePersisted } from '../lib/persist';
 import type { LoraMode } from '../lib/piuLora';
+import { RECEIVE_CLOSED_DEFAULT } from './background';
 
 interface Network {
   /** Modo nó (FUN-016): retransmitir mensagens cifradas de outras pessoas. */
@@ -23,6 +24,11 @@ interface Network {
   loraMode: LoraMode; setLoraMode: (v: LoraMode) => void;
   /** Região do rádio do Piu escolhida pela pessoa (null: vale a do país do aparelho). */
   piuRegion: string | null; setPiuRegion: (v: string) => void;
+  /**
+   * "Receber com o app fechado" (Android): o serviço em primeiro plano, com aviso fixo, segura o núcleo
+   * depois de deslizar o app dos recentes (state/background.ts). Ligado de fábrica.
+   */
+  receiveClosed: boolean; setReceiveClosed: (v: boolean) => void;
 }
 
 const Ctx = createContext<Network | null>(null);
@@ -44,13 +50,14 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
   const [loraMode, setLoraMode] = usePersisted<LoraMode>('net.loraMode', 'auto');
   const [piuRegion, setPiuRegion] = usePersisted<string | null>('net.piuRegion', null);
   const [gateway, setGateway] = usePersisted('net.gateway', PHONE_GATEWAY_DEFAULT);
+  const [receiveClosed, setReceiveClosed] = usePersisted('net.receiveClosed', RECEIVE_CLOSED_DEFAULT);
 
   const value = useMemo<Network>(() => ({
     relay, setRelay, relayPaused, setRelayPaused, tx: { ...tx, mesh: lanPref },
     toggleTx: k => (k === 'mesh' ? setLanPref(v => !v) : setTx(t => ({ ...t, [k]: !t[k] }))),
     battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly, gateway, setGateway,
-    loraMode, setLoraMode, piuRegion, setPiuRegion,
-  }), [loraMode, setLoraMode, piuRegion, setPiuRegion, relay, setRelay, relayPaused, tx, setTx, lanPref, setLanPref, battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly, gateway, setGateway]);
+    loraMode, setLoraMode, piuRegion, setPiuRegion, receiveClosed, setReceiveClosed,
+  }), [loraMode, setLoraMode, piuRegion, setPiuRegion, receiveClosed, setReceiveClosed, relay, setRelay, relayPaused, tx, setTx, lanPref, setLanPref, battery, setBattery, storage, setStorage, chargingOnly, setChargingOnly, gateway, setGateway]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

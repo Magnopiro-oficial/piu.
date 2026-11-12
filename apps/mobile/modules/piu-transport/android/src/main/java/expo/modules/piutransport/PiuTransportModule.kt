@@ -105,7 +105,10 @@ class PiuTransportModule : Module() {
 
   override fun definition() = ModuleDefinition {
     Name("PiuTransport")
-    Events("onState", "onPeerFound", "onPeerLost", "onConnected", "onDisconnected", "onEnvelope")
+    Events("onState", "onPeerFound", "onPeerLost", "onConnected", "onDisconnected", "onEnvelope", "onHeartbeat")
+
+    // Pulso do PiuRelayService (só enquanto ele está ligado): o JS anuncia na rede local e faz o `tick`.
+    OnCreate { PiuRelayService.onHeartbeat = { sendEvent("onHeartbeat", bundleOf()) } }
 
     Function("kind") { NEARBY }
     Function("media") { listOf(NEARBY, BLE) }
@@ -168,8 +171,10 @@ class PiuTransportModule : Module() {
     }
 
     OnDestroy {
+      PiuRelayService.onHeartbeat = null
       stopAll()
-      try { PiuRelayService.stop(context) } catch (_: Exception) {}
+      // Só para agora (reload): a escolha fica, para o reinício do aparelho religar.
+      try { PiuRelayService.stop(context, keepChoice = true) } catch (_: Exception) {}
     }
   }
 

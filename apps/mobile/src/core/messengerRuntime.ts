@@ -629,6 +629,8 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       else if (e.type === 'state' && e.state === 'off') { msg.clearPeers(); peerMedium.clear(); syncMedia(); } // vizinhos somem com o transporte
     });
     const tick = setInterval(() => msg.tick(), 5000);
+    // Pulso nativo do serviço (tela apagada): o tick sai mesmo com os timers JS atrasados.
+    const beat = transport.onHeartbeat?.(() => msg.tick());
     // Temporárias vencidas somem no prazo também com o app fechado (antes era um efeito do StoreProvider).
     store.sweepExpired();
     const sweep = setInterval(() => store.sweepExpired(), SWEEP_MS);
@@ -645,7 +647,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
 
     teardown = () => {
       call?.svc.dispose();
-      off(); clearInterval(tick); clearInterval(sweep); clearInterval(notices);
+      off(); beat?.(); clearInterval(tick); clearInterval(sweep); clearInterval(notices);
       gwStop?.(); gwStop = null; gw = null;
       carryBridge.setCarrier(null);
       clearTimeout(saveTimer);

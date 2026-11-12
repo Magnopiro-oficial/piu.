@@ -318,3 +318,26 @@ test('runLanCheck: mede descoberta e conexões de teste (só abre e fecha) e cla
   assert.ok(r.issues.includes('homeLanReachable') && r.issues.includes('internet'));
   assert.equal(r.verdict, 'red');
 });
+
+test('pulso nativo (PiuRelayService, tela apagada): anuncia quando o timer JS atrasou, e não em dobro', async t => {
+  t.after(stopAll);
+  const lan = new FakeLan();
+  const a = lan.add('192.168.1.10');
+  let now = 1_000_000;
+  // Anúncio de 5 s com o timer JS parado (o intervalo nunca dispara no teste): só o pulso anuncia.
+  const A = engine(a, { beaconMs: 5000, now: () => now });
+  const beacons = () => a.sent.filter(s => s.port === 8423).length;
+  await A.start();
+  const first = beacons();
+  assert.ok(first >= 1, 'anúncio ao ligar');
+  A.heartbeat();
+  assert.equal(beacons(), first, 'o timer está em dia: o pulso não repete o anúncio');
+  now += 5000;
+  A.heartbeat();
+  assert.ok(beacons() > first, 'o timer atrasou: o pulso anuncia');
+  await A.stop();
+  const stopped = beacons();
+  now += 60_000;
+  A.heartbeat();
+  assert.equal(beacons(), stopped, 'desligada não anuncia');
+});

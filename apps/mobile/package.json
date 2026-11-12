@@ -62,7 +62,7 @@
     "icons": "node scripts/gen-icons.mjs",
     "typecheck": "tsc --noEmit",
     "export:web": "expo export --platform web",
-    "test": "node --import tsx --test src/protocol/__tests__/*.test.ts src/messaging/__tests__/*.test.ts src/transport/__tests__/*.test.ts src/lib/__tests__/*.test.ts src/calls/__tests__/*.test.ts src/core/__tests__/*.test.ts",
+    "test": "node --import tsx --test src/protocol/__tests__/*.test.ts src/messaging/__tests__/*.test.ts src/transport/__tests__/*.test.ts src/lib/__tests__/*.test.ts src/calls/__tests__/*.test.ts src/core/__tests__/*.test.ts src/state/__tests__/*.test.ts",
     "lint": "expo lint"
   },
   "private": true,

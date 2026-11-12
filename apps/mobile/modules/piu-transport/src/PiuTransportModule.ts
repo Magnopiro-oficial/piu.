@@ -15,7 +15,9 @@ declare class PiuTransportNativeModule extends NativeModule<PiuTransportEvents> 
   sendVia?(medium: PiuMedium, peerId: string, data: string): Promise<void>;
   /**
    * Android: liga/desliga o serviço em primeiro plano (aviso fixo) que mantém o transporte vivo em
-   * segundo plano enquanto o Modo nó estiver ligado. iPhone: sem efeito.
+   * segundo plano (Modo nó, Ponto Piu, "Receber com o app fechado"). Ligado, sobe a tarefa sem tela
+   * `PiuCore` e guarda a escolha e o texto: religa sozinho se o sistema matar o processo e depois de
+   * reiniciar o aparelho. iPhone: sem efeito.
    */
   setBackground?(on: boolean, title: string, text: string): Promise<void>;
   /**

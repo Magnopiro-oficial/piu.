@@ -21,4 +21,6 @@ dependencies {
   // bundleOf, NotificationCompat e ServiceCompat.startForeground (≥ 1.12). O expo-modules-core já traz uma
   // versão maior (1.17.0); o Gradle usa a maior.
   implementation 'androidx.core:core-ktx:1.13.1'
+  // ReactHost e HeadlessJsTaskContext: a tarefa sem tela PiuCore sobe pelo PiuRelayService.
+  implementation 'com.facebook.react:react-android'
 }

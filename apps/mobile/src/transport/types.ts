@@ -70,7 +70,12 @@ export interface Transport {
    * Modo nó em segundo plano (NFR-009). Android: serviço em primeiro plano com aviso fixo
    * "Piu retransmitindo mensagens". iPhone: sem efeito (só com o app aberto, por decisão de design).
    */
-  setBackgroundRelay?(on: boolean): Promise<void>;
+  setBackgroundRelay?(on: boolean, notice?: { title: string; text: string }): Promise<void>;
+  /**
+   * Pulso nativo do serviço em primeiro plano (Android, a cada 5 s, com wake lock curto): com a tela
+   * apagada os timers JS podem atrasar; o núcleo anuncia na rede local e o mensageiro faz o `tick`.
+   */
+  onHeartbeat?(fn: () => void): () => void;
   /** "Procurar vizinhos" (NFR-004): intervalo entre varreduras de descoberta, em segundos. */
   setDiscoveryInterval?(seconds: number): void;
   /**

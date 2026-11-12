@@ -271,3 +271,15 @@ test('segredo do nome: um dono só, criado e gravado uma vez, lido por quem cheg
   const failing = { ...io, read: () => undefined, write: () => Promise.reject(new Error('Dados sendo apagados.')) };
   assert.match(await ensureNameSecret(failing), /^[0-9a-f]{64}$/);
 });
+
+test('pulso nativo do serviço (tela apagada): o núcleo passa para a rede local, mesmo sem tela', async () => {
+  const f = fakes();
+  const beats = new Set<() => void>();
+  let lanBeats = 0;
+  (f.transport as { onHeartbeat?: (fn: () => void) => () => void }).onHeartbeat = fn => { beats.add(fn); return () => { beats.delete(fn); }; };
+  (f.transport.lan as unknown as { heartbeat: () => void }).heartbeat = () => { lanBeats++; };
+  core(f);
+  assert.equal(beats.size, 1, 'assinado ao criar o núcleo');
+  beats.forEach(fn => fn());
+  assert.equal(lanBeats, 1);
+});

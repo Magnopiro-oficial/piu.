@@ -9,8 +9,10 @@ import type { LanStatus } from '../transport/lan/controller';
 import type { LanCheckResult } from '../transport/lan/lanCheck';
 import { lanLowPower, lanWanted, type LanOffReason } from '../transport/lan/policy';
 import type { WifiInfo } from '../transport/lan/types';
+import { useT } from '../i18n';
 import { useBattery } from '../lib/battery';
 import { usePointRuntime } from '../lib/pointBridge';
+import { shouldBackground } from './background';
 import { useKeys } from './keys';
 import { useNetwork } from './network';
 import { useRelayBattery } from './phoneNodeEffects';
@@ -66,7 +68,8 @@ const LanContext = createContext<LanCtx | null>(null);
  */
 export function TransportProvider({ children }: { children: ReactNode }) {
   const { onboarded, showToast } = useStore();
-  const { tx, toggleTx, relay, relayPaused, battery: userBattery, loraMode, piuRegion } = useNetwork();
+  const { tx, toggleTx, relay, relayPaused, battery: userBattery, loraMode, piuRegion, receiveClosed } = useNetwork();
+  const t = useT();
   const { nodeKeyFor } = useKeys();
   const battery = useRelayBattery(userBattery); // modo nó do celular: pausa em 30% no mínimo
   const { bat } = useSettings();
@@ -99,13 +102,6 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   useEffect(() => { transport.setMediaEnabled?.({ ble: tx.ble && granted.ble, nearby: tx.direct && granted.nearby, ...loraMedia(loraMode, tx.lora) }); }, [transport, tx.ble, tx.direct, tx.lora, loraMode, granted]);
   // Região do rádio do Piu escolhida pela pessoa (sem escolha, o rádio não transmite: native.ts).
   useEffect(() => { if (piuRegion && transport.piulora?.link.status().region !== piuRegion) transport.piulora?.link.setRegion(piuRegion).catch(() => {}); }, [transport, piuRegion]);
-  // Retransmissão em segundo plano (Android, aviso fixo): Modo nó ligado, não pausado, transporte rodando
-  // e "Retransmitir em segundo plano" ligado. No iPhone não tem efeito (só com o app aberto).
-  // Ponto Piu ativo (state/point.tsx): o serviço fica ligado mesmo só com o Wi-Fi local (sem Bluetooth).
-  const pointRt = usePointRuntime();
-  useEffect(() => {
-    void transport.setBackgroundRelay?.((relay && !relayPaused && bat.bg && state === 'running') || pointRt.background).catch(() => {});
-  }, [transport, relay, relayPaused, bat.bg, state, pointRt.background]);
   // Bateria abaixo do limite do usuário: prefere o meio que gasta menos (BLE).
   const { level, charging } = useBattery();
   useEffect(() => {
@@ -124,6 +120,17 @@ export function TransportProvider({ children }: { children: ReactNode }) {
     return () => { alive = false; off(); };
   }, [lan]);
   const lanWant = lanWanted({ available: !!lan?.available, onboarded, hasNode: !!nodeKeyFor, pref: tx.mesh, wifi });
+  // Serviço em primeiro plano (Android, aviso fixo; state/background.ts): Modo nó em segundo plano, Ponto Piu
+  // ativo (state/point.tsx) ou "Receber com o app fechado". No iPhone não tem efeito (só com o app aberto).
+  // Só para "Receber com o app fechado", o aviso diz isso no idioma da pessoa (o do Modo nó segue o de sempre).
+  const pointRt = usePointRuntime();
+  const relayBg = relay && !relayPaused && bat.bg && state === 'running';
+  const background = shouldBackground({ relay, relayPaused, bg: bat.bg, state, point: pointRt.background, receiveClosed, listening: (enabled && permission !== 'denied') || lanWant.on });
+  const noticeTitle = relayBg || pointRt.background ? null : t('network.receiveClosed.notice.title');
+  const noticeText = t('network.receiveClosed.notice.text');
+  useEffect(() => {
+    void transport.setBackgroundRelay?.(background, noticeTitle ? { title: noticeTitle, text: noticeText } : undefined).catch(() => {});
+  }, [transport, background, noticeTitle, noticeText]);
   const relayNow = relay && !relayPaused;
   const relayRef = useRef(relayNow); relayRef.current = relayNow;
   const wifiIp = wifi?.ip ?? null;

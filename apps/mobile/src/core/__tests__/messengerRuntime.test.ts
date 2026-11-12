@@ -239,3 +239,16 @@ test('backup restaurado antes da tela: o perfil espera o dono (setHost) em vez d
   a.rt.setHost({ importProfile: p => got.push(p) });
   assert.equal(got.length, 1, 'entregue uma vez');
 });
+
+test('pulso nativo do serviço (tela apagada): o mensageiro faz o tick; parado, deixa de ouvir', async () => {
+  const a = device('A');
+  const beats = new Set<() => void>();
+  a.net.t.onHeartbeat = fn => { beats.add(fn); return () => { beats.delete(fn); }; };
+  a.rt.start(a.keys);
+  const ticks = mock.method(a.rt.messenger()!, 'tick');
+  assert.equal(beats.size, 1);
+  beats.forEach(fn => fn());
+  assert.equal(ticks.mock.callCount(), 1);
+  await a.rt.shutdown();
+  assert.equal(beats.size, 0);
+});

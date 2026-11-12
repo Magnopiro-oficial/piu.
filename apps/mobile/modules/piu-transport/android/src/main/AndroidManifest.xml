@@ -17,6 +17,9 @@
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
   <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
   <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+  <!-- Pulso do serviço (wake lock curto a cada 5 s) e religar depois de reiniciar o aparelho ou atualizar o app. -->
+  <uses-permission android:name="android.permission.WAKE_LOCK" />
+  <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
   <!-- Bluetooth LE é desejável, não obrigatório: sem ele o app usa só o Nearby. -->
   <uses-feature android:name="android.hardware.bluetooth_le" android:required="false" />
@@ -26,5 +29,14 @@
       android:name="expo.modules.piutransport.PiuRelayService"
       android:exported="false"
       android:foregroundServiceType="connectedDevice" />
+    <!-- Sem LOCKED_BOOT_COMPLETED: o cofre só abre depois do primeiro desbloqueio (BootReceiver.kt). -->
+    <receiver
+      android:name="expo.modules.piutransport.BootReceiver"
+      android:exported="true">
+      <intent-filter>
+        <action android:name="android.intent.action.BOOT_COMPLETED" />
+        <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+      </intent-filter>
+    </receiver>
   </application>
 </manifest>
