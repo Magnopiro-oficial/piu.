@@ -32,17 +32,21 @@ class Net {
 }
 
 type Dev = ReturnType<typeof device>;
-function device(net: Net, name: string, opts: { seed?: Uint8Array; state?: string } = {}) {
+function device(net: Net, name: string, opts: { seed?: Uint8Array; state?: string; snap?: boolean } = {}) {
   const seed = opts.seed ?? newSeed();
   const ids = { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') };
-  const log = { alerts: [] as [AlertView, AlertNotice | null][], group: [] as [string, string][] };
+  // `snap`: salva o estado na hora de cada `changed` (o pior caso de quem salva sem esperar).
+  const log = { alerts: [] as [AlertView, AlertNotice | null][], group: [] as [string, string][], saves: [] as string[] };
+  let ready: Messenger | null = null;
   const m = new Messenger({
     identities: ids, node: deriveNodeKey(seed), relay: true, now: () => net.clock, transmit: net.transmit(name), state: opts.state,
     events: {
       communityAlert: (v, n) => log.alerts.push([v, n]),
       groupMessage: (_g, _f, who, x) => log.group.push([who, x.text]),
+      changed: () => { if (opts.snap && ready) log.saves.push(ready.export()); },
     },
   });
+  ready = m;
   m.displayName = name;
   net.nodes.set(name, m);
   return { m, ids, seed, log, name };
@@ -206,6 +210,32 @@ test('encerramento que chega depois: o alerta oculto aparece e notifica uma vez'
   assert.equal(notified().filter(t => t === 'A4').length, 1, 'uma vez só');
 });
 
+test('alerta que alterna oculto e visível não notifica de novo depois de reabrir o app', () => {
+  const { net, a, b, c, com } = vila();
+  net.clock = T0 + H;
+  const g = a.m.getGroup(com.id)!;
+  const seal = (body: Uint8Array, at: number) => sealGroup({ from: b.ids.public, group: groupKeyOf(g), type: MsgType.Text, body, now: at, ttlSec: 24 * H }).bytes;
+  const id = (k: number) => k.toString(16).padStart(32, 'b');
+  const alert = (k: number, at: number) => seal(encodeAlertPayload({ kind: 'alert', i: id(k), cat: 'agua', sev: 'grave', title: `A${k}`, text: '', area: '', dur: 24 * H }), at);
+  const close = seal(encodeAlertPayload({ kind: 'close', i: id(9), alert: id(1) }), T0 + 40 * 60);
+  const notified = (x: Dev) => x.log.alerts.filter(([, n]) => n).map(([v]) => v.title);
+  // O A4 chega sozinho: vale e notifica. Os mais antigos chegam depois e ele fica oculto.
+  c.m.receive('Ana', alert(4, T0 + 50 * 60));
+  assert.deepEqual(notified(c), ['A4']);
+  for (const [k, at] of [[1, T0], [2, T0 + 15 * 60], [3, T0 + 30 * 60]] as const) c.m.receive('Ana', alert(k, at));
+  assert.equal(c.m.communityAlert(id(4)), null, 'oculto');
+  // Reabre o app (mesmo estado salvo) e o encerramento de A1 faz o A4 voltar: aparece sem notificar.
+  const c2 = device(net, 'Caio', { seed: c.seed, state: c.m.export() });
+  c2.m.receive('Ana', close);
+  assert.equal(c2.m.communityAlert(id(4))?.active, true);
+  assert.deepEqual(notified(c2), [], 'já notificado antes de reabrir');
+  // Saem do aparelho 24 h depois de vencer: o registro de notificado sai junto.
+  net.clock = T0 + 50 * 60 + 48 * H + 1;
+  c2.m.tick();
+  assert.equal(c2.m.communityAlerts().length, 0);
+  assert.deepEqual(JSON.parse(c2.m.export()).cs, [], 'o registro de notificado não cresce sem limite');
+});
+
 test('voto de quem não é membro é ignorado', () => {
   const { net, a, b, c, com } = vila();
   const v = b.m.publishAlert(com.id, draft);
@@ -307,4 +337,39 @@ test('estado salvo: alertas e votos voltam depois de reabrir', () => {
   // Saiu da comunidade: os alertas dela saem do aparelho.
   b.m.leaveGroup(com.id);
   assert.equal(b.m.communityAlerts().length, 0);
+});
+
+test('estado salvo na hora do meu voto já leva o status novo (sem crítica falsa ao reabrir)', () => {
+  const net = new Net();
+  const a = device(net, 'Ana'), b = device(net, 'Beto'), c = device(net, 'Caio'), d = device(net, 'Davi', { snap: true });
+  for (const x of [b, c, d]) { know(a, x); know(x, a); }
+  const com = a.m.createGroup({ kind: 'community', name: 'Vila', via: 'public', memberIds: [b.ids.public.id, c.ids.public.id, d.ids.public.id] });
+  for (const x of ['Beto', 'Caio', 'Davi']) net.link('Ana', x);
+  const v = b.m.publishAlert(com.id, draft);
+  net.run();
+  c.m.voteAlert(v.id, 'confirm');
+  net.run();
+  // O segundo "Confirmo" é o meu: o alerta vira confirmado por causa dele.
+  d.log.saves.length = 0;
+  assert.equal(d.m.voteAlert(v.id, 'confirm').status, 'confirmed');
+  assert.ok(d.log.saves.length > 0, 'o voto avisa `changed`');
+  const first = d.log.saves[0];
+  assert.equal(new Map(JSON.parse(first).cs as [string, string][]).get(v.id), 'confirmed', 'já no primeiro salvamento');
+  // Reabre com esse estado; o voto de Ana chega e não notifica "confirmado" (fui eu que confirmei).
+  const d2 = device(net, 'Davi', { seed: d.seed, state: first });
+  a.m.voteAlert(v.id, 'confirm');
+  net.run();
+  assert.equal(d2.m.communityAlert(v.id)?.confirms, 3);
+  assert.deepEqual(d2.log.alerts.map(([, n]) => n).filter(Boolean), [], 'nada a notificar');
+});
+
+test('estado salvo com item corrompido em `cs`: o app abre e ignora só o item ruim', () => {
+  const { net, b, c, com } = vila();
+  const v = b.m.publishAlert(com.id, draft);
+  net.run();
+  const st = JSON.parse(c.m.export());
+  st.cs = [null, 5, 'x', [1, 'confirmed'], [v.id, 'nada'], ...st.cs];
+  const c2 = device(net, 'Caio', { seed: c.seed, state: JSON.stringify(st) });
+  assert.equal(c2.m.communityAlert(v.id)?.status, 'unconfirmed');
+  assert.deepEqual(JSON.parse(c2.m.export()).cs, [[v.id, 'unconfirmed']], 'o item válido volta; os ruins ficam de fora');
 });

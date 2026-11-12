@@ -62,7 +62,7 @@ test('ponto: o que vai ao disco não leva o id do vizinho em claro nem o horári
   const disk = packRecords(recs).toString('latin1');
   assert.ok(!disk.includes(from) && !disk.includes(to), 'ids de vizinhos não vão em claro para o store.bin');
   const back = unpackRecords(packRecords(recs));
-  assert.equal(back[0]!.storedAt % 3600, 0, 'horário guardado arredondado à hora');
+  assert.equal(back[0]!.storedAt % 86400, 0, 'chegada guardada só com o dia');
   assert.ok(back[0]!.dropAt >= recs[0]!.dropAt - 3600 && back[0]!.dropAt % 3600 === 0);
   await node.stop();
   // Reinício: o mesmo ponto reconhece os vizinhos (não devolve a quem trouxe nem repete a quem já foi).
@@ -311,4 +311,41 @@ test('store.bin: packRecords grava os registros em ordem aleatória (a ordem de 
   assert.equal(order.length, 32);
   assert.notDeepEqual(order, recs.map(r => r.salt), 'ordem igual à de entrada: 1 em 32! por acaso');
   assert.deepEqual([...order].sort(), recs.map(r => r.salt).sort(), 'nenhum registro perdido');
+});
+
+test('store.bin: a chegada (`s`) vai ao disco só com o dia, arredondado para cima; `d` segue à hora', () => {
+  const day = 86400, d0 = 20_000 * day;
+  const mk = (storedAt: number, salt: string) => ({ bytes: new Uint8Array([1]), from: null, storedAt, dropAt: storedAt + 2 * day, sentTo: [], copies: 0, salt });
+  // Duas chegadas em horas diferentes do mesmo dia: o mesmo `s` (o disco não diz que vieram na mesma hora).
+  const back = unpackRecords(packRecords([mk(d0 + 3 * 3600 + 17, '0'.repeat(32)), mk(d0 + 20 * 3600 + 5, '1'.repeat(32))]));
+  assert.deepEqual(back.map(r => r.storedAt), [d0 + day, d0 + day]);
+  assert.deepEqual(back.map(r => r.dropAt).sort(), [d0 + 2 * day + 3 * 3600, d0 + 2 * day + 20 * 3600]);
+  // Já no dia exato não muda (regravar não empurra para o dia seguinte).
+  assert.equal(unpackRecords(packRecords([mk(d0, '2'.repeat(32))]))[0]!.storedAt, d0);
+});
+
+test('ponto: com o dia no disco, o vencimento não muda; "guardar por N dias" reduzido ainda vale (no máximo 1 dia depois)', () => {
+  const now = Math.floor(Date.now() / 1000), day = 86400;
+  const alice = deriveIdentity(newSeed(), 'public'), bob = deriveIdentity(newSeed(), 'public');
+  const env = (ttlSec: number) => sealDirect({ from: alice, to: toPublic(bob), type: MsgType.Text, body: utf8('oi'), now: now - 4 * day, ttlSec }).bytes;
+  const key = pointKey(newSeed());
+  const load = (retentionSec: number, storedAt: number, dropAt: number, bytes: Uint8Array) => {
+    const node = new GuardianNode({ key, transport: fakeTransport().t, limits: { maxBytes: 2 ** 20, retentionSec }, now: () => now });
+    const back = unpackRecords(packRecords([{ bytes, from: null, storedAt, dropAt, sentTo: [], copies: 0, salt: 'ab'.repeat(16) }]));
+    node.importStored(back);
+    return node.router.exportStored()[0]?.dropAt ?? null;
+  };
+  // Mesma retenção (1 dia, a que vence antes): vence na mesma hora de antes (arredondada à hora para baixo).
+  const s1 = now - 5 * 3600;
+  assert.equal(load(day, s1, s1 + day, env(7 * day)), Math.floor((s1 + day) / 3600) * 3600);
+  // Guardado com 7 dias e reduzido para 1: chegou ontem às 18 h (UTC), entre 6 e 30 h atrás em qualquer hora em que o
+  // teste rode. O disco guarda o dia seguinte à chegada (hoje, 0 h), então vence amanhã às 0 h: depois do prazo novo
+  // (chegada + 1 dia), no máximo 1 dia além dele, e bem antes do antigo. Nunca já vencido na carga.
+  const today = Math.floor(now / day) * day, s2 = today - 6 * 3600;
+  const d2 = load(day, s2, s2 + 7 * day, env(7 * day));
+  assert.equal(d2, today + day);
+  assert.ok(d2 > now && d2 >= s2 + day && d2 - (s2 + day) <= day && d2 < s2 + 7 * day);
+  // Chegou há 3 dias: com 1 dia, já passou mesmo com o arredondamento (some na carga).
+  const s3 = now - 3 * day;
+  assert.equal(load(day, s3, s3 + 7 * day, env(7 * day)), null);
 });

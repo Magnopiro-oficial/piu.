@@ -6,11 +6,11 @@
  * (protocol/carry.ts) e as entrega com o mesmo CarryGateway do celular e do piu-node.
  * Estatísticas reais, só contagens: nenhum id de aparelho sai daqui.
  */
-import { createHash, createHmac, randomBytes } from 'node:crypto';
+import { createHash, createHmac, hash, randomBytes } from 'node:crypto';
 import { CarryGateway } from '../../../../mobile/src/lib/carryGateway';
 import { finalizedHead, LunesRpc } from '../../../../mobile/src/lib/lunesRpc';
 import { carryOf, CarryKind, GATEWAY_TX_IDENTITY, gatewayKindOf, sealCarryReceipt } from '../../../../mobile/src/protocol/carry';
-import { envelopeId, openDirect } from '../../../../mobile/src/protocol/envelope';
+import { HOP_OFFSET, openDirect } from '../../../../mobile/src/protocol/envelope';
 import type { KeyPair } from '../../../../mobile/src/protocol/keys';
 import { Router, type StoredEnvelope } from '../../../../mobile/src/protocol/router';
 import type { Transport } from '../../transport/types';
@@ -38,6 +38,18 @@ export interface GuardianNodeOptions {
 export interface DayCounters { day: string; seen: string[]; bytes: number }
 const MAX_SEEN_TODAY = 5000;
 export const dayKey = (ms: number) => new Date(ms).toISOString().slice(0, 10);
+
+/**
+ * O mesmo id de `envelopeId` (protocol/envelope.ts: SHA-256 do envelope com o salto zerado, 16 bytes em hex),
+ * com o SHA-256 nativo do Node: o de suite.ts, em JS puro, custa de 150 a 600 µs por envelope, e carregar
+ * 131 mil guardados travava o ponto por 20 a 60 s ao ligar. Aqui, poucos µs. Zera o salto no próprio `bytes` e
+ * devolve logo em seguida (síncrono: ninguém vê), sem copiar o envelope.
+ */
+export function nativeEnvelopeId(bytes: Uint8Array): string {
+  const hops = bytes[HOP_OFFSET]!;
+  bytes[HOP_OFFSET] = 0;
+  try { return hash('sha256', bytes, 'hex').slice(0, 32); } finally { bytes[HOP_OFFSET] = hops; }
+}
 
 export class GuardianNode {
   readonly router: Router;
@@ -76,7 +88,7 @@ export class GuardianNode {
     this.receipts = o.totals?.receipts ?? 0;
     const gw = o.gateway ?? null;
     this.router = new Router({
-      node: o.key, identities: [], relay: true,
+      node: o.key, identities: [], relay: true, idOf: nativeEnvelopeId,
       limits: { maxBytes: o.limits.maxBytes, maxRetentionSec: o.limits.retentionSec, maxCount: Math.max(500, Math.floor(o.limits.maxBytes / 2048)) },
       // Só o gateway de transações, e só com o papel ligado e a Lunes alcançável.
       openExtra: (bytes, h, nowSec) => (this.carry && this.gatewayOnline && gatewayKindOf(h) === CarryKind.Tx ? openDirect(bytes, GATEWAY_TX_IDENTITY, nowSec) : null),
@@ -146,16 +158,11 @@ export class GuardianNode {
       fix.push({ bytes, from, sent });
     }
     if (!fix.length) return;
-    // O roteador não muda quem trouxe de um envelope guardado: tira e devolve (mesmo `bytes`) com os nomes corrigidos.
-    const stored = new Map(this.router.exportStored().map(e => [e.bytes, e] as const));
-    const back: StoredEnvelope[] = [];
-    for (const f of fix) {
-      const e = stored.get(f.bytes);
-      if (!e) { this.pending.delete(f.bytes); continue; }
-      this.router.forget(envelopeId(e.bytes));
-      back.push({ ...e, from: f.from ? p : e.from, sentTo: f.sent && !e.sentTo.includes(p) ? [...e.sentTo, p] : e.sentTo });
-    }
-    this.router.importStored(back, this.sec());
+    // Corrige no lugar (mesmo `bytes`), numa passada: tirar e devolver ao roteador recalculava o id de cada
+    // envelope (SHA-256 do envelope inteiro, ~150 µs em JS puro, duas vezes por registro): ~40 s medidos para
+    // 131 mil guardados de 593 bytes, de um mesmo vizinho.
+    const found = this.router.amendStored(new Map(fix.map(f => [f.bytes, { ...(f.from ? { from: p } : {}), ...(f.sent ? { sentTo: p } : {}) }] as const)));
+    for (const f of fix) if (!found.has(f.bytes)) this.pending.delete(f.bytes);
   }
 
   /** Conta o aparelho no dia sem guardar o id: hash do id com o dia (não liga um dia ao outro). */
@@ -230,7 +237,7 @@ export class GuardianNode {
     for (const bytes of out) {
       this.forwarded++;
       this.addBytes(bytes.length);
-      this.o.transport.send(peer, bytes).catch(() => { try { this.router.unsent(this.pid(peer), envelopeId(bytes)); } catch { /* inválido */ } this.forwarded--; });
+      this.o.transport.send(peer, bytes).catch(() => { try { this.router.unsent(this.pid(peer), nativeEnvelopeId(bytes)); } catch { /* inválido */ } this.forwarded--; });
     }
     // Repassou algo ou o roteador expurgou vencidos ao montar a rodada: gravar.
     if (out.length || this.router.stats().stored < stored) this.o.onChange?.();
@@ -294,5 +301,5 @@ export class GuardianNode {
     return n;
   }
   /** Apaga tudo o que o ponto guarda de outras pessoas (encerrar). */
-  wipe() { for (const e of this.router.exportStored()) this.router.forget(envelopeId(e.bytes)); this.salts = new WeakMap(); this.pending.clear(); }
+  wipe() { for (const e of this.router.exportStored()) this.router.forget(nativeEnvelopeId(e.bytes)); this.salts = new WeakMap(); this.pending.clear(); }
 }

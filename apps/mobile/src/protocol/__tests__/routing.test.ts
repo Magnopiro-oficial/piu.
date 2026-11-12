@@ -252,3 +252,46 @@ test('reinício: a restauração respeita espaço e retenção e descarta lixo',
   const R3 = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true, limits: { maxRetentionSec: 3600 } });
   assert.equal(R3.importStored(saved, NOW + 3601), 0);
 });
+
+test('amendStored: corrige quem trouxe e para quem foi no lugar, só de terceiros, achando pelo próprio `bytes`', () => {
+  const A = node('A'), B = node('B');
+  const R = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true });
+  const deles = msg(A.id, B.id, 'de terceiro'), outro = msg(A.id, B.id, 'outro'), meu = msg(A.id, B.id, 'meu');
+  R.ingest(deles.bytes, 'Y', NOW); R.ingest(outro.bytes, 'X', NOW);
+  R.send(meu.bytes, NOW);
+  const byId = new Map(R.exportStored().map(e => [envelopeId(e.bytes), e]));
+  const d = byId.get(deles.id)!, o = byId.get(outro.id)!, mi = byId.get(meu.id)!;
+  assert.ok(mi.own && !d.own);
+  const found = R.amendStored(new Map([
+    [d.bytes, { from: 'P' }],
+    [o.bytes, { sentTo: 'Q' }],
+    [mi.bytes, { from: 'P', sentTo: 'Q' }],          // própria: não mexe
+    [d.bytes.slice(), { sentTo: 'Z' }],              // mesmo conteúdo, outro objeto: não casa
+  ]));
+  assert.deepEqual(found, new Set([d.bytes, o.bytes]));
+  const after = new Map(R.exportStored().map(e => [envelopeId(e.bytes), e]));
+  assert.equal(after.get(deles.id)!.from, 'P');
+  assert.deepEqual(after.get(deles.id)!.sentTo, []);
+  assert.equal(after.get(outro.id)!.from, 'X', 'sem `from` na correção, quem trouxe fica');
+  assert.deepEqual(after.get(outro.id)!.sentTo, ['Q']);
+  assert.equal(after.get(meu.id)!.from, null);
+  assert.deepEqual(after.get(meu.id)!.sentTo, []);
+  // Não volta para quem já recebeu; vai para quem não recebeu.
+  assert.equal(R.outgoing('Q', 'eth', NOW + 1).filter(x => envelopeId(x) === outro.id).length, 0);
+  assert.equal(R.outgoing('P', 'eth', NOW + 1).filter(x => envelopeId(x) === deles.id).length, 0, 'não devolve a quem trouxe');
+});
+
+test('idOf: o roteador usa o id dado (ex.: SHA-256 nativo) em vez de recalcular com o de suite.ts', () => {
+  const A = node('A'), B = node('B');
+  let calls = 0;
+  const idOf = (b: Uint8Array) => { calls++; return envelopeId(b); };
+  const R = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true, idOf });
+  const m = msg(A.id, B.id, 'um');
+  assert.equal(R.isNew(m.bytes, NOW), true);
+  assert.equal(R.ingest(m.bytes, 'A', NOW).status, 'stored');
+  const R2 = new Router({ node: deriveNodeKey(newSeed()), identities: [], relay: true, idOf });
+  const before = calls;
+  assert.equal(R2.importStored(R.exportStored(), NOW + 1), 1);
+  assert.ok(R2.has(m.id));
+  assert.ok(before >= 2 && calls === before + 1, `um id por envelope restaurado (${calls - before})`);
+});

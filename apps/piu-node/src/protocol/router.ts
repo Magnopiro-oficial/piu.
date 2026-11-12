@@ -56,6 +56,12 @@ export interface RouterOptions {
    * custar uma troca de chaves a mais em cada envelope que chega.
    */
   openExtra?: (bytes: Uint8Array, h: Header, now: number) => Opened | null;
+  /**
+   * Id do envelope com outra implementação do MESMO cálculo de `envelopeId` (o ponto Piu do desktop passa o
+   * SHA-256 nativo do Node: o de suite.ts, em JS puro, custa centenas de µs por envelope e, ao restaurar
+   * 131 mil guardados, travava o ponto por mais de 20 s). Resultado diferente quebra deduplicação e recibos.
+   */
+  idOf?: (bytes: Uint8Array) => string;
   relay: boolean;
   limits?: Partial<RouterLimits>;
 }
@@ -72,12 +78,14 @@ export class Router {
   relay: boolean;
   identities: Identity[];
   groupKeys: GroupKey[];
+  private idOf: (bytes: Uint8Array) => string;
 
   constructor(private o: RouterOptions) {
     this.limits = { ...DEFAULT_LIMITS, ...o.limits };
     this.relay = o.relay;
     this.identities = o.identities;
     this.groupKeys = o.groupKeys ?? [];
+    this.idOf = o.idOf ?? envelopeId;
   }
 
   get size() { return this.store.size; }
@@ -115,7 +123,7 @@ export class Router {
     let h: Header;
     try { h = parseHeader(bytes); } catch { return false; }
     if (h.expiresAt <= now || h.expiresAt > now + MAX_TTL_SEC + CLOCK_SKEW_SEC) return false;
-    return !this.seen.has(envelopeId(bytes));
+    return !this.seen.has(this.idOf(bytes));
   }
 
   /** Envelope que chegou de um vizinho (`from`), ou criado aqui (`from = null`). */
@@ -124,7 +132,7 @@ export class Router {
     if (bytes.length > this.limits.maxEnvelopeBytes) return { status: 'rejected', reason: 'grande demais' };
     let h: Header;
     try { h = parseHeader(bytes); } catch (e) { return { status: 'rejected', reason: e instanceof ProtocolError ? e.code : 'inválido' }; }
-    const id = envelopeId(bytes);
+    const id = this.idOf(bytes);
     if (h.expiresAt <= now) return { status: 'expired', id };
     if (h.expiresAt > now + MAX_TTL_SEC + CLOCK_SKEW_SEC) return { status: 'rejected', reason: 'TTL acima do máximo' };
     this.purge(now);
@@ -253,10 +261,18 @@ export class Router {
    * repetido (replay) seria aceito de novo até vencer.
    */
   exportSeen(): [string, number][] { return [...this.seen]; }
+  /**
+   * Esquece os ids vistos mais antigos acima do limite. Um iterador só: abrir um novo a cada remoção
+   * percorre de novo as vagas já apagadas (0,4 s para tirar 31 mil de 131 mil, ao restaurar um ponto cheio).
+   */
+  private trimSeen() {
+    const it = this.seen.keys();
+    while (this.seen.size > this.limits.maxSeen) this.seen.delete(it.next().value!);
+  }
   /** Restaura os ids vistos (os vencidos são ignorados). */
   importSeen(list: [string, number][], now: number) {
     for (const [id, exp] of list) if (exp > now && !this.seen.has(id)) this.seen.set(id, exp);
-    while (this.seen.size > this.limits.maxSeen) this.seen.delete(this.seen.keys().next().value!);
+    this.trimSeen();
   }
 
   /**
@@ -266,6 +282,24 @@ export class Router {
    */
   exportStored(): StoredEnvelope[] {
     return [...this.store.values()].map(e => ({ bytes: e.bytes, from: e.from, own: e.own, storedAt: e.storedAt, dropAt: e.dropAt, sentTo: [...e.sentTo], copies: e.copies, releaseAt: e.releaseAt }));
+  }
+
+  /**
+   * Corrige, nos envelopes de terceiros guardados, quem trouxe (`from`) e acrescenta um vizinho a quem já
+   * foram (`sentTo`). A chave é o próprio `bytes` de `exportStored` (o mesmo objeto). Uma passada, sem
+   * recalcular id nem cabeçalho (o ponto Piu reconhece o vizinho depois de reiniciar: tirar e devolver cada
+   * envelope custava um hash do envelope inteiro por registro). Devolve os `bytes` encontrados.
+   */
+  amendStored(fix: Map<Uint8Array, { from?: string; sentTo?: string }>): Set<Uint8Array> {
+    const found = new Set<Uint8Array>();
+    for (const e of this.store.values()) {
+      const f = fix.get(e.bytes);
+      if (!f || e.own) continue;
+      if (f.from !== undefined) e.from = f.from;
+      if (f.sentTo !== undefined) e.sentTo.add(f.sentTo);
+      found.add(e.bytes);
+    }
+    return found;
   }
 
   /**
@@ -283,7 +317,7 @@ export class Router {
       let h: Header;
       try { h = parseHeader(s.bytes); } catch { continue; }
       if (h.expiresAt <= now || h.expiresAt > now + MAX_TTL_SEC + CLOCK_SKEW_SEC) continue;
-      parsed.push({ s, h, id: envelopeId(s.bytes) });
+      parsed.push({ s, h, id: this.idOf(s.bytes) });
     }
     parsed.sort((a, b) => Number(b.s.own) - Number(a.s.own) || b.h.priority - a.h.priority || a.h.expiresAt - b.h.expiresAt);
     for (const { s, h, id } of parsed) {
@@ -300,7 +334,7 @@ export class Router {
       if (!this.seen.has(id)) this.seen.set(id, h.expiresAt);
       n++;
     }
-    while (this.seen.size > this.limits.maxSeen) this.seen.delete(this.seen.keys().next().value!);
+    this.trimSeen();
     return n;
   }
 

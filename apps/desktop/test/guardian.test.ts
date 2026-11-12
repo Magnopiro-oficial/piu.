@@ -193,8 +193,8 @@ test('ponto sem a ponte nunca consulta fora da rede; o teste real só roda a ped
 });
 
 test('arquivo dos envelopes guardados: ida e volta; lixo no fim não quebra', () => {
-  // Horários múltiplos da hora: o disco guarda arredondado à hora (para baixo).
-  const recs = [{ bytes: new Uint8Array([1, 2, 3]), from: 'abcd', storedAt: 7200, dropAt: 10800, sentTo: ['x'], copies: 1, salt: '00112233445566778899aabbccddeeff' }];
+  // Chegada múltipla do dia e vencimento múltiplo da hora: é como o disco guarda (sealed.packRecords).
+  const recs = [{ bytes: new Uint8Array([1, 2, 3]), from: 'abcd', storedAt: 86400, dropAt: 90000, sentTo: ['x'], copies: 1, salt: '00112233445566778899aabbccddeeff' }];
   const back = unpackRecords(Buffer.concat([packRecords(recs), Buffer.from([0, 0, 9])]));
   assert.deepEqual(back, recs);
 });

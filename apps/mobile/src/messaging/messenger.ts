@@ -10,7 +10,7 @@
  * - Estado salvo (`export`): sessões, fila própria, ids vistos (contra replay) e contatos.
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
-import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, type Vote } from './communityAlerts';
+import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, STATUS_LABEL, type Vote } from './communityAlerts';
 import { hoursAllow, type HoursPolicy } from './hours';
 import { isJpegBase64 } from './photo';
 import { isLunesAddress } from '../lib/ss58';
@@ -431,6 +431,11 @@ export class Messenger {
     this.deliveryDays = new DeliveryDays(st?.ud);
     this.accepted = new AcceptedInvites(st?.ia);
     this.alertBook = new AlertBook(st?.ca);
+    for (const x of (Array.isArray(st?.cs) ? st.cs : []) as unknown[]) {
+      if (!Array.isArray(x)) continue; // item corrompido não derruba a abertura
+      const [id, s] = x as [unknown, AlertStatus];
+      if (typeof id === 'string' && this.alertBook.get(id) && Object.prototype.hasOwnProperty.call(STATUS_LABEL, s)) this.alertSeen.set(id, s);
+    }
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
     for (const [id, x] of (st?.p2 ?? []) as [string, { s: string; at: number }][]) {
       const sealed = unb64url(x.s);
@@ -1599,7 +1604,13 @@ export class Messenger {
   // ── alertas da comunidade (communityAlerts.ts) ───────────────────────
 
   private alertBook: AlertBook;
-  /** Estado de cada alerta na última vez que avisei a tela (para saber o que mudou). */
+  /**
+   * Estado de cada alerta na última vez que avisei a tela (para saber o que mudou). Vai no estado
+   * salvo (`cs`): o alerta que já notificou, ficou oculto e voltou não notifica de novo depois de
+   * reabrir o app. Só ids do livro (sai junto do alerta; teto: o do livro). Limite que fica: o
+   * primeiro alerta de um autor que chega sozinho vale e notifica; se chegam depois outros mais
+   * antigos dele, pode ficar oculto (o cálculo só conhece o que está guardado).
+   */
   private alertSeen = new Map<string, AlertStatus>();
 
   private alertView(id: string): AlertView | null {
@@ -1641,9 +1652,9 @@ export class Messenger {
       const before = this.alertsShown(g.id, from);
       const r = this.alertBook.addAlert({ id: w.i, community: g.id, author: from, authorName: who?.name || 'Membro', cat: w.cat, sev: w.sev, title: w.title, text: w.text, area: w.area, at: sentAt, until: sentAt + w.dur }, now, g.members);
       if (r === 'dup' || r === 'rejected') return;
-      this.o.events.changed?.();
       if (r === 'ok' && from !== this.myId(g.via)) this.emitAlert(w.i, true);
       this.emitNowShown(g.id, from, before, w.i);
+      this.o.events.changed?.(); // depois de avisar: o estado salvo já leva o que notificou
       return;
     }
     const a = this.alertBook.get(w.alert);
@@ -1651,8 +1662,8 @@ export class Messenger {
     const before = a ? this.alertsShown(a.community, a.author) : new Set<string>();
     const ok = w.kind === 'vote' ? this.alertBook.addVote(w.alert, from, w.v, sentAt, w.i, g.members, w.n) : this.alertBook.addClose(w.alert, from, sentAt, g.members);
     if (!ok) return;
-    this.o.events.changed?.();
     if (a) { this.emitAlert(a.id, false); this.emitNowShown(a.community, a.author, before, a.id); }
+    this.o.events.changed?.();
   }
 
   private sealAlert(g: GroupState, body: Uint8Array, ttlSec: number, priority: Priority) {
@@ -1690,9 +1701,9 @@ export class Messenger {
     if (this.alertBook.addAlert({ id, community: g.id, author: me, authorName: name, cat: d.cat, sev: d.sev, title, text, area, at: now, until: now + d.durSec }, now, g.members) !== 'ok')
       throw new Error('Não foi possível publicar o alerta.');
     this.markDelivered(`${g.id}|${me}|${id}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'alert', i: id, cat: d.cat, sev: d.sev, title, text, area, dur: d.durSec }), d.durSec, Priority.High);
     const v = this.alertView(id)!;
-    this.alertSeen.set(id, v.status);
+    this.alertSeen.set(id, v.status); // antes do `changed` de sealAlert: o salvamento já leva o status
+    this.sealAlert(g, encodeAlertPayload({ kind: 'alert', i: id, cat: d.cat, sev: d.sev, title, text, area, dur: d.durSec }), d.durSec, Priority.High);
     return v;
   }
 
@@ -1709,9 +1720,9 @@ export class Messenger {
     const n = this.alertBook.nextVoteRev(alertId, me);
     this.alertBook.addVote(alertId, me, v, now, i, g.members, n);
     this.markDelivered(`${g.id}|${me}|${i}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'vote', i, alert: alertId, v, n }), cur.until - now, Priority.Normal);
     const out = this.alertView(alertId)!;
-    this.alertSeen.set(alertId, out.status);
+    this.alertSeen.set(alertId, out.status); // antes do `changed` de sealAlert (ver publishAlert)
+    this.sealAlert(g, encodeAlertPayload({ kind: 'vote', i, alert: alertId, v, n }), cur.until - now, Priority.Normal);
     return out;
   }
 
@@ -1726,9 +1737,9 @@ export class Messenger {
     const i = randomHex(16);
     this.alertBook.addClose(alertId, me, now, g.members);
     this.markDelivered(`${g.id}|${me}|${i}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'close', i, alert: alertId }), cur.until - now, Priority.Normal);
     const out = this.alertView(alertId)!;
-    this.alertSeen.set(alertId, out.status);
+    this.alertSeen.set(alertId, out.status); // antes do `changed` de sealAlert (ver publishAlert)
+    this.sealAlert(g, encodeAlertPayload({ kind: 'close', i, alert: alertId }), cur.until - now, Priority.Normal);
     return out;
   }
 
@@ -2327,6 +2338,7 @@ export class Messenger {
       gv: [...this.vouched],
       rk: this.rotatedFor,
       ca: this.alertBook.export(),
+      cs: [...this.alertSeen].filter(([id]) => this.alertBook.get(id)),
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
       c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, ...(c.groupOnly ? { o: 1 } : {}), k: c.invite ?? '', ...(c.lunes ? { w: c.lunes } : {}), s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],

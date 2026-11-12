@@ -15,15 +15,19 @@
  *   ao ligar o ponto (formato antigo convertido ou vencidos descartados) acontece sem vizinho ligado: `t` vai
  *   VAZIO para o disco e só volta a ter nomes na gravação seguinte (até 1 min) com vizinhos ligados. Se o app
  *   cair nesse intervalo, o envelope pode ser reenviado uma vez a quem já tinha recebido (o aparelho descarta);
- * - quando chegou e quando some (`s`, `d`), arredondados à hora; e quantas cópias saíram (`c`).
+ * - quando some (`d`, arredondado à hora) e o dia em que chegou (`s`, arredondado ao dia, para cima); e quantas
+ *   cópias saíram (`c`).
  * Os registros vão ao disco em ordem sorteada a cada gravação (a ordem de chegada juntaria os de um vizinho).
  * Formatos antigos, convertidos e regravados na carga: sem `v` (ids em claro) e `v: 2` (nome fixo do
  * vizinho, sem sal). Os dois convertem sem perda (o nome fixo é o mesmo que o ponto usa em memória).
  * Limite que sobra: quem abre o cofre do dono do ponto tem a chave do ponto e, se já suspeita de um id,
  * consegue conferir registro a registro se ele trouxe ou recebeu aquele envelope (refaz o HMAC com o sal).
  * Não dá para evitar isso sem perder a proteção de não devolver o envelope a quem o trouxe depois de reiniciar.
- * Também sobra o horário arredondado (`s`): envelopes que chegaram na mesma hora têm o mesmo `s`, então uma
- * rajada grande numa hora calma ainda sugere "vieram juntos" (não diz de quem; arredondar mais custaria prazo).
+ * Também sobra o horário de `d`: quando a retenção do ponto vence antes do prazo do envelope, `d` é a chegada
+ * mais a retenção, então envelopes que chegaram na mesma hora têm o mesmo `d` e uma rajada grande numa hora calma
+ * ainda sugere "vieram juntos" (não diz de quem; arredondar `d` mais custaria prazo). Quando o prazo do envelope
+ * vence antes (o comum: 48 h contra 7 dias), `d` sai do cabeçalho, que já está nos bytes, e a hora da chegada não
+ * fica no disco.
  */
 import { createCipheriv, createDecipheriv, randomBytes, randomInt } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
@@ -83,28 +87,43 @@ export interface StoredRecord { bytes: Uint8Array; from: string | null; storedAt
 const RECORD_V = 3;
 const SALT_RE = /^[0-9a-f]{32}$/;
 
-const HOUR = 3600;
+const HOUR = 3600, DAY = 86400;
 /**
- * Horários vão ao disco arredondados à hora para baixo (não o segundo em que cada aparelho passou): ao
- * restaurar, o envelope some no máximo 1 h antes, nunca depois do prazo prometido. `f`/`t` já chegam salgados
+ * `d` (quando some) vai ao disco arredondado à hora para baixo (não o segundo em que cada aparelho passou): ao
+ * restaurar, o envelope some no máximo 1 h antes, nunca depois do prazo prometido. `s` (quando chegou) só serve
+ * para a carga aplicar uma retenção menor (a pessoa reduziu "guardar por N dias"): vai só o dia, arredondado
+ * para cima, que nunca encurta o prazo de quem não mudou nada (`s` + retenção ≥ `d`). Preço: depois de reduzir
+ * a retenção, o que já estava guardado pode ficar até 1 dia além do prazo novo (nunca além do antigo nem do
+ * prazo do envelope). Para baixo encurtaria até 23 h a cada reinício. `f`/`t` já chegam salgados
  * (guardianNode.exportStored), nunca o id em claro. Registro sem sal válido não é gravado (não deveria existir).
- * A ordem dos registros é sorteada a cada gravação: a ordem do roteador junta os envelopes de uma mesma
- * rajada e, depois de reconhecer um vizinho, põe no fim todos os que ele trouxe ou recebeu. A carga não
- * depende da ordem (o roteador reordena por prioridade e validade).
+ * A ordem dos registros é sorteada a cada gravação: a ordem do roteador é a de chegada e junta os envelopes
+ * de uma mesma rajada (reconhecer um vizinho corrige no lugar e não muda a ordem). A carga não depende da
+ * ordem (o roteador reordena por prioridade e validade).
  */
 export function packRecords(list: StoredRecord[]): Buffer {
-  const parts: Buffer[] = [];
   const order = [...list];
   for (let i = order.length - 1; i > 0; i--) { const j = randomInt(i + 1); [order[i], order[j]] = [order[j]!, order[i]!]; }
+  // Mede tudo antes e escreve num Buffer só: quatro Buffers por registro (e o concat) custavam ~2 s de coleta
+  // de lixo a cada gravação com 131 mil guardados.
+  const metas: string[] = [], recs: StoredRecord[] = [];
+  let size = 0;
   for (const r of order) {
     if (!r.salt || !SALT_RE.test(r.salt)) continue;
-    const s = Math.floor(r.storedAt / HOUR) * HOUR, d = Math.floor(r.dropAt / HOUR) * HOUR;
-    const meta = Buffer.from(JSON.stringify({ v: RECORD_V, n: r.salt, f: r.from, s, d, t: r.sentTo.slice(0, 32), c: r.copies }));
-    const h = Buffer.alloc(4); h.writeUInt32BE(meta.length);
-    const b = Buffer.alloc(4); b.writeUInt32BE(r.bytes.length);
-    parts.push(h, meta, b, Buffer.from(r.bytes));
+    const s = Math.ceil(r.storedAt / DAY) * DAY, d = Math.floor(r.dropAt / HOUR) * HOUR;
+    const meta = JSON.stringify({ v: RECORD_V, n: r.salt, f: r.from, s, d, t: r.sentTo.slice(0, 32), c: r.copies });
+    metas.push(meta); recs.push(r);
+    size += 8 + Buffer.byteLength(meta) + r.bytes.length;
   }
-  return Buffer.concat(parts);
+  const out = Buffer.allocUnsafe(size);
+  let i = 0;
+  for (let k = 0; k < recs.length; k++) {
+    const ml = out.write(metas[k]!, i + 4);
+    out.writeUInt32BE(ml, i); i += 4 + ml;
+    const b = recs[k]!.bytes;
+    out.writeUInt32BE(b.length, i); i += 4;
+    out.set(b, i); i += b.length;
+  }
+  return out;
 }
 
 export function unpackRecords(buf: Buffer, maxEnvelope = 64 * 1024): StoredRecord[] {
