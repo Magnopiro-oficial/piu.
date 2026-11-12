@@ -4,7 +4,8 @@
  * ele grava aqui (`push`, `patchMsg`, `patchChat`…) e a tela só assina (`useSyncExternalStore`).
  * - A gravação é a mesma de antes: `schedule` (o atraso de lib/persist.ts) na chave de sempre.
  * - Banner com `kind` vira notificação do sistema mesmo sem tela; o banner dentro do app só vai a
- *   quem assina `onBanner` (o StoreProvider montado).
+ *   quem assina `onBanner` (o StoreProvider montado). Barramento e filtro por tipo: core/toasts.ts,
+ *   com os ajustes do salvo.
  * Sem react-native: roda no app (core/index.ts liga as peças reais) e nos testes.
  */
 import type { Chat, FileXfer, Msg, Status, ToastData } from '../data/types';
@@ -16,6 +17,7 @@ import { msgSummary } from '../lib/chatCore';
 import { stripPreviews } from '../lib/storageCore';
 import { t } from '../i18n/core';
 import { MESSAGE_TTL_SEC } from '../messaging/messenger';
+import { createToasts, persistedNotifyCfg } from './toasts';
 
 /** Chaves salvas cujo dono é este store (core/__tests__/keyOwners.test.ts). */
 export const CHAT_STORE_KEYS = ['chats', 'verified'] as const;
@@ -76,10 +78,8 @@ export function reviveChats(saved: Chat[]): Chat[] {
 
 export function createChatStore(deps: ChatStoreDeps) {
   const subs = new Set<() => void>();
-  const banners = new Set<(t: ToastData) => void>();
   let viewing: string | null = null;
   let signals: Signals | null = null;
-  let notifyFilter: ((t: ToastData) => boolean) | null = null;
   let retry: ((cid: string, mid: string) => void) | null = null;
   const typingTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -144,17 +144,9 @@ export function createChatStore(deps: ChatStoreDeps) {
   const setStatus = (cid: string, mid: string, status: Status) => patchMsg(cid, mid, m => (isStatusBack(m.status, status) ? {} : { status }));
   const patchFile = (cid: string, mid: string, p: Partial<FileXfer>) => patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {}));
 
-  /**
-   * Banner com `kind` também vira notificação do sistema quando o app não está em primeiro plano
-   * (`notify` confere tipos ligados, silêncio e prévia, e não dispara com o app aberto). O banner
-   * dentro do app (já conforme a pré-visualização) é da tela que assina `onBanner`.
-   */
-  const showToast = (t: ToastData) => {
-    if (t.kind && notifyFilter && !notifyFilter(t)) return;
-    if (t.kind) deps.chirp(t.kind);
-    if (t.kind) deps.notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.critical ? { critical: true } : {}), ...(t.href ? { data: { href: t.href } } : {}) });
-    banners.forEach(fn => { try { fn(t); } catch { /* ouvinte */ } });
-  };
+  // Banner e notificação do sistema (core/toasts.ts): o tipo desligado no salvo não aparece, com ou sem tela.
+  const toasts = createToasts({ notify: deps.notify, chirp: deps.chirp, cfg: () => persistedNotifyCfg(deps.read) });
+  const showToast = toasts.show;
 
   const push = (cid: string, msg: Msg, opts?: { quiet?: boolean }) => {
     // Conversa aberta só conta com o app em primeiro plano e destravado: em segundo plano ou sob o
@@ -270,8 +262,7 @@ export function createChatStore(deps: ChatStoreDeps) {
       return r.freed;
     },
     showToast,
-    onBanner: (fn: (t: ToastData) => void) => { banners.add(fn); return () => { banners.delete(fn); }; },
-    setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => { notifyFilter = fn; },
+    onBanner: toasts.onBanner,
     setSignals: (s: Signals | null) => { signals = s; },
     /** "Reenviar" do banner de mensagem expirada (o envio é da tela: StoreProvider). */
     setRetry: (fn: ((cid: string, mid: string) => void) | null) => { retry = fn; },

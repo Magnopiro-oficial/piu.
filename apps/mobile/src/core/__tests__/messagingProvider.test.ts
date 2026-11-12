@@ -25,7 +25,7 @@ test('MessagingProvider não cria nem descarta o mensageiro: assina o do núcleo
   assert.doesNotMatch(starts[0]!, /return/);
 });
 
-test('desmontar a tela solta só o que depende dela: chamada e a retransmissão pausada pela bateria (rt.detach)', () => {
+test('desmontar a tela solta só o que depende dela: a retransmissão pausada pela bateria (rt.detach)', () => {
   assert.match(messaging, /useEffect\(\(\) => \(\) => rt\.detach\(/);
   // Perfil e carteira voltam ao padrão sem tela (o perfil restaurado espera o próximo dono).
   assert.match(messaging, /rt\.setHost\(\{ importProfile: undefined, settleInvite: undefined \}\)/);

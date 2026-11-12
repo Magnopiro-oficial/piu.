@@ -46,4 +46,6 @@ export const NOTIF_TYPES: [NotifKey, IconName, string, string][] = [
   ['wallet', 'account_balance_wallet', 'Carteira', 'LUNES recebidos e bônus liberados'], ['network', 'hub', 'Rede e nós', 'Novos nós, saída da malha, modo nó pausado'],
   ['alert', 'warning', 'Alertas da comunidade', 'Grave toca alto; Atenção avisa normal; Informativo só na lista'],
 ];
+/** Tipos ligados de fábrica: todos menos Rede e nós (state/settings.tsx e o núcleo sem tela, core/toasts.ts). */
+export const DEFAULT_NOTIFS = Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>;
 export type Preview = 'always' | 'unlocked' | 'never';

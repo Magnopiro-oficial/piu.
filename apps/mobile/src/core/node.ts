@@ -3,7 +3,8 @@
  * desmonta os providers, mas o processo, o runtime JS e o PiuRelayService seguem vivos; quem liga e
  * desliga BLE/Nearby e a rede local agora é este núcleo, e o desmonte da tela não para nada.
  * - `configure` recebe os ajustes (da tela ou do que está salvo) e só religa o que mudou de verdade.
- * - `shutdown` é o único caminho que para tudo ("Apagar dados locais").
+ * - `shutdown` é o único caminho que para tudo ("Apagar dados locais"); `untilStopped` espera por ele
+ *   (a tarefa sem tela, core/coreTask.ts, fica viva até lá).
  * - `claimRuntime`: um dono só configura o núcleo (uma segunda árvore viva é erro, não um segundo nó).
  * Sem react-native: roda no app (core/index.ts liga as peças reais) e nos testes.
  */
@@ -58,6 +59,8 @@ export interface Core {
   claimRuntime(owner: string): (() => void) | null;
   /** Para P2P e LAN. Único caminho de parada; configurar de novo religa. */
   shutdown(): Promise<void>;
+  /** Resolve na próxima `shutdown` (depois de parado). */
+  untilStopped(): Promise<void>;
 }
 
 /** O mesmo índice de `nodeDayOf` (state/keys.tsx): o dia UTC. */
@@ -153,6 +156,7 @@ export function createCore(deps: CoreDeps): Core {
   };
 
   let booting: Promise<void> | null = null;
+  const stopped = new Set<() => void>();
   return {
     transport,
     boot: () => (booting ??= (async () => {
@@ -176,7 +180,11 @@ export function createCore(deps: CoreDeps): Core {
       cfg = { ...cfg, p2p: false, lan: null };
       apply();
       await Promise.all([stops.idle(), lanStops.idle()]);
+      const waiting = [...stopped];
+      stopped.clear();
+      waiting.forEach(fn => fn());
     },
+    untilStopped: () => new Promise<void>(r => { stopped.add(r); }),
   };
 }
 

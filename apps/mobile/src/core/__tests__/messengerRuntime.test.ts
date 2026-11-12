@@ -155,13 +155,14 @@ function fakeCall(phase: string) {
   return { call, did };
 }
 
-test('tela desmontou (detach): a chamada em curso é desligada; a que está tocando, recusada', () => {
-  for (const [phase, want] of [['active', 'hangup'], ['calling', 'hangup'], ['ringing', 'decline'], ['idle', undefined]] as const) {
+test('tela desmontou (detach): a chamada segue, em curso ou tocando (os alertas de chamada são do núcleo)', () => {
+  for (const phase of ['active', 'calling', 'ringing', 'idle']) {
     const f = fakeCall(phase);
     const a = device('A', { makeCall: () => f.call });
     a.rt.start(a.keys);
     a.rt.detach({ relay: false });
-    assert.deepEqual(f.did, want ? [want] : [], phase);
+    assert.deepEqual(f.did, [], phase);
+    assert.equal(a.rt.getSnapshot().call, f.call, phase);
     assert.ok(a.rt.messenger(), 'o mensageiro continua');
   }
 });

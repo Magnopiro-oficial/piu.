@@ -13,26 +13,17 @@ const DAY = 86_400_000;
 /** Primeiro lembrete de backup: um dia depois de criar a identidade. */
 export const BACKUP_FIRST_REMINDER_MS = DAY;
 
-/** Avisos do sistema que o design mostra fora das telas: bateria, backup e o filtro dos banners. */
+/**
+ * Avisos do sistema que o design mostra fora das telas: bateria e backup. O filtro dos banners por
+ * tipo é do núcleo (core/toasts.ts), com os ajustes do salvo.
+ */
 export function SystemPrompts() {
   return (
     <>
-      <NotifyBridge />
       <BatteryGuard />
       <BackupReminder />
     </>
   );
-}
-
-/** Banners respeitam Ajustes → Notificações (por tipo). */
-function NotifyBridge() {
-  const { setNotifyFilter } = useStore();
-  const { notifs } = useSettings();
-  useEffect(() => {
-    setNotifyFilter(t => !t.kind || notifs[t.kind]);
-    return () => setNotifyFilter(null);
-  }, [notifs, setNotifyFilter]);
-  return null;
 }
 
 /**

@@ -235,8 +235,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     rt.setHost({ importProfile: p => setProfile(p as never), settleInvite: id => walletRef.current.settleInvite(id) });
     return () => rt.setHost({ importProfile: undefined, settleInvite: undefined });
   }, [rt, setProfile]);
-  // Desmontar (deslizar o app dos recentes) não para o mensageiro; solta só o que depende da tela:
-  // a chamada (sem os alertas de chamada da tela) e a retransmissão pausada pela bateria.
+  // Desmontar (deslizar o app dos recentes) não para o mensageiro nem a chamada (os alertas são do
+  // núcleo); solta só o que depende da tela: a retransmissão pausada pela bateria.
   const pointRelay = useRef(pointRt.relay); pointRelay.current = pointRt.relay;
   useEffect(() => () => rt.detach({ relay: pointRelay.current }), [rt]);
   // Ajustes → mensageiro (política do roteador, bloqueados, descoberta, retransmissão e gateway).

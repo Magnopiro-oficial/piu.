@@ -81,8 +81,6 @@ interface Store {
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
   /** Altera uma mensagem da conversa (ex.: etapa do cartão "Pedido de chamada"). */
   patchMsg: (chatId: string, msgId: string, p: Partial<Msg>) => void;
-  /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
-  setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
   /** Pré-visualização escolhida em Notificações (MessagingProvider lê os ajustes e repassa aqui). */
   setPreviewMode: (p: Preview) => void;
   patchChat: (chatId: string, p: Partial<Chat>) => void;
@@ -229,7 +227,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     receive: cs.push,
     patchMsg: (cid, mid, p) => cs.patchMsg(cid, mid, () => p),
     setMsgStatus: cs.setMsgStatus,
-    setNotifyFilter: cs.setNotifyFilter,
     setPreviewMode: p => { previewMode.current = p; },
     patchChat: cs.patchChat,
     removeChat: cs.removeChat,

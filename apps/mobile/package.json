@@ -1,7 +1,7 @@
 {
   "name": "piu-mobile",
   "version": "0.1.5",
-  "main": "expo-router/entry",
+  "main": "index.ts",
   "dependencies": {
     "@expo-google-fonts/geist": "^0.4.2",
     "@expo-google-fonts/geist-mono": "^0.4.3",

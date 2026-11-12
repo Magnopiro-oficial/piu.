@@ -8,8 +8,9 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NotificationBridge } from '../lib/notifications';
 import { onboardingRedirect } from '../lib/identityGuard';
 import { cardFromText } from '../lib/inviteLink';
-import { forgetPersisted, loadPersisted, persistNow, readPersisted } from '../lib/persist';
-import { KeysProvider, preloadKeys } from '../state/keys';
+import { bootCore } from '../core';
+import { forgetPersisted, persistNow, readPersisted } from '../lib/persist';
+import { KeysProvider } from '../state/keys';
 import { MessagingProvider } from '../state/messaging';
 import { PointProvider } from '../state/point';
 import { NetworkProvider } from '../state/network';
@@ -34,8 +35,9 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 export default function RootLayout() {
   const [loaded, error] = useFonts(FONT_FILES);
   // Dados salvos no aparelho: lidos antes de esconder o splash, para abrir direto onde a pessoa parou.
+  // `bootCore` lê o salvo e o cofre uma vez por processo e liga o núcleo (o mesmo da tarefa sem tela).
   const [hydrated, setHydrated] = useState(false);
-  useEffect(() => { Promise.all([loadPersisted(), preloadKeys()]).finally(() => setHydrated(true)); }, []);
+  useEffect(() => { bootCore().catch(() => {}).finally(() => setHydrated(true)); }, []);
   const ready = (loaded || !!error) && hydrated;
   useEffect(() => { if (ready) SplashScreen.hideAsync().catch(() => {}); }, [ready]);
   if (!ready) return null;

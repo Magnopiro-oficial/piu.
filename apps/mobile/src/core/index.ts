@@ -2,15 +2,17 @@
  * O núcleo real do processo (core/node.ts com as peças do app): transporte nativo, o que está salvo,
  * as chaves do cofre e as permissões já concedidas. `getCore` é o mesmo objeto para a tela e para a
  * tarefa sem tela; `bootCore` lê o salvo e liga, uma vez por processo.
- * `getChatStore` (conversas) e `getMessengerRuntime` (mensageiro) também são um por processo.
+ * `getChatStore` (conversas), `getMessengerRuntime` (mensageiro) e `getCallAlerts` (alertas de
+ * chamada) também são um por processo.
  */
 import { router, type Href } from 'expo-router';
-import { AppState } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import PiuVoice from '../../modules/piu-voice';
+import { PiuCallAlert } from '../../modules/piu-voice/alert';
 import { isAppLocked } from '../lib/appLockGate';
 import { markRevocationsSent, pendingRevocations } from '../lib/devices';
 import { applySessionRotation, deviceChangeOutbox, saveDeviceChangeOutbox, sessionRotationEpoch, takeDeviceChangeRequest, takeRestoredData } from '../lib/migrationState';
-import { chirpInApp, notify } from '../lib/notifications';
+import { chirpInApp, notificationPermission, notify, requestNotificationPermission } from '../lib/notifications';
 import { forgetPersisted, loadPersisted, persistEpoch, persistNow, readPersisted, schedulePersisted } from '../lib/persist';
 import { newNodeNameSecret } from '../lib/nodeName';
 import { getPhoneNode, updatePhoneNode } from '../lib/phoneNodeStore';
@@ -19,6 +21,7 @@ import { toHex } from '../protocol/bytes';
 import { makePhoneCall } from '../state/calls';
 import { preloadedKeys, preloadedNodeKeyFor, preloadKeys } from '../state/keys';
 import { checkTransportPermissions, getTransport, SERVICE_ID } from '../transport';
+import { createCallAlertRunner, type CallAlertRunner } from './callAlertRunner';
 import { createChatStore, type ChatStore } from './chatStore';
 import { createMessengerRuntime, persistedPrefs, type MessengerRuntime } from './messengerRuntime';
 import { createCore, ensureNameSecret, persistedConfig, type Core, type PersistedBoot } from './node';
@@ -84,7 +87,36 @@ function bootMessenger() {
   getMessengerRuntime().start({ identities: k.identities, node: k.node, nodeKeyFor: k.nodeKeyFor, phonePk: toHex(k.phoneOperator.pk), rotation: sessionRotationEpoch() });
 }
 
-export const bootCore = async (): Promise<void> => { await getCore().boot(); bootMessenger(); };
+let callAlerts: CallAlertRunner | null = null;
+/**
+ * Alertas de chamada do processo (Android): seguem o serviço da chamada do mensageiro, com ou sem
+ * tela (deslizar o app dos recentes não tira o toque nem o aviso). A tela só lê (state/callAlerts.ts).
+ */
+export function getCallAlerts(): CallAlertRunner {
+  if (callAlerts) return callAlerts;
+  const r = (callAlerts = createCallAlertRunner({
+    device: PiuCallAlert,
+    enabled: Platform.OS === 'android' && PiuCallAlert.isAvailable(),
+    foreground: () => AppState.currentState === 'active',
+    onForeground: fn => AppState.addEventListener('change', s => fn(s === 'active')),
+    nameOf: peer => getChatStore().getSnapshot().chats.find(c => c.peer === peer)?.name ?? '',
+    hideName: () => readPersisted('set.preview') === 'never',
+    askNotif: () => {
+      if (Number(Platform.Version) < 33 || readPersisted<boolean>('notif.asked')) return;
+      void notificationPermission().then(p => { if (p === 'undetermined') void requestNotificationPermission(); }).catch(() => {});
+    },
+  }));
+  const rt = getMessengerRuntime();
+  const follow = () => r.attach(rt.getSnapshot().call?.svc ?? null);
+  rt.subscribe(follow);
+  follow();
+  return r;
+}
+
+export const bootCore = async (): Promise<void> => { await getCore().boot(); bootMessenger(); getCallAlerts(); };
+
+/** Resolve quando o núcleo para (`shutdown`): a tarefa sem tela (core/headless.ts) fica viva até lá. */
+export const untilStopped = (): Promise<void> => getCore().untilStopped();
 
 /**
  * "Apagar dados locais" (state/reset.tsx), logo depois de esvaziar a memória: o mensageiro para sem
