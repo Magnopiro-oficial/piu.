@@ -5,13 +5,15 @@
  * Messenger; só `shutdown` para e salva.
  */
 import assert from 'node:assert/strict';
-import { after, test } from 'node:test';
+import { after, mock, test } from 'node:test';
 import { deriveIdentity, deriveNodeKey, newSeed, toPublic } from '../../protocol/keys';
 import { createSimulatedTransport } from '../../transport/simulated';
 import type { Transport, TransportEvent } from '../../transport/types';
 import type { Contact } from '../../messaging/messenger';
-import { createChatStore } from '../chatStore';
-import { chatFor, chatIdFor, createMessengerRuntime, persistedPrefs, type RuntimeKeys } from '../messengerRuntime';
+import type { Msg } from '../../data/types';
+import type { PhoneCall } from '../../state/calls';
+import { createChatStore, SWEEP_MS } from '../chatStore';
+import { chatFor, chatIdFor, createMessengerRuntime, persistedPrefs, type RuntimeHost, type RuntimeKeys } from '../messengerRuntime';
 
 /** Transporte simulado com uma ponta extra: o que um manda para o outro chega como envelope. */
 function simNode(id: string) {
@@ -26,7 +28,7 @@ function simNode(id: string) {
   return { id, t, inject: (e: TransportEvent) => listeners.forEach(fn => fn(e)), plug: (o: { id: string; inject: (e: TransportEvent) => void }) => { other = o; } };
 }
 
-function device(id: string) {
+function device(id: string, host?: Partial<RuntimeHost>) {
   const seed = newSeed();
   const keys: RuntimeKeys = { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node: deriveNodeKey(seed), nodeKeyFor: null, phonePk: null, rotation: 0 };
   const disk: Record<string, unknown> = {};
@@ -39,7 +41,7 @@ function device(id: string) {
   const rt = createMessengerRuntime({
     transport: net.t, chats, read: <T,>(k: string) => disk[k] as T | undefined,
     persistNow: async (k, v) => { disk[k] = v; }, forget: async k => { delete disk[k]; }, epoch: () => 0,
-    prefs: { ...persistedPrefs(() => undefined), relay: true },
+    prefs: { ...persistedPrefs(() => undefined), relay: true }, host,
   });
   live.push(rt);
   return { id, seed, keys, disk, notes, chats, net, rt };
@@ -58,15 +60,23 @@ async function until(ok: () => boolean, ms = 3000) {
   while (!ok()) { if (Date.now() > end) throw new Error('não chegou'); await new Promise(r => setTimeout(r, 10)); }
 }
 
-test('sem tela: A envia, B grava a mensagem no chatStore e notifica (kind msg)', async () => {
+/** A escaneou o QR de B (chaves públicas e o convite de uso único) e já tem a conversa. */
+function scan(a: ReturnType<typeof device>, b: ReturnType<typeof device>, name: string): Contact {
+  const c: Contact = { id: b.keys.identities.public.id, via: 'public', pub: toPublic(b.keys.identities.public), name, invite: b.rt.messenger()!.issueInvite('public').code };
+  a.rt.messenger()!.addContact(c);
+  a.chats.addChat(chatFor(c, false, 'off'));
+  return c;
+}
+
+test('sem tela: A envia, B (que já aceitou A) grava a mensagem no chatStore e notifica (kind msg)', async () => {
   const a = device('A'), b = device('B');
   a.rt.start(a.keys); b.rt.start(b.keys);
   cable(a, b);
-  const mb = b.rt.messenger()!;
-  // A escaneou o QR de B: chaves públicas e o convite de uso único.
-  const beto: Contact = { id: b.keys.identities.public.id, via: 'public', pub: toPublic(b.keys.identities.public), name: 'Beto', invite: mb.issueInvite('public').code };
-  a.rt.messenger()!.addContact(beto);
-  a.chats.addChat(chatFor(beto, false, 'off'));
+  const beto = scan(a, b, 'Beto');
+  // B também tem A como contato aceito (o pedido de conversa já foi aceito antes).
+  const ana: Contact = { id: a.keys.identities.public.id, via: 'public', pub: toPublic(a.keys.identities.public), name: 'Ana' };
+  b.rt.messenger()!.addContact(ana);
+  b.chats.addChat(chatFor(ana, false, 'off'));
   a.rt.messenger()!.sendText(beto.id, 'n1', 'oi, Beto');
 
   const cid = chatIdFor(a.keys.identities.public.id);
@@ -78,6 +88,21 @@ test('sem tela: A envia, B grava a mensagem no chatStore e notifica (kind msg)',
   // As sessões foram salvas antes de os bytes saírem (e a conversa, pela chave de sempre).
   assert.equal(typeof a.disk['msg.state'], 'string');
   assert.ok(Array.isArray(b.disk.chats));
+});
+
+test('pedido de conversa (contato novo pelo convite) entra não lido, mas não notifica (como antes)', async () => {
+  const a = device('A'), b = device('B');
+  a.rt.start(a.keys); b.rt.start(b.keys);
+  cable(a, b);
+  const beto = scan(a, b, 'Beto');
+  a.rt.messenger()!.sendText(beto.id, 'n1', 'oi, Beto');
+
+  const cid = chatIdFor(a.keys.identities.public.id);
+  await until(() => !!b.chats.getSnapshot().chats.find(c => c.id === cid)?.msgs?.some(m => m.id === 'in-n1'));
+  const got = b.chats.getSnapshot().chats.find(c => c.id === cid)!;
+  assert.equal(got.request, true);
+  assert.equal(got.unread, 1);
+  assert.deepEqual(b.notes, [], 'pedido não vira notificação');
 });
 
 test('remontar a tela (start de novo com as mesmas chaves) mantém a mesma instância', () => {
@@ -121,4 +146,78 @@ test('ajustes salvos sem tela: mesmos padrões de Ajustes e Rede', () => {
   assert.deepEqual(p.blocked, ['piu:x']);
   assert.equal(p.policy.maxBytes, 512 * 1024 * 1024);
   assert.equal(p.policy.retentionSec, 48 * 3600);
+});
+
+/** Chamada falsa: só o estado e os comandos que a tela usaria. */
+function fakeCall(phase: string) {
+  const did: string[] = [];
+  const call = { svc: { state: { phase }, controller: { hangup: () => did.push('hangup'), decline: () => did.push('decline') }, dispose: () => did.push('dispose'), onSignal: () => {}, onFrame: () => false, tryWaiting: () => {} } } as unknown as PhoneCall;
+  return { call, did };
+}
+
+test('tela desmontou (detach): a chamada em curso é desligada; a que está tocando, recusada', () => {
+  for (const [phase, want] of [['active', 'hangup'], ['calling', 'hangup'], ['ringing', 'decline'], ['idle', undefined]] as const) {
+    const f = fakeCall(phase);
+    const a = device('A', { makeCall: () => f.call });
+    a.rt.start(a.keys);
+    a.rt.detach({ relay: false });
+    assert.deepEqual(f.did, want ? [want] : [], phase);
+    assert.ok(a.rt.messenger(), 'o mensageiro continua');
+  }
+});
+
+test('tela desmontou: sem a pausa por bateria da tela, a retransmissão para terceiros desliga; a tela de volta religa', () => {
+  const a = device('A');
+  a.rt.start(a.keys);
+  const m = a.rt.messenger()!;
+  assert.notEqual(m.relayStatus().reason, 'off');
+  a.rt.detach({ relay: false });
+  assert.equal(m.relayStatus().reason, 'off');
+  a.rt.setPrefs({ relay: true });
+  assert.notEqual(m.relayStatus().reason, 'off');
+  // Ponto Piu ativo: o ponto mantém a retransmissão.
+  a.rt.detach({ relay: true });
+  assert.notEqual(m.relayStatus().reason, 'off');
+});
+
+test('mensagens temporárias vencidas somem no prazo mesmo sem tela (varredura do núcleo)', async () => {
+  mock.timers.enable({ apis: ['setInterval'] });
+  try {
+    const a = device('A');
+    a.rt.start(a.keys);
+    a.chats.addChat({ id: 'c1', kind: 'direct', ident: 'public', name: 'X', initials: 'X', time: '', unread: 0, msgs: [] } as never);
+    a.chats.push('c1', { id: 'in-1', from: 'them', text: 'some', time: '', expiresAt: Date.now() - 1 } as Msg);
+    assert.equal(a.chats.getSnapshot().chats[0]!.msgs!.length, 1);
+    mock.timers.tick(SWEEP_MS);
+    assert.equal(a.chats.getSnapshot().chats[0]!.msgs!.length, 0);
+    await a.rt.shutdown();
+  } finally { mock.timers.reset(); }
+});
+
+test('várias mudanças nas conversas no mesmo instante: a poda de rotas e arquivos roda uma vez', async () => {
+  const a = device('A');
+  let reads = 0;
+  const get = a.chats.getSnapshot;
+  const chats = { ...a.chats, getSnapshot: () => { reads++; return get(); } };
+  const rt = createMessengerRuntime({ transport: a.net.t, chats, read: () => undefined, persistNow: async () => {}, forget: async () => {}, epoch: () => 0, prefs: persistedPrefs(() => undefined) });
+  await new Promise(r => setTimeout(r, 0));
+  a.chats.addChat({ id: 'c1', kind: 'direct', ident: 'public', name: 'X', initials: 'X', time: '', unread: 0, msgs: [] } as never);
+  reads = 0;
+  for (let i = 0; i < 50; i++) a.chats.patchChat('c1', { time: String(i) });
+  assert.equal(reads, 0, 'nada síncrono a cada mudança');
+  await new Promise(r => setTimeout(r, 0));
+  assert.equal(reads, 1);
+  await rt.dispose();
+});
+
+test('backup restaurado antes da tela: o perfil espera o dono (setHost) em vez de se perder', () => {
+  let taken = false;
+  const a = device('A', { takeRestoredData: () => (taken ? null : (taken = true, { profile: { name: 'Ana' } as unknown })) });
+  a.rt.start(a.keys);
+  const got: unknown[] = [];
+  a.rt.setHost({ importProfile: p => got.push(p) });
+  assert.deepEqual([...got], [{ name: 'Ana' }]);
+  a.rt.setHost({ importProfile: undefined });
+  a.rt.setHost({ importProfile: p => got.push(p) });
+  assert.equal(got.length, 1, 'entregue uma vez');
 });

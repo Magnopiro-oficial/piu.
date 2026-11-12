@@ -233,8 +233,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Perfil do backup restaurado e convite pago aceito: são da tela (StoreProvider, WalletProvider).
   useEffect(() => {
     rt.setHost({ importProfile: p => setProfile(p as never), settleInvite: id => walletRef.current.settleInvite(id) });
-    return () => rt.setHost({ importProfile: () => {}, settleInvite: () => {} });
+    return () => rt.setHost({ importProfile: undefined, settleInvite: undefined });
   }, [rt, setProfile]);
+  // Desmontar (deslizar o app dos recentes) não para o mensageiro; solta só o que depende da tela:
+  // a chamada (sem os alertas de chamada da tela) e a retransmissão pausada pela bateria.
+  const pointRelay = useRef(pointRt.relay); pointRelay.current = pointRt.relay;
+  useEffect(() => () => rt.detach({ relay: pointRelay.current }), [rt]);
   // Ajustes → mensageiro (política do roteador, bloqueados, descoberta, retransmissão e gateway).
   const blockedIds = useMemo(() => blocked.map(b => b.id).filter(id => id.startsWith('piu:')), [blocked]);
   useEffect(() => {

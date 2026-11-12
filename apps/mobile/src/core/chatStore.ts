@@ -51,6 +51,8 @@ export type ChatStore = ReturnType<typeof createChatStore>;
 
 /** "digitando…" some se nada novo chegar neste tempo. */
 const TYPING_MS = 6000;
+/** Remoção das mensagens temporárias vencidas (o núcleo varre, com ou sem tela: messengerRuntime.ts). */
+export const SWEEP_MS = 30_000;
 export const dropExpired = (msgs: Msg[] | undefined, now: number) => (msgs?.some(m => m.expiresAt && m.expiresAt <= now) ? msgs.filter(m => !m.expiresAt || m.expiresAt > now) : msgs);
 
 /**
@@ -222,6 +224,18 @@ export function createChatStore(deps: ChatStoreDeps) {
           hidden: { title: t('toast.expired'), body: t('toast.expired.hidden', { hours: MESSAGE_TTL_SEC / 3600 }) }, href,
           go: () => { deps.navigate?.(href); retry?.(cid, mid); } });
       }
+    },
+    /** Mensagens temporárias: somem deste aparelho no prazo (o contato apaga as dele do mesmo jeito). */
+    sweepExpired: (now = Date.now()) => {
+      if (!st.chats.some(c => c.msgs?.some(m => m.expiresAt && m.expiresAt <= now))) return;
+      setChats(list => list.map(c => { const msgs = dropExpired(c.msgs, now); return msgs === c.msgs ? c : { ...c, msgs }; }));
+    },
+    /**
+     * Enviada: "criada" passa a "na fila" (ou "falha") em `ms`, só se a rede ainda não avançou o estado
+     * (o vizinho pode já ter recebido). O timer é do store: deslizar o app logo depois não a deixa presa.
+     */
+    settleSent: (cid: string, mid: string, ok: boolean, ms = ok ? 300 : 0) => {
+      setTimeout(() => patchMsg(cid, mid, m => (m.status === 'criada' ? { status: ok ? 'aguardando' : 'falha' } : {})), ms);
     },
     setTyping,
     stopTyping,

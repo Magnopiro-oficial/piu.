@@ -110,3 +110,34 @@ test('reload depois de "Apagar dados locais": volta ao salvo (vazio) sem regrava
   assert.deepEqual(s.getSnapshot().chats, []);
   assert.deepEqual(writes, []);
 });
+
+test('sweepExpired: tira as temporárias vencidas e grava; sem nada vencido, não mexe', () => {
+  const { s, writes } = store({ chats: [chat('a', { msgs: [msg('in-1', { expiresAt: Date.now() + 60_000 }), msg('in-2')] })] });
+  writes.length = 0;
+  s.sweepExpired(Date.now());
+  assert.equal(writes.length, 0);
+  s.sweepExpired(Date.now() + 61_000);
+  assert.deepEqual(s.getSnapshot().chats[0]!.msgs!.map(m => m.id), ['in-2']);
+  assert.deepEqual(writes.map(w => w[0]), ['chats']);
+});
+
+test('settleSent: "criada" passa a "aguardando" (ou "falha") pelo store, sem depender da tela montada', async () => {
+  const { s } = store({ chats: [chat('a', { msgs: [msg('n1', { from: 'me', status: 'aguardando' })] })] });
+  s.push('a', msg('n2', { from: 'me', status: 'criada' }));
+  s.push('a', msg('n3', { from: 'me', status: 'criada' }));
+  s.settleSent('a', 'n2', true, 0);
+  s.settleSent('a', 'n3', false, 0);
+  await tick();
+  const st = Object.fromEntries(s.getSnapshot().chats[0]!.msgs!.map(m => [m.id, m.status]));
+  assert.equal(st.n2, 'aguardando');
+  assert.equal(st.n3, 'falha');
+});
+
+test('settleSent não volta um estado que a rede já avançou', async () => {
+  const { s } = store({ chats: [chat('a')] });
+  s.push('a', msg('n2', { from: 'me', status: 'criada' }));
+  s.settleSent('a', 'n2', true, 0);
+  s.setStatus('a', 'n2', 'entregue');
+  await tick();
+  assert.equal(s.getSnapshot().chats[0]!.msgs![0]!.status, 'entregue');
+});

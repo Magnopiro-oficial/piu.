@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { AppState } from 'react-native';
 import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../data/types';
 import { getChatStore } from '../core';
-import { dropExpired, type Signals } from '../core/chatStore';
+import type { Signals } from '../core/chatStore';
 import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
 import { cleanBlocked, cleanProfile } from '../lib/demoCleanup';
@@ -99,8 +99,6 @@ type Outbound = (chatId: string, peer: string, msgId: string, text: string, expi
 export type { Signals };
 
 const Ctx = createContext<Store | null>(null);
-/** Remoção das mensagens temporárias vencidas. */
-const SWEEP_MS = 30_000;
 const TOAST_MS = 4500;
 
 /**
@@ -117,28 +115,14 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const cs = useMemo(() => getChatStore(), []);
   const { chats, verified, typing } = useSyncExternalStore(cs.subscribe, cs.getSnapshot, cs.getSnapshot);
   const [toast, setToast] = useState<Store['toast']>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const toastSeq = useRef(0);
   const retryRef = useRef<(cid: string, mid: string) => void>(() => {});
   const previewMode = useRef<Preview>('always');
   const fileOps = useRef<FileOps | null>(null);
   const outbound = useRef<Outbound | null>(null);
-  useEffect(() => () => {
-    timers.current.forEach(clearTimeout);
-    clearTimeout(toastTimer.current);
-  }, []);
-  // Mensagens temporárias: somem deste aparelho no prazo (o contato apaga as dele do mesmo jeito).
-  useEffect(() => {
-    const sweep = () => {
-      const now = Date.now();
-      if (!cs.getSnapshot().chats.some(c => c.msgs?.some(m => m.expiresAt && m.expiresAt <= now))) return;
-      cs.setChats(list => list.map(c => { const msgs = dropExpired(c.msgs, now); return msgs === c.msgs ? c : { ...c, msgs }; }));
-    };
-    sweep();
-    const t = setInterval(sweep, SWEEP_MS);
-    return () => clearInterval(t);
-  }, [cs]);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // Mensagens temporárias vencidas: o núcleo varre (core/chatStore.ts `sweepExpired`), com ou sem tela.
   // Voltou para a frente (ou destravou) com uma conversa aberta: o que chegou nesse meio-tempo é lido agora.
   useEffect(() => {
     const sub = AppState.addEventListener('change', s => { if (s === 'active') cs.back(); });
@@ -147,8 +131,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [cs]);
   // Configurações do grupo de exemplo das versões antigas: os grupos reais guardam as suas no mensageiro.
   useEffect(() => { void forgetPersisted('group'); }, []);
-
-  const later = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
 
   /** Sai em 300 ms (sobe e some), como no design. */
   const leave = () => {
@@ -195,7 +177,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const to = chat?.peer ?? (chat?.group ? 'group:' + chat.group : null);
       const ok = !!to && (outbound.current?.(cid, to, id, text, exp, loc) ?? false);
       // Só passa para "na fila" se a rede ainda não avançou o estado (o vizinho pode já ter recebido).
-      later(ok ? 300 : 0, () => cs.patchMsg(cid, id, m => (m.status === 'criada' ? { status: ok ? 'aguardando' : 'falha' } : {})));
+      cs.settleSent(cid, id, ok);
       if (chat?.request) cs.setChats(list => list.map(c => (c.id === cid ? { ...c, request: false } : c)));
     },
     retry: (cid, mid) => {

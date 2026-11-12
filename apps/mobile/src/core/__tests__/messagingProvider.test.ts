@@ -17,8 +17,23 @@ test('MessagingProvider não cria nem descarta o mensageiro: assina o do núcleo
   assert.doesNotMatch(messaging, /new Messenger\(|setMessenger\(|svc\.dispose\(|makePhoneCall\(|transport\.subscribe\(/);
   assert.match(messaging, /getMessengerRuntime/);
   assert.match(messaging, /useSyncExternalStore\(rt\.subscribe, rt\.getSnapshot/);
-  // `start` sem cleanup: desmontar não para nada.
-  assert.match(messaging, /useEffect\(\(\) => \{\n\s+rt\.start\([^\n]*\n\s+\}, \[/);
+  // Nenhum caminho da tela para ou troca o mensageiro ao desmontar: só `shutdown` (núcleo) para.
+  assert.doesNotMatch(messaging, /rt\.(shutdown|dispose)\(|rt\.start\(null/);
+  // O efeito que liga (`rt.start`) não devolve cleanup.
+  const starts = [...messaging.matchAll(/useEffect\(\(\) => \{([^]*?)\n {2}\}, \[/g)].map(m => m[1]!).filter(b => /rt\.start\(/.test(b));
+  assert.equal(starts.length, 1);
+  assert.doesNotMatch(starts[0]!, /return/);
+});
+
+test('desmontar a tela solta só o que depende dela: chamada e a retransmissão pausada pela bateria (rt.detach)', () => {
+  assert.match(messaging, /useEffect\(\(\) => \(\) => rt\.detach\(/);
+  // Perfil e carteira voltam ao padrão sem tela (o perfil restaurado espera o próximo dono).
+  assert.match(messaging, /rt\.setHost\(\{ importProfile: undefined, settleInvite: undefined \}\)/);
+});
+
+test('StoreProvider não faz a varredura das temporárias nem a troca de "criada" com timer da tela', () => {
+  assert.doesNotMatch(store, /SWEEP_MS|dropExpired/);
+  assert.match(store, /cs\.settleSent\(/);
 });
 
 test('StoreProvider lê as conversas do chatStore (sem usePersisted de chats/verified)', () => {

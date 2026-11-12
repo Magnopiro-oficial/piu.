@@ -42,7 +42,7 @@ import { isLora } from '../transport/select';
 import type { Medium, Transport } from '../transport/types';
 import type { Privacy } from '../state/settings';
 import type { PhoneCall, PhoneCallDeps } from '../state/calls';
-import type { ChatStore } from './chatStore';
+import { SWEEP_MS, type ChatStore } from './chatStore';
 
 const STATE_KEY = 'msg.state';
 /** Último aviso de troca de aparelho aceito de cada contato (contra repetição). */
@@ -269,8 +269,12 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
 
   // Conversas mudaram: arquivo recebido de mensagem que sumiu (temporária) sai da memória, e as rotas
   // de mensagens que sumiram (temporárias, conversa apagada) também; fica a última de cada conversa.
+  // Agrupado (como o useEffect([chats]) de antes): um arquivo grande chama patchFile por bloco.
   let lastChats: Chat[] | null = null;
-  const onChats = () => {
+  let chatsTimer: ReturnType<typeof setTimeout> | undefined;
+  const onChats = () => { if (chatsTimer === undefined) chatsTimer = setTimeout(pruneChats, 0); };
+  const pruneChats = () => {
+    chatsTimer = undefined;
     const cs = list();
     if (cs === lastChats) return;
     lastChats = cs;
@@ -280,6 +284,11 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
   };
   const offChats = store.subscribe(onChats);
   onChats();
+  const dropChats = () => { clearTimeout(chatsTimer); chatsTimer = undefined; offChats(); };
+
+  // Perfil do backup restaurado é da tela (StoreProvider): sem ela montada, espera o próximo `setHost`.
+  let pendingProfile: unknown = null;
+  const importProfile = (p: unknown) => { if (host.importProfile === NO_HOST.importProfile) pendingProfile = p; else host.importProfile(p); };
 
   // ── Mensageiro ──
   let m: Messenger | null = null;
@@ -348,7 +357,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
     const restored = host.takeRestoredData();
     const restoredState = typeof restored?.['msg.state'] === 'string' ? (restored['msg.state'] as string) : undefined;
     if (restored) {
-      if (restored.profile && typeof restored.profile === 'object') host.importProfile(restored.profile);
+      if (restored.profile && typeof restored.profile === 'object') importProfile(restored.profile);
       // Backups antigos podem trazer as conversas de exemplo: só as reais entram.
       for (const ch of cleanChats(restored.chats)) store.addChat(ch);
       for (const id of Object.keys(cleanVerified(restored.verified, cleanChats(restored.chats)))) store.setVerified(id, true);
@@ -534,7 +543,8 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
           const expiresAt = expiryOf(x);
           if (expiresAt && expiresAt <= Date.now()) return;
           if (x.route) recordRoute(cid, 'in-' + x.msgId, 'in', x.route);
-          store.push(cid, { id: 'in-' + x.msgId, from: 'them', ...textOf(x), time: nowHM(), ...(expiresAt ? { expiresAt } : {}) });
+          // Pedido de conversa (ainda não aceito): entra não lido, sem banner nem notificação, como antes.
+          store.push(cid, { id: 'in-' + x.msgId, from: 'them', ...textOf(x), time: nowHM(), ...(expiresAt ? { expiresAt } : {}) }, { quiet: true });
         },
         // Pedido de pagamento de um contato aceito: vira registro + balão na conversa dele.
         paymentRequest: (contactId, r, _sentAt, route) => {
@@ -619,6 +629,9 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       else if (e.type === 'state' && e.state === 'off') { msg.clearPeers(); peerMedium.clear(); syncMedia(); } // vizinhos somem com o transporte
     });
     const tick = setInterval(() => msg.tick(), 5000);
+    // Temporárias vencidas somem no prazo também com o app fechado (antes era um efeito do StoreProvider).
+    store.sweepExpired();
+    const sweep = setInterval(() => store.sweepExpired(), SWEEP_MS);
 
     // Chamada de voz: um serviço por mensageiro; registros e pedidos viram cartões na conversa.
     const call = host.makeCall({
@@ -632,7 +645,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
 
     teardown = () => {
       call?.svc.dispose();
-      off(); clearInterval(tick); clearInterval(notices);
+      off(); clearInterval(tick); clearInterval(sweep); clearInterval(notices);
       gwStop?.(); gwStop = null; gw = null;
       carryBridge.setCarrier(null);
       clearTimeout(saveTimer);
@@ -673,8 +686,32 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
         void deps.forget(ROUTES_KEY);
       } else setRoutes(b => ({ ...b }));
     },
-    /** Peças que só a tela tem (perfil, carteira): sem elas, o mensageiro segue sem esses efeitos. */
-    setHost: (h: Partial<RuntimeHost>) => { host = { ...host, ...h }; },
+    /**
+     * Peças que só a tela tem (perfil, carteira): sem elas, o mensageiro segue sem esses efeitos.
+     * `undefined` volta ao padrão sem tela (a tela desmontou).
+     */
+    setHost: (h: Partial<RuntimeHost>) => {
+      const next = { ...host };
+      for (const k of Object.keys(h) as (keyof RuntimeHost)[]) (next as Record<string, unknown>)[k] = h[k] ?? NO_HOST[k];
+      host = next;
+      if (pendingProfile !== null && host.importProfile !== NO_HOST.importProfile) { const p = pendingProfile; pendingProfile = null; host.importProfile(p); }
+    },
+    /**
+     * A tela desmontou (deslizar o app dos recentes). Até os alertas de chamada morarem no núcleo, a
+     * chamada não fica sem tela, aviso nem botão de desligar: em curso, desliga; tocando, recusa. A pausa
+     * da retransmissão pela bateria é da tela (SystemPrompts) e não é salva: sem ela, só o Ponto Piu
+     * (`relay`) mantém a retransmissão para terceiros. A tela de volta reaplica os ajustes (`setPrefs`).
+     */
+    detach: (o: { relay: boolean }) => {
+      const svc = st.call?.svc;
+      if (svc) {
+        const ph = svc.state.phase;
+        try { if (ph === 'ringing') svc.controller.decline(); else if (ph === 'active' || ph === 'calling') svc.controller.hangup(); } catch { /* chamada */ }
+      }
+      const prev = prefs;
+      prefs = { ...prefs, relay: o.relay };
+      applyPrefs(prev);
+    },
     getSnapshot: (): RuntimeState => st,
     subscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
     messenger: () => m,
@@ -696,7 +733,7 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       set({ pays: deps.read<Record<string, PayRecord>>(PAYS_KEY) ?? {}, routes: prefs.priv.noRoutes ? {} : cleanBook(deps.read(ROUTES_KEY)) });
     },
     /** Desliga também o ouvinte das conversas (fim definitivo, testes). */
-    dispose: () => { clearTimeout(routesTimer); offChats(); return stop(); },
+    dispose: () => { clearTimeout(routesTimer); dropChats(); return stop(); },
   };
 }
 
