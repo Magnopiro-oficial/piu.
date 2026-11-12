@@ -44,7 +44,9 @@ import java.lang.ref.WeakReference
  *   `START_STICKY` e o sistema o recria com `intent == null` depois de matar o processo; o
  *   `BootReceiver` o religa depois de reiniciar o aparelho ou atualizar o app.
  * - Pulso a cada 5 s numa HandlerThread, com wake lock curto: o núcleo anuncia na rede local e o
- *   mensageiro faz o `tick` mesmo com a tela apagada (evento `onHeartbeat` do PiuTransportModule).
+ *   mensageiro faz o `tick` se o timer JS atrasou (evento `onHeartbeat` do PiuTransportModule). Só
+ *   enquanto a CPU está acordada: o `postDelayed` conta em `uptimeMillis` e o lock solta antes do
+ *   próximo pulso, então com o aparelho dormindo o pulso espera outra coisa acordá-lo (não é alarme).
  */
 class PiuRelayService : Service() {
   companion object {

@@ -269,7 +269,7 @@ export class LnnpLanEngine {
   }
 
   /**
-   * Pulso nativo do PiuRelayService (a cada 5 s, com wake lock curto): com a tela apagada os timers JS
+   * Pulso nativo do PiuRelayService (a cada 5 s com a CPU acordada, wake lock curto): sem tela os timers JS
    * podem atrasar. Anuncia (e confere manuais e varredura) só se o último anúncio já venceu.
    */
   heartbeat() {

@@ -240,6 +240,28 @@ test('backup restaurado antes da tela: o perfil espera o dono (setHost) em vez d
   assert.equal(got.length, 1, 'entregue uma vez');
 });
 
+test('pulso nativo com o timer JS em dia: o mensageiro não faz o tick em dobro', async () => {
+  mock.timers.enable({ apis: ['Date', 'setInterval'], now: 1_000_000 });
+  try {
+    const a = device('A');
+    const beats = new Set<() => void>();
+    a.net.t.onHeartbeat = fn => { beats.add(fn); return () => { beats.delete(fn); }; };
+    a.rt.start(a.keys);
+    const ticks = mock.method(a.rt.messenger()!, 'tick');
+    mock.timers.tick(5000);
+    assert.equal(ticks.mock.callCount(), 1, 'tick do timer');
+    beats.forEach(fn => fn());
+    assert.equal(ticks.mock.callCount(), 1, 'app aberto: o pulso não repete o tick do timer');
+    // Timer JS atrasado (tela apagada): o relógio anda sem o setInterval disparar; o pulso faz o tick.
+    mock.timers.setTime(Date.now() + 5000);
+    beats.forEach(fn => fn());
+    assert.equal(ticks.mock.callCount(), 2);
+    beats.forEach(fn => fn());
+    assert.equal(ticks.mock.callCount(), 2, 'dois pulsos seguidos: um tick só');
+    await a.rt.shutdown();
+  } finally { mock.timers.reset(); }
+});
+
 test('pulso nativo do serviço (tela apagada): o mensageiro faz o tick; parado, deixa de ouvir', async () => {
   const a = device('A');
   const beats = new Set<() => void>();

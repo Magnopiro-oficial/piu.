@@ -12,7 +12,7 @@ import type { WifiInfo } from '../transport/lan/types';
 import { useT } from '../i18n';
 import { useBattery } from '../lib/battery';
 import { usePointRuntime } from '../lib/pointBridge';
-import { shouldBackground } from './background';
+import { screenListening, shouldBackground } from './background';
 import { useKeys } from './keys';
 import { useNetwork } from './network';
 import { useRelayBattery } from './phoneNodeEffects';
@@ -125,10 +125,12 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   // Só para "Receber com o app fechado", o aviso diz isso no idioma da pessoa (o do Modo nó segue o de sempre).
   const pointRt = usePointRuntime();
   const relayBg = relay && !relayPaused && bat.bg && state === 'running';
-  const background = shouldBackground({ relay, relayPaused, bg: bat.bg, state, point: pointRt.background, receiveClosed, listening: (enabled && permission !== 'denied') || lanWant.on });
+  const listening = screenListening({ p2p: enabled && permission !== 'denied', hasLan: !!lan, lanOn: lanWant.on, wifi });
+  const background = shouldBackground({ relay, relayPaused, bg: bat.bg, state, point: pointRt.background, receiveClosed, listening });
   const noticeTitle = relayBg || pointRt.background ? null : t('network.receiveClosed.notice.title');
   const noticeText = t('network.receiveClosed.notice.text');
   useEffect(() => {
+    if (background === undefined) return; // sem opinião ainda (Wi-Fi não lido): fica como o núcleo deixou
     void transport.setBackgroundRelay?.(background, noticeTitle ? { title: noticeTitle, text: noticeText } : undefined).catch(() => {});
   }, [transport, background, noticeTitle, noticeText]);
   const relayNow = relay && !relayPaused;

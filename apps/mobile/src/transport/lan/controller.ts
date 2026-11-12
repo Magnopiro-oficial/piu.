@@ -35,7 +35,7 @@ export interface LanController {
   setNode(node: KeyPair): void;
   setRelay(relay: boolean): void;
   setLowPower(low: boolean): void;
-  /** Pulso nativo do serviço (tela apagada): anuncia se o timer JS atrasou (engine.ts). */
+  /** Pulso nativo do serviço (sem tela, CPU acordada): anuncia se o timer JS atrasou (engine.ts). */
   heartbeat(): void;
   /** Vizinho manual (QR do ponto): valida e devolve a forma canônica; lança se inválido. */
   addPeer(raw: string): string;

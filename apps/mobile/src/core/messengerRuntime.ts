@@ -56,6 +56,8 @@ export const RUNTIME_KEYS = [STATE_KEY, PAYS_KEY, ROUTES_KEY, CHANGES_SEEN] as c
 
 const SAVE_DELAY = 300;
 const nowSec = () => Math.floor(Date.now() / 1000);
+/** Intervalo do tick do mensageiro (e do pulso nativo do PiuRelayService). */
+const TICK_MS = 5000;
 
 /** Id da conversa de um contato real (curto e seguro para a URL). */
 export const chatIdFor = (contactId: string) => 'p' + contactId.replace(/^piu:/, '').slice(0, 20);
@@ -628,9 +630,12 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       }
       else if (e.type === 'state' && e.state === 'off') { msg.clearPeers(); peerMedium.clear(); syncMedia(); } // vizinhos somem com o transporte
     });
-    const tick = setInterval(() => msg.tick(), 5000);
-    // Pulso nativo do serviço (tela apagada): o tick sai mesmo com os timers JS atrasados.
-    const beat = transport.onHeartbeat?.(() => msg.tick());
+    // Pulso nativo do serviço: reserva para quando o timer JS atrasa (CPU acordada, sem tela). Com o
+    // timer em dia (app aberto) não repete o tick: flushAll e créditos rodariam em dobro.
+    let lastTickAt = 0;
+    const doTick = () => { lastTickAt = Date.now(); msg.tick(); };
+    const tick = setInterval(doTick, TICK_MS);
+    const beat = transport.onHeartbeat?.(() => { if (Date.now() - lastTickAt >= TICK_MS) doTick(); });
     // Temporárias vencidas somem no prazo também com o app fechado (antes era um efeito do StoreProvider).
     store.sweepExpired();
     const sweep = setInterval(() => store.sweepExpired(), SWEEP_MS);

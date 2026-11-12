@@ -72,8 +72,9 @@ export interface Transport {
    */
   setBackgroundRelay?(on: boolean, notice?: { title: string; text: string }): Promise<void>;
   /**
-   * Pulso nativo do serviço em primeiro plano (Android, a cada 5 s, com wake lock curto): com a tela
-   * apagada os timers JS podem atrasar; o núcleo anuncia na rede local e o mensageiro faz o `tick`.
+   * Pulso nativo do serviço em primeiro plano (Android, a cada 5 s, com wake lock curto): sem tela os
+   * timers JS podem atrasar; o núcleo anuncia na rede local e o mensageiro faz o `tick`. Só com a CPU
+   * acordada (PiuRelayService.kt): não acorda o aparelho que dormiu.
    */
   onHeartbeat?(fn: () => void): () => void;
   /** "Procurar vizinhos" (NFR-004): intervalo entre varreduras de descoberta, em segundos. */

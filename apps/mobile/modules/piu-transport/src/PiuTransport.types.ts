@@ -14,6 +14,6 @@ export type PiuTransportEvents = {
   onConnected: (e: { id: string; name?: string; auth?: string; via?: PiuMedium }) => void;
   onDisconnected: (e: { id: string; via?: PiuMedium }) => void;
   onEnvelope: (e: { from: string; data: string; via?: PiuMedium }) => void;
-  /** Pulso do serviço em primeiro plano (a cada 5 s, com wake lock curto), só enquanto ele está ligado. */
+  /** Pulso do serviço em primeiro plano (a cada 5 s com a CPU acordada; wake lock curto), só enquanto ele está ligado. */
   onHeartbeat: () => void;
 };
