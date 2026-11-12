@@ -58,14 +58,19 @@ function device(locked = false) {
   };
 }
 
-function runner(dev: ReturnType<typeof device>, o: { foreground?: boolean; enabled?: boolean } = {}) {
+const tick = () => new Promise(r => setTimeout(r, 0));
+
+function runner(dev: ReturnType<typeof device>, o: { foreground?: boolean; enabled?: boolean; notify?: { on: boolean } } = {}) {
   const fg = new Set<(f: boolean) => void>();
-  return createCallAlertRunner({
+  const notify = o.notify ?? { on: true };
+  const r = createCallAlertRunner({
     device: dev.d, enabled: o.enabled ?? true,
     foreground: () => o.foreground ?? false,
     onForeground: fn => { fg.add(fn); return { remove: () => { fg.delete(fn); } }; },
     nameOf: peer => (peer === 'alice' ? 'Alice' : ''), hideName: () => false, askNotif: () => {},
+    notifyAllowed: async () => notify.on,
   });
+  return Object.assign(r, { setForeground: (f: boolean) => fg.forEach(fn => fn(f)) });
 }
 
 test('chamada recebida sem tela: toca e mostra o aviso em tela cheia; o fim para o toque e esconde', () => {
@@ -92,9 +97,14 @@ test('tela bloqueada: a chamada fica em tela cheia (`shown`) e quem assina é av
   w.a.open('bob'); w.a.controller.dial();
   assert.equal(r.getSnapshot().shown, w.b.state.callId);
   assert.ok(n > 0);
-  // A tela reabre depois (deslizou e voltou): lê o que já está em curso, sem esperar outro sinal.
-  assert.equal(runner(dev).getSnapshot().shown, null);
+  // A tela reabre depois (deslizou e voltou) e assina o mesmo executor (getCallAlerts, um por
+  // processo): lê o que já está em curso na primeira leitura, sem esperar outro sinal.
+  let late = 0;
+  const off = r.subscribe(() => late++);
   assert.equal(r.getSnapshot().shown, w.b.state.callId);
+  assert.equal(r.getSnapshot().locked, true);
+  assert.equal(late, 0);
+  off();
 });
 
 test('Atender pela notificação: atende, abre a chamada e sobe o aviso do microfone', () => {
@@ -119,6 +129,27 @@ test('serviço trocado (mensageiro novo) ou solto: o aviso anterior sai e os ouv
   assert.deepEqual(dev.log.filter(x => x === 'ring:off' || x === 'incoming:hide'), ['ring:off', 'incoming:hide']);
   assert.equal(dev.listeners(), 0);
   assert.equal(r.getSnapshot().locked, false);
+});
+
+test('a tela pode sair sem derrubar a chamada só onde há aviso com botão (tocando e em curso, notificação permitida)', async () => {
+  const w = pair(), dev = device(), notify = { on: true }, r = runner(dev, { notify });
+  assert.equal(r.keepCall('ringing'), false, 'sem chamada seguida ainda');
+  r.attach(w.b);
+  await tick();
+  assert.equal(r.keepCall('ringing'), true);
+  assert.equal(r.keepCall('active'), true);
+  // Chamando, o plano não tem aviso (só a tela por cima do bloqueio): sem tela, ficaria sem botão.
+  assert.equal(r.keepCall('calling'), false);
+  // Permissão tirada nos ajustes do sistema: o app volta ao primeiro plano e relê.
+  notify.on = false;
+  r.setForeground(true);
+  await tick();
+  assert.equal(r.keepCall('ringing'), false);
+  assert.equal(r.keepCall('active'), false);
+  const off = runner(device(), { enabled: false });
+  off.attach(w.a);
+  await tick();
+  assert.equal(off.keepCall('active'), false, 'sem o módulo nativo não há aviso');
 });
 
 test('sem o módulo nativo (iPhone, web): nada toca', () => {

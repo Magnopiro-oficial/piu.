@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
-import { test } from 'node:test';
-import { completePersistedWrite, createResetGuard, missingStoredKeys, mustBlockWalletRecovery, persistedWriteStillValid } from '../persistSafety';
+import { mock, test } from 'node:test';
+import { completePersistedWrite, createDelayedWrites, createResetGuard, missingStoredKeys, mustBlockWalletRecovery, persistedWriteStillValid } from '../persistSafety';
 import { isWalletTransferRecord } from '../walletTransfer';
 
 test('carteira só considera registro ausente após leitura bem-sucedida', () => {
@@ -93,4 +93,46 @@ test('valor salvo só vale se abrir com a chave: texto puro sem o prefixo cifrad
   assert.deepEqual(readSealedValue('e1:adulterado', open), { ok: false }, 'GCM inválido');
   assert.deepEqual(readSealedValue('{"lock":false}', open), { ok: false }, 'JSON em claro injetado não é aceito');
   assert.deepEqual(readSealedValue('', open), { ok: false });
+});
+
+test('gravação com atraso: a memória (o que o núcleo lê) muda na hora, o disco depois do atraso', () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    // Mudar "Pré-visualização" para "Nunca": um aviso logo depois já não mostra o conteúdo.
+    const mem: Record<string, unknown> = { 'set.preview': 'always' }, disk: Record<string, unknown> = {};
+    const guard = createResetGuard();
+    const w = createDelayedWrites({ delay: 250, guard, mem: (k, v) => { mem[k] = v; }, write: (k, v) => { disk[k] = v; } });
+    w.schedule('set.preview', 'never');
+    assert.equal(mem['set.preview'], 'never');
+    assert.equal(disk['set.preview'], undefined);
+    w.schedule('set.preview', 'unlocked'); // a última vence, uma gravação só
+    mock.timers.tick(250);
+    assert.deepEqual(disk, { 'set.preview': 'unlocked' });
+    // Cancelada (persistNow, forget): não grava.
+    w.schedule('a', 1); w.cancel('a');
+    w.schedule('b', 2); w.cancelAll();
+    mock.timers.tick(250);
+    assert.deepEqual(Object.keys(disk), ['set.preview']);
+  } finally { mock.timers.reset(); }
+});
+
+test('gravação com atraso durante "Apagar dados locais": nada na memória apagada; grava só no estado novo', async () => {
+  mock.timers.enable({ apis: ['setTimeout'] });
+  try {
+    const mem: Record<string, unknown> = {}, disk: Record<string, unknown> = {};
+    const guard = createResetGuard();
+    const w = createDelayedWrites({ delay: 250, guard, mem: (k, v) => { mem[k] = v; }, write: (k, v) => { disk[k] = v; } });
+    // Agendada antes do apagamento: o apagamento leva a memória e a gravação não acontece.
+    w.schedule('old', 1);
+    let finish!: () => void;
+    const reset = guard.run(() => { for (const k of Object.keys(mem)) delete mem[k]; }, () => new Promise<void>(r => { finish = r; }));
+    w.schedule('new', 2);
+    assert.deepEqual(mem, {}, 'durante o apagamento a memória fica vazia');
+    mock.timers.tick(250);
+    assert.deepEqual(disk, {});
+    finish(); await reset;
+    mock.timers.tick(250);
+    assert.deepEqual(disk, { new: 2 });
+    assert.deepEqual(mem, { new: 2 });
+  } finally { mock.timers.reset(); }
 });

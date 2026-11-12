@@ -22,6 +22,7 @@ import { makePhoneCall } from '../state/calls';
 import { preloadedKeys, preloadedNodeKeyFor, preloadKeys } from '../state/keys';
 import { checkTransportPermissions, getTransport, SERVICE_ID } from '../transport';
 import { createCallAlertRunner, type CallAlertRunner } from './callAlertRunner';
+import { bootThen } from './coreTask';
 import { createChatStore, type ChatStore } from './chatStore';
 import { createMessengerRuntime, persistedPrefs, type MessengerRuntime } from './messengerRuntime';
 import { createCore, ensureNameSecret, persistedConfig, type Core, type PersistedBoot } from './node';
@@ -105,6 +106,7 @@ export function getCallAlerts(): CallAlertRunner {
       if (Number(Platform.Version) < 33 || readPersisted<boolean>('notif.asked')) return;
       void notificationPermission().then(p => { if (p === 'undetermined') void requestNotificationPermission(); }).catch(() => {});
     },
+    notifyAllowed: async () => (await notificationPermission()) === 'granted',
   }));
   const rt = getMessengerRuntime();
   const follow = () => r.attach(rt.getSnapshot().call?.svc ?? null);
@@ -113,7 +115,7 @@ export function getCallAlerts(): CallAlertRunner {
   return r;
 }
 
-export const bootCore = async (): Promise<void> => { await getCore().boot(); bootMessenger(); getCallAlerts(); };
+export const bootCore = bootThen(() => getCore().boot(), bootMessenger, getCallAlerts);
 
 /** Resolve quando o núcleo para (`shutdown`): a tarefa sem tela (core/headless.ts) fica viva até lá. */
 export const untilStopped = (): Promise<void> => getCore().untilStopped();

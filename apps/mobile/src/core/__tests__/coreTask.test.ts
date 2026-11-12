@@ -8,8 +8,12 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
 import type { Transport } from '../../transport/types';
-import { CORE_TASK, coreTask } from '../coreTask';
+import { bootThen, CORE_TASK, coreTask } from '../coreTask';
 import { createCore } from '../node';
+import { createChatStore } from '../chatStore';
+import { createMessengerRuntime, persistedPrefs } from '../messengerRuntime';
+import { deriveIdentity, deriveNodeKey, newSeed } from '../../protocol/keys';
+import { createSimulatedTransport } from '../../transport/simulated';
 
 const SECRET = 'ab'.repeat(32);
 const tick = () => new Promise(r => setTimeout(r, 0));
@@ -45,6 +49,28 @@ test('a tarefa, chamada sem tela, sobe o núcleo uma vez só e fica viva até o 
   await tick();
   assert.equal(done, 2);
   assert.ok(calls.includes('stop'));
+});
+
+test('bootCore pela tarefa e pela tela ao mesmo tempo: núcleo uma vez, mensageiro e alertas depois dele, e uma instância de cada', async () => {
+  const { c, calls } = core();
+  const rt = createMessengerRuntime({
+    transport: createSimulatedTransport(), chats: createChatStore({ read: () => undefined, schedule: () => {}, notify: () => {}, chirp: () => {}, active: () => false, locked: () => false }),
+    read: () => undefined, persistNow: async () => {}, schedule: () => {}, forget: async () => {}, epoch: () => 0, prefs: persistedPrefs(() => undefined),
+  });
+  live.push(rt);
+  const seed = newSeed();
+  const keys = { identities: { public: deriveIdentity(seed, 'public'), anon: deriveIdentity(seed, 'anon') }, node: deriveNodeKey(seed), nodeKeyFor: null, phonePk: null, rotation: 0 };
+  const seen: unknown[] = [];
+  let alerts: object | null = null, made = 0;
+  const bootCore = bootThen(c.boot,
+    () => { calls.push('messenger'); rt.start(keys); seen.push(rt.messenger()); },
+    () => { alerts ??= (made++, {}); });
+  await Promise.all([coreTask({ boot: bootCore, untilStopped: async () => {} })({}), bootCore()]);
+  assert.equal(calls.filter(x => x.startsWith('start')).length, 1);
+  assert.ok(calls.indexOf('messenger') > calls.findIndex(x => x.startsWith('start')), 'o mensageiro sobe depois do núcleo');
+  assert.equal(seen.length, 2);
+  assert.ok(seen[0] && seen[0] === seen[1], 'o mesmo mensageiro');
+  assert.equal(made, 1);
 });
 
 test('untilStopped depois de parar espera a próxima parada (o núcleo pode religar)', async () => {

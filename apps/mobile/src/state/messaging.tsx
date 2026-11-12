@@ -41,7 +41,7 @@ import { DesktopLinkBridge } from '../lib/desktopLinkSession';
 import { DesktopPayment } from '../ui/DesktopPayment';
 import { onlyLora } from '../lib/loraChat';
 import { CallServiceCtx, CallsProvider } from './calls';
-import { getMessengerRuntime } from '../core';
+import { getCallAlerts, getMessengerRuntime } from '../core';
 import { chatFor, chatForGroup, chatIdFor, chatIdForGroup, deviceChangeText, GROUP_LINK, groupSub, nearChat, type PayCheck, type PayRecord, policyOf, receivedFiles } from '../core/messengerRuntime';
 
 const now = () => Math.floor(Date.now() / 1000);
@@ -235,10 +235,11 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     rt.setHost({ importProfile: p => setProfile(p as never), settleInvite: id => walletRef.current.settleInvite(id) });
     return () => rt.setHost({ importProfile: undefined, settleInvite: undefined });
   }, [rt, setProfile]);
-  // Desmontar (deslizar o app dos recentes) não para o mensageiro nem a chamada (os alertas são do
-  // núcleo); solta só o que depende da tela: a retransmissão pausada pela bateria.
+  // Desmontar (deslizar o app dos recentes) não para o mensageiro; a chamada segue onde o núcleo
+  // mostra o aviso com botão (core/callAlertRunner.ts). Solta o que depende da tela: a retransmissão
+  // pausada pela bateria.
   const pointRelay = useRef(pointRt.relay); pointRelay.current = pointRt.relay;
-  useEffect(() => () => rt.detach({ relay: pointRelay.current }), [rt]);
+  useEffect(() => () => rt.detach({ relay: pointRelay.current, keepCall: getCallAlerts().keepCall }), [rt]);
   // Ajustes → mensageiro (política do roteador, bloqueados, descoberta, retransmissão e gateway).
   const blockedIds = useMemo(() => blocked.map(b => b.id).filter(id => id.startsWith('piu:')), [blocked]);
   useEffect(() => {

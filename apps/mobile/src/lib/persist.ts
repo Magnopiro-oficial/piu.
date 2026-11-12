@@ -2,7 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
-import { completePersistedWrite, createReadHealth, createResetGuard, missingStoredKeys, oncePerProcess, readSealedValue } from './persistSafety';
+import { completePersistedWrite, createDelayedWrites, createReadHealth, createResetGuard, missingStoredKeys, oncePerProcess, readSealedValue } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -51,7 +51,6 @@ function open(key: string, stored: string): unknown {
 const guard = createResetGuard();
 /** Geração atual dos dados: muda a cada "Apagar dados locais". */
 export const persistEpoch = () => guard.epoch();
-const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
 /**
  * Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir.
@@ -89,19 +88,17 @@ export const isPersistLoaded = () => loaded;
 /** Uma falha geral ou no campo impede assumir que ele estava ausente. */
 export const persistedReadFailed = (key: string) => health.failed(key);
 
-function schedule(key: string, value: unknown) {
-  clearTimeout(pending.get(key));
-  const at = guard.epoch();
-  pending.set(key, setTimeout(() => {
-    pending.delete(key);
-    if (at !== guard.epoch()) return; // apagado no meio do caminho
-    if (guard.resetting()) { schedule(key, value); return; } // estado novo: espera o apagamento terminar
-    snapshot[key] = value;
+// A memória (`snapshot`) muda na hora; o disco depois do atraso (lib/persistSafety.ts).
+const writes = createDelayedWrites({
+  delay: WRITE_DELAY, guard,
+  mem: (key, value) => { snapshot[key] = value; },
+  write: (key, value) => {
     let sealed: string;
     try { sealed = seal(key, value); } catch { return; } // sem chave, não grava em texto puro
     AsyncStorage.setItem(PREFIX + key, sealed).catch(() => {});
-  }, WRITE_DELAY));
-}
+  },
+});
+const schedule = writes.schedule;
 
 /** Grava com o mesmo atraso do `usePersisted`, sem hook (stores do núcleo, core/chatStore.ts). */
 export const schedulePersisted = (key: string, value: unknown) => schedule(key, value);
@@ -115,8 +112,7 @@ export const readPersisted = <T,>(key: string): T | undefined => snapshot[key] a
  */
 export async function persistNow(key: string, value: unknown): Promise<void> {
   guard.assertWritable(); // durante o "Apagar dados locais" nada é regravado, nem em memória
-  clearTimeout(pending.get(key));
-  pending.delete(key);
+  writes.cancel(key);
   const at = guard.epoch();
   // Mantém a atualização imediata em memória usada por assinantes existentes.
   snapshot[key] = value;
@@ -130,8 +126,7 @@ export async function persistNow(key: string, value: unknown): Promise<void> {
 /** Apaga todos os dados do Piu neste aparelho e cancela gravações pendentes. */
 export async function clearPersisted(): Promise<void> {
   health.begin();
-  pending.forEach(clearTimeout);
-  pending.clear();
+  writes.cancelAll();
   // A memória é limpa na hora e de novo ao final; no intervalo, gravações são recusadas.
   await guard.run(() => { snapshot = {}; }, async () => {
     try {
@@ -150,8 +145,7 @@ export async function clearPersisted(): Promise<void> {
  * Apaga um campo que o app não usa mais (migração). Fica fora do disco, não só da memória.
  */
 export async function forgetPersisted(key: string): Promise<void> {
-  clearTimeout(pending.get(key));
-  pending.delete(key);
+  writes.cancel(key);
   if (!(key in snapshot)) return;
   delete snapshot[key];
   try { await AsyncStorage.removeItem(PREFIX + key); } catch { /* fica cifrado; some no próximo "Apagar dados locais" */ }

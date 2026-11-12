@@ -697,12 +697,19 @@ export function createMessengerRuntime(deps: RuntimeDeps) {
       if (pendingProfile !== null && host.importProfile !== NO_HOST.importProfile) { const p = pendingProfile; pendingProfile = null; host.importProfile(p); }
     },
     /**
-     * A tela desmontou (deslizar o app dos recentes). A chamada segue: toque, avisos e botões das
-     * notificações são do núcleo (core/callAlertRunner.ts). A pausa da retransmissão pela bateria é da
-     * tela (SystemPrompts) e não é salva: sem ela, só o Ponto Piu (`relay`) mantém a retransmissão para
-     * terceiros. A tela de volta reaplica os ajustes (`setPrefs`).
+     * A tela desmontou (deslizar o app dos recentes). A chamada segue onde o núcleo mostra um aviso
+     * com botão (`keepCall`, de core/callAlertRunner.ts: tocando e em curso, com a notificação
+     * permitida); sem ele a chamada não fica sem tela nem botão de desligar: chamando ou em curso,
+     * desliga; tocando, recusa. A pausa da retransmissão pela bateria é da tela (SystemPrompts) e não é
+     * salva: sem ela, só o Ponto Piu (`relay`) mantém a retransmissão para terceiros. A tela de volta
+     * reaplica os ajustes (`setPrefs`).
      */
-    detach: (o: { relay: boolean }) => {
+    detach: (o: { relay: boolean; keepCall?: (phase: string) => boolean }) => {
+      const svc = st.call?.svc;
+      const ph = svc?.state.phase;
+      if (svc && ph && !o.keepCall?.(ph)) {
+        try { if (ph === 'ringing') svc.controller.decline(); else if (ph === 'active' || ph === 'calling') svc.controller.hangup(); } catch { /* chamada */ }
+      }
       const prev = prefs;
       prefs = { ...prefs, relay: o.relay };
       applyPrefs(prev);

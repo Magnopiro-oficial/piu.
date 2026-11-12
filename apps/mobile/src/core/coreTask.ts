@@ -11,3 +11,12 @@ export const coreTask = (c: { boot: () => Promise<void>; untilStopped: () => Pro
   await c.boot();
   await c.untilStopped();
 };
+
+/**
+ * `bootCore` (core/index.ts): liga o núcleo e depois o que vive sobre ele (mensageiro, alertas de
+ * chamada). A tarefa sem tela e a tela chamam juntas: `boot` é memoizado e cada passo é idempotente.
+ */
+export const bootThen = (boot: () => Promise<void>, ...next: Array<() => unknown>) => async (): Promise<void> => {
+  await boot();
+  for (const f of next) f();
+};

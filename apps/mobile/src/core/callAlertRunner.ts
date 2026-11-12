@@ -42,6 +42,8 @@ export interface CallAlertDeps {
   hideName: () => boolean;
   /** Pede a permissão de notificação (Android 13+), se o app ainda não pediu, sem esperar a resposta. */
   askNotif: () => void;
+  /** Notificação permitida agora (sem ela os avisos com Atender/Desligar não aparecem). */
+  notifyAllowed: () => Promise<boolean>;
 }
 
 export interface CallAlertView { locked: boolean; shown: string | null }
@@ -56,6 +58,9 @@ export function createCallAlertRunner(deps: CallAlertDeps) {
   let svc: CallService | null = null;
   let view: CallAlertView = { locked: false, shown: null };
   let release: (() => void) | null = null;
+  let notifyOk = false;
+  // Relida ao seguir um serviço e ao voltar ao primeiro plano (a pessoa pode ter mudado nos ajustes do sistema).
+  const checkNotify = () => { deps.notifyAllowed().then(v => { notifyOk = v; }, () => { notifyOk = false; }); };
 
   const emit = () => {
     const next = { locked: !!svc && locked, shown };
@@ -118,7 +123,7 @@ export function createCallAlertRunner(deps: CallAlertDeps) {
 
     const off: Sub[] = [
       { remove: s.subscribe(sync) },
-      deps.onForeground(f => { env = { ...env, foreground: f }; sync(); }),
+      deps.onForeground(f => { env = { ...env, foreground: f }; if (f) checkNotify(); sync(); }),
       device.addLockListener(l => { env = { ...env, locked: l }; setLocked(l); sync(); }),
       device.addActionListener(({ action, callId }) => {
         const st = s.state;
@@ -152,9 +157,15 @@ export function createCallAlertRunner(deps: CallAlertDeps) {
       release = null;
       r?.();
       svc = deps.enabled ? next : null;
-      if (svc) release = run(svc);
+      if (svc) { checkNotify(); release = run(svc); }
       emit();
     },
+    /**
+     * A chamada nesta fase tem aviso com botão sem a tela (tocando: Atender/Recusar; em curso:
+     * Desligar)? Chamando, o plano não mostra aviso. Quem pergunta é o mensageiro quando a tela
+     * desmonta (messengerRuntime `detach`): sem controle, a chamada não segue.
+     */
+    keepCall: (phase: string): boolean => !!svc && notifyOk && (phase === 'ringing' || phase === 'active'),
     getSnapshot: (): CallAlertView => view,
     subscribe: (fn: () => void) => { subs.add(fn); return () => { subs.delete(fn); }; },
   };

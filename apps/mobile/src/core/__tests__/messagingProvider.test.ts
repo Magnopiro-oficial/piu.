@@ -27,6 +27,9 @@ test('MessagingProvider não cria nem descarta o mensageiro: assina o do núcleo
 
 test('desmontar a tela solta só o que depende dela: a retransmissão pausada pela bateria (rt.detach)', () => {
   assert.match(messaging, /useEffect\(\(\) => \(\) => rt\.detach\(/);
+  // A chamada só segue sem tela onde o núcleo mostra o aviso com botão (core/callAlertRunner.ts).
+  assert.match(messaging, /rt\.detach\(\{ relay: pointRelay\.current, keepCall: getCallAlerts\(\)\.keepCall \}\)/);
+  assert.match(read('core', 'index.ts'), /notifyAllowed: async \(\) => \(await notificationPermission\(\)\) === 'granted'/);
   // Perfil e carteira voltam ao padrão sem tela (o perfil restaurado espera o próximo dono).
   assert.match(messaging, /rt\.setHost\(\{ importProfile: undefined, settleInvite: undefined \}\)/);
 });

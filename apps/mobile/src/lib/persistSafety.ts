@@ -79,3 +79,35 @@ export function createReadHealth() {
     wiped() { general = false; bad.clear(); },
   };
 }
+
+/**
+ * Gravações com atraso (`usePersisted`, `schedulePersisted`): a memória muda na hora, o disco depois
+ * de `delay` (uma gravação só por campo). O núcleo lê a memória (`readPersisted`): mudar
+ * "Pré-visualização" para "Nunca" vale já para o próximo aviso, não só depois do atraso. Durante o
+ * "Apagar dados locais" nada entra na memória apagada; a gravação espera o apagamento terminar.
+ */
+export function createDelayedWrites(d: {
+  delay: number;
+  guard: { epoch(): number; resetting(): boolean };
+  mem: (key: string, value: unknown) => void;
+  write: (key: string, value: unknown) => void;
+}) {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  function schedule(key: string, value: unknown) {
+    clearTimeout(pending.get(key));
+    if (!d.guard.resetting()) d.mem(key, value);
+    const at = d.guard.epoch();
+    pending.set(key, setTimeout(() => {
+      pending.delete(key);
+      if (at !== d.guard.epoch()) return; // apagado no meio do caminho
+      if (d.guard.resetting()) { schedule(key, value); return; } // estado novo: espera o apagamento terminar
+      d.mem(key, value);
+      d.write(key, value);
+    }, d.delay));
+  }
+  return {
+    schedule,
+    cancel: (key: string) => { clearTimeout(pending.get(key)); pending.delete(key); },
+    cancelAll: () => { pending.forEach(clearTimeout); pending.clear(); },
+  };
+}

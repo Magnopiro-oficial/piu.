@@ -155,15 +155,32 @@ function fakeCall(phase: string) {
   return { call, did };
 }
 
-test('tela desmontou (detach): a chamada segue, em curso ou tocando (os alertas de chamada são do núcleo)', () => {
-  for (const phase of ['active', 'calling', 'ringing', 'idle']) {
+test('tela desmontou (detach): a chamada segue só onde o núcleo mostra o controle (aviso com o botão)', () => {
+  // O núcleo (core/callAlertRunner.ts) diz em que fase há aviso com botão: tocando e em curso.
+  const keepCall = (ph: string) => ph === 'ringing' || ph === 'active';
+  for (const [phase, did] of [['active', []], ['ringing', []], ['calling', ['hangup']], ['idle', []]] as const) {
+    const f = fakeCall(phase);
+    const a = device('A', { makeCall: () => f.call });
+    a.rt.start(a.keys);
+    a.rt.detach({ relay: false, keepCall });
+    assert.deepEqual(f.did, did, phase);
+    assert.equal(a.rt.getSnapshot().call, f.call, phase);
+    assert.ok(a.rt.messenger(), 'o mensageiro continua');
+  }
+});
+
+test('tela desmontou sem controle no núcleo (iPhone, sem permissão de notificação): desliga em curso, recusa tocando', () => {
+  for (const [phase, did] of [['active', ['hangup']], ['calling', ['hangup']], ['ringing', ['decline']], ['idle', []]] as const) {
     const f = fakeCall(phase);
     const a = device('A', { makeCall: () => f.call });
     a.rt.start(a.keys);
     a.rt.detach({ relay: false });
-    assert.deepEqual(f.did, [], phase);
-    assert.equal(a.rt.getSnapshot().call, f.call, phase);
-    assert.ok(a.rt.messenger(), 'o mensageiro continua');
+    assert.deepEqual(f.did, did, phase);
+    const g = fakeCall(phase);
+    const b = device('B', { makeCall: () => g.call });
+    b.rt.start(b.keys);
+    b.rt.detach({ relay: false, keepCall: () => false });
+    assert.deepEqual(g.did, did, phase);
   }
 });
 
