@@ -10,6 +10,6 @@ export function getTransport(): Transport {
   return instance;
 }
 
-export { askTransportPermissionsAgain, requestTransportPermissions } from './permissions';
+export { askTransportPermissionsAgain, checkTransportPermissions, requestTransportPermissions } from './permissions';
 export { MEDIA, rankLinks, SMALL_ENVELOPE_BYTES } from './select';
 export * from './types';

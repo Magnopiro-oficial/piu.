@@ -2,7 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
-import { completePersistedWrite, createResetGuard, missingStoredKeys, readSealedValue } from './persistSafety';
+import { completePersistedWrite, createResetGuard, missingStoredKeys, oncePerProcess, readSealedValue } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -54,8 +54,12 @@ const guard = createResetGuard();
 export const persistEpoch = () => guard.epoch();
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
-/** Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir. */
-export async function loadPersisted(): Promise<void> {
+/**
+ * Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir.
+ * Uma vez por processo: o núcleo (core/node.ts) e a tela que remonta depois de deslizar o app dos
+ * recentes dividem o mesmo `snapshot`; reler o disco perderia gravações ainda no atraso de `schedule`.
+ */
+export const loadPersisted = oncePerProcess(async (): Promise<void> => {
   storageReadFailed = true;
   unreadable.clear();
   try {
@@ -77,7 +81,7 @@ export async function loadPersisted(): Promise<void> {
     snapshot = {};
   }
   loaded = true;
-}
+});
 
 export const isPersistLoaded = () => loaded;
 /** Uma falha geral ou no campo impede assumir que ele estava ausente. */

@@ -52,3 +52,12 @@ export function readSealedValue(stored: string, open: (stored: string) => unknow
   const value = open(stored);
   return value === undefined ? { ok: false } : { ok: true, value };
 }
+
+/**
+ * Uma execução por processo: a segunda chamada devolve a mesma promessa. Reabrir o app (Activity nova
+ * sobre o mesmo runtime JS) não relê o disco por cima do que já está em memória.
+ */
+export function oncePerProcess(fn: () => Promise<void>): () => Promise<void> {
+  let run: Promise<void> | null = null;
+  return () => (run ??= fn());
+}
