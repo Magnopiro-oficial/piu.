@@ -127,6 +127,7 @@ export const ptBR = {
   'network.receiveClosed.setup.ok': 'Feito',
   'network.receiveClosed.setup.done': 'Pronto',
   'network.receiveClosed.setup.later': 'Agora não',
+  'network.receiveClosed.setup.cantOpen': 'Não deu para abrir esse ajuste neste aparelho. Procure em Ajustes > Apps > Piu.',
   'network.receiveClosed.setup.missing': 'Falta configurar: {list}',
   'network.receiveClosed.setup.resume': 'Configurar agora',
   'network.reachable': 'NÓS ALCANÇÁVEIS',

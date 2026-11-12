@@ -120,6 +120,7 @@ export const dict: Dict = {
   'network.receiveClosed.setup.ok': 'Feito',
   'network.receiveClosed.setup.done': 'Concluído',
   'network.receiveClosed.setup.later': 'Agora não',
+  'network.receiveClosed.setup.cantOpen': 'Não foi possível abrir esta definição neste aparelho. Procure em Definições > Apps > Piu.',
   'network.receiveClosed.setup.missing': 'Falta configurar: {list}',
   'network.receiveClosed.setup.resume': 'Configurar agora',
   'network.reachable': 'NÓS ALCANÇÁVEIS',

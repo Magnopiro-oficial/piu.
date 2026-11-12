@@ -120,6 +120,7 @@ export const dict: Dict = {
   'network.receiveClosed.setup.ok': 'हो गया',
   'network.receiveClosed.setup.done': 'पूरा',
   'network.receiveClosed.setup.later': 'अभी नहीं',
+  'network.receiveClosed.setup.cantOpen': 'इस फ़ोन पर यह सेटिंग नहीं खुल सकी। सेटिंग > ऐप्स > Piu में देखें।',
   'network.receiveClosed.setup.missing': 'अभी सेट करना बाकी: {list}',
   'network.receiveClosed.setup.resume': 'अभी सेट करें',
   'network.reachable': 'पहुँच योग्य नोड',

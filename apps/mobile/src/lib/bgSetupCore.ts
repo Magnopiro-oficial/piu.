@@ -42,10 +42,24 @@ export function setupNote(oem: Oem): 'network.receiveClosed.guide.xiaomi' | 'net
   return oem === 'xiaomi' ? 'network.receiveClosed.guide.xiaomi' : oem === 'samsung' ? 'network.receiveClosed.guide.samsung' : null;
 }
 
-/** Pede agora? Uma vez, depois do onboarding e com o cofre, só com "Receber com o app fechado" ligado. */
+/**
+ * Pede agora? Uma vez, depois do onboarding e com o cofre, só com "Receber com o app fechado" ligado.
+ * Espera o app em primeiro plano (`active`: os pedidos de permissão do sistema do primeiro uso pausam a
+ * tela) e nenhum outro aviso aberto (`otherDialog`: backup, bateria), para não empilhar diálogos.
+ */
 export function shouldAskBgSetup(i: {
   android: boolean; onboarded: boolean; hasKeys: boolean; receiveClosed: boolean; asked: boolean; locked: boolean;
-  missing: readonly BgStep[];
+  active: boolean; otherDialog: boolean; missing: readonly BgStep[];
 }): boolean {
-  return i.android && i.onboarded && i.hasKeys && i.receiveClosed && !i.asked && !i.locked && i.missing.length > 0;
+  return i.android && i.onboarded && i.hasKeys && i.receiveClosed && !i.asked && !i.locked && i.active && !i.otherDialog
+    && i.missing.length > 0;
+}
+
+/** Botões da tela: "Pronto" (com check) só com tudo feito; faltando algo, só "Agora não". */
+export function setupActions(missing: readonly BgStep[]): {
+  primary: 'network.receiveClosed.setup.done' | null; secondary: 'network.receiveClosed.setup.later' | 'common.close';
+} {
+  return missing.length === 0
+    ? { primary: 'network.receiveClosed.setup.done', secondary: 'common.close' }
+    : { primary: null, secondary: 'network.receiveClosed.setup.later' };
 }

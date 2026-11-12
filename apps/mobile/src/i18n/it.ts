@@ -120,6 +120,7 @@ export const dict: Dict = {
   'network.receiveClosed.setup.ok': 'Fatto',
   'network.receiveClosed.setup.done': 'Fine',
   'network.receiveClosed.setup.later': 'Non ora',
+  'network.receiveClosed.setup.cantOpen': 'Impossibile aprire questa impostazione su questo telefono. Cerca in Impostazioni > App > Piu.',
   'network.receiveClosed.setup.missing': 'Da configurare: {list}',
   'network.receiveClosed.setup.resume': 'Configura ora',
   'network.reachable': 'NODI RAGGIUNGIBILI',

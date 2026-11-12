@@ -4,7 +4,8 @@
  */
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { missingSteps, oemOf, setupNote, shouldAskBgSetup, type PowerInfo } from '../bgSetupCore';
+import { missingSteps, oemOf, setupActions, setupNote, shouldAskBgSetup, type PowerInfo } from '../bgSetupCore';
+import { dictOf, LANGS } from '../../i18n';
 import { ptBR } from '../../i18n/pt-BR';
 
 const power = (o: Partial<PowerInfo> = {}): PowerInfo => ({ ignoringBattery: false, manufacturer: 'Google', brand: 'google', ...o });
@@ -38,7 +39,7 @@ test('orientação curta por fabricante: a já existente da aba Rede', () => {
 });
 
 test('quando pedir: uma vez, depois do onboarding, com o cofre e o ajuste ligado', () => {
-  const ok = { android: true, onboarded: true, hasKeys: true, receiveClosed: true, asked: false, locked: false, missing: ['battery'] as const };
+  const ok = { android: true, onboarded: true, hasKeys: true, receiveClosed: true, asked: false, locked: false, active: true, otherDialog: false, missing: ['battery'] as const };
   assert.equal(shouldAskBgSetup(ok), true);
   assert.equal(shouldAskBgSetup({ ...ok, onboarded: false }), false, 'durante o onboarding');
   assert.equal(shouldAskBgSetup({ ...ok, hasKeys: false }), false, 'antes do cofre existir');
@@ -47,4 +48,20 @@ test('quando pedir: uma vez, depois do onboarding, com o cofre e o ajuste ligado
   assert.equal(shouldAskBgSetup({ ...ok, missing: [] }), false, 'nada a configurar');
   assert.equal(shouldAskBgSetup({ ...ok, android: false }), false, 'só Android');
   assert.equal(shouldAskBgSetup({ ...ok, locked: true }), false, 'com o bloqueio do app na frente');
+  assert.equal(shouldAskBgSetup({ ...ok, otherDialog: true }), false, 'outro aviso aberto (backup, bateria): espera, sem empilhar');
+  assert.equal(shouldAskBgSetup({ ...ok, active: false }), false, 'pedido de permissão do sistema na frente (app fora de primeiro plano)');
+});
+
+test('botões: com algo faltando, só "Agora não" (nada de "Pronto" com check); tudo feito, "Pronto"', () => {
+  assert.deepEqual(setupActions(['battery']), { primary: null, secondary: 'network.receiveClosed.setup.later' });
+  assert.deepEqual(setupActions(['battery', 'autostart']), { primary: null, secondary: 'network.receiveClosed.setup.later' });
+  assert.deepEqual(setupActions([]), { primary: 'network.receiveClosed.setup.done', secondary: 'common.close' });
+});
+
+test('textos: "feito" do cartão difere do botão "Pronto" em todos os idiomas (leitor de tela)', () => {
+  for (const { code } of LANGS) {
+    const d = dictOf(code)!;
+    assert.notEqual(d['network.receiveClosed.setup.ok'], d['network.receiveClosed.setup.done'], code);
+    assert.ok(d['network.receiveClosed.setup.cantOpen'], `${code}: aviso de ajuste que não abriu`);
+  }
 });

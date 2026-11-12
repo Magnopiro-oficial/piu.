@@ -120,6 +120,7 @@ export const dict: Dict = {
   'network.receiveClosed.setup.ok': 'Erledigt',
   'network.receiveClosed.setup.done': 'Fertig',
   'network.receiveClosed.setup.later': 'Jetzt nicht',
+  'network.receiveClosed.setup.cantOpen': 'Diese Einstellung ließ sich auf diesem Gerät nicht öffnen. Suche unter Einstellungen > Apps > Piu.',
   'network.receiveClosed.setup.missing': 'Noch einzurichten: {list}',
   'network.receiveClosed.setup.resume': 'Jetzt einrichten',
   'network.reachable': 'ERREICHBARE KNOTEN',

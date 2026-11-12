@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { Platform } from 'react-native';
+import { AppState, Platform } from 'react-native';
 import { useT } from '../i18n';
 import { isAppLocked, onAppLockChange } from '../lib/appLockGate';
 import { useBattery } from '../lib/battery';
@@ -23,11 +23,14 @@ export const BACKUP_FIRST_REMINDER_MS = DAY;
  * tipo é do núcleo (core/toasts.ts), com os ajustes do salvo.
  */
 export function SystemPrompts() {
+  // Avisos abertos: o pedido dos ajustes do app fechado espera os outros fecharem (sem diálogos empilhados).
+  const [battOpen, setBattOpen] = useState(false);
+  const [backupOpen, setBackupOpen] = useState(false);
   return (
     <>
-      <BatteryGuard />
-      <BackgroundSetupPrompt />
-      <BackupReminder />
+      <BatteryGuard onOpen={setBattOpen} />
+      <BackgroundSetupPrompt otherDialog={battOpen || backupOpen} />
+      <BackupReminder onOpen={setBackupOpen} />
     </>
   );
 }
@@ -37,7 +40,7 @@ export function SystemPrompts() {
  * "Só retransmitir carregando", o Piu para de retransmitir para terceiros. As próprias mensagens continuam.
  * Avisa uma vez por pausa, com o diálogo do design.
  */
-function BatteryGuard() {
+function BatteryGuard({ onOpen }: { onOpen: (open: boolean) => void }) {
   const t = useT();
   const { onboarded } = useStore();
   const { notifs } = useSettings();
@@ -57,6 +60,7 @@ function BatteryGuard() {
     if (shouldPause && !was.current && low && notifs.network) setOpen(true);
     was.current = shouldPause;
   }, [shouldPause, relayPaused, setRelayPaused, low, notifs.network]);
+  useEffect(() => onOpen(open), [open, onOpen]);
 
   if (!open) return null;
   return (
@@ -72,7 +76,7 @@ function BatteryGuard() {
  * Xiaomi só a pessoa liga. Pede uma vez, logo depois do onboarding (com o cofre já criado); quem pular
  * acha o que falta na aba Rede, que reabre a mesma tela.
  */
-function BackgroundSetupPrompt() {
+function BackgroundSetupPrompt({ otherDialog }: { otherDialog: boolean }) {
   const { onboarded } = useStore();
   const { hasKeys } = useKeys();
   const { receiveClosed } = useNetwork();
@@ -81,11 +85,14 @@ function BackgroundSetupPrompt() {
   const [locked, setLocked] = useState(isAppLocked);
   const [open, setOpen] = useState(false);
   useEffect(() => onAppLockChange(setLocked), []);
-  const want = shouldAskBgSetup({ android: Platform.OS === 'android', onboarded, hasKeys, receiveClosed, asked, locked, missing });
+  // Os pedidos de permissão do sistema (Bluetooth, Wi-Fi) do primeiro uso pausam a tela: espera voltar.
+  const [active, setActive] = useState(AppState.currentState === 'active');
+  useEffect(() => { const sub = AppState.addEventListener('change', s => setActive(s === 'active')); return () => sub.remove(); }, []);
+  const want = shouldAskBgSetup({ android: Platform.OS === 'android', onboarded, hasKeys, receiveClosed, asked, locked, active, otherDialog, missing });
 
   useEffect(() => {
     if (!want) return;
-    // Depois da navegação do fim do onboarding (keys.tsx troca para as abas).
+    // Depois da navegação do fim do onboarding (keys.tsx troca para as abas) e de um instante em primeiro plano.
     const t = setTimeout(() => { setAsked(true); setOpen(true); }, 1200);
     return () => clearTimeout(t);
   }, [want, setAsked]);
@@ -98,7 +105,7 @@ function BackgroundSetupPrompt() {
  * Lembrete de backup das chaves: um dia depois do onboarding, enquanto o backup não for feito.
  * "Lembrar em 7 dias" adia; fazer o backup encerra os lembretes.
  */
-function BackupReminder() {
+function BackupReminder({ onOpen }: { onOpen: (open: boolean) => void }) {
   const t = useT();
   const { onboarded } = useStore();
   const { backupDone } = useSettings();
@@ -119,6 +126,7 @@ function BackupReminder() {
     const t = setTimeout(() => setOpen(true), Math.min(wait, DAY));
     return () => clearTimeout(t);
   }, [onboarded, backupDone, since, snooze]);
+  useEffect(() => onOpen(open), [open, onOpen]);
 
   if (!open) return null;
   const later = () => { setSnooze(Date.now() + 7 * DAY); setOpen(false); };

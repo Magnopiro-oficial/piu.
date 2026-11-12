@@ -1,8 +1,9 @@
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppState, Platform, View } from 'react-native';
 import { PiuTransport } from '../../modules/piu-transport';
 import { useT } from '../i18n';
-import { BG_SETUP_AUTOSTART_KEY, type BgStep, missingSteps, oemOf, type PowerInfo, setupNote } from '../lib/bgSetupCore';
+import { isAppLocked, onAppLockChange } from '../lib/appLockGate';
+import { BG_SETUP_AUTOSTART_KEY, type BgStep, missingSteps, oemOf, type PowerInfo, setupActions, setupNote } from '../lib/bgSetupCore';
 import { readPersisted, schedulePersisted } from '../lib/persist';
 import { useTheme } from '../theme/ThemeProvider';
 import { Button } from './Button';
@@ -56,8 +57,10 @@ const STEP_TITLE: Record<BgStep, 'network.receiveClosed.setup.battery' | 'networ
 };
 export const bgStepTitle = (s: BgStep) => STEP_TITLE[s];
 
-const openBattery = () => { try { PiuTransport?.openBatteryExemption?.(); } catch { /* sem a tela: a aba Rede segue mostrando */ } };
-const openAutostart = () => { try { PiuTransport?.openAutostart?.(); } catch { /* idem */ } };
+/** Abre o ajuste do sistema; `false` = nenhuma tela abriu (a pessoa vê onde procurar). */
+const openStep = (s: BgStep): boolean => {
+  try { return (s === 'battery' ? PiuTransport?.openBatteryExemption?.() : PiuTransport?.openAutostart?.()) !== false; } catch { return false; }
+};
 const confirmAutostart = () => { schedulePersisted(BG_SETUP_AUTOSTART_KEY, true); refresh(); };
 
 /** A mesma tela no primeiro uso e na aba Rede: um toque em cada ajuste que falta; confere de novo ao voltar. */
@@ -67,11 +70,17 @@ export function BackgroundSetupDialog({ onClose }: { onClose: () => void }) {
   const { missing, oem } = useBgSetup();
   const note = setupNote(oem);
   const steps: BgStep[] = oem === 'xiaomi' ? ['battery', 'autostart'] : ['battery'];
-  const done = missing.length === 0;
+  const act = setupActions(missing);
+  const [failed, setFailed] = useState<BgStep[]>([]);
+  const open = (s: BgStep) => { if (!openStep(s)) setFailed(f => f.includes(s) ? f : [...f, s]); };
+  // O Modal fica numa janela acima da capa do bloqueio do app (ui/AppLock.tsx): some enquanto travado.
+  const [locked, setLocked] = useState(isAppLocked);
+  useEffect(() => onAppLockChange(setLocked), []);
+  if (locked) return null;
   return (
     <Dialog icon="battery_alert" title={t('network.receiveClosed')} body={t('network.receiveClosed.setup.body')}
-      primary={t('network.receiveClosed.setup.done')} primaryIcon="check" onPrimary={onClose}
-      secondary={done ? t('common.close') : t('network.receiveClosed.setup.later')} onClose={onClose}>
+      primary={act.primary ? t(act.primary) : undefined} primaryIcon="check" onPrimary={onClose}
+      secondary={t(act.secondary)} onClose={onClose}>
       <View style={{ alignSelf: 'stretch', gap: 10 }}>
         {steps.map(s => {
           const ok = !missing.includes(s);
@@ -85,13 +94,14 @@ export function BackgroundSetupDialog({ onClose }: { onClose: () => void }) {
               {!ok && (
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   {s === 'battery'
-                    ? <Button label={t('network.receiveClosed.setup.allow')} height={40} fontSize={13} onPress={openBattery} />
+                    ? <Button label={t('network.receiveClosed.setup.allow')} height={40} fontSize={13} onPress={() => open(s)} />
                     : <>
-                        <Button label={t('network.receiveClosed.setup.open')} height={40} fontSize={13} onPress={openAutostart} />
+                        <Button label={t('network.receiveClosed.setup.open')} height={40} fontSize={13} onPress={() => open(s)} />
                         <Button label={t('network.receiveClosed.setup.confirm')} variant="outline" height={40} fontSize={13} onPress={confirmAutostart} />
                       </>}
                 </View>
               )}
+              {!ok && failed.includes(s) && <T size={12.5} lh={1.4} color={c.ink2}>{t('network.receiveClosed.setup.cantOpen')}</T>}
             </View>
           );
         })}

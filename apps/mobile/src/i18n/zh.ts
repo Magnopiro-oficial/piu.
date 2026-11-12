@@ -120,6 +120,7 @@ export const dict: Dict = {
   'network.receiveClosed.setup.ok': '已完成',
   'network.receiveClosed.setup.done': '完成',
   'network.receiveClosed.setup.later': '以后再说',
+  'network.receiveClosed.setup.cantOpen': '无法在此手机上打开该设置。请前往 设置 > 应用 > Piu。',
   'network.receiveClosed.setup.missing': '尚未设置：{list}',
   'network.receiveClosed.setup.resume': '立即设置',
   'network.reachable': '可达节点',
