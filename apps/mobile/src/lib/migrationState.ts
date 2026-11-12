@@ -58,6 +58,8 @@ export function takeDeviceChangeRequest(): { at: number; reason: DeviceChangeRea
 export const deviceChangeOutbox = (now: number): DeviceChangeOutbox[] => (readPersisted<DeviceChangeOutbox[]>(CHANGES) ?? []).filter(o => deviceChangeActive(o, now));
 export const saveDeviceChangeOutbox = (list: DeviceChangeOutbox[]) => persistNow(CHANGES, list);
 
+/** Época atual da rotação, sem hook (mensageiro do núcleo sem tela). */
+export const sessionRotationEpoch = () => epoch;
 /** Muda a cada pedido de rotação (para o mensageiro se remontar e aplicar). */
 export const useSessionRotationEpoch = () => useSyncExternalStore(subscribe, () => epoch, () => epoch);
 

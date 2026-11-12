@@ -79,6 +79,12 @@ export function preloadedNodeKeyFor(): ((day: number) => KeyPair) | null {
   return k ? derive(k.seed).nodeKeyFor : null;
 }
 
+/** Chaves já derivadas do cofre lido (`preloadKeys`), para o mensageiro sem tela (core/index.ts). */
+export function preloadedKeys() {
+  const k = validSeed(preloaded);
+  return k ? derive(k.seed) : null;
+}
+
 /**
  * Chaves reais do aparelho. Tudo deriva da frase de recuperação, mas o app só guarda na memória a
  * semente do Piu (identidades e nó) e o endereço da carteira; a frase é lida do cofre só na hora.

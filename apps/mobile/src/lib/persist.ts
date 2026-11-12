@@ -103,6 +103,9 @@ function schedule(key: string, value: unknown) {
   }, WRITE_DELAY));
 }
 
+/** Grava com o mesmo atraso do `usePersisted`, sem hook (stores do núcleo, core/chatStore.ts). */
+export const schedulePersisted = (key: string, value: unknown) => schedule(key, value);
+
 /** Valor salvo (já carregado por `loadPersisted`), sem hook. */
 export const readPersisted = <T,>(key: string): T | undefined => snapshot[key] as T | undefined;
 
