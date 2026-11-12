@@ -2,7 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
-import { completePersistedWrite, createResetGuard, missingStoredKeys, oncePerProcess, readSealedValue } from './persistSafety';
+import { completePersistedWrite, createReadHealth, createResetGuard, missingStoredKeys, oncePerProcess, readSealedValue } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -22,8 +22,7 @@ const WRITE_DELAY = 250;
 
 let snapshot: Record<string, unknown> = {};
 let loaded = false;
-let storageReadFailed = true;
-const unreadable = new Set<string>();
+const health = createReadHealth();
 let dataKey: Uint8Array | null = null;
 const enc = new TextEncoder(), dec = new TextDecoder();
 const MARK = 'e1:';
@@ -58,34 +57,37 @@ const pending = new Map<string, ReturnType<typeof setTimeout>>();
  * Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir.
  * Uma vez por processo: o núcleo (core/node.ts) e a tela que remonta depois de deslizar o app dos
  * recentes dividem o mesmo `snapshot`; reler o disco perderia gravações ainda no atraso de `schedule`.
+ * Se a leitura falhou por inteiro, a próxima chamada tenta de novo.
  */
-export const loadPersisted = oncePerProcess(async (): Promise<void> => {
-  storageReadFailed = true;
-  unreadable.clear();
+export const loadPersisted = oncePerProcess(async (): Promise<boolean> => {
+  health.begin();
+  let ok = false;
   try {
     dataKey = await loadOrCreateDataKey();
     const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
     const pairs = await AsyncStorage.multiGet(keys);
-    for (const k of missingStoredKeys(keys, pairs.map(([key]) => key))) unreadable.add(k.slice(PREFIX.length));
+    for (const k of missingStoredKeys(keys, pairs.map(([key]) => key))) health.unreadable(k.slice(PREFIX.length));
     const next: Record<string, unknown> = {};
     for (const [k, v] of pairs) {
       const name = k.slice(PREFIX.length);
-      if (v == null) { unreadable.add(name); continue; }
+      if (v == null) { health.unreadable(name); continue; }
       // Só vale o que abre com a chave; texto puro ou adulterado fica ilegível (não confundir com ausência).
       const r = readSealedValue(v, s => open(name, s));
-      if (r.ok) next[name] = r.value; else unreadable.add(name);
+      if (r.ok) next[name] = r.value; else health.unreadable(name);
     }
     snapshot = next;
-    storageReadFailed = false;
+    health.succeeded();
+    ok = true;
   } catch {
     snapshot = {};
   }
   loaded = true;
+  return ok;
 });
 
 export const isPersistLoaded = () => loaded;
 /** Uma falha geral ou no campo impede assumir que ele estava ausente. */
-export const persistedReadFailed = (key: string) => storageReadFailed || unreadable.has(key);
+export const persistedReadFailed = (key: string) => health.failed(key);
 
 function schedule(key: string, value: unknown) {
   clearTimeout(pending.get(key));
@@ -124,8 +126,7 @@ export async function persistNow(key: string, value: unknown): Promise<void> {
 
 /** Apaga todos os dados do Piu neste aparelho e cancela gravações pendentes. */
 export async function clearPersisted(): Promise<void> {
-  storageReadFailed = true;
-  unreadable.clear();
+  health.begin();
   pending.forEach(clearTimeout);
   pending.clear();
   // A memória é limpa na hora e de novo ao final; no intervalo, gravações são recusadas.
@@ -138,6 +139,8 @@ export async function clearPersisted(): Promise<void> {
     await clearDataKey();
     dataKey = await loadOrCreateDataKey().catch(() => null);
   });
+  // Apagado de propósito: a ausência agora é verdade (sem isso a carteira ficaria travada até o processo morrer).
+  health.wiped();
 }
 
 /**

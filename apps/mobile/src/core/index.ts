@@ -7,7 +7,7 @@ import { loadPersisted, persistNow, readPersisted } from '../lib/persist';
 import { newNodeNameSecret } from '../lib/nodeName';
 import { preloadedNodeKeyFor, preloadKeys } from '../state/keys';
 import { checkTransportPermissions, getTransport, SERVICE_ID } from '../transport';
-import { createCore, persistedConfig, type Core, type PersistedBoot } from './node';
+import { createCore, ensureNameSecret, persistedConfig, type Core, type PersistedBoot } from './node';
 
 let core: Core | null = null;
 
@@ -16,13 +16,20 @@ async function load(): Promise<PersistedBoot> {
   const t = getTransport();
   const wifi = t.lan?.available ? await t.lan.networkInfo().catch(() => null) : null;
   const r = persistedConfig({ read: readPersisted, grants: await checkTransportPermissions(), nodeKeyFor: preloadedNodeKeyFor(), wifi, lanAvailable: !!t.lan?.available });
-  // Sem segredo salvo, cria e grava um: a tela (TransportProvider) passa a ler o mesmo, e o nome não muda ao abrir.
-  if (!r.config.nameSecret && readPersisted<boolean>('onboarded') === true) {
-    const s = newNodeNameSecret();
-    await persistNow('transport.nameSecret', s).then(() => { r.config.nameSecret = s; }, () => {});
-  }
+  // Sem segredo salvo, cria e grava um (o mesmo caminho da tela): o nome não muda ao abrir.
+  if (!r.config.nameSecret && readPersisted<boolean>('onboarded') === true) r.config.nameSecret = await nodeNameSecret();
   return r;
 }
+
+/**
+ * Único dono de `transport.nameSecret` (núcleo sem tela e TransportProvider, que chama ao terminar
+ * o onboarding e a cada montagem): lê o salvo ou cria e grava um.
+ */
+export const nodeNameSecret = (): Promise<string> => ensureNameSecret({
+  read: () => readPersisted('transport.nameSecret'),
+  write: s => persistNow('transport.nameSecret', s),
+  create: newNodeNameSecret,
+});
 
 export function getCore(): Core {
   return (core ??= createCore({ transport: getTransport(), serviceId: SERVICE_ID, load }));

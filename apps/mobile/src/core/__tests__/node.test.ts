@@ -7,8 +7,9 @@ import { after, mock, test } from 'node:test';
 import { dailyNodeName } from '../../lib/nodeName';
 import type { KeyPair } from '../../protocol/keys';
 import type { LanController } from '../../transport/lan/controller';
+import type { WifiInfo } from '../../transport/lan/types';
 import type { Transport, TransportEvent } from '../../transport/types';
-import { createCore, persistedConfig, type CoreDeps } from '../node';
+import { createCore, ensureNameSecret, persistedConfig, screenLan, type CoreDeps } from '../node';
 
 const SECRET = 'ab'.repeat(32);
 const DAY = 20_000;
@@ -207,3 +208,66 @@ test('configuração inicial do persistido: mesmos padrões da aba Rede', () => 
   assert.equal(persistedConfig(base).config.nameSecret, null);
 });
 
+
+test('remontar a tela com o Wi-Fi ainda não lido não derruba a LAN que o núcleo mantinha', async () => {
+  const { c, f } = core();
+  const wifi: WifiInfo = { connected: true, internet: true, ip: '10.0.0.2', prefix: 24, gateway: '10.0.0.1' };
+  c.configure({ nameSecret: SECRET, p2p: false, lan: { nodeKeyFor: key, wifiIp: '10.0.0.2', relay: true } });
+  await tick();
+  f.calls.length = 0;
+  // A tela monta de novo: `networkInfo()` ainda não respondeu (wifi null, a política diz "noWifi").
+  const mount = (w: WifiInfo | null) => screenLan({ hasLan: true, want: !!w?.connected, wifi: w, nodeKeyFor: key, relay: true });
+  assert.equal(mount(null), undefined, 'sem opinião enquanto o Wi-Fi não foi lido');
+  const early = mount(null);
+  if (early !== undefined) c.configure({ lan: early });
+  await tick();
+  // O Wi-Fi chega: mesma rede, nada religa.
+  const late = mount(wifi);
+  if (late !== undefined) c.configure({ lan: late });
+  await tick();
+  assert.deepEqual(f.calls, []);
+  // Lido e sem Wi-Fi de verdade: aí sim desliga; sem módulo de LAN, nunca liga.
+  assert.equal(mount({ ...wifi, connected: false, ip: null }), null);
+  assert.equal(screenLan({ hasLan: false, want: false, wifi: null, nodeKeyFor: key, relay: true }), null);
+});
+
+test('start que falha é tentado de novo na próxima configure (P2P e LAN)', async () => {
+  const f = fakes();
+  let fail = true;
+  const t = f.transport as { start: unknown; lan: { start: unknown } };
+  t.start = async (name: string) => { if (fail) throw new Error('Bluetooth desligado'); f.calls.push(`start ${name}`); };
+  t.lan.start = async (o: { name: string }) => { if (fail) throw new Error('ERR_START'); f.calls.push(`lan.start ${o.name}`); };
+  const { c } = core(f);
+  const cfg = { nameSecret: SECRET, p2p: true, lan: { nodeKeyFor: key, wifiIp: '10.0.0.2', relay: true } };
+  c.configure(cfg);
+  await tick(); await tick();
+  assert.equal(c.status().state, 'unavailable');
+  fail = false;
+  c.configure(cfg); // reabrir o app: mesmos ajustes
+  await tick(); await tick();
+  const name = dailyNodeName(SECRET, DAY);
+  assert.deepEqual(f.calls.sort(), [`lan.start ${name}`, `start ${name}`].sort());
+});
+
+test('segredo do nome: um dono só, criado e gravado uma vez, lido por quem chegar depois', async () => {
+  const store: Record<string, unknown> = {};
+  let made = 0, writes = 0;
+  const io = {
+    read: () => store.s,
+    // Como persistNow: a memória muda na hora, o disco depois.
+    write: (v: string) => { store.s = v; writes++; return tick().then(() => {}); },
+    create: () => `${(++made).toString(16).padStart(2, '0')}`.repeat(32),
+  };
+  const [a, b] = await Promise.all([ensureNameSecret(io), ensureNameSecret(io)]);
+  assert.equal(a, b);
+  assert.equal(made, 1);
+  assert.equal(writes, 1);
+  assert.equal(await ensureNameSecret(io), a, 'reabrir lê o salvo');
+  store.s = 'x';
+  const c = await ensureNameSecret(io);
+  assert.notEqual(c, 'x');
+  assert.equal(store.s, c, 'salvo inválido é trocado e gravado');
+  // Sem gravar (apagando dados), segue com o novo só em memória.
+  const failing = { ...io, read: () => undefined, write: () => Promise.reject(new Error('Dados sendo apagados.')) };
+  assert.match(await ensureNameSecret(failing), /^[0-9a-f]{64}$/);
+});

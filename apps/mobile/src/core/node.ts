@@ -114,7 +114,11 @@ export function createCore(deps: CoreDeps): Core {
       if (wantP2p) {
         void stops.idle().then(() => {
           if (gen !== p2pGen) return;
-          return transport.start(wantP2p, deps.serviceId).catch((err: unknown) => { set({ ...st, state: 'unavailable', reason: String((err as Error)?.message ?? err) }); });
+          return transport.start(wantP2p, deps.serviceId).catch((err: unknown) => {
+            // Não ficou ligado: a próxima `configure` (ex.: reabrir o app) tenta de novo.
+            if (gen === p2pGen) p2pOn = null;
+            set({ ...st, state: 'unavailable', reason: String((err as Error)?.message ?? err) });
+          });
         });
       }
     }
@@ -128,7 +132,8 @@ export function createCore(deps: CoreDeps): Core {
       lanOn = wantLan;
       if (l && lan) {
         // Chave técnica do nó do dia (gira à meia-noite UTC, como a do mensageiro): conferida de hora em hora.
-        void lanStops.idle().then(() => { if (gen === lanGen) return lan.start({ node: l.nodeKeyFor(dayOf(now())), name, relay: l.relay }); }).catch(() => {});
+        void lanStops.idle().then(() => { if (gen === lanGen) return lan.start({ node: l.nodeKeyFor(dayOf(now())), name, relay: l.relay }); })
+          .catch(() => { if (gen === lanGen) lanOn = null; }); // falhou ao ligar: a próxima `configure` tenta de novo
         hourly = setInterval(() => lan.setNode(l.nodeKeyFor(dayOf(now()))), 3_600_000);
       }
     }
@@ -173,6 +178,28 @@ export function createCore(deps: CoreDeps): Core {
       await Promise.all([stops.idle(), lanStops.idle()]);
     },
   };
+}
+
+/**
+ * Rede local pedida pela tela (TransportProvider). `undefined` = sem opinião: o Wi-Fi ainda não foi
+ * lido ao montar, e mandar `null` derrubaria a LAN que o núcleo mantinha ligada sem a tela.
+ */
+export function screenLan(i: { hasLan: boolean; want: boolean; wifi: WifiInfo | null; nodeKeyFor: ((day: number) => KeyPair) | null; relay: boolean }): CoreConfig['lan'] | undefined {
+  if (i.hasLan && i.wifi === null) return undefined;
+  return i.hasLan && i.want && i.nodeKeyFor ? { nodeKeyFor: i.nodeKeyFor, wifiIp: i.wifi?.ip ?? null, relay: i.relay } : null;
+}
+
+/**
+ * Segredo do nome do nó (`transport.nameSecret`), com um dono só (core/index.ts): lê o salvo ou cria
+ * e grava um. `write` muda a memória na hora (persistNow), então quem chega junto lê o mesmo. Sem
+ * conseguir gravar (ex.: "Apagar dados locais" em andamento), segue com o novo só em memória.
+ */
+export async function ensureNameSecret(io: { read: () => unknown; write: (s: string) => Promise<void>; create: () => string }): Promise<string> {
+  const saved = io.read();
+  if (validSecret(saved)) return saved;
+  const s = io.create();
+  await io.write(s).catch(() => {});
+  return s;
 }
 
 /** Padrões de state/network.tsx (`net.tx`, `net.lan`, `net.relay`, `net.loraMode`). */

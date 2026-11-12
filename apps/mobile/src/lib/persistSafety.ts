@@ -56,8 +56,26 @@ export function readSealedValue(stored: string, open: (stored: string) => unknow
 /**
  * Uma execução por processo: a segunda chamada devolve a mesma promessa. Reabrir o app (Activity nova
  * sobre o mesmo runtime JS) não relê o disco por cima do que já está em memória.
+ * `fn` que resolve `false` (leitura falhou) é tentada de novo na próxima chamada.
  */
-export function oncePerProcess(fn: () => Promise<void>): () => Promise<void> {
+export function oncePerProcess(fn: () => Promise<boolean | void>): () => Promise<void> {
   let run: Promise<void> | null = null;
-  return () => (run ??= fn());
+  return () => (run ??= fn().then(ok => { if (ok === false) run = null; }));
+}
+
+/**
+ * Saúde da leitura do armazenamento: falha geral ou campo ilegível impedem assumir ausência
+ * (ex.: a carteira não envia sem saber se havia uma transferência em andamento).
+ * `wiped`: o "Apagar dados locais" terminou; o vazio agora é de propósito, não falha de leitura.
+ */
+export function createReadHealth() {
+  let general = true;
+  const bad = new Set<string>();
+  return {
+    failed: (key: string) => general || bad.has(key),
+    begin() { general = true; bad.clear(); },
+    unreadable(key: string) { bad.add(key); },
+    succeeded() { general = false; },
+    wiped() { general = false; bad.clear(); },
+  };
 }

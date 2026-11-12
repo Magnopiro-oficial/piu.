@@ -1,8 +1,7 @@
 import { router } from 'expo-router';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
-import { usePersisted } from '../lib/persist';
-import { getCore } from '../core';
-import { newNodeNameSecret } from '../lib/nodeName';
+import { getCore, nodeNameSecret } from '../core';
+import { screenLan } from '../core/node';
 import { loraMedia } from '../lib/piuLora';
 import type { MediaGrants } from '../transport/grants';
 import { askTransportPermissionsAgain, DISCOVERY_INTERVAL_SEC, requestTransportPermissions, type Peer, type TransportKind, type TransportState } from '../transport';
@@ -59,9 +58,6 @@ export interface LanCtx extends LanStatus {
 
 const LanContext = createContext<LanCtx | null>(null);
 
-/** Segredo salvo que não serve (formato errado) é trocado por um novo. */
-const validNameSecret = (s: string) => (typeof s === 'string' && /^[0-9a-f]{64}$/.test(s) ? s : newNodeNameSecret());
-
 /**
  * Ajustes do transporte P2P e da rede local para o núcleo (core/node.ts), que liga depois do onboarding,
  * enquanto Bluetooth LE ou Wi-Fi Direct estiverem ativos na aba Rede, e guarda os vizinhos.
@@ -81,8 +77,13 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   useEffect(() => { const release = core.claimRuntime('TransportProvider'); owns.current = !!release; return () => { owns.current = false; release?.(); }; }, [core]);
   // Nome anunciado em claro (BLE/Nearby): não é mais fixo. Sai de um segredo local e do dia UTC
   // (lib/nodeName.ts), como a chave do nó; o segredo fica só no aparelho. Virou o dia, o núcleo religa.
-  const [nameSecret] = usePersisted('transport.nameSecret', newNodeNameSecret, validNameSecret);
-  useEffect(() => { if (owns.current) core.configure({ nameSecret }); }, [core, nameSecret]);
+  // O dono do segredo é o núcleo (core/index.ts): depois do onboarding, a tela lê o salvo (ou o cria) por ele.
+  useEffect(() => {
+    if (!owns.current || !onboarded) return;
+    let alive = true;
+    void nodeNameSecret().then(nameSecret => { if (alive && owns.current) core.configure({ nameSecret }); });
+    return () => { alive = false; };
+  }, [core, onboarded]);
   // Estado, motivo, vizinhos e nome do dia vêm do núcleo (sobrevivem ao desmonte da tela).
   const { state, reason, peers, nodeName } = useSyncExternalStore(core.subscribe, core.status);
   const [permission, setPermission] = useState<TransportCtx['permission']>('unknown');
@@ -126,11 +127,14 @@ export function TransportProvider({ children }: { children: ReactNode }) {
   const relayNow = relay && !relayPaused;
   const relayRef = useRef(relayNow); relayRef.current = relayNow;
   const wifiIp = wifi?.ip ?? null;
+  const wifiKnown = wifi !== null;
   // Outro Wi-Fi (IP novo) religa: os soquetes ficam presos à rede em que foram abertos (core/node.ts).
+  // Ao montar, até o primeiro `networkInfo()` a tela não opina (não derruba a LAN que o núcleo mantinha).
   useEffect(() => {
     if (!owns.current) return;
-    core.configure({ lan: lan && lanWant.on && nodeKeyFor ? { nodeKeyFor, wifiIp, relay: relayRef.current } : null });
-  }, [core, lan, lanWant.on, nodeKeyFor, wifiIp]);
+    const lanCfg = screenLan({ hasLan: !!lan, want: lanWant.on, wifi, nodeKeyFor, relay: relayRef.current });
+    if (lanCfg !== undefined) core.configure({ lan: lanCfg });
+  }, [core, lan, lanWant.on, nodeKeyFor, wifiIp, wifiKnown]); // eslint-disable-line react-hooks/exhaustive-deps
   // Modo nó pausado (bateria/tomada): anúncio e handshake dizem "não retransmito".
   useEffect(() => { lan?.setRelay(relayNow); }, [lan, relayNow]);
   const lanLow = lanLowPower({ level, charging, limitPct: battery });
