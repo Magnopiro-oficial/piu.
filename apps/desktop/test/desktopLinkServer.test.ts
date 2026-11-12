@@ -29,7 +29,7 @@ async function fakePhone(uri: string, sk?: Uint8Array) {
   // Autoassinado: a confiança vem do pino do QR, não de uma CA. Com `rejectUnauthorized: false` o Node não
   // bloqueia por `checkServerIdentity`, então o pino é conferido no socket TLS antes de usar a conexão.
   const opts: ClientOptions = { rejectUnauthorized: false };
-  const ws = new WebSocket(wsUrl(offer), opts);
+  const ws = new WebSocket(wsUrl({ ...offer, host: '127.0.0.1' }), opts);
   await new Promise<void>((res, rej) => {
     ws.once('upgrade', r => {
       const raw = (r.socket as import('node:tls').TLSSocket).getPeerCertificate().raw;
@@ -48,11 +48,11 @@ async function fakePhone(uri: string, sk?: Uint8Array) {
 
 test('vínculo (wss com pino): QR → hello → 3 palavras → confirmação (ready) → snapshot → cmd send/ack → event → ping/pong → queda', async t => {
   const dir = tmp();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', name: 'iMac de teste', tlsDir: dir });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', name: 'iMac de teste', tlsDir: dir });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start();
   if (s0.state !== 'waiting') throw new Error('estado');
-  assert.match(s0.uri, /^piu-link:1\?h=127\.0\.0\.1:\d+&k=[A-Za-z0-9_-]{43}&s=[A-Za-z0-9_-]{22}&c=[A-Za-z0-9_-]{43}$/);
+  assert.match(s0.uri, /^piu-link:1\?h=192\.168\.0\.10:\d+&k=[A-Za-z0-9_-]{43}&s=[A-Za-z0-9_-]{22}&c=[A-Za-z0-9_-]{43}$/);
   assert.equal(b64url(parseLinkQr(s0.uri).cert), srv.certPin);
 
   const phone = await fakePhone(s0.uri);
@@ -115,7 +115,7 @@ test('vínculo: vetores do celular contra o servidor real (chaves e quadros dos 
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   assert.ok(s0.uri.includes(`&s=${VECTORS.s_b64url}`));
-  const phone = await fakePhone(s0.uri.replace('192.168.0.10', '127.0.0.1'), hex(VECTORS.sk_celular));
+  const phone = await fakePhone(s0.uri, hex(VECTORS.sk_celular));
   assert.equal(toHex(phone.keys.send), VECTORS.k_c2d);
   assert.equal(toHex(phone.keys.recv), VECTORS.k_d2c);
   await until(() => srv.state.state === 'confirm', 'confirm');
@@ -129,7 +129,7 @@ test('vínculo: vetores do celular contra o servidor real (chaves e quadros dos 
 
 test('vínculo: certificado diferente do pino é recusado pelo celular; sessão errada fecha com 4001, versão errada com 4002; quadro em claro derruba', async t => {
   const dir = tmp();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   await assert.rejects(fakePhone(s0.uri.replace(/&c=.*/, '&c=' + b64url(new Uint8Array(32)))), /certificado/);
@@ -154,7 +154,7 @@ test('vínculo: certificado diferente do pino é recusado pelo celular; sessão 
 
 test('vínculo: só envia para conversas existentes e coletivas com permissão do celular', async t => {
   const dir = tmp();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s = await srv.start(); if (s.state !== 'waiting') throw new Error('estado');
   const phone = await fakePhone(s.uri);
@@ -186,7 +186,7 @@ const waitingUri = (srv: DesktopLinkServer) => { const st = srv.state; if (st.st
 
 test('vínculo (M-04): escolher a palavra errada cancela, avisa o celular (bye) e mostra um QR novo; a certa vincula', async t => {
   const dir = tmp();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   const phone = await fakePhone(s0.uri);
@@ -208,39 +208,44 @@ test('vínculo (M-04): escolher a palavra errada cancela, avisa o celular (bye) 
   void p2;
 });
 
-test('vínculo (M-03): conexão muda (sem hello) é derrubada no prazo, libera o slot e o QR volta a renovar; o celular de verdade conecta depois', async t => {
+test('vínculo (M-03): conexão muda (sem hello) é derrubada no prazo e libera o slot sem trocar o QR; o celular de verdade conecta depois', async t => {
   const dir = tmp();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir, helloTimeoutMs: 200 });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir, helloTimeoutMs: 200 });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   const mute = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
   const closed = new Promise<number>(res => mute.once('close', code => res(code)));
   await new Promise(res => mute.once('open', res));
-  // Enquanto o mudo segura o slot, outro recebe "ocupado".
+  const mute2 = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
+  const closed2 = new Promise<number>(res => mute2.once('close', code => res(code)));
+  await new Promise(res => mute2.once('open', res));
+  // Limite por endereço: o terceiro pendurado do mesmo IP recebe "ocupado".
   const busy = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
   assert.equal(await new Promise<number>(res => busy.once('close', code => res(code))), 1013);
   assert.equal(await closed, 1008, 'tempo esgotado esperando o hello');
-  await until(() => srv.state.state === 'waiting' && waitingUri(srv) !== s0.uri, 'QR novo');
-  const phone = await fakePhone(waitingUri(srv));
+  assert.equal(await closed2, 1008);
+  assert.equal(waitingUri(srv), s0.uri, 'o QR que a pessoa leu continua valendo');
+  const phone = await fakePhone(s0.uri);
   await until(() => srv.state.state === 'confirm', 'confirm');
   assert.equal(srv.confirm(phone.words[2]!).state, 'linked');
 });
 
-test('vínculo (M-03): hello inválido não vai para "dropped" e troca a oferta; QR vencido ou já usado é recusado (1013)', async t => {
+test('vínculo (M-03): hello inválido não vai para "dropped" nem troca a oferta; QR vencido ou já usado é recusado (1013)', async t => {
   const dir = tmp();
   let now = Date.now();
-  const srv = new DesktopLinkServer({ host: '127.0.0.1', listen: '127.0.0.1', tlsDir: dir, now: () => now });
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir, now: () => now });
   t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   const ws = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
   const c1 = new Promise<number>(res => ws.once('close', code => res(code)));
   ws.once('open', () => ws.send('{"t":"hello","v":1,"s":"lixo","pk":"lixo"}'));
   await c1;
-  await until(() => srv.state.state === 'waiting' && waitingUri(srv) !== s0.uri, 'oferta trocada');
-  // O QR antigo (fotografado antes) não serve mais: sessão diferente → 4001.
-  const old = await fakePhone(s0.uri);
-  await until(() => !!old.closed, 'antigo recusado');
-  assert.equal(old.closed!.code, 4001);
+  assert.equal(srv.state.state, 'waiting');
+  // Quem não provou conhecer o QR não o invalida: sessão errada → 4001 e o QR segue o mesmo.
+  const wrong = await fakePhone(s0.uri.replace(/&s=[^&]+/, '&s=AAAAAAAAAAAAAAAAAAAAAA'));
+  await until(() => !!wrong.closed, 'sessão errada recusada');
+  assert.equal(wrong.closed!.code, 4001);
+  assert.equal(waitingUri(srv), s0.uri, 'oferta mantida');
   // QR vencido (relógio passou de 30 s sem renovar): recusado na conexão.
   now += 31_000;
   const late = await fakePhone(waitingUri(srv));
@@ -264,4 +269,75 @@ test('vínculo (M-03): sem `listen`, escuta só no endereço anunciado no QR (n�
   const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
   assert.equal(srv.boundHost, '127.0.0.1');
   assert.equal(s0.host, '127.0.0.1');
+});
+
+test('vínculo (privacidade): desconectar pelo computador apaga o espelho; o próximo celular não vê nada do anterior antes do snapshot dele', async t => {
+  const dir = tmp();
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir });
+  t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
+  const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
+  const a = await fakePhone(s0.uri);
+  await until(() => srv.state.state === 'confirm', 'confirm A');
+  srv.confirm(a.words[2]!);
+  a.send({ t: 'snapshot', contacts: [{ id: 'piu:abc', chatId: 'c1', name: 'Marina', verified: true }],
+    chats: [{ id: 'c1', ident: 'public', kind: 'direct', name: 'Marina', initials: 'MA', time: '14:32', unread: 0, peer: 'piu:abc' }],
+    messages: { c1: [{ id: 'm1', from: 'them', text: 'segredo de A', time: '14:30' }] },
+    wallet: '6iUb9rXg2AiDh1Sq6uRzpqjSvgZ6NPayojzGM6zh33vZ4Gse' });
+  await until(() => srv.state.state === 'linked' && srv.state.synced, 'snapshot A');
+  assert.equal(srv.listConversations().length, 1);
+  await srv.stop();
+  assert.equal(srv.listConversations().length, 0, 'desconectou: sem conversas de A na memória');
+  assert.deepEqual(srv.getMessages('c1'), []);
+  assert.equal(srv.walletAddress, null, 'sem carteira de A');
+  assert.equal(srv.meInfo(), null);
+  const s1 = await srv.start(); if (s1.state !== 'waiting') throw new Error('estado');
+  const b = await fakePhone(s1.uri);
+  await until(() => srv.state.state === 'confirm', 'confirm B');
+  assert.equal(srv.confirm(b.words[2]!).state, 'linked');
+  assert.equal(srv.listConversations().length, 0, 'B vinculado sem snapshot: nada de A');
+});
+
+test('certificado do vínculo: sem nome do computador nem IPs; novo a cada abertura do servidor; nada identificador no HTTP simples', async t => {
+  const dir = tmp();
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir });
+  t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
+  await srv.start();
+  const pin1 = srv.certPin;
+  const { X509Certificate } = await import('node:crypto');
+  const { request } = await import('node:https');
+  const cert = await new Promise<import('node:crypto').X509Certificate>((res, rej) => {
+    const r = request({ host: '127.0.0.1', port: srv.port, rejectUnauthorized: false }, resp => {
+      const raw = (resp.socket as import('node:tls').TLSSocket).getPeerCertificate().raw;
+      let body = ''; resp.on('data', d => { body += d; }); resp.on('end', () => { assert.ok(!/piu/i.test(body), 'resposta sem texto identificador'); res(new X509Certificate(raw)); });
+    });
+    r.on('error', rej); r.end();
+  });
+  const san = cert.subjectAltName ?? '';
+  const { hostname } = await import('node:os');
+  assert.ok(!san.toLowerCase().includes(hostname().toLowerCase()), 'sem hostname no SAN');
+  assert.ok(!/IP Address/i.test(san), 'sem IPs no SAN');
+  await srv.stop();
+  await srv.start();
+  assert.notEqual(srv.certPin, pin1, 'certificado novo a cada abertura (não identifica o computador entre redes)');
+});
+
+test('vínculo (DoS na LAN): conexões mudas não trocam o QR nem impedem o celular de verdade; limite por endereço', async t => {
+  const dir = tmp();
+  const srv = new DesktopLinkServer({ host: '192.168.0.10', listen: '127.0.0.1', tlsDir: dir, helloTimeoutMs: 300 });
+  t.after(async () => { await srv.stop(); rmSync(dir, { recursive: true, force: true }); });
+  const s0 = await srv.start(); if (s0.state !== 'waiting') throw new Error('estado');
+  // Hello inválido de quem não conhece o QR: libera, mas o QR que a pessoa leu continua valendo.
+  const junk = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
+  const cj = new Promise<number>(res => junk.once('close', code => res(code)));
+  junk.once('open', () => junk.send('{"t":"hello","v":1,"s":"lixo","pk":"lixo"}'));
+  await cj;
+  assert.equal(waitingUri(srv), s0.uri, 'hello inválido não troca o QR');
+  // Um mudo segurando conexão não bloqueia o celular de verdade, que conecta em paralelo.
+  const mute = new WebSocket(`wss://127.0.0.1:${srv.port}`, { rejectUnauthorized: false });
+  const cm = new Promise<number>(res => mute.once('close', code => res(code)));
+  await new Promise(res => mute.once('open', res));
+  const phone = await fakePhone(s0.uri);
+  await until(() => srv.state.state === 'confirm', 'confirm com o mudo pendurado');
+  await cm; // o mudo é dispensado quando o celular de verdade vence
+  assert.equal(srv.confirm(phone.words[2]!).state, 'linked');
 });

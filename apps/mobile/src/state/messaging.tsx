@@ -2,8 +2,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { isLora } from '../transport/select';
 import type { Chat, TempMode } from '../data/types';
 import { cleanChats, cleanVerified } from '../lib/demoCleanup';
-import { forgetPersisted, persistNow, readPersisted, usePersisted } from '../lib/persist';
-import { accountBalance, checkSettlement, finalizedHead, LunesOffline, LunesRpc } from '../lib/lunesRpc';
+import { forgetPersisted, persistEpoch, persistNow, readPersisted, usePersisted } from '../lib/persist';
+import { accountBalance, finalizedHead, LunesOffline, LunesRpc } from '../lib/lunesRpc';
+import { readBlockExecution } from '../lib/walletTransfer';
 import { carryBridge } from '../lib/carryBridge';
 import { bundlePoster, GATEWAY_PROBE_MS, GATEWAY_TICK_MS, VALIDATOR_INBOX_URL } from '../lib/carryConfig';
 import { CarryGateway } from '../lib/carryGateway';
@@ -11,12 +12,13 @@ import { sealEvidence, sealRegistry } from '../lib/evidenceCarry';
 import type { PhoneRegistryFile } from '../lib/phoneNodeCore';
 import { bundleRefHex, CarryKind } from '../protocol/carry';
 import { VALIDATOR_PROOF_PK } from '../protocol/proof';
-import { judgementText, judgePayment, newPayRequest, type PaidNotice, type PaymentJudgement, type PaymentRequest, payRequestSummary } from '../lib/paymentRequest';
+import { checkPaymentTx, judgementText, judgePayment, newPayRequest, type PaidNotice, type PaymentJudgement, type PaymentRequest, type PaymentTxCheck, payRequestSummary } from '../lib/paymentRequest';
 import { addRoute, cleanBook, dropChatRoutes, lastRoute, makeRoute, patchRoute, pruneRoutes, type RouteBook, type RouteRec, routeOf, trimBook } from '../lib/routeCore';
 import { placeFromText } from '../lib/locationCore';
 import { Priority } from '../protocol/envelope';
 import type { Medium } from '../transport/types';
 import { initialsOf, nowHM } from '../lib/text';
+import { STORED, nearAcceptedText } from '../lib/storedText';
 import { fmtLunes } from '../data/wallet';
 import { type ContactCard, decodeCard, encodeCard } from '../messaging/card';
 import { router } from 'expo-router';
@@ -47,6 +49,7 @@ import { createDeviceChange, decodeNotice, type DeviceChangeOutbox, encodeDevice
 import { toHex } from '../protocol/bytes';
 import { toBase64 } from '../transport/base64';
 import { PREVIEW_MAX_BYTES } from '../lib/pickFile';
+import { cleanConfirmed, withConfirmed, type ConfirmedAddresses } from '../lib/walletSend';
 import type { ProfilePhoto } from '../lib/avatar';
 import type { IncomingFile, RouteInfo } from '../messaging/messenger';
 import { attachVirtualPeer } from '../transport/simulated';
@@ -73,6 +76,20 @@ export const deviceChangeText = (who: string, reason: 'phrase' | 'file') =>
 const ROUTES_KEY = 'routes';
 /** Arquivos recebidos nesta execução do app (o conteúdo não vai para o armazenamento). */
 export const receivedFiles = new Map<string, IncomingFile>();
+/** Teto do que fica na memória: passando, sai o arquivo mais antigo (abrir fica indisponível nele). */
+const RECEIVED_MAX_BYTES = 128 * 1024 * 1024;
+const RECEIVED_MAX_FILES = 64;
+function keepReceived(key: string, f: IncomingFile) {
+  receivedFiles.delete(key);
+  receivedFiles.set(key, f);
+  let total = 0;
+  for (const x of receivedFiles.values()) total += x.data.length;
+  while (receivedFiles.size > 1 && (receivedFiles.size > RECEIVED_MAX_FILES || total > RECEIVED_MAX_BYTES)) {
+    const [k, old] = receivedFiles.entries().next().value as [string, IncomingFile];
+    receivedFiles.delete(k);
+    total -= old.data.length;
+  }
+}
 const SAVE_DELAY = 300;
 const now = () => Math.floor(Date.now() / 1000);
 
@@ -98,6 +115,10 @@ interface Messaging {
   contactsFor: (via: IdentityKind) => { id: string; name: string }[];
   /** Contatos públicos que compartilharam o endereço Lunes (destinatários da Carteira). */
   walletContacts: () => { chatId: string; id: string; name: string; address: string }[];
+  /** Carteira: endereço já confirmado de cada conversa (o de um envio concluído), salvo no aparelho. */
+  confirmedWallets: ConfirmedAddresses;
+  /** Envio concluído para o contato da conversa: esse endereço passa a ser o confirmado. */
+  confirmWallet: (chatId: string, address: string) => void;
   /** Estado real de um grupo/canal/comunidade da conversa (ou null). */
   groupOf: (chatId: string) => GroupState | null;
   /** Meu id na identidade usada pelo grupo (para saber se sou admin). */
@@ -271,6 +292,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
   // Endereço Lunes que os contatos públicos recebem (`wa`); `null` com o ajuste desligado.
   const sharedWallet = priv.shareWallet !== false ? wallet.lunesAddress : null;
   const [lastShared, setLastShared] = usePersisted<string | null>('wallet.shared', null);
+  // Endereço já confirmado de cada conversa (usado num envio concluído): a folha Enviar avisa quando o contato aparece com outro.
+  const [confirmedWallets, setConfirmedWallets] = usePersisted<ConfirmedAddresses>('wallet.confirmed', {}, cleanConfirmed);
   const paysRef = useRef(pays); paysRef.current = pays;
   const [payEpoch, setPayEpoch] = useState(0);
   const putPay = useCallback((rec: PayRecord) => {
@@ -421,7 +444,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
             }
             const cid = chatIdFor(contactId);
             if (!c || !chatsRef.current.some(x => x.id === cid)) return;
-            handlers.current.receive(cid, { id: 'sys-rv-' + n.sig.slice(0, 12), from: 'sys', time: nowHM(), text: 'Este contato revogou um aparelho perdido ou comprometido. Confira o código de segurança pessoalmente antes de confiar em mensagens novas.' });
+            // Uma nota por contato a cada 10 min (pelo meu relógio): avisos em sequência não enchem a conversa.
+            const rvId = `sys-rv-${contactId.slice(-12)}-${Math.floor(now() / 600)}`;
+            if (chatsRef.current.find(x => x.id === cid)?.msgs?.some(x => x.id === rvId)) return;
+            handlers.current.receive(cid, { id: rvId, from: 'sys', time: nowHM(), text: STORED.sysRevoked });
           } catch { /* aviso inválido: ignora */ }
         },
         // Foto do perfil público de um contato (já conferida: JPEG pequeno, só de contato público).
@@ -450,7 +476,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         nearAccepted: (c, fee) => {
           walletRef.current.settleInvite(c.id);
           const cid = chatIdFor(c.id);
-          if (!chatsRef.current.some(x => x.id === cid)) handlers.current.addChat(nearChat(c, privRef.current.temp, `${c.name || 'A pessoa'} aceitou seu convite de Por perto. A conversa é cifrada de ponta a ponta.`));
+          if (!chatsRef.current.some(x => x.id === cid)) handlers.current.addChat(nearChat(c, privRef.current.temp, nearAcceptedText(c.name)));
           handlers.current.showToast({ kind: 'nearby', href: `/chat/${cid}`, icon: 'waving_hand', title: `${c.name || 'Alguém'} aceitou seu convite`, body: `A conversa abriu. ${fmtLunes(fee)} LUNES saem da reserva (registro local, sem Mainnet).`, action: 'Abrir',
             hidden: { title: 'Convite aceito', body: 'Abra Por perto para ver.' }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
         },
@@ -468,7 +494,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           const cid = chatIdForGroup(g.id);
           const exists = chatsRef.current.some(c => c.id === cid);
           if (change === 'removed') {
-            if (exists) handlers.current.receive(cid, { id: 'sys-rm-' + Date.now(), from: 'sys', time: nowHM(), text: g.kind === 'channel' ? 'Você não está mais neste canal.' : 'Você foi removido. A chave foi trocada: você não lê nada novo.' });
+            if (exists) handlers.current.receive(cid, { id: 'sys-rm-' + Date.now(), from: 'sys', time: nowHM(), text: g.kind === 'channel' ? STORED.sysLeftChannel : STORED.sysRemoved });
             return;
           }
           const myId = identities[g.via].id;
@@ -510,10 +536,12 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
           handlers.current.receive(cid, { id: 'in-' + f.msgId, from: 'them', text: '', time: nowHM(), ...(expiresAt ? { expiresAt } : {}),
             file: { name: f.name, mb: Math.max(0.1, Math.round((f.size / 1048576) * 10) / 10), blocks: f.blocks, icon: f.mime.startsWith('image/') ? 'image' : 'description', done: 0, state: 'sending', real: true, incoming: true, ...(f.held ? { held: true } : {}) } });
         },
-        fileReceived: (contactId, f) => {
-          const cid = msgToChat.current.get('in-' + f.msgId) ?? chatIdFor(contactId);
+        fileReceived: (_contactId, f) => {
+          // Só guarda o que tem mensagem na conversa (a oferta sem conversa não aparece: nada a abrir).
+          const cid = msgToChat.current.get('in-' + f.msgId);
+          if (!cid || !chatsRef.current.some(c => c.id === cid)) return;
           const preview = f.mime.startsWith('image/') && f.data.length <= PREVIEW_MAX_BYTES ? `data:${f.mime};base64,${toBase64(f.data)}` : undefined;
-          receivedFiles.set('in-' + f.msgId, f);
+          keepReceived('in-' + f.msgId, f);
           handlers.current.patchFile(cid, 'in-' + f.msgId, { state: 'verified', done: f.blocks, preview });
         },
         // Confirmação de leitura do contato: só mensagens minhas daquela conversa.
@@ -580,8 +608,10 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
     }
     mRef.current = m;
     setMessenger(m);
+    const dataEpoch = persistEpoch();
     carryBridge.setCarrier((item, ref) => m.carry(item, ref));
-    return () => { carryBridge.setCarrier(null); clearTimeout(saveTimer.current); void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
+    // Desmonte causado por "Apagar dados locais" (a geração dos dados mudou): não regrava o estado apagado.
+    return () => { carryBridge.setCarrier(null); clearTimeout(saveTimer.current); if (persistEpoch() === dataEpoch) void persistNow(STATE_KEY, m.export()).catch(() => {}); mRef.current = null; setMessenger(null); };
   }, [identities, node, onboarded, rotationEpoch]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Avisos de aparelho revogado: envia os pendentes aos contatos (pública e anônima, cada um pela sua).
@@ -596,7 +626,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         messenger.broadcastNotice(via, encodeRevocation(n));
         for (const g of messenger.rotateForRevocation(identities[via].id, n.sig, via)) {
           const cid = chatIdForGroup(g.id);
-          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: 'Você revogou um aparelho. A chave do grupo foi trocada.' });
+          if (chatsRef.current.some(x => x.id === cid)) handlers.current.receive(cid, { id: `sys-rk-${g.id.slice(0, 6)}-${g.keyV}`, from: 'sys', time: nowHM(), text: STORED.sysGroupRevoked });
         }
       }
       void markRevocationsSent(list.map(n => n.sig));
@@ -705,7 +735,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         if (e.via) peerMedium.current.set(e.from, e.via);
         // Voz da chamada: quadros 'V' vão direto para a chamada, nunca para o roteador.
         if (callRef.current?.svc.onFrame(e.from, e.via ?? transport.kind, e.data)) return;
-        messenger.receive(e.from, e.data);
+        // Dado de par não confiável: um envelope malformado não pode derrubar o ouvinte do transporte.
+        try { messenger.receive(e.from, e.data); } catch { /* descartado */ }
       }
       else if (e.type === 'state' && e.state === 'off') { messenger.clearPeers(); peerMedium.current.clear(); syncMedia(); } // vizinhos somem com o transporte
     });
@@ -818,6 +849,8 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       return (peer && messenger?.getContact(peer)?.pub) || null;
     },
     testDeviceCard: testDevice ? testDevice.card : null,
+    confirmedWallets,
+    confirmWallet: (chatId, address) => setConfirmedWallets(m => withConfirmed(m, chatId, address, chats.map(c => c.id))),
     walletContacts: () => (messenger ? messenger.listContacts()
       .filter(c => c.via === 'public' && !c.request && !!c.lunes)
       .map(c => ({ chatId: chatIdFor(c.id), id: c.id, name: c.name || c.id.slice(4, 8).toUpperCase(), address: c.lunes! })) : []),
@@ -890,7 +923,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         setNearEpoch(e => e + 1);
         if (!r) return null;
         const cid = chatIdFor(r.contact.id);
-        if (!chats.some(x => x.id === cid)) addChat(nearChat(r.contact, priv.temp, 'Você aceitou o pedido de Por perto. A conversa é cifrada de ponta a ponta.', r.request.msg));
+        if (!chats.some(x => x.id === cid)) addChat(nearChat(r.contact, priv.temp, STORED.sysNearYou, r.request.msg));
         setIdentity('public');
         wallet.recordEarned(r.request.name, r.request.fee);
         if (profile.photoSmall) messenger.sendProfilePhoto(profile.photoSmall, r.contact.id);
@@ -971,9 +1004,14 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
         const rpc = new LunesRpc();
         try {
           const b = await accountBalance(rpc, rec.address);
-          // Com o hash do bloco (e da transação, se veio), confere a transação dentro dele.
-          const tx = rec.paid?.blockHash ? await checkSettlement(rpc, { blockHash: rec.paid.blockHash, ...(rec.paid.txHash ? { txHash: rec.paid.txHash } : {}) }) : undefined;
-          const j = judgePayment({ planck: rec.planck != null ? BigInt(rec.planck) : null, baseline: rec.baseline != null ? BigInt(rec.baseline) : null, free: b.free, tx });
+          // Com o hash do bloco (e da transação, se veio), confere a transação dentro dele: destino e valor
+          // pelos bytes do extrínseco, execução pelo indexador (o hash sozinho não prova este pedido).
+          const blockHash = rec.paid?.blockHash;
+          let tx: PaymentTxCheck | undefined = blockHash ? await checkPaymentTx(rpc, { blockHash, ...(rec.paid?.txHash ? { txHash: rec.paid.txHash } : {}) }) : undefined;
+          if (tx && blockHash && tx.extrinsic && tx.finalized && tx.blockNumber != null && tx.txIndex != null && tx.txIndex >= 0) {
+            tx = { ...tx, executed: (await readBlockExecution({ number: tx.blockNumber, hash: blockHash, index: tx.txIndex })).ok };
+          }
+          const j = judgePayment({ planck: rec.planck != null ? BigInt(rec.planck) : null, baseline: rec.baseline != null ? BigInt(rec.baseline) : null, free: b.free, address: rec.address, tx });
           const check: PayCheck = { at: Date.now(), block: b.block, state: j.state, text: judgementText(j) };
           const cur = paysRef.current[id] ?? rec;
           // Sem base e sem prova: a leitura de agora vira a base, para a próxima conferência comparar.
@@ -987,7 +1025,7 @@ export function MessagingProvider({ children }: { children: ReactNode }) {
       all: () => Object.values(pays),
       epoch: payEpoch,
     },
-  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet, lora]); // eslint-disable-line react-hooks/exhaustive-deps
+  }), [messenger, identities, profile.name, profile.photoSmall, setProfile, chats, addChat, testDevice, inviteEpoch, groupEpoch, nearEpoch, alertEpoch, patchChat, setIdentity, priv.temp, wallet, routes, removeChat, pays, payEpoch, putPay, receive, setMsgStatus, sendPay, readBaseline, sharedWallet, lora, confirmedWallets, setConfirmedWallets]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Ponte com o Piu Desktop (lib/desktopLinkSession.ts): snapshot, eventos e comandos pelo store.
   return (
@@ -1021,7 +1059,7 @@ function chatForGroup(g: GroupState, myId: string): Chat {
     id: chatIdForGroup(g.id), group: g.id, ident: g.via, kind: g.kind === 'community' ? 'community' : g.kind, name: g.name, initials: initialsOf(g.name),
     time: nowHM(), unread: 0, owner: canPost(g, myId) || undefined,
     sub: groupSub(g),
-    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: `${g.kind === 'community' ? 'Comunidade cifrada' : g.kind === 'channel' ? 'Canal cifrado' : 'Grupo cifrado'} de ponta a ponta. Só quem está na lista de membros tem a chave.` }],
+    msgs: [{ id: 'sys-g-' + g.id.slice(0, 8), from: 'sys', time: nowHM(), text: g.kind === 'community' ? STORED.sysCommunity : g.kind === 'channel' ? STORED.sysChannel : STORED.sysGroup }],
   };
 }
 
@@ -1036,10 +1074,10 @@ function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
   const name = c.name || (c.via === 'anon' ? 'Anônimo · ' + c.id.slice(4, 8).toUpperCase() : 'Contato · ' + c.id.slice(4, 8).toUpperCase());
   return {
     id: chatIdFor(c.id), peer: c.id, request, ident: c.via, kind: 'direct', name, initials: initialsOf(name), time: nowHM(), unread: 0, temp,
-    sub: request ? 'pedido de conversa · confira o código' : 'cifrada de ponta a ponta',
+    sub: request ? STORED.subRequest : STORED.subE2e,
     msgs: [{ id: 'sys-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: request
-      ? 'Esta pessoa escreveu primeiro. Confira o código de segurança pessoalmente antes de confiar.'
-      : 'Chaves trocadas. As mensagens são cifradas neste aparelho e só o contato consegue ler.' }],
+      ? STORED.sysRequest
+      : STORED.sysKeys }],
   };
 }
 
@@ -1047,7 +1085,7 @@ function chatFor(c: Contact, request: boolean, temp: TempMode): Chat {
 function nearChat(c: Contact, temp: TempMode, note: string, first?: string): Chat {
   const base = chatFor(c, false, temp);
   return {
-    ...base, sub: 'Por perto · cifrada de ponta a ponta',
+    ...base, sub: STORED.subNearby,
     msgs: [{ id: 'sys-near-' + c.id.slice(4, 12), from: 'sys', time: nowHM(), text: note },
       ...(first ? [{ id: 'in-near-' + c.id.slice(4, 12), from: 'them' as const, time: nowHM(), text: first }] : [])],
   };

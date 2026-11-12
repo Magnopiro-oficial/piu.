@@ -40,6 +40,16 @@ for f in *; do
   grep -qF "  $f" SHA256SUMS.txt || { echo "Arquivo fora do SHA256SUMS.txt: $f" >&2; exit 1; }
 done
 
+# A assinatura atesta o que está no release; os hashes vieram do mesmo release (gerados pelo CI).
+# Confira-os por outro canal (build local/reprodutível) antes de assinar. PIU_SIGN_YES=1 pula a pergunta.
+echo "Hashes que serão assinados (SHA256SUMS.txt):"
+cat SHA256SUMS.txt
+if [[ "${PIU_SIGN_YES:-}" != 1 ]]; then
+  [[ -t 0 ]] || { echo "Sem terminal para confirmar. Rode de forma interativa (ou PIU_SIGN_YES=1)." >&2; exit 1; }
+  read -r -p "Esses hashes conferem com um build local/reprodutível? Assinar? [s/N] " ans
+  [[ "$ans" =~ ^[sSyY]$ ]] || { echo "Cancelado, nada foi assinado." >&2; exit 1; }
+fi
+
 echo "Assinando com $KEY…"
 sign() { gpg --yes --local-user "$KEY" --armor --detach-sign --output "$1.asc" -- "$1"; gpg --verify "$1.asc" "$1"; }
 sign SHA256SUMS.txt

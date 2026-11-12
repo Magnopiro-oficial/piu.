@@ -1,5 +1,6 @@
+import { CameraView, useCameraPermissions } from 'expo-camera';
 import { router, useLocalSearchParams, type Href } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, ScrollView, View } from 'react-native';
 import { fmtDate, t as tr, useT } from '../i18n';
 import { confirmDevice } from '../lib/deviceAuth';
@@ -7,9 +8,9 @@ import { addDevice, platformName, revokeDevice, thisDevice, useDevices } from '.
 import type { DeviceRecord } from '../lib/devicesCore';
 import { lockGate } from '../lib/identityGuard';
 import { startLink } from '../lib/desktopLinkSession';
-import { MigrationError, parseOffer, respondToOffer } from '../lib/migration';
+import { codeSourceAllowed, MigrationError, parseOffer, respondToOffer, type CodeSource } from '../lib/migration';
 import { b64url } from '../messaging/card';
-import { CodeQr, CodeReader, CodeWords } from '../lib/migrationUi';
+import { CodeQr, CodeWords } from '../lib/migrationUi';
 import { useKeys } from '../state/keys';
 import { useStore } from '../state/store';
 import { useTheme } from '../theme/ThemeProvider';
@@ -17,6 +18,7 @@ import { Button } from '../ui/Button';
 import { BackHeader, SectionLabel } from '../ui/Controls';
 import { Dialog } from '../ui/Dialog';
 import { Icon, type IconName } from '../ui/Icon';
+import { NoCapture } from '../ui/NoCapture';
 import { Screen } from '../ui/Screen';
 import { T } from '../ui/T';
 
@@ -33,6 +35,60 @@ function describe(d: DeviceRecord): { desc: string; tag: string } {
 
 type Pair = { step: 'scan' } | { step: 'reply'; reply: string; code: string[]; name: string };
 type Ask = { kind: 'drop' | 'revoke'; d: DeviceRecord };
+
+/**
+ * Leitor da oferta só pela câmera, sem campo para colar: este aparelho ENVIA a frase e as 4 palavras
+ * só são conferidas depois, no aparelho novo, então um código colado (recebido de outra pessoa)
+ * levaria as chaves embora. `onRead` devolve a mensagem de erro, ou null se aceitou.
+ */
+function OfferCamera({ hint, onRead }: { hint: string; onRead: (text: string, source: CodeSource) => string | null }) {
+  const { c } = useTheme();
+  const t = useT();
+  const [perm, requestPerm] = useCameraPermissions();
+  const [camera, setCamera] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const handled = useRef(false);
+  const read = (text: string) => {
+    const e = onRead(text.trim(), 'camera');
+    setError(e);
+    if (!e) setCamera(false);
+    else handled.current = false;
+  };
+  const open = async () => {
+    handled.current = false;
+    setError(null);
+    const p = perm?.granted ? perm : await requestPerm();
+    if (p.granted) setCamera(true);
+    else setError(t('devices.scan.noCamera'));
+  };
+  return (
+    <View style={{ gap: 12 }}>
+      {camera ? (
+        <>
+          <View style={{ height: 280, borderRadius: 24, overflow: 'hidden', backgroundColor: '#000' }}>
+            <CameraView style={{ flex: 1 }} facing="back" barcodeScannerSettings={{ barcodeTypes: ['qr'] }}
+              onBarcodeScanned={r => { if (handled.current) return; handled.current = true; read(r.data); }} />
+            <View pointerEvents="none" style={{ position: 'absolute', left: 46, right: 46, top: 46, bottom: 46, borderWidth: 2, borderColor: '#fff', borderRadius: 18 }} />
+          </View>
+          <Button label={t('scan.closeCamera')} variant="soft" height={44} onPress={() => setCamera(false)} />
+        </>
+      ) : (
+        <View style={{ padding: 16, borderRadius: 22, backgroundColor: c.bg2, gap: 12 }}>
+          <Icon name="qr_code_scanner" size={28} w={300} />
+          <T size={14} lh={1.45} color={c.ink2}>{hint}</T>
+          <Button label={t('scan.openCamera')} height={46} onPress={open} />
+        </View>
+      )}
+      <T size={12.5} lh={1.45} color={c.ink2}>{t('devices.scan.cameraOnly')}</T>
+      {error && (
+        <View accessibilityRole="alert" style={{ flexDirection: 'row', gap: 10, padding: 14, borderRadius: 16, borderWidth: 1, borderColor: c.ink }}>
+          <Icon name="gpp_bad" size={20} />
+          <T size={13.5} lh={1.4} style={{ flex: 1 }}>{error}</T>
+        </View>
+      )}
+    </View>
+  );
+}
 
 /**
  * Aparelhos com as suas chaves (registro real, salvo neste aparelho): adicionar um aparelho (QR +
@@ -53,7 +109,9 @@ export default function Devices() {
   useEffect(() => { if (add) setPair({ step: 'scan' }); }, [add]);
 
   /** Aparelho antigo: leu a oferta do novo → confirma o dono → responde com a frase cifrada. */
-  const onOffer = (text: string): string | null => {
+  const onOffer = (text: string, source: CodeSource): string | null => {
+    // Quem envia a frase só aceita a oferta lida pela câmera (as 4 palavras são conferidas só depois).
+    if (!codeSourceAllowed('offer', source)) return t('devices.scan.cameraOnly');
     // QR do Piu Desktop lido aqui por engano: segue para "Conectar ao computador" com ele.
     if (text.trim().startsWith('piu-link:')) {
       const err = startLink(text);
@@ -106,6 +164,8 @@ export default function Devices() {
 
   return (
     <Screen>
+      {/* QR de resposta (frase cifrada para a oferta lida): sem print nem gravação enquanto aparece. */}
+      {pair?.step === 'reply' && <NoCapture k="devices-pair" />}
       <BackHeader title={t('profile.row.devices')} />
       <ScrollView contentContainerStyle={{ paddingBottom: 32 }} keyboardShouldPersistTaps="handled">
         <View style={{ paddingHorizontal: 20, gap: 8 }}>
@@ -136,7 +196,7 @@ export default function Devices() {
           {pair?.step === 'scan' && (
             <View style={{ marginTop: 6, gap: 10 }}>
               <T size={13.5} lh={1.45} color={c.ink2}>{t('devices.scan.before')} <T size={13.5} w={600}>{t('devices.scan.path')}</T>{t('devices.scan.after')}</T>
-              <CodeReader hint={t('devices.scan.hint')} placeholder="piu-mig1:…" onRead={onOffer} />
+              <OfferCamera hint={t('devices.scan.hint')} onRead={onOffer} />
               <Button label={t('common.cancel')} variant="soft" height={44} onPress={() => setPair(null)} />
             </View>
           )}

@@ -1,0 +1,6 @@
+• Correções de segurança e privacidade da auditoria de 09/11.
+• Os avisos do sistema dentro das conversas aparecem no idioma do app.
+• O app ficou menor para baixar e instalar.
+• Foto da câmera enviada em "Original" sai sem a localização e sem os outros dados escondidos do arquivo.
+• Com o bloqueio do app ligado, a tela não pode ser capturada. As telas da frase de recuperação também não.
+• O app pede confirmação antes de parear com um Piu Node lido por QR.

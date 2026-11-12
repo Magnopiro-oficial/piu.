@@ -2,7 +2,7 @@ import { gcm } from '@noble/ciphers/aes.js';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { clearDataKey, loadOrCreateDataKey } from './vault';
-import { completePersistedWrite, missingStoredKeys } from './persistSafety';
+import { completePersistedWrite, createResetGuard, missingStoredKeys, readSealedValue } from './persistSafety';
 
 /**
  * Persistência local (sem servidor): o estado do app fica no aparelho entre aberturas.
@@ -48,7 +48,10 @@ function open(key: string, stored: string): unknown {
     return JSON.parse(dec.decode(pt));
   } catch { return undefined; }
 }
-let epoch = 0;
+// Geração dos dados e "reset em andamento" ("Apagar dados locais").
+const guard = createResetGuard();
+/** Geração atual dos dados: muda a cada "Apagar dados locais". */
+export const persistEpoch = () => guard.epoch();
 const pending = new Map<string, ReturnType<typeof setTimeout>>();
 
 /** Lê todos os valores salvos para a memória. Falhas de leitura não impedem o app de abrir. */
@@ -61,17 +64,13 @@ export async function loadPersisted(): Promise<void> {
     const pairs = await AsyncStorage.multiGet(keys);
     for (const k of missingStoredKeys(keys, pairs.map(([key]) => key))) unreadable.add(k.slice(PREFIX.length));
     const next: Record<string, unknown> = {};
-    const migrate: [string, string][] = [];
     for (const [k, v] of pairs) {
       const name = k.slice(PREFIX.length);
       if (v == null) { unreadable.add(name); continue; }
-      const opened = open(name, v);
-      if (opened !== undefined) { next[name] = opened; continue; }
-      if (v.startsWith(MARK)) { unreadable.add(name); continue; } // não confundir corrupção com ausência
-      // Formato antigo (texto puro): lê uma vez e regrava cifrado.
-      try { next[name] = JSON.parse(v); migrate.push([k, seal(name, next[name])]); } catch { unreadable.add(name); }
+      // Só vale o que abre com a chave; texto puro ou adulterado fica ilegível (não confundir com ausência).
+      const r = readSealedValue(v, s => open(name, s));
+      if (r.ok) next[name] = r.value; else unreadable.add(name);
     }
-    if (migrate.length) await AsyncStorage.multiSet(migrate);
     snapshot = next;
     storageReadFailed = false;
   } catch {
@@ -86,10 +85,11 @@ export const persistedReadFailed = (key: string) => storageReadFailed || unreada
 
 function schedule(key: string, value: unknown) {
   clearTimeout(pending.get(key));
-  const at = epoch;
+  const at = guard.epoch();
   pending.set(key, setTimeout(() => {
     pending.delete(key);
-    if (at !== epoch) return; // apagado no meio do caminho
+    if (at !== guard.epoch()) return; // apagado no meio do caminho
+    if (guard.resetting()) { schedule(key, value); return; } // estado novo: espera o apagamento terminar
     snapshot[key] = value;
     let sealed: string;
     try { sealed = seal(key, value); } catch { return; } // sem chave, não grava em texto puro
@@ -105,13 +105,14 @@ export const readPersisted = <T,>(key: string): T | undefined => snapshot[key] a
  * (ex.: catraca das sessões: reusar uma chave de mensagem depois de um travamento seria grave).
  */
 export async function persistNow(key: string, value: unknown): Promise<void> {
+  guard.assertWritable(); // durante o "Apagar dados locais" nada é regravado, nem em memória
   clearTimeout(pending.get(key));
   pending.delete(key);
-  const at = epoch;
+  const at = guard.epoch();
   // Mantém a atualização imediata em memória usada por assinantes existentes.
   snapshot[key] = value;
   const sealed = seal(key, value); // sem chave, falha: quem chama não deve transmitir
-  await completePersistedWrite(at, () => epoch,
+  await completePersistedWrite(at, guard.epoch,
     () => AsyncStorage.setItem(PREFIX + key, sealed),
     () => AsyncStorage.removeItem(PREFIX + key),
     () => {});
@@ -119,19 +120,20 @@ export async function persistNow(key: string, value: unknown): Promise<void> {
 
 /** Apaga todos os dados do Piu neste aparelho e cancela gravações pendentes. */
 export async function clearPersisted(): Promise<void> {
-  epoch += 1;
   storageReadFailed = true;
   unreadable.clear();
   pending.forEach(clearTimeout);
   pending.clear();
-  snapshot = {};
-  try {
-    const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
-    await AsyncStorage.multiRemove(keys);
-  } catch { /* nada a fazer */ }
-  // Sem a chave antiga, qualquer resto no disco fica ilegível; uma nova é criada para o próximo uso.
-  await clearDataKey();
-  dataKey = await loadOrCreateDataKey().catch(() => null);
+  // A memória é limpa na hora e de novo ao final; no intervalo, gravações são recusadas.
+  await guard.run(() => { snapshot = {}; }, async () => {
+    try {
+      const keys = (await AsyncStorage.getAllKeys()).filter(k => k.startsWith(PREFIX));
+      await AsyncStorage.multiRemove(keys);
+    } catch { /* nada a fazer */ }
+    // Sem a chave antiga, qualquer resto no disco fica ilegível; uma nova é criada para o próximo uso.
+    await clearDataKey();
+    dataKey = await loadOrCreateDataKey().catch(() => null);
+  });
 }
 
 /**

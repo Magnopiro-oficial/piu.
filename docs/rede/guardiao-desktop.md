@@ -34,6 +34,21 @@ do protocolo guarda em memória e grava cifrado em disco ao pausar, ao fechar e 
 - `<userData>/guardian/point.bin`: configuração + semente, AES-256-GCM com a chave de dados do cofre do sistema
   (Keychain / cofre do Windows / chaveiro do Linux). Sem cofre, o ponto não ativa.
 - `<userData>/guardian/store.bin`: envelopes de terceiros, AES-256-GCM com chave derivada da semente do ponto.
+  Por envelope: os bytes (cifrados de ponta a ponta), um sal aleatório próprio (16 bytes), quem trouxe e para
+  quem já foi (só vizinhos ligados na hora da gravação), horários arredondados à hora e a contagem de cópias.
+  Quem trouxe/para quem foi nunca vão como id do aparelho nem como nome fixo do vizinho: são um hash do nome
+  do vizinho com o sal do envelope, com chave do ponto. Dois envelopes do mesmo vizinho ficam com nomes
+  diferentes, então quem abre o cofre não vê grupos "vieram do mesmo aparelho". Depois de reiniciar, o ponto
+  reconhece cada vizinho quando ele liga (um hash por envelope guardado ainda não reconhecido, ~3 µs; medido:
+  ~27 ms com 10 mil envelopes, ~0,7 s no pior caso de 512 MB lotado de envelopes mínimos) e não devolve nem
+  repete envio. Formatos antigos (ids em claro; nome fixo sem sal) são convertidos sem perda e regravados na
+  carga. **Limite que sobra:** quem tem a chave do ponto (abre o cofre do dono) e já suspeita de um id ainda
+  pode conferir, registro a registro, se aquele aparelho trouxe ou recebeu cada envelope. Não dá para evitar
+  sem perder a proteção de não devolver o envelope a quem o trouxe depois de reiniciar.
+  A ordem dos registros no arquivo é sorteada a cada gravação (a ordem de chegada, ou a de reconhecer um
+  vizinho, juntaria os envelopes dele num bloco); custo medido: ~37 ms para 262 mil registros. Também sobra o
+  horário arredondado: envelopes que chegaram na mesma hora têm o mesmo horário no disco, então uma rajada
+  grande numa hora calma ainda sugere "vieram juntos" (sem dizer de quem).
 - **Encerrar** (E5d) sobrescreve e apaga os dois arquivos (a semente some; o que sobrasse fica ilegível).
 
 ## Teste automático (E4)
@@ -47,8 +62,9 @@ Uma etapa a cada 1,1 s depois que o resultado real chega (sem movimento: tudo de
    192.168.15.1, 192.168.100.1, 10.0.0.1, 10.0.0.138, 172.16.0.1, menos os da própria sub-rede). Conectou ou
    recusou (= existe alguém ali): esta rede alcança outra rede privada → aviso para usar uma rede de visitantes.
    O painel do roteador desta rede responder é normal e só aparece no texto.
-3. **Internet**: conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (abre e fecha). O ponto não usa a internet; ela só
-   libera o papel de gateway.
+3. **Internet**: sem o gateway ligado, só uma estimativa local (há rota de saída nesta rede?), sem nenhuma
+   consulta externa. Ao ligar o gateway (ou pedir o teste), conexão TCP a 1.1.1.1:443 e 9.9.9.9:443 (abre e
+   fecha), com aviso na tela antes. O ponto não usa a internet; ela só libera o papel de gateway.
 4. **Capacidade**: espaço livre no disco diante do menor limite (256 MB).
 
 Sem interface de rede local ou sem espaço: falha e "Continuar" não acende.

@@ -1,7 +1,9 @@
 /**
  * Transporte da voz durante a chamada, por cima dos enlaces com os vizinhos (o mesmo `send` que leva os
  * envelopes). Os quadros (./callCrypto) só vão a vizinhos diretos: até achar por onde o contato
- * responde, vão a todos (quem não é da chamada descarta pela etiqueta); depois, só por aquele enlace.
+ * responde, só o ping vai a todos (quem não é da chamada descarta pela etiqueta); depois, tudo só por
+ * aquele enlace. Áudio nunca vai a todos (auditoria 2026-11-09): o vizinho alheio veria o tamanho e o
+ * ritmo dos quadros, ou seja, a cadência da fala. Sem enlace, o áudio é descartado até o pong chegar.
  * Dentro do quadro cifrado, o 1º byte diz o que é: áudio (codec) ou ping/pong (latência e "ainda vivo").
  * Sem quadro válido por LOST_MS, o caminho caiu: a máquina entra em "mudando" e volta a procurar.
  * LoRa (Meshtastic ou rádio do Piu) nunca carrega voz: nem vira o enlace, nem entra no envio a todos.
@@ -60,7 +62,8 @@ export class VoiceLink {
     const inner = new Uint8Array(1 + payload.length);
     inner[0] = codec === 'opus' ? Inner.Opus : Inner.Pcmu;
     inner.set(payload, 1);
-    this.out(inner);
+    if (this.link) this.out(inner);
+    else this.ping(); // sem enlace: o áudio fica parado e só o ping procura (no máximo 1 por segundo)
   }
 
   /** Quadro que chegou de um vizinho. `true` se era desta chamada (não vai para o mensageiro). */
@@ -87,19 +90,24 @@ export class VoiceLink {
   tick() {
     if (this.closed) return;
     const now = this.p.now();
-    if (now - this.lastPing >= PING_EVERY_MS) {
-      this.lastPing = now;
-      const ts = new Uint8Array(8);
-      new DataView(ts.buffer).setFloat64(0, now);
-      this.out(concatByte(Inner.Ping, ts));
-    }
+    this.ping();
     if (this.route && now - this.lastRx > LOST_MS) {
       this.link = null;
+      this.lastPing = -Infinity; // procura de novo já no próximo tick (o áudio fica parado até achar)
       this.setRoute(null);
     }
   }
 
   close() { this.closed = true; this.link = null; }
+
+  private ping() {
+    const now = this.p.now();
+    if (now - this.lastPing < PING_EVERY_MS) return;
+    this.lastPing = now;
+    const ts = new Uint8Array(8);
+    new DataView(ts.buffer).setFloat64(0, now);
+    this.out(concatByte(Inner.Ping, ts));
+  }
 
   private setRoute(r: LiveRoute | null, wifiDirect = false) {
     if (r === this.route && wifiDirect === this.wifiDirect) return;

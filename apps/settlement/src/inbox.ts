@@ -6,14 +6,16 @@
  * certificados, avais, cauções) EXATAMENTE como confere os arquivos compartilhados à mão. Nada aqui é
  * confiável por vir da caixa: quem mandou o pacote não importa.
  *
- * Deduplicação: o nome do arquivo é a referência do pacote (`bundleRef`); o mesmo pacote por outro
- * gateway não grava de novo. Recibo repetido em partes diferentes o próprio livro descarta.
+ * Deduplicação: o nome do arquivo é o hash do conteúdo ABERTO (JSON canônico), não do pacote selado:
+ * re-selar o mesmo conteúdo (nova chave efêmera) não cria arquivo novo; o mesmo pacote por outro
+ * gateway também não grava de novo. Recibo repetido em partes diferentes o próprio livro descarta.
  */
+import { createHash } from 'node:crypto';
 import { existsSync, readdirSync } from 'node:fs';
 import { createServer, type IncomingMessage, type Server } from 'node:http';
 import { join } from 'node:path';
 import { writeFileAtomic } from './fsutil.js';
-import { BundleKind, bundleRefHex, MAX_BUNDLE_BYTES, openBundle } from './protocol/carry.js';
+import { BundleKind, MAX_BUNDLE_BYTES, openBundle } from './protocol/carry.js';
 import type { KeyPair } from './protocol/keys.js';
 import { MAX_CERTS_PER_FILE } from './registry.js';
 import { isU32 } from './hex.js';
@@ -27,6 +29,8 @@ const isObj = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 
 const arr = (v: unknown, max: number) => v === undefined || (Array.isArray(v) && v.length <= max && v.every(isObj));
 /** Teto de itens por parte (uma parte tem no máximo 12 KB; isto só recusa lixo). */
 const MAX_ITEMS = 2000;
+/** Intervalo mínimo entre recontagens do disco quando a cota está cheia. */
+const RECOUNT_MS = 10_000;
 
 /** Forma de um `EvidenceFile` (o conteúdo é conferido no close). */
 function evidenceShape(j: unknown): string | null {
@@ -47,6 +51,13 @@ function registryShape(j: unknown): string | null {
   return keys.length ? `campo desconhecido (${keys[0]})` : null;
 }
 
+/** JSON canônico: chaves em ordem, para o mesmo conteúdo dar sempre o mesmo texto. */
+function canonical(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonical).join(',')}]`;
+  if (isObj(v)) return `{${Object.keys(v).sort().map(k => `${JSON.stringify(k)}:${canonical(v[k])}`).join(',')}}`;
+  return JSON.stringify(v);
+}
+
 /** Abre, confere a forma e grava em `<dir>/evidencias|registro/caixa-<ref>.json`. */
 export function ingestBundle(sealed: Uint8Array, proofKey: KeyPair, dir: string, opts: { dryRun?: boolean } = {}): InboxResult {
   if (sealed.length < 1 || sealed.length > MAX_BUNDLE_BYTES) return { ok: false, reason: 'tamanho fora do limite' };
@@ -57,7 +68,7 @@ export function ingestBundle(sealed: Uint8Array, proofKey: KeyPair, dir: string,
   const kind = b.kind === BundleKind.Evidence ? 'evidencias' : 'registro';
   const err = b.kind === BundleKind.Evidence ? evidenceShape(j) : registryShape(j);
   if (err) return { ok: false, reason: err };
-  const file = join(dir, kind, `caixa-${bundleRefHex(sealed).slice(0, 32)}.json`);
+  const file = join(dir, kind, `caixa-${createHash('sha256').update(`piu/caixa/v1\n${kind}\n${canonical(j)}`).digest('hex').slice(0, 32)}.json`);
   if (existsSync(file)) return { ok: true, kind, file, duplicate: true };
   if (opts.dryRun) return { ok: true, kind, file, duplicate: false };
   writeFileAtomic(file, JSON.stringify(j, null, 2));
@@ -96,6 +107,15 @@ export function inboxServer(o: {
     return ra;
   };
   const now = o.now ?? Date.now;
+  // Recontagem do disco com a cota cheia: se o operador limpou a pasta, volta a aceitar sem reiniciar.
+  // No máximo uma a cada RECOUNT_MS: ler 200 mil nomes a cada POST travaria a caixa (negação de serviço).
+  let lastRecount = -Infinity;
+  const recount = () => {
+    const t = now();
+    if (t - lastRecount < RECOUNT_MS) return;
+    lastRecount = t;
+    counts.clear();
+  };
   const windows = new Map<string, { start: number; n: number }>();
   const allowed = (ip: string) => {
     const t = now();
@@ -117,7 +137,8 @@ export function inboxServer(o: {
     if (!allowed(clientIp(req))) return reply(429, { error: 'muitos pacotes; tente depois' });
     const b = await body(req);
     if (!b) return reply(413, { error: 'pacote grande demais' });
-    if (countOf('evidencias') >= maxFiles || countOf('registro') >= maxFiles) {
+    const full = () => countOf('evidencias') >= maxFiles || countOf('registro') >= maxFiles;
+    if (full() && (recount(), full())) {
       // Cota cheia: confere só se é repetido (não grava nada novo).
       const r0 = ingestBundle(b, o.proofKey, o.dir, { dryRun: true });
       if (!r0.ok) return reply(400, { error: r0.reason });

@@ -26,6 +26,7 @@ import java.net.InetAddress
 import java.net.ServerSocket
 import java.net.Socket
 import java.security.SecureRandom
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.Semaphore
 import kotlin.concurrent.thread
 
@@ -37,6 +38,12 @@ private const val APK_TYPE = "application/vnd.android.package-archive"
 private const val GO_IP = "192.168.49.1"
 /** Conexões atendidas ao mesmo tempo (as duas páginas juntas). A rede do ponto é aberta a qualquer um: sem teto, uma thread por conexão esgotava o app. */
 private const val MAX_CONN = 12
+/** Conexões ao mesmo tempo vindas do mesmo aparelho (IP): um só não ocupa todas as vagas. */
+private const val MAX_CONN_PER_IP = 4
+/** Sem nenhum byte entregue por este tempo, a conexão é derrubada (quem não lê não prende a vaga). */
+private const val STALL_MS = 30_000L
+/** Prazo total de uma conexão, mesmo lendo devagar (o APK leva bem menos numa rede local). */
+private const val MAX_CONN_MS = 10 * 60_000L
 /** Maior linha de pedido aceita (`GET /Piu-0.1.1.apk HTTP/1.1` tem ~30 bytes); o resto do pedido nem é lido. */
 private const val MAX_REQUEST_LINE = 1024
 /** Nome do instalador: o que `apkShareName` gera (sem barra, aspas, CR/LF — vai no cabeçalho). */
@@ -61,6 +68,16 @@ class PiuAppShareModule : Module() {
   private val autoStop = Runnable { stopWifi() }
   private val apkHash = FileHashCache()
   private val slots = Semaphore(MAX_CONN)
+  /** Conexões abertas por IP de origem. */
+  private val perIp = ConcurrentHashMap<String, Int>()
+  /** Conexões em atendimento: servidor de origem e o prazo de cada uma (vigiadas por `watchdog`). */
+  private val active = ConcurrentHashMap<Socket, Conn>()
+  @Volatile private var watchdogOn = false
+
+  private class Conn(val server: ServerSocket) {
+    val started = System.currentTimeMillis()
+    @Volatile var progress = started
+  }
 
   private fun ctx(): Context = appContext.reactContext ?: throw CodedException("ERR_NO_CONTEXT", "Sem contexto do app.", null)
 
@@ -191,8 +208,28 @@ class PiuAppShareModule : Module() {
   private var lanServer: ServerSocket? = null
 
   private fun stopLan() {
+    lanServer?.let { closeActive(it) }
     try { lanServer?.close() } catch (_: Exception) {}
     lanServer = null
+  }
+
+  /** Derruba as conexões ainda abertas do servidor `s`, devolvendo as vagas para a próxima sessão. */
+  private fun closeActive(s: ServerSocket) {
+    active.forEach { (sock, conn) -> if (conn.server === s) try { sock.close() } catch (_: Exception) {} }
+  }
+
+  /** Uma thread só vigia todas as conexões: parada sem progresso ou aberta demais é fechada. */
+  private fun ensureWatchdog() {
+    synchronized(this) { if (watchdogOn) return; watchdogOn = true }
+    thread(name = "piu-share-watchdog", isDaemon = true) {
+      while (true) {
+        try { Thread.sleep(5_000) } catch (_: InterruptedException) {}
+        val now = System.currentTimeMillis()
+        active.forEach { (sock, conn) ->
+          if (now - conn.progress > STALL_MS || now - conn.started > MAX_CONN_MS) try { sock.close() } catch (_: Exception) {}
+        }
+      }
+    }
   }
 
   /** Certificados de assinatura do app instalado (os atuais, sem o histórico de rotação). */
@@ -258,15 +295,27 @@ class PiuAppShareModule : Module() {
     thread(name = "piu-apk-server", isDaemon = true) { acceptLoop(s, apk, pageHtml) }
   }
 
-  /** Uma thread por conexão, no máximo `MAX_CONN` juntas; acima disso a conexão é fechada na hora. */
+  /**
+   * Uma thread por conexão, no máximo `MAX_CONN` juntas e `MAX_CONN_PER_IP` por aparelho; acima disso a
+   * conexão é fechada na hora. Cada uma tem prazo (`watchdog`): um leitor lento não prende as vagas.
+   */
   private fun acceptLoop(s: ServerSocket, apk: File, pageHtml: String) {
+    ensureWatchdog()
     while (!s.isClosed) {
       val c = try { s.accept() } catch (e: Exception) { break }
-      if (!slots.tryAcquire()) { try { c.close() } catch (_: Exception) {}; continue }
+      val ip = c.inetAddress?.hostAddress ?: ""
+      if (perIp.merge(ip, 1, Int::plus)!! > MAX_CONN_PER_IP) { leave(ip); try { c.close() } catch (_: Exception) {}; continue }
+      if (!slots.tryAcquire()) { leave(ip); try { c.close() } catch (_: Exception) {}; continue }
+      val conn = Conn(s)
+      active[c] = conn
       thread(isDaemon = true) {
-        try { serve(c, apk, pageHtml) } catch (_: Exception) {} finally { slots.release() }
+        try { serve(c, conn, apk, pageHtml) } catch (_: Exception) {} finally { active.remove(c); leave(ip); slots.release() }
       }
     }
+  }
+
+  private fun leave(ip: String) {
+    perIp.computeIfPresent(ip) { _, n -> if (n <= 1) null else n - 1 }
   }
 
   /** Primeira linha do pedido, até `MAX_REQUEST_LINE` bytes; mais longa (ou sem fim) = `null`. */
@@ -283,7 +332,7 @@ class PiuAppShareModule : Module() {
   }
 
   /** Só `GET /` (a página) e `GET /<arquivo>` (o instalador); caminho comparado por igualdade, sem arquivo do disco. */
-  private fun serve(c: Socket, apk: File, pageHtml: String) {
+  private fun serve(c: Socket, conn: Conn, apk: File, pageHtml: String) {
     c.use { sock ->
       sock.soTimeout = 15_000
       val line = requestLine(sock.getInputStream()) ?: return
@@ -300,7 +349,16 @@ class PiuAppShareModule : Module() {
         "/${apk.name}" -> {
           out.write(("HTTP/1.1 200 OK\r\nContent-Type: $APK_TYPE\r\nContent-Length: ${apk.length()}\r\n" +
             "Content-Disposition: attachment; filename=\"${apk.name}\"\r\n" + SEC_HEADERS + "Connection: close\r\n\r\n").toByteArray())
-          apk.inputStream().use { it.copyTo(out, 64 * 1024) }
+          // Em blocos, marcando o progresso: a escrita não tem prazo próprio, quem fecha é o `watchdog`.
+          apk.inputStream().use { input ->
+            val buf = ByteArray(64 * 1024)
+            while (true) {
+              val n = input.read(buf)
+              if (n < 0) break
+              out.write(buf, 0, n)
+              conn.progress = System.currentTimeMillis()
+            }
+          }
         }
         else -> out.write("HTTP/1.1 404 Not Found\r\nContent-Length: 0\r\nX-Content-Type-Options: nosniff\r\nConnection: close\r\n\r\n".toByteArray())
       }
@@ -310,6 +368,7 @@ class PiuAppShareModule : Module() {
 
   private fun stopWifi() {
     main.removeCallbacks(autoStop)
+    server?.let { closeActive(it) }
     try { server?.close() } catch (_: Exception) {}
     server = null
     val m = manager; val ch = channel

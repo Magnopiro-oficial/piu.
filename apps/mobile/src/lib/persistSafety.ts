@@ -23,3 +23,32 @@ export function missingStoredKeys(expected: readonly string[], returned: readonl
   const present = new Set(returned);
   return expected.filter(key => !present.has(key));
 }
+
+/**
+ * Guarda do "Apagar dados locais": a geração dos dados muda a cada reset e, enquanto ele roda,
+ * nenhuma gravação é aceita (ex.: o desmonte de um provedor regravando o estado da identidade apagada).
+ * `wipe` limpa a memória no começo (síncrono) e de novo no fim, depois de apagar o armazenamento.
+ */
+export function createResetGuard() {
+  let epoch = 0, running = 0;
+  return {
+    epoch: () => epoch,
+    resetting: () => running > 0,
+    assertWritable() { if (running > 0) throw new Error('Dados sendo apagados.'); },
+    async run(wipe: () => void, erase: () => Promise<void>): Promise<void> {
+      epoch += 1; running += 1;
+      wipe();
+      try { await erase(); } finally { wipe(); running -= 1; }
+    },
+  };
+}
+
+/**
+ * Lê um valor do armazenamento: só vale o que abre com a chave de dados (AES-GCM).
+ * Texto puro (sem o prefixo cifrado) é ilegível: aceitá-lo deixaria quem escreve no disco,
+ * sem a chave, injetar estado (ex.: desligar o bloqueio). Toda versão publicada já gravava cifrado.
+ */
+export function readSealedValue(stored: string, open: (stored: string) => unknown): { ok: true; value: unknown } | { ok: false } {
+  const value = open(stored);
+  return value === undefined ? { ok: false } : { ok: true, value };
+}

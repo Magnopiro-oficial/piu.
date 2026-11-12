@@ -3,3 +3,15 @@ dist/
 *.tsbuildinfo
 *.local
 .DS_Store
+# Binários de teste e segredos de assinatura nunca vão para o repositório
+*.apk
+*.aab
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+*.p8
+.env
+.env.*
+!.env.example

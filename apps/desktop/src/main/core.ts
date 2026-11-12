@@ -417,6 +417,7 @@ export class PiuCore {
 
   /** Só chamar depois da reautenticação (main.ts → security.ts `reauthForPhrase`). */
   revealPhrase() { return this.vault.getPhrase(); }
+  /** Idem: só depois da reautenticação (main.ts → security.ts `exportBackupAfterReauth`). */
   exportIdentityBackup(password: string) { return createIdentityBackup(this.vault, password); }
   suggestWords(prefix: string) { return suggestWords(prefix, 6); }
 
@@ -840,8 +841,18 @@ export class PiuCore {
 
   lockAttempts(now = Date.now()) { return { triesLeft: triesLeft(this.attempts), wait: lockWait(this.attempts, now) }; }
 
+  /** Fila da conferência da senha: uma por vez (baixo 28), senão uma rajada passaria inteira pela espera. */
+  private lockQueue: Promise<unknown> = Promise.resolve();
+
   /** Confere a senha do Piu. Durante a espera, recusa sem conferir (e sem contar erro novo). */
-  async checkLockPassword(pw: string, now = Date.now()): Promise<{ ok: boolean; triesLeft: number; wait: ReturnType<typeof lockWait> }> {
+  checkLockPassword(pw: string, now = Date.now()): Promise<{ ok: boolean; triesLeft: number; wait: ReturnType<typeof lockWait> }> {
+    // A espera é reavaliada só quando chega a vez desta conferência (depois de gravado o erro anterior).
+    const run = this.lockQueue.then(() => this.checkLockPasswordNow(pw, now));
+    this.lockQueue = run.catch(() => {});
+    return run;
+  }
+
+  private async checkLockPasswordNow(pw: string, now: number) {
     const lock = this.state.lock;
     if (!lock?.secret) return { ok: false, ...this.lockAttempts(now) };
     if (lockWait(lock.attempts, now)) return { ok: false, ...this.lockAttempts(now) };

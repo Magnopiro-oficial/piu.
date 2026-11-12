@@ -10,6 +10,7 @@ import { linkDesktopPtBR } from './linkDesktop/pt-BR.js';
 import { callPtBR } from './call/pt-BR.js';
 import { loraPtBR } from './lora/pt-BR.js';
 import { mapPtBR } from './map/pt-BR.js';
+import { storedPtBR } from './stored/pt-BR.js';
 
 export const ptBR = {
   ...piu11PtBR,
@@ -18,6 +19,7 @@ export const ptBR = {
   ...callPtBR,
   ...loraPtBR,
   ...mapPtBR,
+  ...storedPtBR,
   // ── comum ──
   'common.back': 'Voltar',
   'common.close': 'Fechar',
@@ -655,6 +657,11 @@ export const ptBR = {
   'scan.panel.repair.title': 'Parear de novo com outro segredo?',
   'scan.panel.repair.body': 'Este celular já está pareado com {node}. Continuar troca o pareamento: as aprovações de transferência passam a valer só para o painel deste QR. Só continue se você mesmo gerou este QR no painel.',
   'scan.panel.repair.confirm': 'Trocar pareamento',
+  'scan.panel.pairNew.title': 'Parear com este equipamento?',
+  'scan.panel.pairNew.body': '{node} · {operator}\nEndereço: {url}\nCertificado: {pin}\n\nSó continue se você mesmo abriu este QR no painel do seu equipamento.',
+  'scan.panel.pairNew.pasted': 'Este código foi colado, não lido pela câmera. Confira de onde ele veio.',
+  'scan.panel.pairNew.confirm': 'Parear',
+  'scan.panel.pairNew.prompt': 'Confirme para parear com {node}',
   'join.sent': 'Pedido enviado para {name}',
   'join.sent.body': 'Você entra quando um admin receber o pedido (e aprovar, se o grupo exigir).',
   'scan.verify.mismatch': 'Este QR não é de {name}. Se a pessoa está na sua frente, alguém pode ter trocado as chaves: não confie na conversa.',
@@ -908,6 +915,8 @@ export const ptBR = {
   'devices.scan.path': 'Restaurar → De outro aparelho',
   'devices.scan.after': '. Depois leia o QR que aparece nele.',
   'devices.scan.hint': 'Aponte a câmera para o QR do aparelho novo. As chaves vão direto e cifradas, sem servidor.',
+  'devices.scan.noCamera': 'Sem permissão para a câmera. Libere a câmera nos ajustes do aparelho para ler o QR do aparelho novo.',
+  'devices.scan.cameraOnly': 'Por segurança, aqui o código só entra pela câmera, com os dois aparelhos lado a lado. Nunca envie as suas chaves a partir de um código recebido de outra pessoa.',
   'devices.reply.title': 'Agora o aparelho novo lê este QR',
   'devices.reply.qr': 'QR de resposta para o aparelho novo',
   'devices.reply.prompt': 'Confira se as mesmas palavras aparecem no {name}:',
@@ -1838,6 +1847,12 @@ export const ptBR = {
   "wallet.sendSheet.noContacts": "Contatos aparecem aqui quando compartilham o endereço Lunes deles ou mandam um pedido de pagamento com ele.",
   "wallet.sendSheet.settleValue": "ao entrar em um bloco da Mainnet",
   "wallet.sendSheet.over": "Valor maior que o saldo disponível",
+  "wallet.sendSheet.contactAddr.a11y": "Endereço Lunes de {name}: {address}",
+  "wallet.sendSheet.addrChanged.title": "O endereço deste contato mudou",
+  "wallet.sendSheet.addrChanged.body": "{name} aparece agora com um endereço Lunes diferente do último envio que você concluiu. Confira com a pessoa por outro meio antes de enviar.",
+  "wallet.sendSheet.addrChanged.before": "Endereço do último envio",
+  "wallet.sendSheet.addrChanged.now": "Endereço de agora",
+  "wallet.sendSheet.addrChanged.confirm": "Usar o endereço novo",
   "wallet.sendSheet.scan.a11y": "Ler o QR de outra carteira",
   "wallet.sendSheet.scan.hint": "Aponte a câmera para o QR da carteira de destino: endereço Lunes ou pedido de pagamento do Piu.",
   "wallet.sendSheet.scan.placeholder": "Endereço Lunes ou pedido de pagamento",

@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/de';
 import { call } from './call/de';
 import { lora } from './lora/de';
 import { map } from './map/de';
+import { stored } from './stored/de';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Zurück',
   'common.close': 'Schließen',
   'common.cancel': 'Abbrechen',
@@ -633,6 +635,11 @@ export const dict: Dict = {
   "scan.panel.repair.title": "Erneut mit einem anderen Geheimnis koppeln?",
   "scan.panel.repair.body": "Dieses Handy ist bereits mit {node} gekoppelt. Weiter ersetzt die Kopplung: Überweisungsfreigaben gelten dann nur noch für das Panel dieses QR. Fahre nur fort, wenn du diesen QR selbst im Panel erzeugt hast.",
   "scan.panel.repair.confirm": "Kopplung ersetzen",
+  "scan.panel.pairNew.title": "Mit diesem Gerät koppeln?",
+  "scan.panel.pairNew.body": "{node} · {operator}\nAdresse: {url}\nZertifikat: {pin}\n\nFahre nur fort, wenn du diesen QR selbst im Panel deines Geräts geöffnet hast.",
+  "scan.panel.pairNew.pasted": "Dieser Code wurde eingefügt, nicht mit der Kamera gelesen. Prüfe, woher er kommt.",
+  "scan.panel.pairNew.confirm": "Koppeln",
+  "scan.panel.pairNew.prompt": "Bestätige, um mit {node} zu koppeln",
   "join.sent": "Anfrage an {name} gesendet",
   "join.sent.body": "Du trittst bei, sobald ein Admin die Anfrage erhält (und genehmigt, falls die Gruppe dies verlangt).",
   "scan.verify.mismatch": "Dieser QR gehört nicht zu {name}. Wenn die Person vor dir steht, könnte jemand die Schlüssel ausgetauscht haben: Vertraue dem Chat nicht.",
@@ -880,6 +887,8 @@ export const dict: Dict = {
   "devices.scan.path": "Wiederherstellen → Von einem anderen Gerät",
   "devices.scan.after": ". Lies dann den angezeigten QR.",
   "devices.scan.hint": "Richte die Kamera auf den QR des neuen Geräts. Die Schlüssel werden direkt und verschlüsselt übertragen, ohne Server.",
+  "devices.scan.noCamera": "Keine Kameraberechtigung. Erlaube die Kamera in den Geräteeinstellungen, um den QR-Code des neuen Geräts zu lesen.",
+  "devices.scan.cameraOnly": "Zur Sicherheit kommt der Code hier nur über die Kamera herein, mit beiden Geräten nebeneinander. Sende deine Schlüssel nie aufgrund eines Codes, den du von jemand anderem erhalten hast.",
   "devices.reply.title": "Jetzt liest das neue Gerät diesen QR",
   "devices.reply.qr": "Antwort-QR für das neue Gerät",
   "devices.reply.prompt": "Prüfe, ob auf {name} dieselben Wörter erscheinen:",
@@ -1794,6 +1803,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "Kontakte erscheinen hier, sobald sie ihre Lunes-Adresse teilen oder eine Zahlungsanfrage damit senden.",
   "wallet.sendSheet.settleValue": "sobald sie in einen Block des Lunes Mainnet kommt",
   "wallet.sendSheet.over": "Betrag höher als das verfügbare Guthaben",
+  "wallet.sendSheet.contactAddr.a11y": "Lunes-Adresse von {name}: {address}",
+  "wallet.sendSheet.addrChanged.title": "Die Adresse dieses Kontakts hat sich geändert",
+  "wallet.sendSheet.addrChanged.body": "{name} erscheint jetzt mit einer anderen Lunes-Adresse als bei deiner letzten abgeschlossenen Überweisung. Kläre das vor dem Senden auf einem anderen Weg mit der Person.",
+  "wallet.sendSheet.addrChanged.before": "Adresse der letzten Überweisung",
+  "wallet.sendSheet.addrChanged.now": "Adresse jetzt",
+  "wallet.sendSheet.addrChanged.confirm": "Neue Adresse verwenden",
   "wallet.sendSheet.scan.a11y": "QR einer anderen Wallet scannen",
   "wallet.sendSheet.scan.hint": "Richte die Kamera auf den QR der Ziel-Wallet: Lunes-Adresse oder Piu-Zahlungsanfrage.",
   "wallet.sendSheet.scan.placeholder": "Lunes-Adresse oder Zahlungsanfrage",

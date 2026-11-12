@@ -60,6 +60,10 @@ interface Neighbor {
 }
 
 const linkKey = (m: Medium, id: string) => m + '|' + id;
+/** Formato do nome do app (lib/nodeName.ts). */
+const NODE_NAME = /^piu-[0-9a-f]{6}$/;
+/** Meios em que o nome vem de um anúncio de rádio sem formato garantido pelo nativo. */
+const checkedName = (m: Medium, name: string | undefined) => (name && (m === 'ble' || m === 'nearby') && !NODE_NAME.test(name) ? undefined : name);
 
 /**
  * Junta os enlaces de vários meios em vizinhos lógicos e escolhe, a cada envio, por onde sair
@@ -69,6 +73,11 @@ const linkKey = (m: Medium, id: string) => m + '|' + id;
  * Nearby, no anúncio BLE e no bloco de apresentação (`hello`) do BLE. Enlace ainda sem nome vira
  * um vizinho próprio; quando o nome chega, o enlace migra (o vizinho antigo some e o novo conecta).
  * O nome não é identidade: quem confirma quem é quem são as chaves do Piu, na camada de cima.
+ *
+ * Auditoria 2026-11-09: qualquer um no alcance pode anunciar o nome de outro aparelho. Por isso, no
+ * Bluetooth LE e no Nearby só junta quem tem o nome no formato do app (`piu-` + 6 hex, o mesmo que a
+ * rede local aceita no NODE_HINT); e, se o vizinho tem dois enlaces do mesmo meio, o envelope sai
+ * pelos dois (o roteador descarta o repetido), para quem imita o nome não desviar nem sumir com ele.
  */
 export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}): Transport {
   const now = opts.now ?? Date.now;
@@ -148,7 +157,8 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
         const l = link(e.medium, e.id);
         l.seen = true;
         if (e.type === 'up') l.up = true;
-        if (e.name) l.name = e.name;
+        const name = checkedName(e.medium, e.name);
+        if (name) l.name = name;
         place(l);
         break;
       }
@@ -191,15 +201,26 @@ export function createMultiTransport(source: LinkSource, opts: MultiOptions = {}
       const ranked = rankLinks(linksOf(n), { size: data.length, lowBattery, now: now(), caps, disabled });
       if (!ranked.length) throw new Error(`Nenhum meio disponível para ${n.name}.`);
       let last: unknown;
+      const tried = new Set<Medium>();
       for (const l of ranked) {
-        try {
-          await source.sendVia(l.medium, l.id, data);
-          l.failures = 0; l.lastFailureAt = undefined;
-          return sentVia(n, l.medium);
-        } catch (err) {
-          l.failures++; l.lastFailureAt = now();
-          last = err;
-        }
+        if (tried.has(l.medium)) continue;
+        tried.add(l.medium);
+        // Todos os enlaces deste meio (normalmente um só; dois = alguém pode estar imitando o nome).
+        // Manda por todos ao mesmo tempo e segue assim que um der certo: um enlace que
+        // trava (impostor que não responde) não segura o envio pelo verdadeiro.
+        const same = ranked.filter(o => o.medium === l.medium);
+        const ok = await new Promise<boolean>(resolve => {
+          let pending = same.length;
+          for (const o of same) {
+            Promise.resolve()
+              .then(() => source.sendVia(o.medium, o.id, data))
+              .then(
+                () => { o.failures = 0; o.lastFailureAt = undefined; resolve(true); },
+                err => { o.failures++; o.lastFailureAt = now(); last = err; if (--pending === 0) resolve(false); },
+              );
+          }
+        });
+        if (ok) return sentVia(n, l.medium);
       }
       throw last instanceof Error ? last : new Error(String(last));
     },

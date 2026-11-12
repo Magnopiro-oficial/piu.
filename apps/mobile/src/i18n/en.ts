@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/en';
 import { call } from './call/en';
 import { lora } from './lora/en';
 import { map } from './map/en';
+import { stored } from './stored/en';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Back',
   'common.close': 'Close',
   'common.cancel': 'Cancel',
@@ -632,6 +634,11 @@ export const dict: Dict = {
   'scan.panel.repair.title': 'Pair again with a different secret?',
   'scan.panel.repair.body': 'This phone is already paired with {node}. Continuing replaces the pairing: transfer approvals will only work for the panel of this QR. Only continue if you generated this QR in the panel yourself.',
   'scan.panel.repair.confirm': 'Replace pairing',
+  'scan.panel.pairNew.title': 'Pair with this device?',
+  'scan.panel.pairNew.body': '{node} · {operator}\nAddress: {url}\nCertificate: {pin}\n\nOnly continue if you opened this QR in your own device panel.',
+  'scan.panel.pairNew.pasted': 'This code was pasted, not read by the camera. Check where it came from.',
+  'scan.panel.pairNew.confirm': 'Pair',
+  'scan.panel.pairNew.prompt': 'Confirm to pair with {node}',
   'join.sent': 'Request sent to {name}',
   'join.sent.body': 'You join when an admin receives the request (and approves it, if the group requires).',
   'scan.verify.mismatch': 'This QR is not {name}’s. If the person is in front of you, someone may have swapped the keys: do not trust the chat.',
@@ -879,6 +886,8 @@ export const dict: Dict = {
   'devices.scan.path': 'Restore → From another device',
   'devices.scan.after': '. Then read the QR it shows.',
   'devices.scan.hint': 'Point the camera at the new device’s QR. The keys go directly and encrypted, with no server.',
+  'devices.scan.noCamera': 'No camera permission. Allow the camera in the device settings to read the new device’s QR.',
+  'devices.scan.cameraOnly': 'For safety, the code can only come in through the camera here, with both devices side by side. Never send your keys from a code someone else gave you.',
   'devices.reply.title': 'Now the new device reads this QR',
   'devices.reply.qr': 'Reply QR for the new device',
   'devices.reply.prompt': 'Check that the same words appear on the {name}:',
@@ -1793,6 +1802,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "Contacts show up here once they share their Lunes address or send a payment request with it.",
   "wallet.sendSheet.settleValue": "when it enters a Lunes Mainnet block",
   "wallet.sendSheet.over": "Amount is higher than the available balance",
+  "wallet.sendSheet.contactAddr.a11y": "Lunes address of {name}: {address}",
+  "wallet.sendSheet.addrChanged.title": "This contact's address has changed",
+  "wallet.sendSheet.addrChanged.body": "{name} now shows a Lunes address different from the last send you completed. Check with the person through another channel before sending.",
+  "wallet.sendSheet.addrChanged.before": "Address of the last send",
+  "wallet.sendSheet.addrChanged.now": "Address now",
+  "wallet.sendSheet.addrChanged.confirm": "Use the new address",
   "wallet.sendSheet.scan.a11y": "Scan another wallet's QR",
   "wallet.sendSheet.scan.hint": "Point the camera at the destination wallet's QR: a Lunes address or a Piu payment request.",
   "wallet.sendSheet.scan.placeholder": "Lunes address or payment request",

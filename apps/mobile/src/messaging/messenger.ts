@@ -10,7 +10,7 @@
  * - Estado salvo (`export`): sessões, fila própria, ids vistos (contra replay) e contatos.
  *   Contém segredos: o app guarda cifrado (lib/persist.ts).
  */
-import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, type Vote } from './communityAlerts';
+import { AlertBook, type AlertCategory, type AlertNotice, type AlertSeverity, type AlertStatus, type AlertView, checkDraft, decodeAlertPayload, encodeAlertPayload, noticeFor, sortViews, STATUS_LABEL, type Vote } from './communityAlerts';
 import { hoursAllow, type HoursPolicy } from './hours';
 import { isJpegBase64 } from './photo';
 import { isLunesAddress } from '../lib/ss58';
@@ -53,6 +53,12 @@ export interface Contact {
   invite?: string;
   /** Endereço Lunes que o contato compartilhou comigo (`wa`); só contato público aceito. */
   lunes?: string;
+  /**
+   * Veio só de um grupo (entrou pelo link, indicado, membro do mesmo grupo): eu nunca aceitei a pessoa
+   * em conversa direta. Não recebe meu endereço Lunes nem minha foto e não me liga, cobra ou manda
+   * arquivo, até eu escrever, cobrar ou ligar para ela (ou adicionar pelo cartão).
+   */
+  groupOnly?: boolean;
 }
 
 /** Convite emitido por mim (o código vai no QR). Uso único; vence com o cartão. */
@@ -304,6 +310,8 @@ function fromWire(w: unknown): { id: string; name: string; pub: PublicIdentity }
 /** Indicação de um membro: vale 7 dias (como o convite do grupo). */
 interface Vouch { via: IdentityKind; admins: string[]; at: number }
 const MAX_INVITE_BATCH = 20;
+/** Avisos de revogação da mesma pessoa: uma troca de chave dos grupos a cada 10 min, no máximo. */
+const REVOKE_ROTATE_EVERY_SEC = 10 * 60;
 
 /** Pedido para entrar aguardando um admin (só no aparelho do admin). */
 interface PendingJoin { id: string; name: string; via: IdentityKind; pub: PublicIdentity; at: number }
@@ -423,6 +431,11 @@ export class Messenger {
     this.deliveryDays = new DeliveryDays(st?.ud);
     this.accepted = new AcceptedInvites(st?.ia);
     this.alertBook = new AlertBook(st?.ca);
+    for (const x of (Array.isArray(st?.cs) ? st.cs : []) as unknown[]) {
+      if (!Array.isArray(x)) continue; // item corrompido não derruba a abertura
+      const [id, s] = x as [unknown, AlertStatus];
+      if (typeof id === 'string' && this.alertBook.get(id) && Object.prototype.hasOwnProperty.call(STATUS_LABEL, s)) this.alertSeen.set(id, s);
+    }
     for (const [k, d] of (st?.mx ?? []) as [string, DayMetrics][]) this.days.set(k, d);
     for (const [id, x] of (st?.p2 ?? []) as [string, { s: string; at: number }][]) {
       const sealed = unb64url(x.s);
@@ -462,7 +475,7 @@ export class Messenger {
     this.rotatedFor = Array.isArray(st.rk) ? (st.rk as string[]).slice(-200) : [];
     for (const [gid, v] of (st.gv ?? []) as [string, Vouch][]) if (v.at + GROUP_INVITE_TTL_SEC > o.now()) this.vouched.set(gid, v);
     this.refreshGroupKeys();
-    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, invite: c.k || undefined, lunes: c.w || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
+    for (const c of st.c ?? []) this.contacts.set(c.id, { id: c.id, via: c.via, name: c.name, request: !!c.r, ...(c.o ? { groupOnly: true } : {}), invite: c.k || undefined, lunes: c.w || undefined, pub: { signPk: unb64url(c.s), agreePk: unb64url(c.a), binding: unb64url(c.b) } });
     for (const i of (st.inv ?? []) as Invite[]) if (i.expiresAt > o.now()) this.invites.set(i.code, i);
     // A fila própria volta antes dos ids vistos (senão os próprios envelopes contariam como repetidos).
     for (const q of (st.q ?? []) as Outgoing[]) {
@@ -534,7 +547,16 @@ export class Messenger {
     const mine = [this.o.identities.public.id, this.o.identities.anon.id];
     if (mine.includes(c.id)) throw new Error('Este é o seu próprio código.');
     const cur = this.contacts.get(c.id);
-    this.contacts.set(c.id, { ...c, name: c.name || cur?.name || '', lunes: c.lunes ?? cur?.lunes, request: false });
+    const next: Contact = { ...c, name: c.name || cur?.name || '', lunes: c.lunes ?? cur?.lunes, request: false };
+    delete next.groupOnly;
+    this.contacts.set(c.id, next);
+    this.o.events.changed?.();
+  }
+
+  /** Eu escrevi, mandei arquivo, cobrei ou liguei para quem veio só de grupo: passa a ser contato aceito. */
+  private acceptDirect(c: Contact) {
+    if (!c.groupOnly) return;
+    delete c.groupOnly;
     this.o.events.changed?.();
   }
 
@@ -590,6 +612,7 @@ export class Messenger {
   sendText(contactId: string, msgId: string, text: string, expireSec?: number, loc?: WireLocation) {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
+    this.acceptDirect(c);
     const x = text.slice(0, MAX_TEXT);
     const mgr = this.managers[c.via];
     const p: Payload = { t: 'm', i: msgId, x };
@@ -614,6 +637,7 @@ export class Messenger {
     if (r.expiresAt <= now) throw new Error('Este pedido já venceu.');
     const w = wirePayRequest(r);
     if (!readPayRequest(w, now)) throw new Error('Pedido inválido.');
+    this.acceptDirect(c);
     this.enqueue(c, w, r.id, Priority.Normal, false, Math.min(TTL_SEC, r.expiresAt - now));
   }
 
@@ -664,6 +688,9 @@ export class Messenger {
     const c = this.contacts.get(contactId);
     if (!c || c.request || !this.managers[c.via].get(contactId)?.established) return false;
     if (o.live && !this.peers.size) return false;
+    // Ligar ou pedir chamada para quem veio só de grupo aceita a pessoa (senão a resposta dela cairia).
+    const st = (payload.s as { t?: string } | undefined)?.t;
+    if (st === 'invite' || st === 'request') this.acceptDirect(c);
     this.enqueue(c, payload, o.live ? null : o.msgId ?? null, o.live ? Priority.High : Priority.Normal, false, o.ttlSec, o.live);
     return true;
   }
@@ -694,6 +721,7 @@ export class Messenger {
     const c = this.contacts.get(contactId);
     if (!c) throw new Error('Contato desconhecido.');
     if (f.data.length === 0 || f.data.length > MAX_FILE_BYTES) throw new Error('Arquivo vazio ou maior que 50 MB.');
+    this.acceptDirect(c);
     const total = Math.ceil(f.data.length / FILE_BLOCK);
     const job: FileJob = { msgId, to: contactId, data: f.data, total, next: 0, acked: new Set(), inFlight: new Set(), paused: false };
     this.fileJobs.set(msgId, job);
@@ -777,9 +805,12 @@ export class Messenger {
 
   private onFileControl(from: string, p: Payload, sentAt?: number) {
     const c = this.contacts.get(from);
-    if (!c) return; // arquivo só de contato já aceito
+    if (!c) return;
     if (p.t === 'f') {
-      if (typeof p.i !== 'string' || p.i.length > 64 || !(p.s > 0 && p.s <= MAX_FILE_BYTES) || p.c !== Math.ceil(p.s / FILE_BLOCK) || !/^[0-9a-f]{64}$/.test(p.h)) return;
+      // Oferta só de contato já aceito (nem pedido de conversa, nem quem veio só de grupo).
+      if (c.request || c.groupOnly) return;
+      // Tamanho e blocos como número inteiro: texto ("0x10") ou fração furavam o teto de memória.
+      if (typeof p.i !== 'string' || p.i.length > 64 || !Number.isInteger(p.s) || !Number.isInteger(p.c) || !(p.s > 0 && p.s <= MAX_FILE_BYTES) || p.c !== Math.ceil(p.s / FILE_BLOCK) || typeof p.h !== 'string' || !/^[0-9a-f]{64}$/.test(p.h)) return;
       const key = `${from}|${p.i}`;
       if (this.fileRx.has(key) || this.deliveredSet.has(`${from}|file|${p.i}`)) return;
       // Poucos recebimentos simultâneos (memória); ofertas esperando "Baixar" não guardam blocos.
@@ -1122,7 +1153,7 @@ export class Messenger {
     for (const m of g.members) {
       if (m.id === me) continue;
       let c = this.contacts.get(m.id);
-      if (!c) { c = { id: m.id, via: g.via, pub: m.pub, name: m.name }; this.contacts.set(c.id, c); }
+      if (!c) { c = { id: m.id, via: g.via, pub: m.pub, name: m.name, groupOnly: true }; this.contacts.set(c.id, c); }
       this.enqueue(c, { t: 'g', s: encodeState(g, m.role === 'admin' ? 'admin' : 'member', m.id) }, null, Priority.High);
     }
   }
@@ -1214,7 +1245,7 @@ export class Messenger {
         this.o.events.joinRequest?.(g.id, { id: x.id, name: x.name });
         continue;
       }
-      if (!this.contacts.has(x.id)) this.contacts.set(x.id, { id: x.id, via: g.via, pub: x.pub, name: x.name });
+      if (!this.contacts.has(x.id)) this.contacts.set(x.id, { id: x.id, via: g.via, pub: x.pub, name: x.name, groupOnly: true });
       add.push(x.id);
     }
     if (add.length) this.addMembers(g.id, add);
@@ -1325,7 +1356,7 @@ export class Messenger {
     const me = this.myId(com.via);
     for (const m of com.members) {
       if (m.role !== 'admin' || m.id === me) continue;
-      const c = this.contacts.get(m.id) ?? { id: m.id, via: com.via, pub: m.pub, name: m.name };
+      const c = this.contacts.get(m.id) ?? { id: m.id, via: com.via, pub: m.pub, name: m.name, groupOnly: true };
       if (!this.contacts.has(c.id)) this.contacts.set(c.id, c);
       this.enqueue(c, p, null, Priority.High);
     }
@@ -1355,6 +1386,8 @@ export class Messenger {
 
   /** Avisos de revogação já tratados (cada aviso troca a chave uma vez só). */
   private rotatedFor: string[] = [];
+  /** Última troca de chave por aviso de cada pessoa (s, só na memória). */
+  private revokeRotatedAt = new Map<string, number>();
 
   /** Troca a chave do grupo sem tirar ninguém (v → v+1). Só admin. */
   rotateKey(gid: string) {
@@ -1381,6 +1414,17 @@ export class Messenger {
     if (this.rotatedFor.includes(noticeId)) return [];
     this.rotatedFor.push(noticeId);
     while (this.rotatedFor.length > 200) this.rotatedFor.shift();
+    // Aviso de outra pessoa: no máximo uma troca de chave por pessoa a cada 10 min (quem assina avisos
+    // sem parar não faz os grupos trocarem de chave sem parar). A minha revogação sempre troca.
+    const mine = who === this.o.identities.public.id || who === this.o.identities.anon.id;
+    const now = this.o.now();
+    if (!mine) {
+      const last = this.revokeRotatedAt.get(who);
+      if (last !== undefined && now - last < REVOKE_ROTATE_EVERY_SEC) return [];
+      this.revokeRotatedAt.delete(who);
+      this.revokeRotatedAt.set(who, now);
+      while (this.revokeRotatedAt.size > 200) this.revokeRotatedAt.delete(this.revokeRotatedAt.keys().next().value as string);
+    }
     const out: GroupState[] = [];
     for (const g of [...this.groups.values()]) {
       const me = this.myId(g.via);
@@ -1407,7 +1451,7 @@ export class Messenger {
   sendWalletAddress(address: string | null, to?: string) {
     if (address && !isLunesAddress(address)) throw new Error('Endereço Lunes inválido.');
     for (const c of this.contacts.values()) {
-      if (c.via !== 'public' || c.request || this.blocked.has(c.id) || (to && c.id !== to)) continue;
+      if (c.via !== 'public' || c.request || c.groupOnly || this.blocked.has(c.id) || (to && c.id !== to)) continue;
       this.enqueue(c, { t: 'wa', a: address ?? '' }, null, Priority.Low, false);
     }
   }
@@ -1440,7 +1484,7 @@ export class Messenger {
 
   sendProfilePhoto(jpegBase64: string | null, to?: string) {
     for (const c of this.contacts.values()) {
-      if (c.via !== 'public' || c.request || this.blocked.has(c.id) || (to && c.id !== to)) continue;
+      if (c.via !== 'public' || c.request || c.groupOnly || this.blocked.has(c.id) || (to && c.id !== to)) continue;
       this.enqueue(c, { t: 'pp', p: jpegBase64 ?? '' }, null, Priority.Low, true);
     }
   }
@@ -1460,7 +1504,7 @@ export class Messenger {
     this.pendingJoins.set(gid, list.filter(x => x.id !== id));
     if (!p) return;
     if (accept) {
-      if (!this.contacts.has(p.id)) this.contacts.set(p.id, { id: p.id, via: p.via, pub: p.pub, name: p.name });
+      if (!this.contacts.has(p.id)) this.contacts.set(p.id, { id: p.id, via: p.via, pub: p.pub, name: p.name, groupOnly: true });
       this.addMembers(gid, [p.id]);
     }
     this.o.events.changed?.();
@@ -1486,7 +1530,7 @@ export class Messenger {
       this.o.events.changed?.();
       return;
     }
-    if (!this.contacts.has(from)) this.contacts.set(from, { id: from, via, pub, name });
+    if (!this.contacts.has(from)) this.contacts.set(from, { id: from, via, pub, name, groupOnly: true });
     this.addMembers(g.id, [from]);
   }
 
@@ -1560,7 +1604,13 @@ export class Messenger {
   // ── alertas da comunidade (communityAlerts.ts) ───────────────────────
 
   private alertBook: AlertBook;
-  /** Estado de cada alerta na última vez que avisei a tela (para saber o que mudou). */
+  /**
+   * Estado de cada alerta na última vez que avisei a tela (para saber o que mudou). Vai no estado
+   * salvo (`cs`): o alerta que já notificou, ficou oculto e voltou não notifica de novo depois de
+   * reabrir o app. Só ids do livro (sai junto do alerta; teto: o do livro). Limite que fica: o
+   * primeiro alerta de um autor que chega sozinho vale e notifica; se chegam depois outros mais
+   * antigos dele, pode ficar oculto (o cálculo só conhece o que está guardado).
+   */
   private alertSeen = new Map<string, AlertStatus>();
 
   private alertView(id: string): AlertView | null {
@@ -1578,6 +1628,20 @@ export class Messenger {
     this.o.events.communityAlert?.(v, noticeFor(prev, v));
   }
 
+  /** Alertas do autor que valem agora (os que passaram do limite ficam ocultos: communityAlerts.ts, `counted`). */
+  private alertsShown(gid: string, author: string): Set<string> {
+    const g = this.groups.get(gid);
+    const out = new Set<string>();
+    if (!g) return out;
+    for (const a of this.alertBook.all()) if (a.community === gid && a.author === author && this.alertBook.isCounted(a.id, g.members)) out.add(a.id);
+    return out;
+  }
+
+  /** Um encerramento ou outro alerta abriu espaço: o oculto aparece e notifica (só se ainda não foi visto). */
+  private emitNowShown(gid: string, author: string, before: Set<string>, skip: string) {
+    for (const id of this.alertsShown(gid, author)) if (id !== skip && !before.has(id)) this.emitAlert(id, !this.alertSeen.has(id));
+  }
+
   private onAlertPayload(g: GroupState, from: string, sentAt: number, w: NonNullable<ReturnType<typeof decodeAlertPayload>>) {
     const key = `${g.id}|${from}|${w.i}`;
     if (this.deliveredSet.has(key)) return;
@@ -1585,18 +1649,21 @@ export class Messenger {
     const now = this.o.now();
     if (w.kind === 'alert') {
       const who = g.members.find(x => x.id === from);
+      const before = this.alertsShown(g.id, from);
       const r = this.alertBook.addAlert({ id: w.i, community: g.id, author: from, authorName: who?.name || 'Membro', cat: w.cat, sev: w.sev, title: w.title, text: w.text, area: w.area, at: sentAt, until: sentAt + w.dur }, now, g.members);
-      if (r !== 'ok') return;
-      this.o.events.changed?.();
-      if (from !== this.myId(g.via)) this.emitAlert(w.i, true);
+      if (r === 'dup' || r === 'rejected') return;
+      if (r === 'ok' && from !== this.myId(g.via)) this.emitAlert(w.i, true);
+      this.emitNowShown(g.id, from, before, w.i);
+      this.o.events.changed?.(); // depois de avisar: o estado salvo já leva o que notificou
       return;
     }
     const a = this.alertBook.get(w.alert);
     if (a && a.community !== g.id) return; // voto para alerta de outra comunidade
+    const before = a ? this.alertsShown(a.community, a.author) : new Set<string>();
     const ok = w.kind === 'vote' ? this.alertBook.addVote(w.alert, from, w.v, sentAt, w.i, g.members, w.n) : this.alertBook.addClose(w.alert, from, sentAt, g.members);
     if (!ok) return;
+    if (a) { this.emitAlert(a.id, false); this.emitNowShown(a.community, a.author, before, a.id); }
     this.o.events.changed?.();
-    if (a) this.emitAlert(a.id, false);
   }
 
   private sealAlert(g: GroupState, body: Uint8Array, ttlSec: number, priority: Priority) {
@@ -1617,7 +1684,8 @@ export class Messenger {
 
   /**
    * Publica um alerta na comunidade (qualquer membro). Vai no grupo da comunidade, cifrado com a
-   * chave dela e com prioridade Alta. Limite: 3 ativos por membro e 1 a cada 10 min.
+   * chave dela e com prioridade Alta. Limite: 3 ativos por membro e 1 a cada 10 min (o mesmo cálculo
+   * de quem recebe; o que passa dele fica oculto nos outros aparelhos).
    */
   publishAlert(gid: string, d: { cat: AlertCategory; sev: AlertSeverity; title: string; text: string; area?: string; durSec: number }): AlertView {
     const g = this.assertCommunity(gid);
@@ -1633,9 +1701,9 @@ export class Messenger {
     if (this.alertBook.addAlert({ id, community: g.id, author: me, authorName: name, cat: d.cat, sev: d.sev, title, text, area, at: now, until: now + d.durSec }, now, g.members) !== 'ok')
       throw new Error('Não foi possível publicar o alerta.');
     this.markDelivered(`${g.id}|${me}|${id}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'alert', i: id, cat: d.cat, sev: d.sev, title, text, area, dur: d.durSec }), d.durSec, Priority.High);
     const v = this.alertView(id)!;
-    this.alertSeen.set(id, v.status);
+    this.alertSeen.set(id, v.status); // antes do `changed` de sealAlert: o salvamento já leva o status
+    this.sealAlert(g, encodeAlertPayload({ kind: 'alert', i: id, cat: d.cat, sev: d.sev, title, text, area, dur: d.durSec }), d.durSec, Priority.High);
     return v;
   }
 
@@ -1652,9 +1720,9 @@ export class Messenger {
     const n = this.alertBook.nextVoteRev(alertId, me);
     this.alertBook.addVote(alertId, me, v, now, i, g.members, n);
     this.markDelivered(`${g.id}|${me}|${i}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'vote', i, alert: alertId, v, n }), cur.until - now, Priority.Normal);
     const out = this.alertView(alertId)!;
-    this.alertSeen.set(alertId, out.status);
+    this.alertSeen.set(alertId, out.status); // antes do `changed` de sealAlert (ver publishAlert)
+    this.sealAlert(g, encodeAlertPayload({ kind: 'vote', i, alert: alertId, v, n }), cur.until - now, Priority.Normal);
     return out;
   }
 
@@ -1669,9 +1737,9 @@ export class Messenger {
     const i = randomHex(16);
     this.alertBook.addClose(alertId, me, now, g.members);
     this.markDelivered(`${g.id}|${me}|${i}`);
-    this.sealAlert(g, encodeAlertPayload({ kind: 'close', i, alert: alertId }), cur.until - now, Priority.Normal);
     const out = this.alertView(alertId)!;
-    this.alertSeen.set(alertId, out.status);
+    this.alertSeen.set(alertId, out.status); // antes do `changed` de sealAlert (ver publishAlert)
+    this.sealAlert(g, encodeAlertPayload({ kind: 'close', i, alert: alertId }), cur.until - now, Priority.Normal);
     return out;
   }
 
@@ -2062,8 +2130,12 @@ export class Messenger {
     if (changed) this.o.events.changed?.();
   }
 
-  /** Bytes que chegaram de um vizinho. */
+  /** Bytes que chegaram de um vizinho. Dado de par não é confiável: nenhuma exceção sai daqui para o transporte. */
   receive(peerId: string, bytes: Uint8Array) {
+    try { return this.receiveUnsafe(peerId, bytes); } catch { this.rx = null; return { status: 'rejected' as const, reason: 'erro ao processar' }; }
+  }
+
+  private receiveUnsafe(peerId: string, bytes: Uint8Array) {
     if (bytes.length >= 3 && bytes[0] === PROOF_MAGIC[0] && bytes[1] === PROOF_MAGIC[1]) { this.onProofs(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isProofV2Frame(bytes)) { this.onProofsV2(peerId, bytes); return { status: 'rejected' as const, reason: 'prova' }; }
     if (isPresenceFrame(bytes)) { this.onPresence(peerId, bytes); return { status: 'rejected' as const, reason: 'presença' }; }
@@ -2121,7 +2193,7 @@ export class Messenger {
     if (this.rx?.hops === 1 && this.contacts.has(m.fromId)) this.direct.set(m.fromId, { peer: this.rx.peer, at: this.o.now() });
     if (p?.t === 'cl') {
       const c = this.contacts.get(m.fromId);
-      if (!c || c.request) return true;
+      if (!c || c.request || c.groupOnly) return true;
       const s = (p as { s?: { t?: string; requestId?: unknown } }).s;
       // Pedido de chamada vem pela fila: confirma a entrega (o cartão de quem pediu vira "Entregue").
       const queued = s?.t === 'request' || s?.t === 'requestAnswer';
@@ -2145,7 +2217,7 @@ export class Messenger {
     if (p?.t === 'pq' || p?.t === 'pd') {
       // Só de contato aceito: um "pedido de conversa" (código não conferido) não pode pedir dinheiro.
       const c = this.contacts.get(m.fromId);
-      if (!c || c.request) return false;
+      if (!c || c.request || c.groupOnly) return false;
       if (p.t === 'pd') { const n = readPaidNotice(p); if (n) this.o.events.paymentPaid?.(c.id, n); return false; }
       const r = readPayRequest(p, this.o.now());
       if (!r) return false;
@@ -2266,8 +2338,9 @@ export class Messenger {
       gv: [...this.vouched],
       rk: this.rotatedFor,
       ca: this.alertBook.export(),
+      cs: [...this.alertSeen].filter(([id]) => this.alertBook.get(id)),
       gq: [...this.pendingJoins].map(([gid, l]) => [gid, l.map(p => ({ id: p.id, name: p.name, via: p.via, at: p.at, s: b64url(p.pub.signPk), a: b64url(p.pub.agreePk), b: b64url(p.pub.binding) }))]),
-      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, k: c.invite ?? '', ...(c.lunes ? { w: c.lunes } : {}), s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
+      c: [...this.contacts.values()].map(c => ({ id: c.id, via: c.via, name: c.name, r: c.request ? 1 : 0, ...(c.groupOnly ? { o: 1 } : {}), k: c.invite ?? '', ...(c.lunes ? { w: c.lunes } : {}), s: b64url(c.pub.signPk), a: b64url(c.pub.agreePk), b: b64url(c.pub.binding) })),
       q: [...this.outbox.values()],
       cy: [...this.carries].map(([id, c]) => [id, { s: b64url(c.seed), x: c.expiresAt, k: c.about, r: c.ref, ...(c.bytes && this.router.has(id) ? { b: b64url(c.bytes) } : {}) }]),
       seen: this.router.exportSeen(),

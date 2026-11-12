@@ -26,6 +26,7 @@ import { RouteSheet } from '../../ui/RouteSheet';
 import { LocationBubble, LocationSheet } from '../../ui/LocationSheet';
 import { T } from '../../ui/T';
 import { daySeparators, msgSummary, queueHoursLeft } from '../../lib/chatCore';
+import { localizeStored } from '../../lib/storedText';
 import { locationText } from '../../lib/locationCore';
 import { shareReceivedFile } from '../../lib/openFile';
 import { routeIcon, routeLabel } from '../../lib/routeCore';
@@ -163,7 +164,7 @@ export default function ChatScreen() {
               <Icon name="settings_input_antenna" size={13} color={c.ink2} />
               <T size={12.5} color={c.ink2} numberOfLines={1}>{t('lora.chat.sub')}</T>
             </View>
-          ) : <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.kind === 'direct' && waiting.length ? t('chat.queue.sub', { count: waiting.length }) : chat.sub}</T>}
+          ) : <T size={12.5} color={c.ink2} numberOfLines={1} accessibilityLiveRegion="polite">{typing[chat.id] ? t('chat.typing') : chat.kind === 'direct' && waiting.length ? t('chat.queue.sub', { count: waiting.length }) : chat.sub && localizeStored(chat.sub, t)}</T>}
         </View>
         {call && chat.kind === 'direct' && (call.canCall?.(chat.id) ?? true) && <CallButton onPress={() => call.callChat(chat.id)} />}
         <Pressable onPress={openInfo} accessibilityRole="button" accessibilityLabel={chat.kind === 'direct' ? t('chat.info.contact') : chat.kind === 'group' ? t('chat.info.group') : chat.kind === 'community' ? t('chat.info.community') : t('chat.info.channel')} style={{ width: 40, height: 40, alignItems: 'center', justifyContent: 'center' }}>
@@ -327,7 +328,7 @@ function Bubble({ msg, chat, lora, gap, pay, checking, onPress, onRetry, onToggl
     return (
       <View style={{ alignSelf: 'center', maxWidth: 300, marginTop: 8, marginBottom: 4, paddingVertical: 7, paddingHorizontal: 12, borderRadius: 12, backgroundColor: c.bg2, flexDirection: 'row', gap: 6, alignItems: 'flex-start' }}>
         <Icon name="key" size={14} style={{ marginTop: 1 }} />
-        <T size={12} lh={1.4} color={c.ink2} style={{ flexShrink: 1, textAlign: 'center' }}>{msg.text}</T>
+        <T size={12} lh={1.4} color={c.ink2} style={{ flexShrink: 1, textAlign: 'center' }}>{localizeStored(msg.text, t)}</T>
       </View>
     );
   }

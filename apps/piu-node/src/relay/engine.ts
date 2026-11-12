@@ -156,6 +156,11 @@ const MAX_LAST_SEEN = 4096;
 /** Ajustes e resumos guardados (um por equipamento): mais do que isto, os mais antigos saem. */
 const MAX_DEVICES = 256;
 const REPORT_MS = 30_000;
+/**
+ * Id curto do vizinho para o log: journald/logread guardam histórico e outros usuários leem, então
+ * o log não grava o id inteiro nem o endereço (quem esteve perto do nó e quando). O painel mostra tudo.
+ */
+const shortId = (id: string) => `${id.slice(0, 4)}…`;
 
 /** O horário de operação vale agora? (hora local do equipamento) */
 export function inWindow(hours: HoursPolicy, ms: number): boolean {
@@ -355,7 +360,7 @@ export class RelayEngine {
     this.counters.handshakesOk++;
     this.links.set(link.id, link);
     this.seen(link.session.peerId);
-    this.log(`LNNP: vizinho ${link.session.peerId} conectado (${link.address}, v${link.session.version})`);
+    this.log(`LNNP: vizinho ${shortId(link.session.peerId)} conectado (v${link.session.version})`);
     this.flush(link);
     this.syncOperator(link);
     return true;
@@ -410,7 +415,7 @@ export class RelayEngine {
     this.sameOperator.delete(id);
     this.receiptRate.delete(id);
     this.seen(l.session.peerId);
-    this.log(`LNNP: vizinho ${l.session.peerId} desconectado`);
+    this.log(`LNNP: vizinho ${shortId(l.session.peerId)} desconectado`);
   }
 
   /** "Visto por último", com tamanho fixo: reinsere no fim e tira os mais antigos (B-03 da auditoria). */

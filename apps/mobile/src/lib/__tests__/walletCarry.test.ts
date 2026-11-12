@@ -150,9 +150,19 @@ test('com internet: um gateway já incluiu → acha pelo recibo ou pela busca; n
     c2.state.pool.push('0x' + 'aa'.repeat(150)); c2.mine(2, true);
     const rpc2 = c2.rpc();
     try {
-      const lost = await reconcileCarriedTransfer(r2, w2.cb, { rpc: rpc2, outgoingBlocks: async () => null });
+      // Indexador fora do ar: só o nó RPC não basta para dizer "não concluída".
+      const unsure = await reconcileCarriedTransfer(r2, w2.cb, { rpc: rpc2, outgoingBlocks: async () => null });
+      assert.equal(unsure.status, 'signed');
+      assert.match(unsure.error!, /não refaça o pagamento/i);
+      const lost = await reconcileCarriedTransfer(unsure, w2.cb, { rpc: rpc2, outgoingBlocks: async () => [] });
       assert.equal(lost.status, 'failed');
       assert.match(lost.error!, /mesmo nonce/);
+      // Indexador fora do ar por 24 h: não fica em trânsito (e bloqueando envios) para sempre.
+      const since = await reconcileCarriedTransfer(r2, w2.cb, { rpc: rpc2, outgoingBlocks: async () => null, now: () => NOW });
+      assert.equal(since.status, 'signed'); assert.equal(since.unconfirmedSince, NOW);
+      const freed = await reconcileCarriedTransfer(since, w2.cb, { rpc: rpc2, outgoingBlocks: async () => null, now: () => NOW + 24 * 3_600_000 });
+      assert.equal(freed.status, 'failed'); assert.equal(isActiveWalletTransfer(freed), false);
+      assert.match(freed.error!, /confira/i);
     } finally { rpc2.close(); }
   } finally { rpc.close(); }
 });
@@ -187,7 +197,14 @@ test('com internet: Lunes recusa (saldo) → não concluída com o aviso; sem ro
     assert.equal(still.status, 'signed');
     assert.match(still.error!, /Segue em trânsito/);
     chain.state.offline = false; chain.state.validity = PAYMENT;
-    const failed = await reconcileCarriedTransfer(still, w.cb, { rpc });
+    // A recusa vem de um nó RPC só: sem o indexador para conferir, segue em trânsito.
+    const unsure = await reconcileCarriedTransfer(still, w.cb, { rpc, outgoingBlocks: async () => null });
+    assert.equal(unsure.status, 'signed');
+    assert.match(unsure.error!, /não refaça o pagamento/i);
+    // Indexador lista uma saída igual: as fontes discordam, não diz "não concluída".
+    const conflict = await reconcileCarriedTransfer(unsure, w.cb, { rpc, outgoingBlocks: async () => [1003] });
+    assert.equal(conflict.status, 'signed'); assert.match(conflict.error!, /#1003/);
+    const failed = await reconcileCarriedTransfer(conflict, w.cb, { rpc, outgoingBlocks: async () => [] });
     assert.equal(failed.status, 'failed');
     assert.match(failed.error!, /Payment/);
     assert.match(failed.error!, /ainda pode valer/);

@@ -214,6 +214,8 @@ export const main = {
   'main.check.homeOk': 'Nenhuma outra rede privada respondeu',
   'main.check.internetYes': 'Tem · fica desligada para o ponto',
   'main.check.internetNo': 'Não tem · o ponto funciona só na rede local',
+  'main.check.internetLocalYes': 'Parece ter (há rota de saída) · estimativa local, nada foi consultado fora da rede',
+  'main.check.internetLocalNo': 'Parece não ter (sem rota de saída) · estimativa local, nada foi consultado fora da rede',
   'main.check.diskUnknown': 'Não deu para ler o espaço livre do disco',
   'main.check.diskGood': 'Boa · {free} livres no disco',
   'main.check.diskTight': 'Apertada · {free} livres no disco',

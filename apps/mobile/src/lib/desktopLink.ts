@@ -61,6 +61,34 @@ export class DesktopLinkError extends Error {
 export interface LinkOffer { v: number; host: string; port: number; pk: Uint8Array; session: Uint8Array; /** SHA-256 do certificado TLS (DER). */ cert: Uint8Array }
 
 const HOST_RE = /^(\[[0-9a-fA-F:.]+\]|[A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)$/;
+const OCTET = '(0|[1-9]\\d{0,2})';
+const IPV4_RE = new RegExp(`^${OCTET}\\.${OCTET}\\.${OCTET}\\.${OCTET}$`);
+
+/**
+ * O computador do vínculo está na mesma rede: só IP literal privado ou link-local (10/8, 172.16/12,
+ * 192.168/16, 169.254/16, 100.64/10, fe80::/10, fc00::/7). Nome DNS, IP público, loopback e 0.0.0.0
+ * ficam de fora: um QR de outra pessoa não leva o celular a um servidor na internet (QRLjacking).
+ * IPv4 só em decimal sem zero à esquerda (nada de octal, hexadecimal, inteiro ou forma curta).
+ */
+function isLocalHost(host: string): boolean {
+  if (host.startsWith('[')) {
+    const a = host.slice(1, -1).toLowerCase();
+    if (a.includes('.') || a.includes(':::')) return false;
+    const halves = a.split('::');
+    if (halves.length > 2) return false;
+    const groups = halves.flatMap(h => (h ? h.split(':') : []));
+    if (!groups.every(g => /^[0-9a-f]{1,4}$/.test(g))) return false;
+    if (halves.length === 1 ? groups.length !== 8 : groups.length > 7) return false;
+    if (!halves[0] || groups[0]!.length !== 4) return false;
+    const first = parseInt(groups[0]!, 16);
+    return (first & 0xffc0) === 0xfe80 || (first & 0xfe00) === 0xfc00;
+  }
+  const m = IPV4_RE.exec(host);
+  if (!m) return false;
+  const [a, b, c, d] = m.slice(1).map(Number) as [number, number, number, number];
+  if (a > 255 || b > 255 || c > 255 || d > 255) return false;
+  return a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+}
 const isZero = (b: Uint8Array) => b.every(x => x === 0);
 
 function fromB64(s: string, len: number, what: string): Uint8Array {
@@ -90,6 +118,7 @@ export function parseLinkQr(text: string): LinkOffer {
   if (colon < 1) throw new DesktopLinkError('FORMAT', 'Endereço do computador inválido.');
   const host = h.slice(0, colon), portS = h.slice(colon + 1);
   if (!HOST_RE.test(host) || host.length > 253 || !/^\d{1,5}$/.test(portS)) throw new DesktopLinkError('FORMAT', 'Endereço do computador inválido.');
+  if (!isLocalHost(host)) throw new DesktopLinkError('FORMAT', 'Este QR aponta para fora da sua rede. O computador e o celular precisam estar na mesma rede Wi-Fi.');
   const port = Number(portS);
   if (port < 1 || port > 65535) throw new DesktopLinkError('FORMAT', 'Porta inválida no QR.');
   const pk = fromB64(k, KEY_BYTES, 'Chave do computador');

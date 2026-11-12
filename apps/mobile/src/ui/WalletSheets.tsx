@@ -12,7 +12,7 @@ import { CodeReader } from '../lib/migrationUi';
 import { formatLunes, LUNES_EXPLORER, planckToLunes } from '../lib/lunesRpc';
 import { decodeSs58 } from '../lib/ss58';
 import { blockLabel, lunes2, walletSummary, whenLabel } from '../lib/walletCore';
-import { DEFAULT_AMOUNT, OTHER_ID, QUICK_AMOUNTS, QUOTE_DEBOUNCE_MS, amountState, contactAddresses, parseWalletQr, receiveAddressLabel, recipientsFrom, sanitizeAmount, type Recipient } from '../lib/walletSend';
+import { DEFAULT_AMOUNT, OTHER_ID, QUICK_AMOUNTS, QUOTE_DEBOUNCE_MS, addressTrust, amountState, contactAddresses, groupAddress, needsAddressAck, parseWalletQr, receiveAddressLabel, recipientsFrom, sanitizeAmount, type Recipient } from '../lib/walletSend';
 import { WalletTransferError, type WalletQuote, type WalletTransferRecord } from '../lib/walletTransfer';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
@@ -36,7 +36,8 @@ const NO_TOTALS = { pendente: 0, validado: 0, em_lote: 0, rejeitado: 0, pago: 0 
  * Folha Enviar (design §2): destinatários em círculos, valor grande com chips 1/5/10, resumo e o botão
  * "Segure para assinar e enviar" na própria folha. Tudo com dados reais da Lunes Mainnet:
  * - destinatários: contatos que já mandaram pedido de pagamento com o endereço deles, mais "Outro"
- *   (endereço digitado ou lido pelo QR de outra carteira);
+ *   (endereço digitado ou lido pelo QR de outra carteira); o endereço do contato escolhido aparece ao lado
+ *   do nome, e se for diferente do último envio concluído para ele a folha avisa e pede confirmação;
  * - a cotação (`quoteTransfer`: taxa e disponível) é pedida em segundo plano, com debounce, assim que
  *   destino e valor valem, para o resumo e o botão ficarem na folha sem o passo "estimar";
  * - o gesto abre a cena de pagamento, que chama o mesmo `sendTransfer` (biometria → sr25519 → nó Lunes)
@@ -48,7 +49,7 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
   const { c } = useTheme();
   const t = useT();
   const { chats } = useStore();
-  const { payments, walletContacts } = useMessaging();
+  const { payments, walletContacts, confirmedWallets, confirmWallet } = useMessaging();
   const { canSign, nativeWalletReady, useOwnWallet, quoteTransfer, sendTransfer, pendingTransfer, transferRecoveryBlocked, refreshTransfer, retryTransfer, onchain, reserved, lunesAddress, onchainSnap, onchainStatus, offlineContext, transferInTransit } = useWallet();
   // Contatos com endereço Lunes conhecido: o que o contato compartilhou (payload `wa`) manda; senão o do último
   // pedido de pagamento que ele mandou. Até 3, mais "Outro" (4 círculos, como no design); vindo de uma conversa,
@@ -65,7 +66,9 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
   const [quote, setQuote] = useState<WalletQuote | null>(null);
   const [quoting, setQuoting] = useState(false);
   const [quoteError, setQuoteError] = useState<string | null>(null);
-  const [scene, setScene] = useState<{ dest: string; amount: string; quote: WalletQuote | null } | null>(null);
+  const [scene, setScene] = useState<{ dest: string; amount: string; quote: WalletQuote | null; chatId: string | null } | null>(null);
+  // Endereço novo de um contato que a pessoa aceitou usar nesta folha (aviso "o endereço deste contato mudou").
+  const [acked, setAcked] = useState<string | null>(null);
   // A folha some por baixo da íris (design: 760 ms) e volta só se a cena terminar em erro.
   const [covered, setCovered] = useState(false);
   const [record, setRecord] = useState<WalletTransferRecord | null>(pendingTransfer);
@@ -83,6 +86,10 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
   const dest = chosen.id === OTHER_ID ? other.trim() : chosen.address!;
   const destCheck = dest ? decodeSs58(dest) : null;
   const destOk = !!destCheck?.ok;
+  // Contato escolhido: o endereço proposto agora contra o do último envio concluído para ele.
+  const isContact = chosen.id !== OTHER_ID;
+  const trust = isContact ? addressTrust(confirmedWallets[chosen.id], dest) : 'first';
+  const mustAck = isContact && needsAddressAck(trust, acked, dest);
   // Saldo disponível para enviar: o da cotação (free − bloqueios − mínimo da conta) quando existe; antes, a leitura da Mainnet.
   const snap = onchainSnap && onchainSnap.address === lunesAddress ? onchainSnap : null;
   const available = meshOn && offlineContext ? planckToLunes(BigInt(offlineContext.available)) : quote ? planckToLunes(BigInt(quote.available)) : snap ? walletSummary({ onchain, totals: NO_TOTALS, reserved, perLunes: CREDIT_PARAMS.creditsPerLunes }).available : null;
@@ -122,14 +129,18 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
   const sceneDone = (r: PayResult) => {
     setScene(null); setCovered(false);
     if (r.record) setRecord(r.record);
-    if (r.record && !r.error) { setQuote(null); onSent?.(r.record); onClose(); return; }
+    if (r.record && !r.error) {
+      // Envio concluído para um contato: esse endereço passa a ser o confirmado da conversa.
+      if (scene?.chatId) confirmWallet(scene.chatId, scene.dest);
+      setQuote(null); onSent?.(r.record); onClose(); return;
+    }
     setError(r.error ?? t('ownWallet.error'));
   };
   /** Gesto completo: abre a cena já; se a cotação ainda não chegou, a cena a pede antes de assinar. */
   const sign = () => {
-    if (working.current || !amt.ok || !destOk) return;
+    if (working.current || !amt.ok || !destOk || mustAck) return;
     Keyboard.dismiss(); setError(null);
-    setScene({ dest, amount, quote });
+    setScene({ dest, amount, quote, chatId: isContact ? chosen.id : null });
   };
   const sceneSend = async () => {
     if (!scene) throw new Error(t('ownWallet.error'));
@@ -150,7 +161,7 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
   const note = error ?? (meshOn ? null : quoteError) ?? (chosen.id === OTHER_ID && other.trim() && destCheck && !destCheck.ok ? destCheck.error : null) ?? (amt.over && available !== null ? t('wallet.sendSheet.over') : null);
   const fee = meshOn && offlineContext ? t('n11.n8.feeValue', { fee: formatLunes(BigInt(offlineContext.fee) * 2n) }) : quote ? `${formatLunes(BigInt(quote.fee))} LUNES` : quoting ? t('ownWallet.estimating') : '—';
   const meshFooter = !meshOn ? undefined
-    : mesh.kind === 'mesh' ? <PnButton label={t('n11.n8.continue')} icon="hub" disabled={!amt.ok || !destOk} onPress={() => { onClose(); router.push({ pathname: '/wallet/mesh', params: { dest, amount } }); }} />
+    : mesh.kind === 'mesh' ? <PnButton label={t('n11.n8.continue')} icon="hub" disabled={!amt.ok || !destOk || mustAck} onPress={() => { onClose(); router.push({ pathname: '/wallet/mesh', params: { dest, amount } }); }} />
     : mesh.kind === 'stale' ? <StateCard icon="wifi_off" solid title={t('n11.n8a.title')} body={t('n11.n8a.body', { max: OFFLINE_CONTEXT_MAX_AGE_MS / 86_400_000, count: mesh.days })} />
     : mesh.kind === 'noReading' ? <StateCard icon="wifi_off" solid title={t('n11.n8a.none')} body={t('n11.n8a.noneBody', { max: OFFLINE_CONTEXT_MAX_AGE_MS / 86_400_000 })} />
     : <T size={13} lh={1.45} color={c.ink2} align="center">{t('n11.n8.unavailable')}</T>;
@@ -188,10 +199,11 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
       ) : (
         <>{meshOn && <MeshBanner />}<SendForm recipients={recipients} to={chosen.id} onPick={pick} other={other} onOther={v => { setOther(v.replace(/\s/g, '')); setError(null); }}
           scanning={scanning} onScan={() => setScanning(s => !s)}
+          contact={isContact ? { name: chosen.name, address: dest, was: mustAck ? confirmedWallets[chosen.id]! : null, onConfirm: () => setAcked(dest) } : null}
           reader={scanning ? <CodeReader hint={t('wallet.sendSheet.scan.hint')} placeholder={t('wallet.sendSheet.scan.placeholder')} onRead={readQr} /> : null}
           amount={amount} onAmount={v => { setAmount(sanitizeAmount(v)); setError(null); }}
           available={available === null ? '—' : `${lunes2(available)} LUNES`} fee={fee} note={note}
-          holdDisabled={busy || !amt.ok || !destOk || !!quoteError} onSign={sign} footer={meshFooter} /></>
+          holdDisabled={busy || !amt.ok || !destOk || !!quoteError || mustAck} onSign={sign} footer={meshFooter} /></>
       ))}
       {!!error && (active || record || !canSign) && <T size={13} lh={1.45} accessibilityLiveRegion="polite">{error}</T>}
       {scene && (
@@ -209,9 +221,11 @@ export function SendSheet({ onClose, onSent, toChatId }: { onClose: () => void; 
  * valor 56/650 centralizado, chips 1/5/10 LUNES (32 px, raio 16, `bg2`), resumo (`bg2`, raio 18,
  * 14/16, 13 px) e o botão de segurar com a dica abaixo (onde também aparecem os avisos).
  */
-export function SendForm({ recipients, to, onPick, other, onOther, scanning, onScan, reader, amount, onAmount, available, fee, note, holdDisabled, onSign, footer }: {
+export function SendForm({ recipients, to, onPick, other, onOther, scanning, onScan, reader, contact, amount, onAmount, available, fee, note, holdDisabled, onSign, footer }: {
   recipients: Recipient[]; to: string; onPick: (r: Recipient) => void;
   other: string; onOther: (v: string) => void; scanning: boolean; onScan: () => void; reader: ReactNode;
+  /** Contato escolhido: o endereço dele ao lado do nome. `was` = endereço do último envio concluído, quando o de agora é outro e ainda falta confirmar. */
+  contact?: { name: string; address: string; was: string | null; onConfirm: () => void } | null;
   amount: string; onAmount: (v: string) => void; available: string; fee: string; note: string | null;
   holdDisabled: boolean; onSign: () => void;
   /** Sem rede (Piu 11 N8/N8a): no lugar do botão de segurar, "Continuar sem internet" ou o aviso. */
@@ -240,6 +254,24 @@ export function SendForm({ recipients, to, onPick, other, onOther, scanning, onS
         })}
       </View>
       {onlyOther && <T size={12.5} lh={1.4} color={c.ink2} style={{ marginTop: -8 }}>{t('wallet.sendSheet.noContacts')}</T>}
+      {!!contact && (
+        <View style={{ gap: 4, marginTop: -6 }}>
+          <T size={13} w={600}>{contact.name}</T>
+          <T size={12.5} lh={1.5} mono selectable accessibilityLabel={t('wallet.sendSheet.contactAddr.a11y', { name: contact.name, address: contact.address })}>{groupAddress(contact.address)}</T>
+        </View>
+      )}
+      {!!contact?.was && (
+        <View accessibilityLiveRegion="polite" style={{ padding: 16, borderRadius: 20, borderWidth: 1.5, borderColor: c.ink, gap: 10 }}>
+          <View style={{ flexDirection: 'row', gap: 10, alignItems: 'center' }}>
+            <Icon name="error" size={24} w={300} />
+            <T size={15} w={650} style={{ flex: 1 }}>{t('wallet.sendSheet.addrChanged.title')}</T>
+          </View>
+          <T size={13} lh={1.45} color={c.ink2}>{t('wallet.sendSheet.addrChanged.body', { name: contact.name })}</T>
+          <AddressLine label={t('wallet.sendSheet.addrChanged.before')} address={groupAddress(contact.was)} />
+          <AddressLine label={t('wallet.sendSheet.addrChanged.now')} address={groupAddress(contact.address)} />
+          <Button label={t('wallet.sendSheet.addrChanged.confirm')} variant="outline" height={46} onPress={contact.onConfirm} />
+        </View>
+      )}
       {otherOn && (
         <View style={{ gap: 10, marginTop: -6 }}>
           <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>

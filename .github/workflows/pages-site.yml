@@ -9,10 +9,9 @@ on:
     paths: ['apps/site/**', 'apps/provider-panel/**', '.github/workflows/pages-site.yml']
   workflow_dispatch:
 
+# Menor privilégio: o build só lê (código e dados do Pages); só o job de publicação escreve no Pages.
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
@@ -22,6 +21,11 @@ jobs:
   build:
     name: Build do site
     runs-on: ubuntu-latest
+    # O configure-pages consulta a API do Pages (só leitura). Permissão no job troca a do topo,
+    # por isso o contents: read aparece de novo aqui.
+    permissions:
+      contents: read
+      pages: read
     defaults:
       run:
         working-directory: apps/site
@@ -39,14 +43,14 @@ jobs:
             apps/site/package-lock.json
             apps/provider-panel/package-lock.json
       - id: pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - run: npm ci
       - name: Build (painel embutido + site)
         run: npm run build
         env:
           SITE_URL: ${{ steps.pages.outputs.origin }}
           BASE_PATH: ${{ steps.pages.outputs.base_path }}/
-      - uses: actions/upload-pages-artifact@v3
+      - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: apps/site/dist
 
@@ -54,9 +58,12 @@ jobs:
     name: Publicar
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@d6db90164ac5ed86f2b6aed7e0febac5b3c0c03e # v4

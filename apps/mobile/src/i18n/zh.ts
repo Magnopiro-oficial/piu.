@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/zh';
 import { call } from './call/zh';
 import { lora } from './lora/zh';
 import { map } from './map/zh';
+import { stored } from './stored/zh';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': '返回',
   'common.close': '关闭',
   'common.cancel': '取消',
@@ -633,6 +635,11 @@ export const dict: Dict = {
   "scan.panel.repair.title": "用新的密钥重新配对?",
   "scan.panel.repair.body": "此手机已与 {node} 配对。继续将替换配对:转账批准将只对此二维码的面板有效。只有在你本人于面板中生成此二维码时才继续。",
   "scan.panel.repair.confirm": "替换配对",
+  "scan.panel.pairNew.title": "与此设备配对？",
+  "scan.panel.pairNew.body": "{node} · {operator}\n地址：{url}\n证书：{pin}\n\n只有在你本人于自己设备的面板中打开此二维码时才继续。",
+  "scan.panel.pairNew.pasted": "此代码是粘贴的，不是相机扫描的。请确认它的来源。",
+  "scan.panel.pairNew.confirm": "配对",
+  "scan.panel.pairNew.prompt": "确认与 {node} 配对",
   "join.sent": "已向{name}发送请求",
   "join.sent.body": "管理员收到请求并批准（如群组要求）后，你即可加入。",
   "scan.verify.mismatch": "此二维码不属于{name}。如果对方就在面前，密钥可能已被替换：请勿信任此聊天。",
@@ -880,6 +887,8 @@ export const dict: Dict = {
   "devices.scan.path": "恢复 → 从另一台设备",
   "devices.scan.after": "。然后扫描该设备显示的二维码。",
   "devices.scan.hint": "将相机对准新设备二维码。密钥经加密直接传输，不经过服务器。",
+  "devices.scan.noCamera": "没有相机权限。请在设备设置中允许使用相机，以读取新设备的二维码。",
+  "devices.scan.cameraOnly": "为了安全，这里的代码只能通过相机读取，两台设备需放在一起。切勿根据他人发来的代码发送你的密钥。",
   "devices.reply.title": "现在用新设备扫描此二维码",
   "devices.reply.qr": "给新设备的回复二维码",
   "devices.reply.prompt": "请确认{name}上显示相同词语：",
@@ -1794,6 +1803,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "联系人分享其 Lunes 地址或发送带该地址的付款请求后，会显示在这里。",
   "wallet.sendSheet.settleValue": "进入 Lunes Mainnet 区块时",
   "wallet.sendSheet.over": "金额超过可用余额",
+  "wallet.sendSheet.contactAddr.a11y": "{name} 的 Lunes 地址：{address}",
+  "wallet.sendSheet.addrChanged.title": "此联系人的地址已更改",
+  "wallet.sendSheet.addrChanged.body": "{name} 现在显示的 Lunes 地址与你上次完成发送时的不同。发送前请通过其他方式向对方确认。",
+  "wallet.sendSheet.addrChanged.before": "上次发送的地址",
+  "wallet.sendSheet.addrChanged.now": "现在的地址",
+  "wallet.sendSheet.addrChanged.confirm": "使用新地址",
   "wallet.sendSheet.scan.a11y": "扫描另一个钱包的二维码",
   "wallet.sendSheet.scan.hint": "将相机对准目标钱包的二维码：Lunes 地址或 Piu 付款请求。",
   "wallet.sendSheet.scan.placeholder": "Lunes 地址或付款请求",

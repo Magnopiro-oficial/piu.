@@ -92,6 +92,12 @@ private let maxHelloBytes = 64
 private let maxEnvelopeBytes = 32 * 1024
 private let maxPartialMessages = 64
 private let partialTimeout: TimeInterval = 60
+/** Teto de periféricos (conectados ou tentando), o mesmo `MAX_CLIENTS` do Android. */
+private let maxPeripherals = 6
+/** Tentativa de conexão que não termina em tanto tempo é cancelada (o CoreBluetooth não desiste sozinho). */
+private let connectTimeout: TimeInterval = 15
+/** Teto de blocos esperando para notificar: acima disso o envio é recusado (o rádio não está dando conta). */
+private let maxPendingNotify = 512
 
 /** Uma remontagem aberta (struct em vez de tupla rotulada: inferência de tipo mais simples para o compilador). */
 private struct Partial {
@@ -124,6 +130,10 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var outbox: CBMutableCharacteristic?
   private var subscribers: [UUID: CBCentral] = [:]
   private var pendingNotify: [(Data, CBCentral)] = []
+  /** Tentativas canceladas pelo prazo: o retorno do CoreBluetooth (falha/desconexão) é ignorado. */
+  private var timedOut: Set<UUID> = []
+  /** Início da tentativa de conexão de cada periférico (o prazo só vale para a tentativa que o criou). */
+  private var connectStarted: [UUID: Date] = [:]
 
   private var nextMessageId: UInt32 = 1
   /** Nome curto do nó de cada vizinho (anúncio ou `hello`). */
@@ -134,6 +144,8 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   private var scanTimer: DispatchSourceTimer?
   /** Cada varredura dura isto (s); depois o rádio descansa até a próxima. */
   private let scanWindow: TimeInterval = 4
+  /** Depois do `stop` os retornos atrasados do CoreBluetooth não religam a varredura. */
+  private var stopped = false
 
   init(name: String, emit: @escaping Emit) {
     self.name = name
@@ -179,12 +191,13 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
 
   func stop() {
     queue.sync {
+      stopped = true
       scanTimer?.cancel(); scanTimer = nil
       central.stopScan()
       peripherals.values.forEach { central.cancelPeripheralConnection($0) }
       peripheralManager.stopAdvertising()
       peripheralManager.removeAllServices()
-      peripherals.removeAll(); inboxes.removeAll(); subscribers.removeAll(); pendingNotify.removeAll(); partial.removeAll(); names.removeAll()
+      peripherals.removeAll(); inboxes.removeAll(); subscribers.removeAll(); pendingNotify.removeAll(); partial.removeAll(); names.removeAll(); timedOut.removeAll(); connectStarted.removeAll()
     }
   }
 
@@ -200,7 +213,9 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
           p.writeValue(chunk, for: inbox, type: .withResponse)
         }
       } else if let c = subscribers[id], let out = outbox {
-        for chunk in frames(data, mtu: c.maximumUpdateValueLength) {
+        let chunks = frames(data, mtu: c.maximumUpdateValueLength)
+        guard pendingNotify.count + chunks.count <= maxPendingNotify else { throw PeerNotConnectedException(peerId) }
+        for chunk in chunks {
           if !peripheralManager.updateValue(chunk, for: out, onSubscribedCentrals: [c]) { pendingNotify.append((chunk, c)) }
         }
       } else {
@@ -293,7 +308,11 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
 
   func centralManager(_ c: CBCentralManager, didDiscover p: CBPeripheral, advertisementData ad: [String: Any], rssi: NSNumber) {
     guard peripherals[p.identifier] == nil else { return }
+    // Teto de conexões: um anunciante com endereços aleatórios não esgota o Bluetooth nem a memória.
+    guard peripherals.count < maxPeripherals else { return }
     peripherals[p.identifier] = p
+    timedOut.remove(p.identifier) // nova tentativa: retornos daqui em diante valem
+    if timedOut.count > 256 { timedOut.removeAll() }
     // iPhone anuncia o nome local; Android, no service data do serviço Piu (resposta de varredura).
     let serviceData = (ad[CBAdvertisementDataServiceDataKey] as? [CBUUID: Data])?[serviceUUID].flatMap { String(data: $0, encoding: .utf8) }
     let peerName = ad[CBAdvertisementDataLocalNameKey] as? String ?? serviceData ?? p.name ?? "piu"
@@ -301,6 +320,33 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     emit("onPeerFound", ["id": p.identifier.uuidString, "name": peerName, "via": "ble"])
     p.delegate = self
     c.connect(p)
+    // Quem não completa a conexão (nem chega à inbox) a tempo libera a vaga.
+    let id = p.identifier
+    let started = Date()
+    connectStarted[id] = started
+    queue.asyncAfter(deadline: .now() + connectTimeout) { [weak self] in
+      guard let self = self, self.connectStarted[id] == started else { return }
+      self.connectStarted[id] = nil
+      guard let pending = self.peripherals[id], self.inboxes[id] == nil else { return }
+      self.peripherals[id] = nil
+      self.timedOut.insert(id)
+      self.central.cancelPeripheralConnection(pending)
+      self.slotFreed()
+      // O mesmo vizinho pode seguir conectado pelo outro papel (ele inscrito na nossa outbox).
+      guard self.subscribers[id] == nil else { return }
+      self.names[id] = nil
+      self.emit("onPeerLost", ["id": id.uuidString, "via": "ble"])
+    }
+  }
+
+  /**
+   * Vaga liberada. Na varredura contínua (modo Rápida) o ciclo nunca reinicia e, sem duplicatas, quem
+   * ficou de fora pelo teto ou caiu no prazo não seria relatado de novo: reinicia a varredura para isso.
+   */
+  private func slotFreed() {
+    guard !stopped, scanTimer == nil, scanInterval <= scanWindow + 1, central.state == .poweredOn else { return }
+    central.stopScan()
+    central.scanForPeripherals(withServices: [serviceUUID], options: [CBCentralManagerScanOptionAllowDuplicatesKey: false])
   }
 
   func centralManager(_ c: CBCentralManager, didConnect p: CBPeripheral) {
@@ -308,15 +354,21 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
   }
 
   func centralManager(_ c: CBCentralManager, didFailToConnect p: CBPeripheral, error: Error?) {
+    if timedOut.remove(p.identifier) != nil { return } // já liberado pelo prazo
     peripherals[p.identifier] = nil
+    slotFreed()
+    if subscribers[p.identifier] == nil { names[p.identifier] = nil }
     emit("onPeerLost", ["id": p.identifier.uuidString, "via": "ble"])
   }
 
   func centralManager(_ c: CBCentralManager, didDisconnectPeripheral p: CBPeripheral, error: Error?) {
+    if timedOut.remove(p.identifier) != nil { return } // já liberado pelo prazo, o app já foi avisado
     peripherals[p.identifier] = nil
     inboxes[p.identifier] = nil
+    slotFreed()
     // O mesmo vizinho pode seguir conectado pelo outro papel (ele inscrito na nossa outbox).
     guard subscribers[p.identifier] == nil else { return }
+    names[p.identifier] = nil
     emit("onDisconnected", ["id": p.identifier.uuidString, "via": "ble"])
     emit("onPeerLost", ["id": p.identifier.uuidString, "via": "ble"])
   }
@@ -376,6 +428,7 @@ private final class BleEngine: NSObject, CBCentralManagerDelegate, CBPeripheralM
     subscribers[central.identifier] = nil
     pendingNotify.removeAll { $0.1.identifier == central.identifier }
     guard inboxes[central.identifier] == nil else { return }
+    if peripherals[central.identifier] == nil { names[central.identifier] = nil }
     emit("onDisconnected", ["id": central.identifier.uuidString, "via": "ble"])
     emit("onPeerLost", ["id": central.identifier.uuidString, "via": "ble"])
   }

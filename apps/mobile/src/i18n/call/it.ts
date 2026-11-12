@@ -6,8 +6,8 @@ export const call: Dict = {
   'call.action': 'Chiama',
   'call.action.tip': 'Chiamata vocale · {keys}',
   'call.callName': 'Chiama {first}',
-  'call.e2e': 'Crittografata end-to-end',
-  'call.e2e.long': 'Crittografata end-to-end. Nessuno lungo il percorso può ascoltare, nemmeno Lunes.',
+  'call.e2e': 'Cifrata end-to-end',
+  'call.e2e.long': 'Cifrata end-to-end. Nessuno lungo il percorso può ascoltare, nemmeno Lunes.',
   'call.verified': 'Parole verificate',
 
   'call.route.direct': 'Diretta · Wi-Fi locale',

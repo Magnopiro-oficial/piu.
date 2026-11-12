@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/es';
 import { call } from './call/es';
 import { lora } from './lora/es';
 import { map } from './map/es';
+import { stored } from './stored/es';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Volver',
   'common.close': 'Cerrar',
   'common.cancel': 'Cancelar',
@@ -632,6 +634,11 @@ export const dict: Dict = {
   'scan.panel.repair.title': '¿Vincular de nuevo con otro secreto?',
   'scan.panel.repair.body': 'Este móvil ya está vinculado con {node}. Continuar reemplaza la vinculación: las aprobaciones de transferencia solo valdrán para el panel de este QR. Continúa solo si generaste tú este QR en el panel.',
   'scan.panel.repair.confirm': 'Reemplazar vinculación',
+  'scan.panel.pairNew.title': '¿Emparejar con este equipo?',
+  'scan.panel.pairNew.body': '{node} · {operator}\nDirección: {url}\nCertificado: {pin}\n\nContinúa solo si abriste tú este QR en el panel de tu equipo.',
+  'scan.panel.pairNew.pasted': 'Este código se pegó, no lo leyó la cámara. Comprueba de dónde vino.',
+  'scan.panel.pairNew.confirm': 'Emparejar',
+  'scan.panel.pairNew.prompt': 'Confirma para emparejar con {node}',
   'join.sent': 'Solicitud enviada a {name}',
   'join.sent.body': 'Entras cuando un admin reciba la solicitud (y la apruebe, si el grupo lo exige).',
   'scan.verify.mismatch': 'Este QR no es de {name}. Si la persona está delante de ti, alguien puede haber cambiado las claves: no confíes en la conversación.',
@@ -879,6 +886,8 @@ export const dict: Dict = {
   'devices.scan.path': 'Restaurar → Desde otro dispositivo',
   'devices.scan.after': '. Después lee el QR que aparece en él.',
   'devices.scan.hint': 'Apunta la cámara al QR del dispositivo nuevo. Las claves van directas y cifradas, sin servidor.',
+  'devices.scan.noCamera': 'Sin permiso para la cámara. Permite la cámara en los ajustes del dispositivo para leer el QR del dispositivo nuevo.',
+  'devices.scan.cameraOnly': 'Por seguridad, aquí el código solo entra por la cámara, con los dos dispositivos uno al lado del otro. Nunca envíes tus claves a partir de un código recibido de otra persona.',
   'devices.reply.title': 'Ahora el dispositivo nuevo lee este QR',
   'devices.reply.qr': 'QR de respuesta para el dispositivo nuevo',
   'devices.reply.prompt': 'Comprueba que aparecen las mismas palabras en el {name}:',
@@ -1793,6 +1802,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "Los contactos aparecen aquí cuando comparten su dirección Lunes o envían una solicitud de pago con ella.",
   "wallet.sendSheet.settleValue": "al entrar en un bloque de la Lunes Mainnet",
   "wallet.sendSheet.over": "Importe mayor que el saldo disponible",
+  "wallet.sendSheet.contactAddr.a11y": "Dirección Lunes de {name}: {address}",
+  "wallet.sendSheet.addrChanged.title": "La dirección de este contacto cambió",
+  "wallet.sendSheet.addrChanged.body": "{name} aparece ahora con una dirección Lunes distinta a la del último envío que completaste. Confírmalo con la persona por otro medio antes de enviar.",
+  "wallet.sendSheet.addrChanged.before": "Dirección del último envío",
+  "wallet.sendSheet.addrChanged.now": "Dirección de ahora",
+  "wallet.sendSheet.addrChanged.confirm": "Usar la dirección nueva",
   "wallet.sendSheet.scan.a11y": "Leer el QR de otra billetera",
   "wallet.sendSheet.scan.hint": "Apunta la cámara al QR de la billetera de destino: dirección Lunes o solicitud de pago de Piu.",
   "wallet.sendSheet.scan.placeholder": "Dirección Lunes o solicitud de pago",

@@ -91,6 +91,11 @@ export interface ReauthDeps {
   promptTouchID: (reason: string) => Promise<void>;
   /** Confirmação nativa do sistema (diálogo do processo principal; o renderer não consegue clicar nela). */
   confirm: () => Promise<boolean>;
+  /**
+   * Senha do Piu digitada para mostrar a frase (baixo 27): quando vem, ela substitui o clique e é conferida
+   * no processo principal (`check`: core.checkLockPassword, com o mesmo contador de tentativas).
+   */
+  lockPassword?: { given: string; check: (pw: string) => Promise<boolean> };
 }
 
 /**
@@ -104,8 +109,33 @@ export async function reauthForPhrase(d: ReauthDeps): Promise<boolean> {
       await d.promptTouchID(tm('main.phrase.touchId'));
       return true;
     }
+    if (d.lockPassword) return (await d.lockPassword.check(d.lockPassword.given)) === true;
     return (await d.confirm()) === true;
   } catch { return false; }
+}
+
+export interface BackupExportDeps {
+  /** A mesma reautenticação de mostrar a frase (`reauthForPhrase`). */
+  reauth: () => Promise<boolean>;
+  /** Diálogo nativo de salvar; `null`: cancelado. */
+  choosePath: () => Promise<string | null>;
+  encrypt: () => Promise<string>;
+  write: (path: string, data: string) => Promise<void>;
+}
+
+/**
+ * Exportar o backup da identidade (M-01): o arquivo leva a frase cifrada com uma senha escolhida na hora,
+ * logo vale o mesmo que mostrá-la. Reautentica ANTES do diálogo de salvar e de ler a frase; recusa ou
+ * erro: nada é cifrado nem gravado (falha fechada).
+ */
+export async function exportBackupAfterReauth(d: BackupExportDeps): Promise<'saved' | 'cancelled'> {
+  let ok = false;
+  try { ok = (await d.reauth()) === true; } catch { ok = false; }
+  if (!ok) throw new Error(tm('main.phrase.refused'));
+  const path = await d.choosePath();
+  if (!path) return 'cancelled';
+  await d.write(path, await d.encrypt());
+  return 'saved';
 }
 
 /**

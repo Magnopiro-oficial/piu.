@@ -19,9 +19,8 @@
 import { CarryKind, type CarryReceipt } from '../protocol/carry';
 import { encodeSignedExtrinsic, IMMORTAL_PERIOD, signedExtra, transferKeepAliveCall } from './extrinsic';
 import { accountBalance, accountNextIndex, findExtrinsicInBlock, isHash, LunesRpc, paymentQueryInfo, submitExtrinsic, toHex, validateTransaction } from './lunesRpc';
-import { fetchLunesHistory } from './lunesHistory';
 import {
-  checkedRuntime, checkedSigned, isActiveWalletTransfer, LUNES_GENESIS_HASH, normalized, saveRecord, spendable, trackWalletTransfer, WALLET_RUNTIME,
+  checkedRuntime, checkedSigned, failWithSecondSource, indexedOutgoing, isActiveWalletTransfer, LUNES_GENESIS_HASH, normalized, saveRecord, spendable, trackWalletTransfer, WALLET_RUNTIME,
   type WalletQuote, type WalletSigningContext, type WalletTransferDeps, type WalletTransferRecord, type WalletTransferSave, WalletTransferError,
 } from './walletTransfer';
 
@@ -171,19 +170,8 @@ export function applyCarryReceipt(record: WalletTransferRecord | null, rc: Carry
   return { ...record, updatedAt: now, carried: { ...record.carried, report: { status: rc.status, at: now, ...(block ? { block } : {}), ...(rc.reason ? { reason: rc.reason.slice(0, 200) } : {}) } } };
 }
 
-export interface ReconcileDeps extends WalletTransferDeps {
-  /** Blocos com uma saída deste valor para este destino depois do bloco dado (indexador). `null`: indisponível. */
-  outgoingBlocks?: (record: WalletTransferRecord) => Promise<number[] | null>;
-}
-
-async function indexedOutgoing(record: WalletTransferRecord, deps: ReconcileDeps): Promise<number[] | null> {
-  if (deps.outgoingBlocks) return deps.outgoingBlocks(record);
-  try {
-    const h = await fetchLunesHistory(record.from, { fetch: deps.fetch });
-    const dest = normalized(record.dest).address;
-    return h.moves.filter(m => m.direction === 'out' && m.amount === BigInt(record.value) && m.block > record.ctx.blockNumber && normalized(m.counterparty).address === dest).map(m => m.block);
-  } catch { return null; }
-}
+/** `outgoingBlocks` (indexador) agora fica em `WalletTransferDeps`: o envio direto também usa a segunda fonte. */
+export type ReconcileDeps = WalletTransferDeps;
 
 /**
  * Com internet, o aparelho resolve sozinho a transferência levada pela malha (não depende do recibo):
@@ -215,7 +203,8 @@ export async function reconcileCarriedTransfer(record: WalletTransferRecord, cal
           const index = hash ? await findExtrinsicInBlock(rpc, hash, record.hash) : null;
           return hash && index !== null && index >= 0 ? { number: n, hash, index } : null;
         };
-        for (const n of [...new Set((await indexedOutgoing(record, deps)) ?? [])].filter(n => n <= bal.block).sort((a, b) => a - b)) {
+        const listed = await indexedOutgoing(record, deps);
+        for (const n of [...new Set(listed ?? [])].filter(n => n <= bal.block).sort((a, b) => a - b)) {
           const block = await found(n);
           if (block) return trackWalletTransfer({ ...record, status: 'included', block, updatedAt: nowOf(deps), error: undefined }, callbacks, d);
         }
@@ -226,14 +215,22 @@ export async function reconcileCarriedTransfer(record: WalletTransferRecord, cal
           if (block) return trackWalletTransfer({ ...record, status: 'included', block, updatedAt: nowOf(deps), error: undefined }, callbacks, d);
           scanned = n;
         }
-        if (scanned >= bal.block) return saveRecord({ ...record, status: 'failed', scanned, updatedAt: nowOf(deps), error: 'Outra transação desta carteira usou o mesmo nonce antes desta; esta não será liquidada.' }, callbacks);
+        // Sem o indexador como segunda fonte, a resposta de um nó RPC sozinho não vira "não concluída" (até o prazo).
+        if (scanned >= bal.block) {
+          return failWithSecondSource({ ...record, scanned }, listed, bal.block,
+            'Outra transação desta carteira usou o mesmo nonce antes desta; esta não será liquidada.',
+            'O nó não achou esta transferência', callbacks, deps);
+        }
         return saveRecord({ ...record, scanned, updatedAt: nowOf(deps), error: `Procurando esta transferência nos blocos (até #${scanned} de #${bal.block}). Não refaça o pagamento.` }, callbacks);
       }
       const validity = await validateTransaction(rpc, record.hex, bal.blockHash);
       if (!validity.ok) {
         // Stale com o nonce livre no finalizado: está num bloco ainda não finalizado. Espera.
         if (validity.reason === 'Stale') return saveRecord({ ...record, updatedAt: nowOf(deps), error: 'Em bloco ainda não finalizado; acompanhando.' }, callbacks);
-        return saveRecord({ ...record, status: 'failed', updatedAt: nowOf(deps), error: `A Lunes recusou a transferência levada pela malha (${validity.reason}). Atenção: até outra transação desta carteira ser liquidada, a assinatura ainda pode valer se alguém a enviar.` }, callbacks);
+        // A recusa vem de um nó só; o indexador confere que não há saída igual desde a assinatura.
+        return failWithSecondSource(record, await indexedOutgoing(record, deps), Number.MAX_SAFE_INTEGER,
+          `A Lunes recusou a transferência levada pela malha (${validity.reason}). Atenção: até outra transação desta carteira ser liquidada, a assinatura ainda pode valer se alguém a enviar.`,
+          `A Lunes recusou a transferência levada pela malha (${validity.reason})`, callbacks, deps);
       }
       try { await submitExtrinsic(rpc, record.hex); } catch (e) {
         if (!/already imported|already in the pool|1013/i.test(e instanceof Error ? e.message : String(e))) {

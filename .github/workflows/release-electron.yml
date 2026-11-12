@@ -135,32 +135,15 @@ jobs:
           # o runner windows-latest nem consegue montar a área de trabalho (D:\a\piu.\piu.).
           - label: windows-x64
             os: ubuntu-latest
-            container: electronuserland/builder:wine
+            container: electronuserland/builder:wine@sha256:f3a8d451994c881d0972e7b1846ee4d4fdc15eb41fc6b1f350b38cbf99ca90fe
             platform: win
             arch: x64
     env:
       APP_DIR: ${{ inputs.app_dir }}
       # Sem certificado: não procurar identidade no keychain (senão o build do macOS falha).
       CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-      # Secrets opcionais de assinatura/notarização (vazios = desligado), só na plataforma certa:
-      # o CSC_LINK (Apple) não pode chegar ao job do Windows, senão o electron-builder tentaria
-      # assinar o .exe com ele. APPLE_API_KEY (caminho do .p8) é criado no passo "Assinatura".
-      CSC_LINK: ${{ matrix.platform == 'mac' && secrets.CSC_LINK || '' }}
-      CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.CSC_KEY_PASSWORD || '' }}
-      APPLE_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_ID || '' }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'mac' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
-      APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
-      APPLE_API_KEY_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_ID || '' }}
-      APPLE_API_ISSUER: ${{ matrix.platform == 'mac' && secrets.APPLE_API_ISSUER || '' }}
-      WIN_CSC_LINK: ${{ matrix.platform == 'win' && secrets.WIN_CSC_LINK || '' }}
-      WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
-      AZURE_TENANT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_TENANT_ID || '' }}
-      AZURE_CLIENT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_ID || '' }}
-      AZURE_CLIENT_SECRET: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_SECRET || '' }}
-      AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ENDPOINT || '' }}
-      AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME || '' }}
-      AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE || '' }}
-      AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME || '' }}
+      # Os secrets de assinatura NÃO ficam aqui: só os passos que precisam deles os recebem (env do
+      # passo), para que `npm ci` e scripts de instalação de dependências não os enxerguem.
       # Sem telemetria/avisos de update do electron-builder; cache do Electron por runner.
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
@@ -202,6 +185,14 @@ jobs:
         env:
           PLATFORM: ${{ matrix.platform }}
           APPLE_API_KEY_P8: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_P8 || '' }}
+          # Secrets opcionais de assinatura/notarização (vazios = desligado), só na plataforma certa:
+          # o CSC_LINK (Apple) não pode chegar ao job do Windows, senão o electron-builder tentaria
+          # assinar o .exe com ele. APPLE_API_KEY (caminho do .p8) é criado no passo "Assinatura".
+          CSC_LINK: ${{ matrix.platform == 'mac' && secrets.CSC_LINK || '' }}
+          APPLE_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_ID || '' }}
+          APPLE_API_KEY_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_ID || '' }}
+          WIN_CSC_LINK: ${{ matrix.platform == 'win' && secrets.WIN_CSC_LINK || '' }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ENDPOINT || '' }}
         run: |
           set -euo pipefail
           # O electron-builder quer APPLE_API_KEY como CAMINHO do .p8; o secret guarda o conteúdo.
@@ -235,6 +226,25 @@ jobs:
           PLATFORM: ${{ matrix.platform }}
           ARCH: ${{ matrix.arch }}
           OUT_DIR: ${{ inputs.output_dir }}
+          # Secrets opcionais de assinatura/notarização (vazios = desligado), só na plataforma certa:
+          # o CSC_LINK (Apple) não pode chegar ao job do Windows, senão o electron-builder tentaria
+          # assinar o .exe com ele. APPLE_API_KEY (caminho do .p8) é criado no passo "Assinatura".
+          CSC_LINK: ${{ matrix.platform == 'mac' && secrets.CSC_LINK || '' }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'mac' && secrets.CSC_KEY_PASSWORD || '' }}
+          APPLE_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_ID || '' }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ matrix.platform == 'mac' && secrets.APPLE_APP_SPECIFIC_PASSWORD || '' }}
+          APPLE_TEAM_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_TEAM_ID || '' }}
+          APPLE_API_KEY_ID: ${{ matrix.platform == 'mac' && secrets.APPLE_API_KEY_ID || '' }}
+          APPLE_API_ISSUER: ${{ matrix.platform == 'mac' && secrets.APPLE_API_ISSUER || '' }}
+          WIN_CSC_LINK: ${{ matrix.platform == 'win' && secrets.WIN_CSC_LINK || '' }}
+          WIN_CSC_KEY_PASSWORD: ${{ matrix.platform == 'win' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
+          AZURE_TENANT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_TENANT_ID || '' }}
+          AZURE_CLIENT_ID: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_ID || '' }}
+          AZURE_CLIENT_SECRET: ${{ matrix.platform == 'win' && secrets.AZURE_CLIENT_SECRET || '' }}
+          AZURE_TRUSTED_SIGNING_ENDPOINT: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ENDPOINT || '' }}
+          AZURE_TRUSTED_SIGNING_ACCOUNT_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_ACCOUNT_NAME || '' }}
+          AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_CERTIFICATE_PROFILE || '' }}
+          AZURE_TRUSTED_SIGNING_PUBLISHER_NAME: ${{ matrix.platform == 'win' && secrets.AZURE_TRUSTED_SIGNING_PUBLISHER_NAME || '' }}
         run: |
           set -euo pipefail
           # Secret ausente chega como variável VAZIA; o electron-builder trata CSC_LINK="" como caminho
@@ -353,7 +363,11 @@ jobs:
 
           Confira o SHA-256 em \`SHA256SUMS.txt\`."
           if gh release view "$TAG" >/dev/null 2>&1; then
-            echo "Release $TAG já existe: enviando arquivos (--clobber)"
+            # Release já publicado não é sobrescrito: quem baixa e a assinatura GPG ficariam inconsistentes.
+            if [[ "$(gh release view "$TAG" --json isDraft --jq .isDraft)" != true ]]; then
+              echo "::error::O release $TAG já foi publicado; não vou sobrescrever. Use outra tag/versão."; exit 1
+            fi
+            echo "Release $TAG é rascunho: enviando arquivos (--clobber)"
             gh release upload "$TAG" _dl/* --clobber
           else
             gh release create "$TAG" _dl/* --draft --verify-tag --title "$TITLE" --notes "$notes"

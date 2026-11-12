@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/fr';
 import { call } from './call/fr';
 import { lora } from './lora/fr';
 import { map } from './map/fr';
+import { stored } from './stored/fr';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'Retour',
   'common.close': 'Fermer',
   'common.cancel': 'Annuler',
@@ -629,9 +631,14 @@ export const dict: Dict = {
   'scan.panel.approvePrompt': 'Approuver {amount} LUNES',
   'scan.panel.cancelled': 'Approbation annulée. Rien n’a été envoyé.',
   'scan.panel.needLock': 'Configurez un verrouillage de l’appareil (biométrie ou code) pour approuver des virements.',
-  'scan.panel.repair.title': 'Réassocier avec un autre secret ?',
-  'scan.panel.repair.body': 'Ce téléphone est déjà associé à {node}. Continuer remplace l’association : les approbations de transfert ne vaudront que pour le panneau de ce QR. Ne continuez que si vous avez généré ce QR vous-même dans le panneau.',
-  'scan.panel.repair.confirm': 'Remplacer l’association',
+  'scan.panel.repair.title': 'Jumeler à nouveau avec un autre secret ?',
+  'scan.panel.repair.body': 'Ce téléphone est déjà jumelé avec {node}. Continuer remplace le jumelage : les approbations de transfert ne vaudront que pour le panneau de ce QR. Ne continuez que si vous avez généré ce QR vous-même dans le panneau.',
+  'scan.panel.repair.confirm': 'Remplacer le jumelage',
+  'scan.panel.pairNew.title': 'Jumeler avec cet équipement ?',
+  'scan.panel.pairNew.body': '{node} · {operator}\nAdresse : {url}\nCertificat : {pin}\n\nNe continuez que si vous avez ouvert ce QR vous-même dans le panneau de votre équipement.',
+  'scan.panel.pairNew.pasted': 'Ce code a été collé, pas lu par la caméra. Vérifiez sa provenance.',
+  'scan.panel.pairNew.confirm': 'Jumeler',
+  'scan.panel.pairNew.prompt': 'Confirmez pour jumeler avec {node}',
   'join.sent': 'Demande envoyée à {name}',
   'join.sent.body': 'Vous entrez quand un admin reçoit la demande (et l’approuve, si le groupe l’exige).',
   'scan.verify.mismatch': 'Ce QR n’est pas celui de {name}. Si la personne est devant vous, quelqu’un a peut-être échangé les clés : ne faites pas confiance à la conversation.',
@@ -879,6 +886,8 @@ export const dict: Dict = {
   'devices.scan.path': 'Restaurer → Depuis un autre appareil',
   'devices.scan.after': '. Puis lisez le QR qu’il affiche.',
   'devices.scan.hint': 'Pointez la caméra vers le QR du nouvel appareil. Les clés partent directement, chiffrées, sans serveur.',
+  'devices.scan.noCamera': 'Pas d’autorisation pour la caméra. Autorisez la caméra dans les réglages de l’appareil pour lire le QR du nouvel appareil.',
+  'devices.scan.cameraOnly': 'Par sécurité, ici le code n’entre que par la caméra, les deux appareils côte à côte. N’envoyez jamais vos clés à partir d’un code reçu d’une autre personne.',
   'devices.reply.title': 'Maintenant le nouvel appareil lit ce QR',
   'devices.reply.qr': 'QR de réponse pour le nouvel appareil',
   'devices.reply.prompt': 'Vérifiez que les mêmes mots apparaissent sur le {name} :',
@@ -1793,6 +1802,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "Les contacts apparaissent ici quand ils partagent leur adresse Lunes ou envoient une demande de paiement avec celle-ci.",
   "wallet.sendSheet.settleValue": "à l'entrée dans un bloc du Lunes Mainnet",
   "wallet.sendSheet.over": "Montant supérieur au solde disponible",
+  "wallet.sendSheet.contactAddr.a11y": "Adresse Lunes de {name} : {address}",
+  "wallet.sendSheet.addrChanged.title": "L'adresse de ce contact a changé",
+  "wallet.sendSheet.addrChanged.body": "{name} apparaît maintenant avec une adresse Lunes différente de celle du dernier envoi que vous avez terminé. Vérifiez avec la personne par un autre moyen avant d'envoyer.",
+  "wallet.sendSheet.addrChanged.before": "Adresse du dernier envoi",
+  "wallet.sendSheet.addrChanged.now": "Adresse actuelle",
+  "wallet.sendSheet.addrChanged.confirm": "Utiliser la nouvelle adresse",
   "wallet.sendSheet.scan.a11y": "Lire le QR d'un autre portefeuille",
   "wallet.sendSheet.scan.hint": "Visez le QR du portefeuille de destination : adresse Lunes ou demande de paiement Piu.",
   "wallet.sendSheet.scan.placeholder": "Adresse Lunes ou demande de paiement",

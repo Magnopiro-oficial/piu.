@@ -26,7 +26,7 @@ import {
 import { LnnpLanTransport } from '../../transport/lnnpLan';
 import type { Transport } from '../../transport/types';
 import { type DayCounters, GuardianNode } from './guardianNode';
-import { type CheckDeps, runLanCheck } from './lanCheck';
+import { type CheckDeps, probeInternet, runLanCheck } from './lanCheck';
 import { currentNetwork, type NetDeps } from './netinfo';
 import { packRecords, readSealed, shred, unpackRecords, writeSealed } from './sealed';
 import { tm } from '../i18n';
@@ -39,7 +39,7 @@ export function pointKey(seed: Uint8Array): KeyPair {
   if (seed.length !== 32) throw new Error('Semente do ponto inválida.');
   return deriveNodeKey(kdf(seed, utf8('piu/v1/ponto'), 'ponto/node'));
 }
-const storeKey = (seed: Uint8Array) => Buffer.from(kdf(seed, utf8('piu/v1/ponto'), 'ponto/store'));
+export const storeKey = (seed: Uint8Array) => Buffer.from(kdf(seed, utf8('piu/v1/ponto'), 'ponto/store'));
 
 interface PointFile {
   v: 1;
@@ -82,7 +82,8 @@ export class GuardianService {
   private canStore = false;
   private dirty = false;
   private timers: NodeJS.Timeout[] = [];
-  private lastTest: GuardianTest | null = null;
+  /** Internet confirmada pelo teste real (nunca pela estimativa local). Exigida para ligar a ponte. */
+  private internetOk = false;
   private busy: Promise<unknown> = Promise.resolve();
 
   constructor(private o: GuardianOptions) {}
@@ -143,14 +144,29 @@ export class GuardianService {
 
   network() { return currentNetwork(this.o.net); }
 
-  /** Teste automático (E4). O espaço confere contra o menor limite (o nível vem depois). */
+  /**
+   * Teste automático (E4). O espaço confere contra o menor limite (o nível vem depois).
+   * Sem a ponte (gateway) ligada, nada sai da rede local: a etapa "internet" é só uma estimativa.
+   */
   async test(): Promise<GuardianTest> {
     const net = await this.network();
-    const t = await runLanCheck(net, { storageMB: this.p?.config.storageMB ?? STORAGE_OPTIONS_MB[0], dataDir: this.o.dir, discoveryPort: this.o.lan?.discoveryPort ?? undefined }, this.o.check);
-    this.lastTest = t;
+    // Teste real de internet só com a ponte ligada. O "Testar de novo" do aviso de isolamento não consulta
+    // fora da rede: ali só interessa se os aparelhos voltaram a se ver.
+    const external = this.p?.config.gateway === true && this.status !== 'isolating';
+    const t = await runLanCheck(net, { storageMB: this.p?.config.storageMB ?? STORAGE_OPTIONS_MB[0], dataDir: this.o.dir, discoveryPort: this.o.lan?.discoveryPort ?? undefined, external }, this.o.check);
+    if (external) this.internetOk = t.internet;
     // "Testar de novo" depois do aviso de isolamento: se os aparelhos voltaram a se ver, sai do aviso.
     if (this.p && this.status === 'isolating' && t.steps.find(s => s.id === 'peers')?.level === 'ok') { this.status = 'active'; this.reason = undefined; this.emit(); }
     return t;
+  }
+
+  /**
+   * Teste real de internet, só quando a pessoa liga a ponte ou pede: abre e fecha uma conexão com 1.1.1.1 e
+   * 9.9.9.9 (nenhum dado do Piu é enviado). A tela avisa antes o que será consultado.
+   */
+  async testInternet(): Promise<boolean> {
+    this.internetOk = await probeInternet(this.o.check?.probe);
+    return this.internetOk;
   }
 
   private limits(c: GuardianConfig) {
@@ -167,7 +183,7 @@ export class GuardianService {
     if (config.level === 'guardian-app') throw new Error(this.state().apk.reason);
     const net = await this.network();
     if (!net.up) throw new Error(tm('main.point.noLan'));
-    if (config.gateway && !(this.lastTest?.internet)) throw new Error(tm('main.point.gatewayNeedsInternet'));
+    if (config.gateway && !this.internetOk) throw new Error(tm('main.point.gatewayNeedsInternet'));
     this.p = {
       v: 1, seed: randomBytes(32).toString('hex'), config, network: { label: net.label, ssid: net.ssid, cidr: net.cidr }, createdAt: this.ms(), paused: false,
       wifi: { password: null, open: false }, totals: { forwarded: 0, receipts: 0 }, day: null,
@@ -182,7 +198,7 @@ export class GuardianService {
     const p = this.need();
     const next = sanitizeGuardianConfig(raw, p.config);
     if (next.level === 'guardian-app') throw new Error(this.state().apk.reason);
-    if (next.gateway && !p.config.gateway && !(this.lastTest?.internet)) throw new Error(tm('main.point.gatewayRetest'));
+    if (next.gateway && !p.config.gateway && !this.internetOk) throw new Error(tm('main.point.gatewayRetest'));
     const restart = next.level !== p.config.level || next.storageMB !== p.config.storageMB || next.days !== p.config.days || next.gateway !== p.config.gateway;
     p.config = next;
     if (restart && this.node) { await this.stopNode(); await this.startNode(); }
@@ -240,7 +256,7 @@ export class GuardianService {
     await this.stopNode(false);
     shred(this.storeFile);
     shred(this.pointFile);
-    this.p = null; this.status = 'off'; this.reason = undefined; this.lastTest = null;
+    this.p = null; this.status = 'off'; this.reason = undefined; this.internetOk = false;
     this.emit();
     return this.state();
   }
@@ -270,13 +286,20 @@ export class GuardianService {
       onChange: () => { this.dirty = true; },
     });
     // Guardião: o que estava guardado volta (multiplicador não guarda nada no disco).
+    let purged = false;
     if (p.config.level !== 'multiplier') {
       try {
         const raw = readSealed(this.storeFile, storeKey(seed), STORE_MAGIC);
-        if (raw) node.importStored(unpackRecords(raw).map(r => ({ ...r, own: false, releaseAt: 0 })));
+        const recs = raw ? unpackRecords(raw) : [];
+        // Formatos antigos (ids em claro ou nome fixo do vizinho, sem sal): o nó converte e regravamos já, com sal.
+        // No disco, "para quem já foi" sai vazio nessa regravação (ninguém ligado ainda); a memória guarda o convertido.
+        const legacy = recs.some(r => r.legacy);
+        // Vencidos descartados na carga: regrava logo (o disco não fica com o que já devia ter sumido).
+        if (raw) purged = node.importStored(recs) < recs.length || legacy;
       } catch (e) { this.o.log?.(`ponto: mensagens guardadas ilegíveis (${(e as Error).message}); começando vazio`); }
     } else shred(this.storeFile);
     this.node = node;
+    if (purged) this.persist(true);
     await node.start();
     if ((transport as { state?: string }).state === 'unavailable') {
       this.status = 'down'; this.reason = (transport as { reason?: string }).reason ?? tm('main.point.lanNotOpen');

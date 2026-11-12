@@ -222,3 +222,26 @@ test('recompensas desligadas: os textos do provider e do convite não prometem p
     assert.match(ref[k] as string, /nada é pago|ainda não/i, `${k} diz que hoje não paga`);
   }
 });
+
+test('termos: fr diz "jumeler", it diz "abbinare"/"apparato"/"cifrato" no pareamento e na cifra', () => {
+  const fr = dictOf('fr') as Dict;
+  const it = dictOf('it') as Dict;
+  const repair = ['scan.panel.repair.title', 'scan.panel.repair.body', 'scan.panel.repair.confirm'];
+  for (const k of repair) {
+    assert.doesNotMatch(fr[k] as string, /associ/i, `fr ${k}`);
+    assert.match(fr[k] as string, /jumel/i, `fr ${k}`);
+    assert.doesNotMatch(it[k] as string, /associ/i, `it ${k}`);
+    assert.match(it[k] as string, /abbin/i, `it ${k}`);
+  }
+  // O equipamento do provider (router/antena) é "apparato", como em network.provider.*;
+  // "dispositivo" fica para os aparelhos do próprio usuário.
+  assert.match(it['network.provider.paired'] as string, /apparato/);
+  for (const k of ['scan.panel.pairNew.title', 'scan.panel.pairNew.body']) {
+    assert.match(it[k] as string, /apparato/, `it ${k}`);
+    assert.doesNotMatch(it[k] as string, /apparecch|dispositivo/i, `it ${k}`);
+  }
+  // A cifra é "cifrato"/"cifratura" em todo o it.ts, inclusive nos textos gravados (stored.*).
+  for (const k of Object.keys(it)) {
+    if (typeof it[k] === 'string') assert.doesNotMatch(it[k] as string, /crittograf/i, `it ${k}`);
+  }
+});

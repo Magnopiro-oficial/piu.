@@ -47,6 +47,17 @@ export class MigrationError extends Error {
   constructor(public code: 'FORMAT' | 'EXPIRED' | 'AUTH' | 'CONTENT', message: string) { super(message); this.name = 'MigrationError'; }
 }
 
+/** Por onde um código da migração chegou: lido pela câmera ou colado/digitado como texto. */
+export type CodeSource = 'camera' | 'text';
+
+/**
+ * Origens aceitas em cada sentido. A oferta faz o aparelho antigo ENVIAR a frase, e as 4 palavras só
+ * são conferidas depois, no aparelho novo: por isso ela só entra pela câmera (os dois aparelhos lado
+ * a lado), nunca por texto colado, que pode ter vindo de outra pessoa. A resposta só é aplicada
+ * depois da conferência das palavras, então pode vir pela câmera ou colada.
+ */
+export const codeSourceAllowed = (kind: 'offer' | 'reply', source: CodeSource): boolean => kind === 'reply' || source === 'camera';
+
 const PLATFORMS: DevicePlatform[] = ['android', 'ios', 'web', 'other'];
 
 const clamp = (s: string) => { let c = [...s.trim()]; while (utf8(c.join('')).length > MAX_NAME) c = c.slice(0, -1); return c.join(''); };

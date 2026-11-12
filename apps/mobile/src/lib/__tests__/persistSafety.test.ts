@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { completePersistedWrite, missingStoredKeys, mustBlockWalletRecovery, persistedWriteStillValid } from '../persistSafety';
+import { completePersistedWrite, createResetGuard, missingStoredKeys, mustBlockWalletRecovery, persistedWriteStillValid } from '../persistSafety';
 import { isWalletTransferRecord } from '../walletTransfer';
 
 test('carteira só considera registro ausente após leitura bem-sucedida', () => {
@@ -52,4 +52,45 @@ test('chave listada mas ausente no resultado é tratada como ilegível', () => {
   assert.deepEqual(missing, ['piu:v1:wallet.transfer']);
   assert.equal(mustBlockWalletRecovery(missing.includes('piu:v1:wallet.transfer'), undefined, isWalletTransferRecord), true);
   assert.deepEqual(missingStoredKeys(['a'], ['a']), []);
+});
+
+test('"Apagar dados locais": nada regrava o estado apagado e a identidade seguinte não o herda', async () => {
+  // Mesmo desenho de lib/persist.ts: um snapshot em memória e gravações que passam pela guarda.
+  const guard = createResetGuard();
+  let snapshot: Record<string, unknown> = { 'msg.state': 'contatos-da-identidade-antiga' };
+  const write = (key: string, value: unknown) => { guard.assertWritable(); snapshot[key] = value; };
+  const startedAt = guard.epoch();
+  let release!: () => void;
+  const erasing = new Promise<void>(resolve => { release = resolve; });
+  const reset = guard.run(() => { snapshot = {}; }, () => erasing);
+  assert.equal(guard.resetting(), true);
+  assert.deepEqual(snapshot, {}, 'a limpeza inicial é síncrona');
+  // Desmonte do MessagingProvider causado pelo reset: a gravação é recusada.
+  assert.throws(() => write('msg.state', 'contatos-da-identidade-antiga'), /sendo apagados/);
+  assert.equal(persistedWriteStillValid(startedAt, guard.epoch()), false, 'o desmonte reconhece que veio de um reset');
+  // Mesmo que algo escreva direto na memória durante o apagamento, a limpeza final remove.
+  snapshot['msg.state'] = 'contatos-da-identidade-antiga';
+  release(); await reset;
+  assert.equal(guard.resetting(), false);
+  assert.equal(snapshot['msg.state'], undefined, 'a identidade seguinte não encontra o estado antigo');
+  write('msg.state', 'identidade-nova');
+  assert.equal(snapshot['msg.state'], 'identidade-nova');
+});
+
+test('falha ao apagar o armazenamento não deixa as gravações travadas', async () => {
+  const guard = createResetGuard();
+  let wipes = 0;
+  await assert.rejects(guard.run(() => { wipes += 1; }, async () => { throw new Error('disco'); }), /disco/);
+  assert.equal(wipes, 2);
+  assert.equal(guard.resetting(), false);
+  assert.doesNotThrow(() => guard.assertWritable());
+});
+
+test('valor salvo só vale se abrir com a chave: texto puro sem o prefixo cifrado é ilegível', async () => {
+  const { readSealedValue } = await import('../persistSafety');
+  const open = (s: string) => (s === 'e1:ok' ? { lock: true } : undefined);
+  assert.deepEqual(readSealedValue('e1:ok', open), { ok: true, value: { lock: true } });
+  assert.deepEqual(readSealedValue('e1:adulterado', open), { ok: false }, 'GCM inválido');
+  assert.deepEqual(readSealedValue('{"lock":false}', open), { ok: false }, 'JSON em claro injetado não é aceito');
+  assert.deepEqual(readSealedValue('', open), { ok: false });
 });

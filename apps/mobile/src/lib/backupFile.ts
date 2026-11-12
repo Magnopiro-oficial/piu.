@@ -59,11 +59,32 @@ async function deriveKey(password: string, h: Header, o: KdfProgress) {
   });
 }
 
-/** Avalia a senha escolhida para o arquivo. `null` = boa o suficiente. */
-/** Motivo de a senha não servir (`short` = curta, `repetitive` = poucos caracteres distintos), ou null. A tela traduz. */
+// Sequências e linhas de teclado (e o inverso): trechos de 3+ caracteres daqui são previsíveis.
+const SEQUENCES = ['01234567890', 'abcdefghijklmnopqrstuvwxyz', 'qwertyuiop', 'asdfghjklç;', 'zxcvbnm,./', 'qwertzuiop', 'azertyuiop', '1qaz2wsx3edc4rfv'];
+const SEQ = [...SEQUENCES, ...SEQUENCES.map(s => [...s].reverse().join(''))];
+// Palavras das listas de senhas vazadas mais comuns (pt/en/es) e o nome do app.
+const COMMON = ['senha', 'minhasenha', 'segredo', 'password', 'passw0rd', 'pass', 'contraseña', 'clave', 'admin', 'root', 'user', 'login', 'welcome', 'letmein', 'iloveyou', 'teamo', 'amor', 'love', 'deus', 'jesus', 'cristo', 'brasil', 'brazil', 'portugal', 'futebol', 'football', 'flamengo', 'corinthians', 'palmeiras', 'monkey', 'dragon', 'master', 'shadow', 'sunshine', 'princess', 'qwerty', 'abc', 'piu', 'backup', 'lunes', 'test', 'teste'];
+
+/** Quanto sobra da senha depois de tirar sequências, palavras comuns e anos (19xx/20xx). */
+function unpredictableLength(p: string): number {
+  let s = p.normalize('NFKC').toLowerCase().replace(/(19|20)\d\d/g, '');
+  for (const w of [...COMMON].sort((a, b) => b.length - a.length)) s = s.split(w).join('');
+  let left = 0;
+  for (let i = 0; i < s.length;) {
+    let j = i + 3;
+    while (j <= s.length && SEQ.some(q => q.includes(s.slice(i, j)))) j++;
+    if (j - 1 - i >= 3) { i = j - 1; continue; } // trecho de sequência: não conta
+    left++; i++;
+  }
+  return left;
+}
+
+/** Motivo de a senha não servir (`short` = curta, `repetitive` = repetitiva ou previsível), ou null. A tela traduz. */
 export function passwordIssue(p: string): 'short' | 'repetitive' | null {
   if (p.length < MIN_PASSWORD) return 'short';
   if (new Set(p).size < 5) return 'repetitive';
+  // Sequência, teclado ou palavra comum com números: cai no primeiro ataque de dicionário.
+  if (unpredictableLength(p) < 5) return 'repetitive';
   return null;
 }
 export function passwordProblem(p: string): string | null {

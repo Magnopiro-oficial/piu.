@@ -14,7 +14,7 @@
  */
 import { fromUtf8, toHex, utf8 } from '../protocol/bytes';
 import { type GroupKey, Priority } from '../protocol/envelope';
-import type { IdentityKind, PublicIdentity } from '../protocol/keys';
+import { identityId, type IdentityKind, type PublicIdentity, verifyBinding } from '../protocol/keys';
 import { random } from '../protocol/suite';
 import { b64url, unb64url } from './card';
 import { stripBidi } from './bidi';
@@ -125,10 +125,12 @@ export function decodeState(text: string, via: IdentityKind): GroupState | null 
     if (!Number.isInteger(j.rev) || j.rev < 1 || !Number.isInteger(j.keyV) || j.keyV < 1) return null;
     if (typeof j.key !== 'string' || unb64url(j.key).length !== 32) return null;
     if (!Array.isArray(j.members) || j.members.length < 1 || j.members.length > MAX_GROUP_MEMBERS) return null;
+    // Id tem de ser o das chaves, e as chaves têm de conferir (como em addContact): senão alguém entraria
+    // na lista com o id de outra pessoa e as próprias chaves. Membro assim é descartado.
     const members: GroupMember[] = j.members.map((m: Record<string, string>) => ({
       id: String(m.id), name: stripBidi(String(m.name ?? '')).slice(0, 40), role: m.role === 'admin' ? 'admin' : m.role === 'mod' ? 'mod' : 'member',
       pub: { signPk: unb64url(m.s), agreePk: unb64url(m.a), binding: unb64url(m.b) },
-    }));
+    })).filter((m: GroupMember) => verifyBinding(m.pub) && identityId(m.pub.signPk, m.pub.agreePk) === m.id);
     if (!members.some(m => m.role === 'admin')) return null;
     const children = Array.isArray(j.children) ? j.children.slice(0, 50).filter((c: Record<string, string>) => /^[0-9a-f]{32}$/.test(c.id)).map((c: Record<string, string>) => ({ id: c.id, name: stripBidi(String(c.name)).slice(0, 60), kind: c.kind === 'channel' ? 'channel' as const : 'group' as const })) : undefined;
     return {

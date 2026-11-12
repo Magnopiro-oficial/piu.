@@ -23,6 +23,11 @@ export const sessionDest = (tagKey: Uint8Array, expiresAt: number) =>
 interface Extra { piuPrev?: 1; piuSince?: number }
 const withExtra = (exported: string, x: Extra) => JSON.stringify({ ...JSON.parse(exported), ...x });
 
+/** Sessão de quem recebe; `null` se a chave do remetente não serve para o acordo (dado de fora nunca lança aqui). */
+function respond(me: Identity, them: PublicIdentity): Session | null {
+  try { return Session.respond(me, them); } catch { return null; }
+}
+
 export class SessionManager {
   private sessions = new Map<string, Session>();
   /** Sessão substituída por uma nova do mesmo contato: ainda abre o que dela estiver a caminho. */
@@ -59,17 +64,17 @@ export class SessionManager {
     // que o início da atual. Igual ou mais antiga = replay de uma primeira mensagem antiga.
     if (cur?.established) {
       if (m.sentAt <= (this.since.get(m.fromId) ?? -1)) return null;
-      const fresh = Session.respond(this.me, m.from);
-      const p2 = fresh.decrypt(m.body);
-      if (!p2) return null;
+      const fresh = respond(this.me, m.from);
+      const p2 = fresh?.decrypt(m.body);
+      if (!fresh || !p2) return null;
       this.previous.set(m.fromId, cur);
       this.sessions.set(m.fromId, fresh);
       this.since.set(m.fromId, m.sentAt);
       return p2;
     }
-    const fresh = Session.respond(this.me, m.from);
-    const p2 = fresh.decrypt(m.body);
-    if (!p2) return null;
+    const fresh = respond(this.me, m.from);
+    const p2 = fresh?.decrypt(m.body);
+    if (!fresh || !p2) return null;
     // Início simultâneo: as duas pontas criaram sessão. Fica a de quem tem o id menor como iniciador.
     if (cur && !cur.established && this.myId < m.fromId) { this.seen(m.fromId, m.sentAt); return p2; } // mantém a nossa; a mensagem foi lida
     this.sessions.set(m.fromId, fresh);

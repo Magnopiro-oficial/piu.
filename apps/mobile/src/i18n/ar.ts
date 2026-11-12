@@ -7,6 +7,7 @@ import { linkDesktop } from './linkDesktop/ar';
 import { call } from './call/ar';
 import { lora } from './lora/ar';
 import { map } from './map/ar';
+import { stored } from './stored/ar';
 
 export const dict: Dict = {
   ...piu11,
@@ -15,6 +16,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': 'رجوع',
   'common.close': 'إغلاق',
   'common.cancel': 'إلغاء',
@@ -703,6 +705,11 @@ export const dict: Dict = {
   "scan.panel.repair.title": "إعادة الإقران بسر مختلف؟",
   "scan.panel.repair.body": "هذا الهاتف مقترن بالفعل بـ {node}. المتابعة تستبدل الإقران: ستصبح موافقات التحويل صالحة فقط للوحة رمز QR هذا. لا تتابع إلا إذا أنشأت رمز QR هذا بنفسك في اللوحة.",
   "scan.panel.repair.confirm": "استبدال الإقران",
+  "scan.panel.pairNew.title": "الإقران مع هذا الجهاز؟",
+  "scan.panel.pairNew.body": "{node} · {operator}\nالعنوان: {url}\nالشهادة: {pin}\n\nلا تتابع إلا إذا فتحت رمز QR هذا بنفسك في لوحة جهازك.",
+  "scan.panel.pairNew.pasted": "لُصق هذا الرمز ولم تقرأه الكاميرا. تحقق من مصدره.",
+  "scan.panel.pairNew.confirm": "إقران",
+  "scan.panel.pairNew.prompt": "أكّد للإقران مع {node}",
   "join.sent": "أُرسل الطلب إلى {name}",
   "join.sent.body": "تنضم عندما يتلقى مسؤول الطلب ويوافق عليه إن كانت المجموعة تشترط ذلك.",
   "scan.verify.mismatch": "رمز QR هذا ليس لـ {name}. إن كان الشخص أمامك فقد يكون أحدهم استبدل المفاتيح: لا تثق بالمحادثة.",
@@ -946,6 +953,8 @@ export const dict: Dict = {
   "devices.scan.path": "استعادة ← من جهاز آخر",
   "devices.scan.after": ". ثم امسح رمز QR الذي يعرضه.",
   "devices.scan.hint": "وجّه الكاميرا إلى QR الجهاز الجديد. تُنقل المفاتيح مباشرة ومشفّرة بلا خادم.",
+  "devices.scan.noCamera": "لا يوجد إذن لاستخدام الكاميرا. اسمح بالكاميرا من إعدادات الجهاز لقراءة رمز QR الخاص بالجهاز الجديد.",
+  "devices.scan.cameraOnly": "للأمان، يدخل الرمز هنا عبر الكاميرا فقط، والجهازان جنبًا إلى جنب. لا ترسل مفاتيحك أبدًا بناءً على رمز استلمته من شخص آخر.",
   "devices.reply.title": "ليقرأ الجهاز الجديد رمز QR هذا الآن",
   "devices.reply.qr": "رمز QR للرد على الجهاز الجديد",
   "devices.reply.prompt": "تأكد من ظهور الكلمات نفسها على {name}:",
@@ -1795,6 +1804,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "تظهر جهات الاتصال هنا عندما تشارك عنوان Lunes الخاص بها أو ترسل طلب دفع يحتويه.",
   "wallet.sendSheet.settleValue": "عند دخولها كتلة في Lunes Mainnet",
   "wallet.sendSheet.over": "المبلغ أكبر من الرصيد المتاح",
+  "wallet.sendSheet.contactAddr.a11y": "عنوان Lunes الخاص بـ {name}: {address}",
+  "wallet.sendSheet.addrChanged.title": "تغيّر عنوان جهة الاتصال هذه",
+  "wallet.sendSheet.addrChanged.body": "يظهر {name} الآن بعنوان Lunes مختلف عن آخر إرسال أكملته. تحقّق من الشخص بوسيلة أخرى قبل الإرسال.",
+  "wallet.sendSheet.addrChanged.before": "عنوان آخر إرسال",
+  "wallet.sendSheet.addrChanged.now": "العنوان الحالي",
+  "wallet.sendSheet.addrChanged.confirm": "استخدام العنوان الجديد",
   "wallet.sendSheet.scan.a11y": "مسح رمز QR لمحفظة أخرى",
   "wallet.sendSheet.scan.hint": "وجّه الكاميرا إلى رمز QR لمحفظة الوجهة: عنوان Lunes أو طلب دفع من Piu.",
   "wallet.sendSheet.scan.placeholder": "عنوان Lunes أو طلب دفع",

@@ -74,6 +74,14 @@ export interface LnnpConfig {
 const list = (v: string | undefined) => (v ?? '').split(',').map(x => x.trim()).filter(Boolean);
 const flag = (v: string | undefined, def: boolean) => (v === undefined || v === '' ? def : !['0', 'false', 'off', 'nao', 'não'].includes(v.toLowerCase()));
 
+/** Número de variável de ambiente: vazio vale o padrão; valor fora da regra recusa a subida com a mensagem. */
+function envNum(env: NodeJS.ProcessEnv, name: string, def: number, ok: (n: number) => boolean) {
+  const v = env[name]; if (v === undefined || v === '') return def;
+  const n = Number(v); if (!ok(n)) throw new Error(`${name}: valor inválido (${v}).`); return n;
+}
+/** Porta TCP (0 = aleatória, usada nos testes). */
+const isPort = (n: number) => Number.isInteger(n) && n >= 0 && n <= 65535;
+
 export function loadLnnpConfig(env = process.env): LnnpConfig {
   const discovery = env.PIU_LNNP_DISCOVERY_PORT ?? '8423';
   const allow = list(env.PIU_LNNP_ALLOW).map(x => x.toLowerCase());
@@ -83,10 +91,7 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
   // As mesmas regras do painel (https://, host público, sem credenciais): auditoria final, B-N1.
   const inboxErr = inboxUrl ? inboxUrlProblem(inboxUrl) : null;
   if (inboxErr) throw new Error(`PIU_VALIDATOR_INBOX: ${inboxErr} (use um endereço https://).`);
-  const num = (name: string, def: number, ok: (n: number) => boolean) => {
-    const v = env[name]; if (v === undefined || v === '') return def;
-    const n = Number(v); if (!ok(n)) throw new Error(`${name}: valor inválido (${v}).`); return n;
-  };
+  const num = (name: string, def: number, ok: (n: number) => boolean) => envNum(env, name, def, ok);
   const lora = {
     sf: num('PIU_LORA_SF', 9, n => Number.isInteger(n) && n >= 7 && n <= 12),
     bwKHz: num('PIU_LORA_BW_KHZ', 125, n => [62.5, 125, 250, 500].includes(n)),
@@ -111,20 +116,20 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     enabled: flag(env.PIU_LNNP, true),
     relay: flag(env.PIU_LNNP_RELAY, true),
     listen: env.PIU_LNNP_LISTEN ?? '0.0.0.0',
-    port: Number(env.PIU_LNNP_PORT ?? 8422),
+    port: num('PIU_LNNP_PORT', 8422, isPort),
     discoveryPort: ['off', '0', 'false'].includes(discovery) ? null : Number(discovery),
     broadcast: list(env.PIU_LNNP_BROADCAST ?? '255.255.255.255'),
     peers: list(env.PIU_LNNP_PEERS),
-    memoryMB: Number(env.PIU_LNNP_MEMORY_MB ?? 256),
+    memoryMB: num('PIU_LNNP_MEMORY_MB', 256, n => Number.isInteger(n) && n >= 1),
     allow: allow.length ? allow : null,
-    beaconMs: Number(env.PIU_LNNP_BEACON_MS ?? 5000),
+    beaconMs: num('PIU_LNNP_BEACON_MS', 5000, n => Number.isInteger(n) && n >= 1000),
     sampleMs: num('PIU_RELAY_SAMPLE_MS', 300_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
     persistMs: num('PIU_RELAY_PERSIST_MS', 30_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),
   };
 }
 
 export function loadConfig(env = process.env): Config {
-  const port = Number(env.PIU_NODE_PORT ?? 8420);
+  const port = envNum(env, 'PIU_NODE_PORT', 8420, isPort);
   const hosts = (env.PIU_NODE_HOSTS ?? 'piu-node.local,localhost,127.0.0.1').split(',').map(h => h.trim()).filter(Boolean);
   return {
     port,

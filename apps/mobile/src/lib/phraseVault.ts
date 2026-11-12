@@ -197,9 +197,19 @@ export async function recoverPhrase(d: VaultDeps, words: string[]): Promise<bool
   return true;
 }
 
+/**
+ * Itens do cofre que "Apagar dados locais" remove além da frase e das chaves do dia: os nós pareados
+ * do provider (lib/vault.ts, com o segredo de aprovação de cada um) e o segredo do ponto
+ * (lib/pointSecret.ts). A chave de dados sai em clearPersisted (lib/persist.ts).
+ * Teste em __tests__/vaultWipe.test.ts: chave nova do cofre fora desta lista faz o teste falhar.
+ */
+const OTHER_KEYS = ['piu.approvals.v1', 'piu.point.secret.v1'];
+export const VAULT_WIPE_KEYS: readonly string[] = [BIO_KEY, LEGACY_KEY, KEYS_KEY, ...OTHER_KEYS];
+
 /** "Apagar dados locais". */
 export async function wipeVault(d: VaultDeps): Promise<void> {
   await quietDel(d, BIO_KEY, true);
   await quietDel(d, LEGACY_KEY);
   await quietDel(d, KEYS_KEY);
+  for (const k of OTHER_KEYS) await quietDel(d, k);
 }

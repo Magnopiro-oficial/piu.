@@ -73,3 +73,19 @@ test('PiuCore: 5 erros começam a espera e ela sobrevive a fechar e abrir o Piu'
   assert.equal((await b.checkLockPassword('pato42!', t0 + 92_000)).ok, true);
   assert.equal(b.lockAttempts(t0 + 92_000).wait, null);
 });
+
+test('baixo 28: tentativas em rajada (no mesmo instante) não furam o limite de 5 e a espera', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-core-lock3-'));
+  const c = new PiuCore(opts(dir));
+  t.after(async () => { await c.close(); rmSync(dir, { recursive: true, force: true }); });
+  await c.open();
+  await c.setLockPassword(null, 'pato42!');
+  const t0 = 20_000_000;
+  const rs = await Promise.all(Array.from({ length: 12 }, () => c.checkLockPassword('x', t0)));
+  assert.equal(rs.filter(r => r.ok).length, 0);
+  // Só 5 contam erro: a espera é a primeira (30 s), não o teto de 12 erros.
+  assert.equal(c.lockAttempts(t0).wait?.totalSec, 30);
+  // Uma rajada com a senha certa durante a espera também não entra.
+  const ok = await Promise.all([c.checkLockPassword('pato42!', t0 + 1000), c.checkLockPassword('pato42!', t0 + 1000)]);
+  assert.equal(ok.some(r => r.ok), false);
+});

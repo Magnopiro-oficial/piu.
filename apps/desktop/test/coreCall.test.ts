@@ -62,9 +62,9 @@ test('PiuCore: chamada pela ponte da janela — toca, atende, voz, desliga, cart
   await until(() => audio.a.some(c => c.op === 'start') && audio.b.some(c => c.op === 'start'), 'microfones abertos');
 
   // A janela da Ana manda um pedaço do microfone; chega cifrado e toca na janela da Bia.
-  a.callFrame('opus', new Uint8Array(48).fill(7));
+  // O microfone manda quadros sem parar: os primeiros, antes de o enlace da voz ser achado, não saem.
   b.callFrame('opus', new Uint8Array(1025));   // grande demais: descartado
-  await until(() => audio.b.some(c => c.op === 'play' && c.payload.length === 48), 'voz na Bia');
+  await until(() => { a.callFrame('opus', new Uint8Array(48).fill(7)); return audio.b.some(c => c.op === 'play' && c.payload.length === 48); }, 'voz na Bia');
   assert.ok(!audio.a.some(c => c.op === 'play'), 'nada tocou na Ana');
   a.callAct({ a: 'event', event: { type: 'mute' } });
   assert.ok(audio.a.some(c => c.op === 'mute' && c.on));

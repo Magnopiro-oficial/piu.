@@ -3,7 +3,7 @@
  * evidencias/ e registro/, conferidos depois no close como os compartilhados à mão.
  */
 import assert from 'node:assert/strict';
-import { mkdtempSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -84,4 +84,32 @@ test('caixa atrás de proxy (--trust-proxy): o limite é por cliente (X-Forwarde
   const post2 = (xff: string) => fetch(`http://127.0.0.1:${p2}/caixa`, { method: 'POST', body: random(10) as unknown as BodyInit, headers: { 'X-Forwarded-For': xff } });
   assert.equal((await post2('5.5.5.5')).status, 400);
   assert.equal((await post2('6.6.6.6')).status, 429);
+});
+
+test('mesmo conteúdo re-selado (nova chave efêmera) é repetido: não grava arquivo novo', () => {
+  const d = dir();
+  const a = ingestBundle(sealBundle(BundleKind.Evidence, JSON.stringify(evidence), key.pk), key, d);
+  // Mesma coisa com as chaves em outra ordem: o conteúdo aberto é o mesmo.
+  const reordered = { proofs: [], sealedProofs: [], receipts: evidence.receipts, v: 2 };
+  const b = ingestBundle(sealBundle(BundleKind.Evidence, JSON.stringify(reordered), key.pk), key, d);
+  assert.ok(a.ok && !a.duplicate && b.ok && b.duplicate);
+  assert.equal(readdirSync(join(d, 'evidencias')).length, 1);
+});
+
+test('cota cheia: se o operador limpa a pasta, a caixa volta a aceitar sem reiniciar', async t => {
+  const d = dir();
+  let clock = 1_000_000;
+  const server = inboxServer({ proofKey: key, dir: d, maxFiles: 1, now: () => clock });
+  await new Promise<void>(r => server.listen(0, '127.0.0.1', () => r()));
+  t.after(() => new Promise<void>(r => server.close(() => r())));
+  const port = (server.address() as { port: number }).port;
+  const post = (body: Uint8Array) => fetch(`http://127.0.0.1:${port}/caixa`, { method: 'POST', body: body as unknown as BodyInit });
+  const ev = (n: number) => sealBundle(BundleKind.Evidence, JSON.stringify({ ...evidence, receipts: [{ ...evidence.receipts[0]!, at: 1_800_000_000 + n }] }), key.pk);
+  assert.equal((await post(ev(1))).status, 202);
+  assert.equal((await post(ev(2))).status, 507);
+  for (const f of readdirSync(join(d, 'evidencias'))) rmSync(join(d, 'evidencias', f));
+  // A recontagem do disco é limitada (1 vez a cada 10 s): logo depois ainda recusa, sem reler o disco.
+  assert.equal((await post(ev(2))).status, 507);
+  clock += 11_000;
+  assert.equal((await post(ev(2))).status, 202);
 });

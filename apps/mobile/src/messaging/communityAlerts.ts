@@ -10,7 +10,9 @@
  * conta quem é membro da comunidade no estado atual.
  *
  * - Publicar: categoria, gravidade, título, texto, área (opcional) e validade (1, 6, 24 ou 72 h).
- *   Limite: no máximo 3 alertas ativos por membro em cada comunidade e 1 a cada 10 min.
+ *   Limite: no máximo 3 alertas ativos por membro em cada comunidade e 1 a cada 10 min. Quais alertas
+ *   valem sai só do conjunto guardado (não da ordem de chegada): o que passa do limite fica guardado
+ *   oculto e aparece se um encerramento que chegar depois abrir espaço (`AlertBook.counted`).
  * - Classificar: "Confirmo" ou "Não procede", um voto por membro (vale o mais recente). O autor não
  *   classifica o próprio alerta.
  * - Estado, calculado igual em todo aparelho a partir dos votos de membros atuais:
@@ -20,6 +22,7 @@
  * - Guarda: some do aparelho 24 h depois de vencer (histórico curto).
  */
 import { fromUtf8, utf8 } from '../protocol/bytes';
+import { stripBidi } from './bidi';
 import type { GroupMember } from './groups';
 
 export type AlertCategory = 'clima' | 'agua' | 'fogo' | 'via' | 'seguranca' | 'saude' | 'servico' | 'outro';
@@ -53,6 +56,13 @@ const MAX_DURATION_SEC = 72 * 3600;
 
 export const MAX_ACTIVE_PER_MEMBER = 3;
 export const MIN_INTERVAL_SEC = 10 * 60;
+/**
+ * Alertas guardados (que valem ou ocultos) por membro em cada comunidade. Um membro honesto tem no
+ * máximo 3 ativos e 1 a cada 10 min; 30 cobre, por exemplo, 5 h seguidas publicando e encerrando sem
+ * parar, com o histórico de 24 h. Acima disso sai o de menor (until, at, id): o que fica é sempre os 30
+ * de maior (until, at, id) entre os recebidos, em qualquer ordem de chegada, e quem sai venceria antes.
+ */
+export const MAX_STORED_PER_MEMBER = 30;
 /** Vencido ou encerrado continua na lista (histórico) por 24 h e depois sai do aparelho. */
 export const HISTORY_SEC = 24 * 3600;
 export const TITLE_MAX = 80;
@@ -60,6 +70,7 @@ export const TEXT_MAX = 1000;
 export const AREA_MAX = 120;
 /** Relógio de quem publicou adiantado demais: o alerta é recusado. */
 const FUTURE_SKEW_SEC = 10 * 60;
+/** Teto do aparelho: acima dele sai o alerta de quem tem mais guardado (somando comunidades), não dos outros. */
 const MAX_ALERTS = 500;
 const MAX_LOOSE = 2000;
 
@@ -121,7 +132,7 @@ export type WireAlert =
   | { kind: 'close'; i: string; alert: string };
 
 const ID_RE = /^[0-9a-f]{32}$/;
-const clip = (v: unknown, max: number) => (typeof v === 'string' ? v.trim().slice(0, max) : '');
+const clip = (v: unknown, max: number) => (typeof v === 'string' ? stripBidi(v).trim().slice(0, max) : '');
 
 export function encodeAlertPayload(p: WireAlert): Uint8Array {
   if (p.kind === 'alert') return utf8(JSON.stringify({ i: p.i, ca: { c: p.cat, s: p.sev, t: p.title, x: p.text, ...(p.area ? { r: p.area } : {}), d: p.dur } }));
@@ -188,6 +199,9 @@ export function voteStatus(confirms: number, denies: number): 'unconfirmed' | 'c
   return 'unconfirmed';
 }
 
+/** Ordem de descarte: o que vence antes sai primeiro (empate: at, depois id). */
+const byUntil = (x: CommunityAlert, y: CommunityAlert) => x.until - y.until || x.at - y.at || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0);
+
 const canModerate = (roster: Roster, id: string) => roster.some(m => m.id === id && (m.role === 'admin' || m.role === 'mod'));
 const isIn = (roster: Roster, id: string) => roster.some(m => m.id === id);
 
@@ -220,6 +234,9 @@ export class AlertBook {
   private votes = new Map<string, Map<string, VoteRec>>();
   /** alerta → quem pediu para encerrar → quando. A permissão é conferida no cálculo (papel atual). */
   private closes = new Map<string, Map<string, number>>();
+  /** Cálculo de `counted` guardado por comunidade|autor; vale enquanto o livro e os moderadores não mudam. */
+  private rev = 0;
+  private countedCache = new Map<string, { rev: number; mods: string; ids: Set<string> }>();
 
   constructor(saved?: unknown) {
     const s = (saved && typeof saved === 'object' ? saved : {}) as Saved;
@@ -245,40 +262,75 @@ export class AlertBook {
     return at;
   }
 
-  /** Alertas do autor nesta comunidade que contam para o limite no instante `at`. */
-  private limitReason(community: string, author: string, at: number, roster: Roster, except?: string): string | null {
+  /**
+   * Quais alertas do autor nesta comunidade valem. Função só do conjunto guardado (alertas e
+   * encerramentos) e dos moderadores atuais: dá o mesmo em todo aparelho, em qualquer ordem de chegada.
+   * Na ordem (at, id), o alerta vale se nenhum outro que vale está a menos de 10 min dele e se, no seu
+   * `at`, há menos de 3 que valem ativos (começaram antes, não venceram, não encerrados até ali).
+   * Os que não valem ficam guardados ocultos (fora da lista, da tela bloqueada e sem notificação).
+   */
+  private counted(community: string, author: string, roster: Roster): Set<string> {
+    const key = `${community}|${author}`;
+    const mods = roster.filter(m => m.role === 'admin' || m.role === 'mod').map(m => m.id).sort().join(',');
+    const hit = this.countedCache.get(key);
+    if (hit && hit.rev === this.rev && hit.mods === mods) return hit.ids;
+    const list = [...this.alerts.values()].filter(x => x.community === community && x.author === author)
+      .sort((x, y) => x.at - y.at || (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+    const ok: { a: CommunityAlert; closed: number | null }[] = [];
+    for (const a of list) {
+      if (ok.some(c => a.at - c.a.at < MIN_INTERVAL_SEC)) continue;
+      const active = ok.filter(c => a.at < c.a.until && (c.closed === null || c.closed > a.at)).length;
+      if (active < MAX_ACTIVE_PER_MEMBER) ok.push({ a, closed: this.closedAt(a, roster) });
+    }
+    const ids = new Set(ok.map(c => c.a.id));
+    this.countedCache.set(key, { rev: this.rev, mods, ids });
+    return ids;
+  }
+
+  /** O alerta vale (aparece)? Oculto: passou do limite com o que está guardado agora. */
+  isCounted(id: string, roster: Roster): boolean {
+    const a = this.alerts.get(id);
+    return !!a && this.counted(a.community, a.author, roster).has(id);
+  }
+
+  /** Posso publicar agora? Motivo em português, ou `null`. Mesmo cálculo de quem recebe (`counted`). */
+  canPublish(community: string, author: string, now: number, roster: Roster): string | null {
+    if (!isIn(roster, author)) return LIMIT_MSG.member;
     let active = 0;
-    for (const x of this.alerts.values()) {
-      if (x.id === except || x.community !== community || x.author !== author) continue;
-      if (Math.abs(at - x.at) < MIN_INTERVAL_SEC) return LIMIT_MSG.wait;
+    for (const id of this.counted(community, author, roster)) {
+      const x = this.alerts.get(id)!;
+      if (Math.abs(now - x.at) < MIN_INTERVAL_SEC) return LIMIT_MSG.wait;
       const closed = this.closedAt(x, roster);
-      if (x.at <= at && at < x.until && (closed === null || closed > at)) active++;
+      if (x.at <= now && now < x.until && (closed === null || closed > now)) active++;
     }
     return active >= MAX_ACTIVE_PER_MEMBER ? LIMIT_MSG.max : null;
   }
 
-  /** Posso publicar agora? Motivo em português, ou `null`. */
-  canPublish(community: string, author: string, now: number, roster: Roster): string | null {
-    if (!isIn(roster, author)) return LIMIT_MSG.member;
-    return this.limitReason(community, author, now, roster);
-  }
-
   /**
    * Alerta que chegou (ou que eu publiquei). Recusa quem não é membro, relógio adiantado demais,
-   * id repetido de outro autor e quem passou do limite (o mesmo cálculo em todo aparelho).
+   * validade fora do padrão, vencido há mais que o histórico e id repetido. O que passa do limite é
+   * guardado oculto (`'hidden'`); a chegada pode mudar quais alertas do mesmo autor valem. Acima de
+   * `MAX_STORED_PER_MEMBER` do autor na comunidade, ou do teto do aparelho, sai um alerta (pode ser este).
    */
-  addAlert(a: CommunityAlert, now: number, roster: Roster): 'ok' | 'dup' | 'rejected' {
+  addAlert(a: CommunityAlert, now: number, roster: Roster): 'ok' | 'hidden' | 'dup' | 'rejected' {
     const cur = this.alerts.get(a.id);
     if (cur) return 'dup';
     if (!isIn(roster, a.author) || a.at > now + FUTURE_SKEW_SEC || a.until - a.at > MAX_DURATION_SEC || a.until <= a.at) return 'rejected';
-    if (this.limitReason(a.community, a.author, a.at, roster)) return 'rejected';
     if (a.until + HISTORY_SEC <= now) return 'rejected';
     this.alerts.set(a.id, a);
+    this.rev++;
+    // Teto por autor e comunidade: sai o de menor (until, at, id).
+    const mine = [...this.alerts.values()].filter(x => x.community === a.community && x.author === a.author);
+    for (const x of mine.sort(byUntil).slice(0, Math.max(0, mine.length - MAX_STORED_PER_MEMBER))) this.forget(x.id);
+    // Teto do aparelho: sai o de menor (until, at, id) do autor com mais alertas guardados.
     if (this.alerts.size > MAX_ALERTS) {
-      const oldest = [...this.alerts.values()].sort((x, y) => x.until - y.until)[0]!;
-      this.forget(oldest.id);
+      const count = new Map<string, number>();
+      for (const x of this.alerts.values()) count.set(x.author, (count.get(x.author) ?? 0) + 1);
+      const top = [...count].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0))[0]![0];
+      this.forget([...this.alerts.values()].filter(x => x.author === top).sort(byUntil)[0]!.id);
     }
-    return 'ok';
+    if (!this.alerts.has(a.id)) return 'rejected';
+    return this.isCounted(a.id, roster) ? 'ok' : 'hidden';
   }
 
   /** Revisão do próximo voto meu neste alerta. */
@@ -306,14 +358,15 @@ export class AlertBook {
     if (m?.has(by)) return false;
     if (!m) { m = new Map(); this.closes.set(alertId, m); }
     m.set(by, at);
+    this.rev++;
     this.trimLoose();
     return true;
   }
 
-  /** Visão do alerta para a tela, calculada agora com os membros atuais. */
+  /** Visão do alerta para a tela, calculada agora com os membros atuais. `null` se oculto (passou do limite). */
   view(id: string, roster: Roster, me: string, now: number, communityName = ''): AlertView | null {
     const a = this.alerts.get(id);
-    if (!a) return null;
+    if (!a || !this.isCounted(id, roster)) return null;
     let confirms = 0, denies = 0;
     for (const [voter, r] of this.votes.get(id) ?? []) {
       if (voter === a.author || !isIn(roster, voter)) continue;
@@ -350,7 +403,7 @@ export class AlertBook {
     return changed;
   }
 
-  private forget(id: string) { this.alerts.delete(id); this.votes.delete(id); this.closes.delete(id); }
+  private forget(id: string) { this.alerts.delete(id); this.votes.delete(id); this.closes.delete(id); this.rev++; }
 
   /** Votos e encerramentos sem alerta conhecido têm teto (contra enxurrada). */
   private trimLoose() {

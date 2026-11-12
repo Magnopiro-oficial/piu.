@@ -6,6 +6,7 @@ import { BackupError, openBackup, parseBackupHeader } from '../lib/backupFile';
 import { PhraseExistsError } from '../lib/identityGuard';
 import { useT } from '../i18n';
 import { pickBackupFile } from '../lib/migrationIO';
+import { usePreventCapture } from '../lib/screenCapture';
 import { requestDeviceChangeNotice, requestSessionRotation, stashRestoredData } from '../lib/migrationState';
 import { isValidPhrase, PHRASE_WORDS, WORDLIST } from '../protocol';
 import { useKeys } from '../state/keys';
@@ -40,6 +41,8 @@ export default function Restore() {
   const t = useT();
   const { restoreMode, setRestoreMode } = useSettings();
   const { restore } = useKeys();
+  // As 12 palavras ficam visíveis enquanto são digitadas: sem print, gravação nem miniatura (como em backup).
+  usePreventCapture('restore');
   const [words, setWords] = useState<string[]>(Array(PHRASE_WORDS).fill(''));
   const [err, setErr] = useState<string | null>(null);
   const [file, setFile] = useState<{ name: string; text: string } | null>(null);
@@ -77,6 +80,8 @@ export default function Restore() {
       if (restoreMode === 'phrase') {
         // Digitou a frase: tem a cópia fora do aparelho (a frase pode ir para o item com biometria, B-01).
         await restore(words, { replace, known: true });
+        // Aplicada: as palavras saem da tela (ela fica na pilha atrás de Migração).
+        setWords(Array(PHRASE_WORDS).fill(''));
         // O pedido do aviso vem antes: a rotação remonta o mensageiro, que assina e distribui.
         await requestDeviceChangeNotice('phrase');
         await requestSessionRotation('restaurado pela frase');

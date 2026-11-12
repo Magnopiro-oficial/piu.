@@ -4,6 +4,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useT } from '../i18n';
 import { matchesId, readSearch } from '../lib/searchInput';
 import { initialsOf } from '../lib/text';
+import { localizeStored } from '../lib/storedText';
 import { useMessaging } from '../state/messaging';
 import { useStore } from '../state/store';
 import { useTransport } from '../state/transport';
@@ -86,7 +87,7 @@ export default function NewChat() {
                 <Avatar initials={x.initials} size={44} square={x.kind !== 'direct'} photo={x.photo} />
                 <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
                   <T size={15.5} w={550} numberOfLines={1}>{x.name}</T>
-                  <T size={13} color={c.ink2} numberOfLines={1}>{x.sub ?? ''}</T>
+                  <T size={13} color={c.ink2} numberOfLines={1}>{x.sub ? localizeStored(x.sub, t) : ''}</T>
                 </View>
               </Pressable>
             )) : (

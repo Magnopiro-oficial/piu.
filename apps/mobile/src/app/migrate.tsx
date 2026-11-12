@@ -7,6 +7,7 @@ import { addDevice, platformName, thisDevice, thisDeviceKey, thisPlatform } from
 import { PhraseExistsError } from '../lib/identityGuard';
 import { createOffer, MigrationError, type MigrationPayload, readReply, wipeOffer } from '../lib/migration';
 import { requestSessionRotation } from '../lib/migrationState';
+import { usePreventCapture } from '../lib/screenCapture';
 import { CodeQr, CodeReader, CodeWords } from '../lib/migrationUi';
 import { useKeys } from '../state/keys';
 import { useSettings } from '../state/settings';
@@ -41,6 +42,8 @@ export default function Migrate() {
   const { identities, restore } = useKeys();
   const { file, hist } = useLocalSearchParams<{ file?: string; hist?: string }>();
   const device = restoreMode === 'device';
+  // A frase chega por aqui (de outro aparelho): sem print nem gravação durante a transferência.
+  usePreventCapture('migrate');
   const [phase, setPhase] = useState<Phase>(device ? 'offer' : 'progress');
   const [n, setN] = useState(0);
   const [got, setGot] = useState<{ code: string[]; payload: MigrationPayload } | null>(null);

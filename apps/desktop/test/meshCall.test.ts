@@ -71,9 +71,8 @@ test('desktop ↔ desktop pela LAN: toca, atende, voz cifrada nos dois sentidos,
   assert.deepEqual(a.words, b.words);
   await until(() => A.audio.on && B.audio.on, 'microfones abertos');
 
-  A.audio.speak(40);
-  B.audio.speak(33);
-  await until(() => B.audio.played.includes(40) && A.audio.played.includes(33), 'voz nos dois sentidos');
+  // Fala contínua, como o microfone de verdade: antes de o enlace da voz ser achado o áudio não sai.
+  await until(() => { A.audio.speak(40); B.audio.speak(33); return B.audio.played.includes(40) && A.audio.played.includes(33); }, 'voz nos dois sentidos');
   await until(() => a.state.route === 'direct' && b.state.route === 'direct', 'caminho direto pela LAN');
 
   a.controller.hangup();

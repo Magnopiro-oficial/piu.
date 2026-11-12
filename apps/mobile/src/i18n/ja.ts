@@ -6,6 +6,7 @@ import { linkDesktop } from './linkDesktop/ja';
 import { call } from './call/ja';
 import { lora } from './lora/ja';
 import { map } from './map/ja';
+import { stored } from './stored/ja';
 
 export const dict: Dict = {
   ...piu11,
@@ -14,6 +15,7 @@ export const dict: Dict = {
   ...call,
   ...lora,
   ...map,
+  ...stored,
   'common.back': '戻る',
   'common.close': '閉じる',
   'common.cancel': 'キャンセル',
@@ -633,6 +635,11 @@ export const dict: Dict = {
   "scan.panel.repair.title": "別のシークレットで再ペアリングしますか?",
   "scan.panel.repair.body": "このスマートフォンはすでに {node} とペアリングされています。続けるとペアリングが置き換わり、送金の承認はこの QR のパネルでのみ有効になります。この QR を自分でパネルに表示した場合のみ続けてください。",
   "scan.panel.repair.confirm": "ペアリングを置き換える",
+  "scan.panel.pairNew.title": "この機器とペアリングしますか?",
+  "scan.panel.pairNew.body": "{node} · {operator}\nアドレス: {url}\n証明書: {pin}\n\nこの QR を自分の機器のパネルで表示した場合のみ続けてください。",
+  "scan.panel.pairNew.pasted": "このコードはカメラで読み取ったものではなく、貼り付けられたものです。出どころを確認してください。",
+  "scan.panel.pairNew.confirm": "ペアリング",
+  "scan.panel.pairNew.prompt": "{node} とのペアリングを確認",
   "join.sent": "{name}に要求を送信しました",
   "join.sent.body": "管理者が要求を受信し、必要な場合は承認すると参加できます。",
   "scan.verify.mismatch": "このQRは{name}のものではありません。対面している場合、鍵が差し替えられた可能性があります。このチャットを信用しないでください。",
@@ -880,6 +887,8 @@ export const dict: Dict = {
   "devices.scan.path": "復元 → 別の端末から",
   "devices.scan.after": "。その後、表示されたQRを読み取ってください。",
   "devices.scan.hint": "新しい端末のQRにカメラを向けてください。鍵はサーバーを介さず直接暗号化して転送されます。",
+  "devices.scan.noCamera": "カメラの許可がありません。新しい端末のQRを読み取るには、端末の設定でカメラを許可してください。",
+  "devices.scan.cameraOnly": "安全のため、ここではコードはカメラからのみ読み取れます。2台の端末を並べて行ってください。他の人から受け取ったコードで鍵を送信しないでください。",
   "devices.reply.title": "今度は新しい端末でこのQRを読み取ります",
   "devices.reply.qr": "新しい端末への応答QR",
   "devices.reply.prompt": "{name}にも同じ単語が表示されることを確認してください：",
@@ -1794,6 +1803,12 @@ export const dict: Dict = {
   "wallet.sendSheet.noContacts": "連絡先が Lunes アドレスを共有するか、そのアドレス付きの支払いリクエストを送ると、ここに表示されます。",
   "wallet.sendSheet.settleValue": "Lunes Mainnet のブロックに入った時点",
   "wallet.sendSheet.over": "利用可能な残高を超えています",
+  "wallet.sendSheet.contactAddr.a11y": "{name} の Lunes アドレス: {address}",
+  "wallet.sendSheet.addrChanged.title": "この連絡先のアドレスが変わりました",
+  "wallet.sendSheet.addrChanged.body": "{name} の Lunes アドレスが、前回完了した送金のときと異なっています。送る前に、別の手段で本人に確認してください。",
+  "wallet.sendSheet.addrChanged.before": "前回の送金のアドレス",
+  "wallet.sendSheet.addrChanged.now": "現在のアドレス",
+  "wallet.sendSheet.addrChanged.confirm": "新しいアドレスを使う",
   "wallet.sendSheet.scan.a11y": "別のウォレットの QR を読み取る",
   "wallet.sendSheet.scan.hint": "送金先ウォレットの QR にカメラを向けてください：Lunes アドレスまたは Piu の支払いリクエストです。",
   "wallet.sendSheet.scan.placeholder": "Lunes アドレスまたは支払いリクエスト",
