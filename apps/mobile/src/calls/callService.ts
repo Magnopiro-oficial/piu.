@@ -10,6 +10,7 @@ import { CallController } from './callController';
 import { agree } from '../protocol/suite';
 import { splitRoute, type CallRecord, type CallState, type RouteHint, type Signal } from './callMachine';
 import { VoiceLink, type Codec } from './callMedia';
+import { callTone, type CallTone } from './callTone';
 import { isLiveSignal, readCallWire, callWire, type WireCall } from './callSignals';
 import type { RequestStep } from './callView';
 import type { Medium } from '../transport/types';
@@ -22,6 +23,11 @@ export interface AudioEngine {
   play(codec: Codec, payload: Uint8Array, seq: number): void;
   setMuted(muted: boolean): void;
   setSpeaker?(on: boolean): void;
+  /**
+   * Som de quem liga na saída da chamada (./callTone): "chamando" em loop, tom curto de falha, ou silêncio.
+   * O tom abre a saída da chamada sem a voz e o silêncio a solta; `start` para o tom e segue na mesma saída.
+   */
+  tone?(kind: CallTone | null): void;
   /** Níveis 0..1 do meu microfone e da voz que chega. */
   levels(): { mine: number; theirs: number };
 }
@@ -101,7 +107,7 @@ export class CallService {
       remind: (peer, ms) => p.remind?.(peer, ms),
     });
     // Mudo e alto-falante na hora (não esperam o tique): mudo é privacidade.
-    this.controller.subscribe(() => { if (this.link) this.syncAudio(); this.emit(); });
+    this.controller.subscribe(() => { this.syncTone(); if (this.link || this.tone) this.syncAudio(); this.emit(); });
   }
 
   get state(): CallState { return this.controller.state; }
@@ -270,6 +276,24 @@ export class CallService {
     this.ticker = every(() => { this.link?.tick(); this.syncAudio(); }, TICK_MS);
   }
 
+  /** Som que está tocando agora (./callTone); muda só quando o estado pede outro. */
+  private tone: CallTone | null = null;
+  private syncTone() {
+    const next = callTone(this.controller.state);
+    if (next === this.tone) return;
+    const s = this.controller.state;
+    this.tone = next;
+    // Atendeu: o `start` do motor já para o tom sem soltar a saída. Um silêncio aqui chegaria antes
+    // dele (no celular o start espera a permissão do microfone) e fecharia e reabriria modo, foco e
+    // Bluetooth: estalo, e em Bluetooth antigo o começo da voz se perde.
+    if (!next && s.phase === 'active') return;
+    // A rota vai antes do tom: o "chamando" já sai no fone/alto-falante escolhido, não no da chamada anterior.
+    if (next && s.speaker !== this.lastSpeaker) { this.lastSpeaker = s.speaker; this.p.audio.setSpeaker?.(s.speaker); }
+    this.p.audio.tone?.(next);
+    // Silêncio sem voz solta a saída (e o motor esquece a rota): o próximo tom manda a rota de novo.
+    if (!next && !this.link) this.lastSpeaker = undefined;
+  }
+
   private lastMuted?: boolean;
   private lastSpeaker?: boolean;
   private syncAudio() {
@@ -281,15 +305,14 @@ export class CallService {
   private stopMedia() {
     if (this.ticker !== undefined) (this.p.clearInterval ?? ((h: unknown) => clearInterval(h as ReturnType<typeof setInterval>)))(this.ticker);
     this.ticker = undefined;
-    this.link?.close();
-    this.link = undefined;
-    this.p.audio.stop();
+    // Só para a voz que abriu: sem ela, quem solta a saída é o tom (um stop aqui fecharia a saída
+    // entre o "chamando" e o tom de falha, ou mataria o tom de falha).
+    if (this.link) { this.link.close(); this.link = undefined; this.p.audio.stop(); this.lastMuted = this.lastSpeaker = undefined; }
     this.keys = undefined;
     this.mine?.sk.fill(0);
     this.mine = undefined;
     this.theirKey.clear();
-    this.lastMuted = this.lastSpeaker = undefined;
   }
 
-  dispose() { this.stopMedia(); this.controller.dispose(); this.listeners.clear(); }
+  dispose() { if (this.tone) { this.tone = null; this.p.audio.tone?.(null); } this.stopMedia(); this.controller.dispose(); this.listeners.clear(); }
 }

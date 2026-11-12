@@ -46,6 +46,7 @@ export function phoneAudio(onMicDenied: () => void): AudioEngine {
     play: (codec, payload, seq) => PiuVoice.play(codec, payload, seq),
     setMuted: m => PiuVoice.setMuted(m),
     setSpeaker: on => PiuVoice.setSpeaker(on),
+    tone: k => PiuVoice.tone(k ?? 'none'),
     levels: () => PiuVoice.levels(),
   };
 }

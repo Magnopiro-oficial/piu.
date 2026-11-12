@@ -3,7 +3,7 @@
  * quem fala, botões e cartões de registro na conversa. Igual no celular e no Desktop; cada um passa o
  * seu `t` (dicionários com as chaves `call.*`).
  */
-import { fmtDuration, type CallRecord, type CallState, type LiveRoute } from './callMachine';
+import { failedAttempt, fmtDuration, type CallRecord, type CallState, type LiveRoute } from './callMachine';
 
 type Vars = Record<string, string | number>;
 export type Tr = (key: string, vars?: Vars) => string;
@@ -39,6 +39,20 @@ export function endTitle(t: Tr, s: CallState): string {
     case 'busy': return t('call.end.busy');
     case 'lost': return t('call.end.lost');
     default: return t('call.end.done');
+  }
+}
+
+/**
+ * Aviso da tentativa que não deu certo (só de quem ligou), na tela de fim do celular: título claro e o
+ * porquê. `null` quando não é falha (eu desliguei, eu recusei, a conversa terminou).
+ */
+export function failNotice(t: Tr, s: CallState, c: Contact): { icon: string; title: string; sub: string } | null {
+  if (!failedAttempt(s)) return null;
+  switch (s.end?.reason) {
+    case 'noanswer': return { icon: 'phone_missed', title: t('call.end.noanswer'), sub: t('call.fail.noanswerSub', { first: c.first }) };
+    case 'declined': return { icon: 'call_end', title: t('call.end.declined'), sub: t('call.fail.declinedSub', { first: c.first }) };
+    case 'busy': return { icon: 'call_end', title: t('call.end.busy'), sub: t('call.fail.busySub', { first: c.first }) };
+    default: return { icon: 'call_end', title: t('call.fail.title'), sub: endTitle(t, s) }; // nocall · unreachable
   }
 }
 
@@ -106,8 +120,10 @@ export function recordCard(t: Tr, r: CallRecord, c: Contact, o: { desktop?: bool
     }
     case 'cancelled': return { icon: 'call_end', title: t('call.end.cancelled'), sub: via, mine, callBack: false };
     case 'noanswer': {
+      // A oferta não chegou a tocar: "Não foi possível chamar", como na tela de fim.
+      const couldNot = r.note === 'nocall' || r.note === 'unreachable';
       const sub = r.note === 'nocall' ? t('call.rec.nocallSub') : r.note === 'unreachable' ? t('call.rec.unreachableSub') : via;
-      return { icon: 'call_end', title: t('call.end.noanswer'), sub, mine, callBack: false };
+      return { icon: 'call_end', title: t(couldNot ? 'call.fail.title' : 'call.end.noanswer'), sub, mine, callBack: false };
     }
     case 'busy': return { icon: 'call_end', title: t('call.end.busy'), sub: via, mine, callBack: false };
     case 'sas': return { icon: 'call_end', title: t('call.end.sas'), sub: withDur(t('call.rec.sasSub')), mine, callBack: false };

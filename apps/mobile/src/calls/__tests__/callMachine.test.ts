@@ -201,6 +201,24 @@ test('contato sem chamada: a oferta saiu e nada voltou (nem "tocando") em 10 s �
   assert.equal(reduce(accepted.state, { type: 'noReply', now: 10_000 }).state, accepted.state);
 });
 
+test('tentativa que falhou fica mais tempo na tela de fim (dá para ler o motivo); desligar segue rápido', () => {
+  assert.ok(CALL_TIMING.failScreenMs >= 3000 && CALL_TIMING.failScreenMs > CALL_TIMING.endScreenMs);
+  const calling = run([{ type: 'open', peer: 'm', route: 'direct' }, { type: 'dial', callId: 'c', now: 0 }]).s;
+  const ringing = reduce(calling, { type: 'peerRinging', callId: 'c' }).state;
+  const endMs = (r: { effects: Effect[] }) => r.effects.flatMap(f => (f.kind === 'timer' && f.name === 'endDone' ? [f.ms] : []))[0];
+  const fails: [string, CallState, CallEvent][] = [
+    ['nocall', calling, { type: 'noReply', now: 10_000 }],
+    ['unreachable', calling, { type: 'unreachable', callId: 'c', now: 1 }],
+    ['noanswer', ringing, { type: 'ringTimeout', now: 45_000 }],
+    ['busy', ringing, { type: 'remoteDecline', callId: 'c', reason: 'busy', now: 2 }],
+    ['declined', ringing, { type: 'remoteDecline', callId: 'c', reason: 'declined', now: 2 }],
+  ];
+  for (const [name, s, e] of fails) assert.equal(endMs(reduce(s, e)), CALL_TIMING.failScreenMs, name);
+  assert.equal(endMs(reduce(ringing, { type: 'hangup', now: 3 })), CALL_TIMING.endScreenMs, 'eu cancelei');
+  const incoming = reduce(IDLE, { type: 'incoming', callId: 'x', peer: 'm', route: 'direct', now: 0 }).state;
+  assert.equal(endMs(reduce(incoming, { type: 'decline', now: 1, how: 'message' })), CALL_TIMING.endScreenMs, 'eu recusei');
+});
+
 test('oferta que nem saiu (sem sessão/sem vizinho): termina na hora com "sem conexão", sem sinal e sem esperar', () => {
   const calling = run([{ type: 'open', peer: 'm', route: 'direct' }, { type: 'dial', callId: 'c', now: 0 }]);
   // A oferta é o último efeito: se ela falhar, os timers já armados são cancelados pelo fim.

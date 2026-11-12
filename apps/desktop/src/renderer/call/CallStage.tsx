@@ -5,10 +5,10 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import type { CallState } from '../../../../mobile/src/calls/callMachine';
-import { controls, encChip, routeChip, speakLine, statusLine, type CallScene, type ControlId } from '../../../../mobile/src/calls/callView';
+import { controls, encChip, routeChip, type CallScene, type ControlId } from '../../../../mobile/src/calls/callView';
 import { avatarScale, contour, CONTOUR_STYLE, dotAlpha, dotRadius, END_SECONDS, flashAlpha, rings, voiceNow, type FrameInput } from '../../../../mobile/src/calls/callVisual';
 import { F, FM, motionOff, Sym } from '../ui';
-import { callKeyLabel, deviceIcon, HANDOFF, onStage, stageLayout, type AudioDevice } from './callDesktop';
+import { callKeyLabel, callLines, deviceIcon, HANDOFF, onStage, stageLayout, type AudioDevice } from './callDesktop';
 import { type DesktopCallHost, useFrame, useSticky, useTick, useTr } from './CallContext';
 
 const ENTER = 'cubic-bezier(.2,.85,.3,1)';
@@ -157,6 +157,7 @@ export function CallStage({ host, mac }: { host: DesktopCallHost; mac: boolean }
 
   const soft = !!sc && (sc.soft || motionOff());
   const who = sc ? ampOf(sc, soft, !!ho).who : null;
+  const lines = s && sc ? callLines(t, s, sc.contact, now, who) : { status: '', speak: '' };
   const enc = s ? encChip(t, s) : null;
   const rc = s ? routeChip(t, s, sc?.latencyMs) : null;
   const ctl5 = s && (ph === 'calling' || ph === 'active') && !ho ? controls(t, s, { desktop: true, audioOpen, phoneName: host.phoneName, keys: { mute: callKeyLabel('mute', mac) } }) : [];
@@ -180,8 +181,8 @@ export function CallStage({ host, mac }: { host: DesktopCallHost; mac: boolean }
           <div ref={av} style={{ position: 'absolute', left: L.avatar.left, top: L.avatar.top, width: 120, height: 120, borderRadius: 60, background: '#fff', color: '#0c0c0c', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 40, fontWeight: 700, letterSpacing: '-0.04em' }}>{sc.contact.initials}</div>
           <div style={{ position: 'absolute', top: L.textTop, left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 8, textAlign: 'center' }}>
             <span style={{ fontSize: 36, fontWeight: 700, letterSpacing: '-0.05em', lineHeight: 1 }}>{sc.contact.name}</span>
-            <span role="status" style={{ font: `500 14px ${FM}`, opacity: .7, minHeight: 20 }}>{statusLine(t, s, sc.contact, now, { desktop: true })}</span>
-            <span style={{ fontSize: 13.5, opacity: .6, minHeight: 20 }}>{ho ? '' : speakLine(t, s, sc.contact, who)}</span>
+            <span role="status" style={{ font: `500 14px ${FM}`, opacity: .7, minHeight: 20 }}>{lines.status}</span>
+            <span style={{ fontSize: 13.5, opacity: .6, minHeight: 20 }}>{ho ? '' : lines.speak}</span>
           </div>
 
           {ctl5.length > 0 && (

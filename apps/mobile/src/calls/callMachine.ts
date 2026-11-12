@@ -32,6 +32,8 @@ export type EndReason = 'hangup' | 'remote' | 'cancel' | 'declined' | 'busy' | '
 /** Tempos da especificação (§6) e do produto. */
 export const CALL_TIMING = {
   endScreenMs: 1700,
+  /** Tentativa de quem ligou que não deu certo: a tela de fim fica mais, para ler o motivo. */
+  failScreenMs: 3500,
   /** Sem resposta: o chamador desiste e o outro lado registra chamada perdida. */
   ringTimeoutMs: 45_000,
   /**
@@ -45,6 +47,11 @@ export const CALL_TIMING = {
   switchTimeoutMs: 20_000,
   toastMs: 2400,
 } as const;
+
+/** Desfechos de uma tentativa de quem ligou que não deu certo (som curto de falha e aviso na tela). */
+const FAILED: ReadonlySet<EndReason> = new Set<EndReason>(['busy', 'declined', 'noanswer', 'nocall', 'unreachable']);
+/** Tela de fim de uma tentativa minha que falhou (não quando eu desliguei ou eu recusei). */
+export const failedAttempt = (s: CallState) => s.phase === 'ending' && s.dir === 'out' && !!s.end && FAILED.has(s.end.reason);
 
 export type CallRecord = {
   callId: string;
@@ -154,8 +161,9 @@ function toEnding(s: CallState, now: number, reason: EndReason, record: Omit<Cal
   if (signal) effects.push({ kind: 'send', signal });
   effects.push({ kind: 'media', on: false }, { kind: 'cancelTimer', name: 'ringTimeout' }, { kind: 'cancelTimer', name: 'noReply' }, { kind: 'cancelTimer', name: 'switchTimeout' });
   effects.push({ kind: 'record', record: { callId: s.callId!, peer: s.peer!, dir: s.dir!, at: now, ...record, ...wfd(s, record.route) } });
-  effects.push({ kind: 'timer', name: 'endDone', ms: CALL_TIMING.endScreenMs });
-  return { state: { ...s, phase: 'ending', endedAt: now, end: { reason, durationMs: record.durationMs }, wordsOpen: false, mini: false, switching: undefined }, effects };
+  const state: CallState = { ...s, phase: 'ending', endedAt: now, end: { reason, durationMs: record.durationMs }, wordsOpen: false, mini: false, switching: undefined };
+  effects.push({ kind: 'timer', name: 'endDone', ms: failedAttempt(state) ? CALL_TIMING.failScreenMs : CALL_TIMING.endScreenMs });
+  return { state, effects };
 }
 
 /** Volta à conversa sem tela de fim (recusar pelo aviso, atendida em outro aparelho). */

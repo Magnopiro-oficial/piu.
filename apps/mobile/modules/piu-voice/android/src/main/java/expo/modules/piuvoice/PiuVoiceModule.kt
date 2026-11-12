@@ -72,6 +72,9 @@ class PiuVoiceModule : Module() {
 
     Function("setSpeaker") { on: Boolean -> control.execute { engine().setSpeaker(on) }; Unit }
 
+    // Tom de quem liga ("ringback", "fail" ou "none"): na thread de controle, em ordem com start/stop.
+    Function("tone") { kind: String -> control.execute { engine().tone(kind) }; Unit }
+
     Function("levels") {
       val e = engine
       mapOf("mine" to (e?.mine?.value ?: 0f).toDouble(), "theirs" to (e?.theirs?.value ?: 0f).toDouble())
