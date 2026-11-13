@@ -1,6 +1,8 @@
+• Receives messages and calls with the app closed and after a phone restart.
+• Callers hear a ringback tone and see why when a call fails.
+• Group invite QR opens full screen.
 • Security and privacy fixes from the Nov 9 audit.
-• System notices inside chats now show in the app's language.
-• The app is smaller to download and install.
-• Camera photos sent as "Original" no longer carry location or other hidden file data.
-• With app lock on, the screen can't be captured. The recovery phrase screens can't either.
-• The app asks for confirmation before pairing with a Piu Node read from a QR code.
+• System notices in the app's language; smaller app.
+• "Original" photos are sent without location.
+• With app lock on, the screen can't be captured.
+• Confirmation before pairing with a Piu Node.

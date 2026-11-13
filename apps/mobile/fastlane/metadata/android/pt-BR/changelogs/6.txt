@@ -1,6 +1,8 @@
+• Recebe mensagens e chamadas com o app fechado e depois de reiniciar o celular.
+• Quem liga ouve o som de chamando e vê o motivo quando não dá certo.
+• QR do convite de grupo abre em tela cheia.
 • Correções de segurança e privacidade da auditoria de 09/11.
-• Os avisos do sistema dentro das conversas aparecem no idioma do app.
-• O app ficou menor para baixar e instalar.
-• Foto da câmera enviada em "Original" sai sem a localização e sem os outros dados escondidos do arquivo.
-• Com o bloqueio do app ligado, a tela não pode ser capturada. As telas da frase de recuperação também não.
-• O app pede confirmação antes de parear com um Piu Node lido por QR.
+• Avisos do sistema no idioma do app; app menor.
+• Foto "Original" sai sem localização.
+• Com o bloqueio ligado, a tela não pode ser capturada.
+• Confirmação antes de parear com um Piu Node.
