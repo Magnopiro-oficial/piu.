@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -37,7 +38,7 @@ test('disco: cada mensagem num arquivo próprio, gravado uma vez; a que saiu som
   assert.equal(statSync(dir).mode & 0o777, 0o700);
   assert.ok(statSync(join(dir, 'state.bin')).size < a.bytes.length + b.bytes.length, 'estado sem os bytes das mensagens');
   for (const f of files) assert.ok(!readFileSync(join(dir, 'env', f)).includes(Buffer.from(a.bytes.subarray(-32))), 'mensagem não fica como veio');
-  const before = statSync(join(dir, 'env', files[0]!)).mtimeMs;
+  const before = new Map(files.map(f => [f, statSync(join(dir, 'env', f)).mtimeMs]));
 
   // Segunda gravação: a que já estava não é reescrita; a que saiu é apagada; a nova entra.
   st.save({ envelopes: [kept(a.bytes, { sentTo: ['x', 'y'], copies: 2 }), kept(c.bytes)], seen: [[a.id, 9e9]], receipts: [] }, 2000);
@@ -45,7 +46,7 @@ test('disco: cada mensagem num arquivo próprio, gravado uma vez; a que saiu som
   assert.equal(after.length, 2);
   const keptName = files.find(f => after.includes(f));
   assert.ok(keptName, 'a primeira continua com o mesmo arquivo');
-  assert.equal(statSync(join(dir, 'env', keptName!)).mtimeMs, before, 'não foi regravada');
+  assert.equal(statSync(join(dir, 'env', keptName!)).mtimeMs, before.get(keptName!), 'não foi regravada');
 
   // Reabrindo: bytes e o que mudou (a quem foi, cópias) voltam.
   const back = new RelayStore(dir, key).load()!;
@@ -124,4 +125,19 @@ test('espaço para guardar mensagens: opções em MB que o nó cumpre; ajustes a
   // Regra do equipamento (em GB, na malha) continua valendo como teto.
   e.applySettings({ ...DEFAULT_SETTINGS, limits: { ...DEFAULT_SETTINGS.limits, sto: 512 } }, { bw: 50, sto: 1, hours: 'always' });
   assert.equal(e.effective.stoMB, 512);
+});
+
+test('disco: o nome do arquivo não revela qual mensagem está guardada (só este nó calcula)', t => {
+  const dir = tmp();
+  t.after(() => rmSync(dir, { recursive: true, force: true }));
+  const a = letter('quem tem esta mensagem não confirma que ela está aqui');
+  new RelayStore(dir, storeKey(deriveNodeKey(newSeed()))).save({ envelopes: [kept(a.bytes)], seen: [], receipts: [] }, 1);
+  const [name] = envFiles(dir);
+  // Antes: SHA-256 dos bytes. Qualquer um com o envelope (ele passa pela malha) achava o arquivo.
+  assert.notEqual(name, `${createHash('sha256').update(a.bytes).digest('hex')}.bin`);
+  // Outro nó com a mesma mensagem: outro nome.
+  const other = tmp();
+  t.after(() => rmSync(other, { recursive: true, force: true }));
+  new RelayStore(other, storeKey(deriveNodeKey(newSeed()))).save({ envelopes: [kept(a.bytes)], seen: [], receipts: [] }, 1);
+  assert.notEqual(envFiles(other)[0], name);
 });

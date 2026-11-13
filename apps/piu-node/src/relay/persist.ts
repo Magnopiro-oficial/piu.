@@ -3,8 +3,9 @@
  * no armazenamento local"; REQ NFR-002 e FUN-012).
  *
  * Salva na pasta `<data>/lnnp/relay-store/`:
- * - `env/<sha256>.bin`: cada envelope guardado num arquivo próprio, gravado uma vez quando chega e
- *   apagado quando sai do roteador (o nome é o SHA-256 dos bytes; não é o id do envelope);
+ * - `env/<nome>.bin`: cada envelope guardado num arquivo próprio, gravado uma vez quando chega e
+ *   apagado quando sai do roteador. O nome é um HMAC-SHA256 dos bytes com chave deste nó: quem tem uma
+ *   cópia do envelope (ele passa pela malha) não consegue saber se ele está guardado aqui;
  * - `state.bin`: o resto, pequeno e regravado a cada rodada: a quem cada envelope já foi e quantas
  *   cópias saíram (para o reinício não repetir envio nem recibo), os ids já vistos até vencerem
  *   (deduplicação) e os recibos guardados para o validador.
@@ -22,7 +23,7 @@
  * versão desconhecida não derruba o nó: é posto de lado (`.corrompido`) e o nó sobe vazio; envelope
  * ilegível fica de fora e sai do disco na gravação seguinte.
  */
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHmac, randomBytes } from 'node:crypto';
 import { existsSync, readdirSync, readFileSync, renameSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { writeFileAtomic } from '../fsutil.js';
@@ -164,7 +165,14 @@ export class RelayStore {
   /** Veio do arquivo único antigo: a próxima gravação acontece mesmo sem mudança (e então o antigo sai). */
   migrating = false;
 
-  constructor(readonly dir: string, private key: Uint8Array, private o: { legacyFile?: string | null; log?: (m: string) => void } = {}) {}
+  /** Chave só dos nomes, derivada da do armazenamento (a mesma chave nunca cifra e nomeia). */
+  private nameKey: Buffer;
+
+  constructor(readonly dir: string, private key: Uint8Array, private o: { legacyFile?: string | null; log?: (m: string) => void } = {}) {
+    this.nameKey = createHmac('sha256', key).update('piu-node/relay-store/nomes/v1').digest();
+  }
+
+  private hashName(bytes: Uint8Array) { return createHmac('sha256', this.nameKey).update(bytes).digest('hex'); }
 
   private get envDir() { return join(this.dir, 'env'); }
   private get stateFile() { return join(this.dir, 'state.bin'); }
@@ -172,7 +180,7 @@ export class RelayStore {
 
   private nameOf(bytes: Uint8Array) {
     let n = this.names.get(bytes);
-    if (!n) { n = createHash('sha256').update(bytes).digest('hex'); this.names.set(bytes, n); }
+    if (!n) { n = this.hashName(bytes); this.names.set(bytes, n); }
     return n;
   }
 
@@ -201,7 +209,7 @@ export class RelayStore {
       if (name && this.onDisk.has(name)) {
         try { bytes = unseal(ENV_MAGIC, envAad(name), this.key, readFileSync(this.envFile(name))); } catch { bytes = null; }
       }
-      if (!name || !bytes || createHash('sha256').update(bytes).digest('hex') !== name) { lost++; continue; }
+      if (!name || !bytes || this.hashName(bytes) !== name) { lost++; continue; }
       const u = Uint8Array.from(bytes);
       this.names.set(u, name);
       envelopes.push({ bytes: u, ...parseMeta(e) });
