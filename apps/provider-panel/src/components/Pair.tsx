@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { useT } from '../i18n/react';
 import { ApiError, pair } from '../lib/api';
 import { useNode } from '../state/node';
-import { Icon } from './ui';
+import { Icon, useEscape } from './ui';
 
 const onlyDigits = (s: string) => s.replace(/\D/g, '').slice(0, 8);
 
@@ -82,6 +82,8 @@ export function StepUpDialog({ onConfirm, onClose, reason, confirmLabel }: {
   const [code, setCode] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Esc fecha, como os outros diálogos do painel (menos durante o envio).
+  useEscape(!busy, onClose);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     if (code.length !== 8 || busy) return;
@@ -117,6 +119,7 @@ export function PasswordDialog({ onConfirm, onClose }: { onConfirm: (password: s
   const [again, setAgain] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEscape(!busy, onClose);
   const problem = pw.length < 10 ? t('pw.min') : new Set(pw).size < 5 ? t('pw.repetitive') : pw !== again ? t('pw.mismatch') : null;
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -160,6 +163,7 @@ export function RestoreDialog({ onConfirm, onClose }: { onConfirm: (backup: stri
   const [pw, setPw] = useState('');
   const [err, setErr] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  useEscape(!busy, onClose);
   const pick = async (f: File | undefined) => {
     setErr(null); setFile(null);
     if (!f) return;
