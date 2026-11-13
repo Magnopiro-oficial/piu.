@@ -8,7 +8,7 @@ import { type DeviceLimits, type EngineOptions, type OperatorTrust, type Operato
 import { type CertJson, certFromJson, certToJson, type ListJson, listFromJson, listToJson, type PolicyJson, policyFromJson, policyToJson, unhex } from './operator-frames.js';
 import { RelayHistory, SAMPLE_MS } from './history.js';
 import { LanAdapter, type LanOptions, type PeerStatus } from './lan.js';
-import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
+import { RelayStore, storeKey } from './persist.js';
 import { createGateway, type GatewayHandle, type GatewayOptions } from './gateway.js';
 import { MeshtasticAdapter, type MeshtasticStats } from './meshtastic.js';
 import { RNodeAdapter, type RNodeStats } from './rnode.js';
@@ -74,7 +74,10 @@ export async function startRelay(
     openModem?: (path: string, baud: number) => Promise<Modem>;
     /** Arquivo do histórico (`<data>/relay-history.json`). Ausente: só em memória (testes). */
     historyFile?: string | null;
-    /** Envelopes guardados, ids vistos e recibos (`<data>/lnnp/relay-store.bin`). Ausente: só em memória. */
+    /**
+     * Envelopes guardados, ids vistos e recibos: o arquivo único antigo (`<data>/lnnp/relay-store.bin`), de
+     * onde sai a pasta nova ao lado (`relay-store/`, ver persist.ts). Ausente: só em memória.
+     */
     storeFile?: string | null;
     /** Intervalo para salvar o armazenamento quando algo mudou (ms). Padrão: 30 s. */
     persistMs?: number;
@@ -96,18 +99,18 @@ export async function startRelay(
   if (gateway) { gateway.attach(engine); void gateway.probe(); }
   // Mensagens guardadas antes do reinício voltam antes de o primeiro vizinho conectar.
   const storeFile = extra.storeFile ?? null;
-  const key = storeKey(node);
-  if (storeFile) {
-    const snap = loadSnapshot(storeFile, key, engine.router.limits.maxBytes, extra.log);
+  const disk = storeFile ? new RelayStore(storeFile.replace(/\.bin$/, ''), storeKey(node), { legacyFile: storeFile, log: extra.log }) : null;
+  if (disk) {
+    const snap = disk.load();
     if (snap) {
       const r = engine.importState(snap);
       extra.log?.(`LNNP: ${r.envelopes} mensagens guardadas e ${r.receipts} recibos restaurados do armazenamento local`);
     }
   }
-  let savedAt = engine.changes;
+  let savedAt = disk?.migrating ? -1 : engine.changes; // migrando do arquivo antigo: grava na primeira rodada
   const persist = () => {
-    if (!storeFile || engine.changes === savedAt) return;
-    try { const c = engine.changes; saveSnapshot(storeFile, engine.exportState(), key, Date.now()); savedAt = c; }
+    if (!disk || engine.changes === savedAt) return;
+    try { const c = engine.changes; disk.save(engine.exportState(), Date.now()); savedAt = c; }
     catch (e) { extra.log?.(`LNNP: armazenamento de mensagens não gravado (${e instanceof Error ? e.message : e})`); }
   };
   const lan = new LanAdapter(engine, {

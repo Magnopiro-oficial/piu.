@@ -57,7 +57,7 @@ test('config: porta, memória e intervalo de anúncio inválidos recusam a subid
   assert.throws(() => loadConfig({ PIU_NODE_PORT: '84x0' }), /PIU_NODE_PORT: valor inválido/);
   // Linha em branco no arquivo de ambiente vale o padrão (antes virava 0).
   const c = loadLnnpConfig({ PIU_LNNP_BEACON_MS: '', PIU_LNNP_MEMORY_MB: '', PIU_LNNP_PORT: '' });
-  assert.equal(c.beaconMs, 5000); assert.equal(c.memoryMB, 256); assert.equal(c.port, 8422);
+  assert.equal(c.beaconMs, 5000); assert.equal(c.memoryMB, 512); assert.equal(c.port, 8422);
   // Valores válidos (inclusive porta 0, usada nos testes do pacote e no smoke do desktop).
   const d = loadLnnpConfig({ PIU_LNNP_BEACON_MS: '1000', PIU_LNNP_MEMORY_MB: '16', PIU_LNNP_PORT: '0' });
   assert.equal(d.beaconMs, 1000); assert.equal(d.memoryMB, 16); assert.equal(d.port, 0);

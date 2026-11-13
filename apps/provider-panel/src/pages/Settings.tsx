@@ -6,7 +6,7 @@ import { LANGS, REGIONS, dateFormat, getRegion, setLang, setRegion, t, type Key,
 import { useLang, useT } from '../i18n/react';
 import { ApiError, NeedsReauth, type ApiOperatorKey } from '../lib/api';
 import { downloadText } from '../lib/io';
-import { LIMIT_DEFAULTS, bandNote, storageNote } from '../lib/limits';
+import { LIMIT_DEFAULTS, STORAGE_OPTIONS_MB, bandNote, storageNote } from '../lib/limits';
 import { Icon, Segmented, Toggle } from '../components/ui';
 import { OPERATOR, pubRules, sessions as demoSessions } from '../data/seed';
 import { useStore } from '../state/store';
@@ -90,8 +90,8 @@ export function Settings() {
           <LimitRow title={api ? t('st.bandNode') : t('st.bandGlobal')} desc={t('st.bandDesc')} def={t('common.mbps', { n: LIMIT_DEFAULTS.bw })} note={bandNote(limits.bw, relay)}>
             <Segmented {...segProps} label={t('st.bandAria')} value={limits.bw} onChange={bw => setLimits({ bw })} options={[20, 50, 100].map(v => ({ value: v, label: t('common.mbps', { n: v }) }))} />
           </LimitRow>
-          <LimitRow title={t('st.storageTitle')} desc={t('st.storageDesc')} def={t('common.gb', { n: LIMIT_DEFAULTS.sto })} note={storageNote(limits.sto, relay)}>
-            <Segmented {...segProps} label={t('dv.storage')} value={limits.sto} onChange={sto => setLimits({ sto })} options={[4, 8, 16].map(v => ({ value: v, label: t('common.gb', { n: v }) }))} />
+          <LimitRow title={t('st.storageTitle')} desc={t('st.storageDesc')} def={t('common.mb', { n: LIMIT_DEFAULTS.sto })} note={storageNote(limits.sto, relay)}>
+            <Segmented {...segProps} label={t('dv.storage')} value={limits.sto} onChange={sto => setLimits({ sto })} options={STORAGE_OPTIONS_MB.map(v => ({ value: v, label: t('common.mb', { n: v }) }))} />
           </LimitRow>
           <LimitRow title={t('st.hoursTitle')} desc={t('st.hoursDesc')} def={t('hours.always')}>
             <Segmented<HoursPolicy> {...segProps} label={t('dv.hours')} value={limits.hours} onChange={hours => setLimits({ hours })} options={hoursOptions()} />

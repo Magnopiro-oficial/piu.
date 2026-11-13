@@ -43,12 +43,24 @@ export interface WalletTx { id: string; amount: number; at: number; to: string; 
 export interface Wallet { balance: number; txs: WalletTx[] }
 
 export type HoursPolicy = 'always' | 'night' | 'day';
-/** Ajustes do operador: limites globais e política de tráfego (valores do painel). */
+/**
+ * Ajustes do operador: limites globais e política de tráfego (valores do painel). `sto` em MB: o roteador
+ * guarda no máximo 20 mil envelopes de até 32 KB (~625 MB), então as opções ficam abaixo disso.
+ */
 export interface Settings {
-  limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: HoursPolicy };
+  limits: { bw: 20 | 50 | 100; sto: 128 | 256 | 512; hours: HoursPolicy };
   policies: { media: boolean; unknown: boolean; community: boolean };
 }
-export const DEFAULT_SETTINGS: Settings = { limits: { bw: 50, sto: 8, hours: 'always' }, policies: { media: true, unknown: true, community: false } };
+export const STORAGE_OPTIONS_MB = [128, 256, 512] as const;
+export const DEFAULT_SETTINGS: Settings = { limits: { bw: 50, sto: 256, hours: 'always' }, policies: { media: true, unknown: true, community: false } };
+
+/**
+ * Ajustes salvos antes de o espaço passar a MB (4, 8 ou 16 "GB", que na prática eram os 256 MB de
+ * memória reservada) valem o padrão: o nó continua guardando o mesmo que guardava.
+ */
+export function normalizeSettings(s: Settings): Settings {
+  return (STORAGE_OPTIONS_MB as readonly number[]).includes(s.limits.sto) ? s : { ...s, limits: { ...s.limits, sto: DEFAULT_SETTINGS.limits.sto } };
+}
 
 /** Celular pareado que aprova transferências. `secret` só aqui e no celular (nunca na API). */
 export interface Phone { id: string; operatorId: string; name: string; secret: string; addedAt: number; confirmed: boolean }
@@ -245,7 +257,7 @@ export class Store {
     return dev;
   }
 
-  settings(operatorId: string): Settings { return this.s.settings[operatorId] ?? DEFAULT_SETTINGS; }
+  settings(operatorId: string): Settings { const s = this.s.settings[operatorId]; return s ? normalizeSettings(s) : DEFAULT_SETTINGS; }
   /**
    * Ajustes que valem para ESTE equipamento: os do dono (o primeiro operador pareado).
    * Outros operadores podem entrar no painel, mas não mudam os limites do equipamento de outra pessoa.

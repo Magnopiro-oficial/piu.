@@ -205,14 +205,14 @@ test('limites do equipamento: salvos pela API e aplicados ao motor quando é o p
   const r = await p.send('PUT', `/api/devices/${self.id}/limits`, { bw: 5, sto: 1, hours: 'night' });
   assert.equal(r.statusCode, 200, r.body);
   assert.deepEqual((r.json() as { limits: object }).limits, { bw: 5, sto: 1, hours: 'night' });
-  // O menor entre o global (50 Mbps, 8 GB, sempre) e o do equipamento; os dois horários valem.
-  assert.deepEqual(R.engine.effective, { bw: 5, sto: 1, hours: ['always', 'night'] });
-  assert.equal(R.engine.router.limits.maxBytes, 1024 ** 3);
+  // O menor entre o global (50 Mbps, 256 MB, sempre) e o do equipamento (1 GB); os dois horários valem.
+  assert.deepEqual(R.engine.effective, { bw: 5, stoMB: 256, hours: ['always', 'night'] });
+  assert.equal(R.engine.router.limits.maxBytes, 256 * 1024 ** 2);
   const h = new Date().getHours();
   assert.equal(R.engine.relaying, h >= 22 || h < 7, 'fora das 22h–7h não retransmite');
   // O global mais apertado continua valendo.
-  assert.equal((await p.send('PUT', '/api/settings', { limits: { bw: 20, sto: 4, hours: 'always' }, policies: { media: true, unknown: true, community: false } })).statusCode, 200);
-  assert.deepEqual(R.engine.effective, { bw: 5, sto: 1, hours: ['always', 'night'] });
+  assert.equal((await p.send('PUT', '/api/settings', { limits: { bw: 20, sto: 128, hours: 'always' }, policies: { media: true, unknown: true, community: false } })).statusCode, 200);
+  assert.deepEqual(R.engine.effective, { bw: 5, stoMB: 128, hours: ['always', 'night'] });
   // Equipamento novo pelo assistente leva as regras junto.
   const d = await p.send('POST', '/api/devices', { name: 'Mini-PC', cls: 'Home Node', family: 'minipc', limits: { bw: 20, sto: 4, hours: 'day' } });
   assert.equal(d.statusCode, 201, d.body);
@@ -220,5 +220,5 @@ test('limites do equipamento: salvos pela API e aplicados ao motor quando é o p
   assert.deepEqual(R.engine.effective.hours, ['always', 'night'], 'regras de outro equipamento não mexem neste motor');
   // Limpar: só os globais.
   assert.equal((await p.send('PUT', `/api/devices/${self.id}/limits`, { clear: true })).statusCode, 200);
-  assert.deepEqual(R.engine.effective, { bw: 20, sto: 4, hours: ['always'] });
+  assert.deepEqual(R.engine.effective, { bw: 20, stoMB: 128, hours: ['always'] });
 });

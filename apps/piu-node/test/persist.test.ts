@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { test } from 'node:test';
@@ -49,10 +49,12 @@ test('reinício: mensagens guardadas, ids vistos e recibos voltam do disco (0600
   await A.close(); open.splice(open.indexOf(A), 1);
   await R.close(); open.splice(open.indexOf(R), 1);
 
-  // Arquivo: só o usuário do serviço lê; o conteúdo não aparece em claro.
-  assert.equal(statSync(file).mode & 0o777, 0o600);
+  // Pasta ao lado do antigo arquivo único: só o usuário do serviço lê; o conteúdo não aparece em claro.
+  const state = join(dir, 'lnnp', 'relay-store', 'state.bin');
+  assert.equal(statSync(state).mode & 0o777, 0o600);
   assert.equal(statSync(join(dir, 'lnnp')).mode & 0o777, 0o700);
-  assert.ok(!readFileSync(file).includes(Buffer.from(m.id)), 'id do envelope não fica em claro');
+  assert.ok(!readFileSync(state).includes(Buffer.from(m.id)), 'id do envelope não fica em claro');
+  assert.ok(!existsSync(file), 'o arquivo único antigo não é mais usado');
 
   R = await relay();
   assert.ok(R.engine.router.has(m.id), 'a mensagem voltou');
@@ -101,4 +103,21 @@ test('reinício: arquivo corrompido ou de outro nó não derruba o nó; vencido 
   open.push(n2);
   assert.equal(n2.engine.router.size, 0);
   assert.equal(n2.engine.router.stats().seen, 0);
+});
+
+test('migração pelo nó: com o arquivo único antigo, o primeiro fechamento já grava a pasta nova e apaga o antigo', async t => {
+  const dir = mkdtempSync(join(tmpdir(), 'piu-persist-'));
+  let again: RelayHandle | null = null;
+  t.after(async () => { await again?.close(); rmSync(dir, { recursive: true, force: true }); });
+  const file = join(dir, 'relay-store.bin');
+  const node = deriveNodeKey(newSeed());
+  const m = letter(person(), person(), 'guardada no formato antigo');
+  writeFileSync(file, encodeSnapshot({ envelopes: [{ bytes: m.bytes, from: 'x', own: false, storedAt: Math.floor(Date.now() / 1000), dropAt: 9e9, sentTo: [], copies: 0, releaseAt: 0 }], seen: [[m.id, 9e9]], receipts: [] }, storeKey(node), Date.now()), { mode: 0o600 });
+  const n = await startRelay(node, cfg(), DEFAULT_SETTINGS, { tickMs: 100, storeFile: file });
+  assert.ok(n.engine.router.has(m.id), 'voltou do arquivo antigo');
+  await n.close(); // nada mudou desde que subiu: mesmo assim grava, para não depender do antigo
+  assert.ok(!existsSync(file), 'o antigo saiu');
+  assert.equal(readdirSync(join(dir, 'relay-store', 'env')).length, 1);
+  again = await startRelay(node, cfg(), DEFAULT_SETTINGS, { tickMs: 100, storeFile: file });
+  assert.ok(again.engine.router.has(m.id), 'volta da pasta nova');
 });

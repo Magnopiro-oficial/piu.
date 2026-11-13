@@ -55,7 +55,7 @@ export type ApiRelay = { enabled: false } | {
   /** `restored`: o que voltou do armazenamento local quando o nó subiu. */
   store: { envelopes: number; bytes: number; maxBytes: number; seen: number; restored?: { envelopes: number; seen: number; receipts: number } };
   counters: ApiTotals & { delivered: number; handshakesOk: number; handshakesFailed: number; revokedRefused?: number };
-  limits: { bwMbps: number; stoGB: number; hours: string; media: boolean; device?: ApiDeviceLimits | null; operator?: ApiDeviceLimits | null; effective?: { bwMbps: number; stoGB: number; hours: string[] } };
+  limits: { bwMbps: number; stoMB: number; hours: string; media: boolean; device?: ApiDeviceLimits | null; operator?: ApiDeviceLimits | null; effective?: { bwMbps: number; stoMB: number; hours: string[] } };
   operator?: { signed: boolean; revoked: number; listSeq: number };
   lan?: { port: number; discoveryPort: number | null; peers?: ApiPeer[] }; serial?: ApiSerial[];
 };
@@ -76,7 +76,7 @@ export type ApiGateway =
   | { available: true; enabled: boolean; online: boolean; inbox: boolean; inboxUrl: string | null; changedAt: number | null; startedAt: number | null;
       counters: { sent: number; finalized: number; refused: number; queued: number; forwarded: number; errors: number }; recent: ApiGatewayItem[] };
 export interface ApiSession { id: string; label: string; createdAt: number; lastSeen: number; current: boolean }
-export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 4 | 8 | 16; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
+export interface ApiSettings { limits: { bw: 20 | 50 | 100; sto: 128 | 256 | 512; hours: 'always' | 'night' | 'day' }; policies: { media: boolean; unknown: boolean; community: boolean } }
 /** `GET /api/settings`: com `owner` (só os ajustes do dono deste equipamento valem no motor). */
 export type ApiSettingsView = ApiSettings & { owner?: boolean };
 export interface ApiPending { id: string; request: string; code: string; phone: string; expiresAt: number }

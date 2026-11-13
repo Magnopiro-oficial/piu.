@@ -120,7 +120,7 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     discoveryPort: ['off', '0', 'false'].includes(discovery) ? null : Number(discovery),
     broadcast: list(env.PIU_LNNP_BROADCAST ?? '255.255.255.255'),
     peers: list(env.PIU_LNNP_PEERS),
-    memoryMB: num('PIU_LNNP_MEMORY_MB', 256, n => Number.isInteger(n) && n >= 1),
+    memoryMB: num('PIU_LNNP_MEMORY_MB', 512, n => Number.isInteger(n) && n >= 1),
     allow: allow.length ? allow : null,
     beaconMs: num('PIU_LNNP_BEACON_MS', 5000, n => Number.isInteger(n) && n >= 1000),
     sampleMs: num('PIU_RELAY_SAMPLE_MS', 300_000, n => Number.isInteger(n) && n >= 1000 && n <= 3_600_000),

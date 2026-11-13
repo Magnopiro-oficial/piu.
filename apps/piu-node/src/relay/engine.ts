@@ -19,7 +19,7 @@ import {
 } from '../protocol/lnnp.js';
 import { type RelayReceipt, verifyRelayReceipt } from '../protocol/receipts.js';
 import { type IngestResult, Router, type TransportClass } from '../protocol/router.js';
-import type { HoursPolicy, Settings } from '../store.js';
+import { DEFAULT_SETTINGS, type HoursPolicy, type Settings } from '../store.js';
 import { CLOCK_SKEW_SEC } from '../protocol/envelope.js';
 import {
   decodeCert, decodeDevicePolicy, decodeDeviceReport, decodeRevocationList, type DevicePolicy, type DeviceReport, encodeCert, encodeDevicePolicy,
@@ -76,7 +76,7 @@ export interface EngineOptions {
   node: KeyPair;
   /** Modo nó: retransmite envelopes de terceiros (o operador ainda pode limitar por horário). */
   relay: boolean;
-  /** Teto de memória para envelopes guardados (o armazenamento do painel não passa disto). */
+  /** Teto de memória para envelopes guardados (o espaço escolhido no painel não passa disto). */
   memoryBytes: number;
   /** Identidades locais (só em testes ou num nó que também é cliente). O piu-node normal não tem nenhuma. */
   identities?: Identity[];
@@ -144,7 +144,7 @@ export interface Counters {
   revokedRefused: number;
 }
 
-const GiB = 1024 ** 3;
+const MiB = 1024 ** 2;
 /** Recibos de outros nós guardados (FIFO). Os deste nó têm buffer próprio: nunca saem por causa destes. */
 const RECEIPT_LOG = 1000;
 /** Recibos assinados por este nó (evidência de pagamento do operador) guardados até a exportação. */
@@ -188,7 +188,7 @@ export class RelayEngine {
   private receiptRate = new Map<string, { start: number; n: number }>();
   private links = new Map<string, LinkPort>();
   private reassembly = new Map<string, Reassembler>();
-  private settings: Settings['limits'] & { media: boolean } = { bw: 50, sto: 8, hours: 'always', media: true };
+  private settings: Settings['limits'] & { media: boolean } = { ...DEFAULT_SETTINGS.limits, media: true };
   /** Regras deste equipamento (assistente, passo "Regras"); valem junto com os limites globais. */
   private device: DeviceLimits | null = null;
   private bucket = { tokens: 0, at: 0 };
@@ -248,7 +248,7 @@ export class RelayEngine {
     const before = this.relaying;
     if (s) this.settings = { ...s.limits, media: s.policies.media };
     if (device !== undefined) this.device = device;
-    this.router.limits.maxBytes = Math.min(this.effective.sto * GiB, this.o.memoryBytes);
+    this.router.limits.maxBytes = Math.min(this.effective.stoMB * MiB, this.o.memoryBytes);
     this.bucket = { tokens: this.rate(), at: this.now() };
     this.updateRelay();
     if (this.relaying !== before) this.announceCaps();
@@ -263,13 +263,14 @@ export class RelayEngine {
   /**
    * Limites em vigor: o menor entre o global, o do equipamento e o que o operador mandou de outro
    * equipamento (banda e armazenamento), e todos os horários ao mesmo tempo ("Os limites globais de
-   * Configurações continuam valendo").
+   * Configurações continuam valendo"). Espaço em MB: o global já é em MB; as regras de equipamento
+   * (assinadas e levadas pela malha) continuam em GB.
    */
   get effective() {
     const ds = [this.device, this.operatorPolicy?.limits ?? null].filter((d): d is DeviceLimits => !!d);
     return {
       bw: Math.min(this.settings.bw, ...ds.map(d => d.bw)),
-      sto: Math.min(this.settings.sto, ...ds.map(d => d.sto)),
+      stoMB: Math.min(this.settings.sto, ...ds.map(d => d.sto * 1024)),
       hours: [this.settings.hours, ...ds.map(d => d.hours)],
     };
   }
@@ -678,7 +679,7 @@ export class RelayEngine {
     }
     if (k === me) {
       const before = this.relaying;
-      this.router.limits.maxBytes = Math.min(this.effective.sto * GiB, this.o.memoryBytes);
+      this.router.limits.maxBytes = Math.min(this.effective.stoMB * MiB, this.o.memoryBytes);
       this.bucket = { tokens: this.rate(), at: this.now() };
       this.updateRelay();
       if (!quiet) this.log(`LNNP: ajustes do operador nº ${p.seq} aplicados (${p.paused ? 'pausado' : 'sem pausa'}${p.limits ? `, ${p.limits.bw} Mbps, ${p.limits.sto} GB, horário ${p.limits.hours}` : ''})`);
@@ -898,8 +899,8 @@ export class RelayEngine {
       counters: { ...this.counters },
       operator: { signed: !!this.op.cert && toHex(this.op.cert.operatorPk) === this.lineage.at(-1), revoked: this.revoked.size, listSeq: this.op.list?.seq ?? 0 },
       limits: {
-        bwMbps: this.settings.bw, stoGB: this.settings.sto, hours: this.settings.hours, media: this.settings.media,
-        device: this.device, operator: this.operatorPolicy?.limits ?? null, effective: { bwMbps: this.effective.bw, stoGB: this.effective.sto, hours: this.effective.hours },
+        bwMbps: this.settings.bw, stoMB: this.settings.sto, hours: this.settings.hours, media: this.settings.media,
+        device: this.device, operator: this.operatorPolicy?.limits ?? null, effective: { bwMbps: this.effective.bw, stoMB: this.effective.stoMB, hours: this.effective.hours },
       },
     };
   }

@@ -127,8 +127,8 @@ test('equipamento remoto do mesmo operador: pausa e regras chegam assinadas, val
   // Regras de B pelo painel de A: o menor entre o global de B e as regras vale lá.
   assert.equal((await pa.send('PUT', `/api/devices/${id}/limits`, { bw: 5, sto: 1, hours: 'always' })).statusCode, 200);
   await until(() => B.engine.effective.bw === 5, 'regras em B');
-  assert.deepEqual(B.engine.effective, { bw: 5, sto: 1, hours: ['always', 'always'] });
-  assert.equal(B.engine.router.limits.maxBytes, 1024 ** 3);
+  assert.deepEqual(B.engine.effective, { bw: 5, stoMB: 256, hours: ['always', 'always'] });
+  assert.equal(B.engine.router.limits.maxBytes, 256 * 1024 ** 2);
 
   // Retomar.
   assert.equal(((await pa.send('POST', `/api/devices/${id}/pause`)).json() as { status: string }).status, 'active');
@@ -162,7 +162,7 @@ test('equipamento remoto do mesmo operador: pausa e regras chegam assinadas, val
   open.push(B);
   assert.equal(B.engine.pausedNow, true);
   assert.equal(B.engine.relaying, false);
-  assert.deepEqual(B.engine.effective, { bw: 5, sto: 1, hours: ['always', 'always'] });
+  assert.deepEqual(B.engine.effective, { bw: 5, stoMB: 256, hours: ['always', 'always'] });
 });
 
 test('reiniciar pelo painel: só o próprio nó, só o dono, com step-up; sai depois da resposta', async t => {

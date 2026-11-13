@@ -152,11 +152,11 @@ test('limites do operador ligados ao roteador: armazenamento, horário, banda e 
   let clock = new Date(2026, 10, 2, 12, 0, 0).getTime(); // meio-dia, hora local
   const e = new RelayEngine({ node: deriveNodeKey(newSeed()), relay: true, memoryBytes: 64 * 1024 ** 3, now: () => clock });
   const settings = (limits: Partial<Settings['limits']>, media = true): Settings => ({ limits: { ...DEFAULT_SETTINGS.limits, ...limits }, policies: { ...DEFAULT_SETTINGS.policies, media } });
-  e.applySettings(settings({ sto: 4 }));
-  assert.equal(e.router.limits.maxBytes, 4 * 1024 ** 3);
+  e.applySettings(settings({ sto: 512 }));
+  assert.equal(e.router.limits.maxBytes, 512 * 1024 ** 2);
   // O teto de memória do nó vale mais que o armazenamento do painel.
   const small = new RelayEngine({ node: deriveNodeKey(newSeed()), relay: true, memoryBytes: 16 * 1024 ** 2 });
-  small.applySettings(settings({ sto: 16 }));
+  small.applySettings(settings({ sto: 512 }));
   assert.equal(small.router.limits.maxBytes, 16 * 1024 ** 2);
   // Horário: só à noite → ao meio-dia não retransmite; às 23h, sim (rodada periódica).
   e.applySettings(settings({ hours: 'night' }));
@@ -207,8 +207,8 @@ test('API: GET /api/relay exige sessão e mostra as estatísticas reais; PUT /ap
   assert.deepEqual(Object.keys(s.counters).sort(), ['delivered', 'duplicates', 'expired', 'forwarded', 'full', 'handshakesFailed', 'handshakesOk', 'received', 'receipts', 'receiptsReceived', 'rejected', 'relayOff', 'revokedRefused', 'stored'].sort());
   // Nada de chave secreta nem conteúdo na resposta.
   assert.equal(r.body.includes('"sk"'), false);
-  const put = await app.inject({ method: 'PUT', url: '/api/settings', headers: { ...headers, cookie, 'x-csrf-token': csrf }, payload: { limits: { bw: 20, sto: 4, hours: 'always' }, policies: { media: false, unknown: true, community: false } } });
+  const put = await app.inject({ method: 'PUT', url: '/api/settings', headers: { ...headers, cookie, 'x-csrf-token': csrf }, payload: { limits: { bw: 20, sto: 128, hours: 'always' }, policies: { media: false, unknown: true, community: false } } });
   assert.equal(put.statusCode, 200, put.body);
-  assert.equal(R.engine.router.limits.maxBytes, 16 * 1024 ** 2); // teto de memória do teste (16 MiB) < 4 GB
-  assert.deepEqual(R.engine.stats().limits, { bwMbps: 20, stoGB: 4, hours: 'always', media: false, device: null, operator: null, effective: { bwMbps: 20, stoGB: 4, hours: ['always'] } });
+  assert.equal(R.engine.router.limits.maxBytes, 16 * 1024 ** 2); // teto de memória do teste (16 MiB) < 128 MB
+  assert.deepEqual(R.engine.stats().limits, { bwMbps: 20, stoMB: 128, hours: 'always', media: false, device: null, operator: null, effective: { bwMbps: 20, stoMB: 128, hours: ['always'] } });
 });

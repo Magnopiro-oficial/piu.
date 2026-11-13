@@ -316,11 +316,12 @@ test('ajustes: validação estrita, persistem por operador', async () => {
   const t = await setup();
   const a = await t.pair('Ana');
   const b = await t.pair('Beto', '10.0.4.2');
-  const good = { limits: { bw: 100, sto: 4, hours: 'night' }, policies: { media: false, unknown: true, community: true } };
+  const good = { limits: { bw: 100, sto: 512, hours: 'night' }, policies: { media: false, unknown: true, community: true } };
   assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, body: good })).statusCode, 403, 'sem CSRF');
   for (const bad of [
     { ...good, limits: { ...good.limits, bw: 1000 } },
     { ...good, limits: { ...good.limits, bw: '100' } },
+    { ...good, limits: { ...good.limits, sto: 8 } }, // GB antigos: o nó não cumpria; agora só MB reais
     { ...good, extra: 1 },
     { ...good, policies: { ...good.policies, alerts: false } },
   ]) assert.equal((await t.req('PUT', '/api/settings', { cookie: a.cookie, csrf: a.csrf, body: bad })).statusCode, 400, JSON.stringify(bad));

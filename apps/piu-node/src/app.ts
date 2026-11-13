@@ -26,7 +26,7 @@ import {
   certFromJson, certToJson, type DevicePolicy, type DeviceReport, type OperatorCert, type RevocationList, samePolicyValue, unhex,
 } from './relay/operator-frames.js';
 import { MAX_RUNTIME_PEERS, parsePeerAddress, type PeerStatus } from './relay/lan.js';
-import type { Device, DeviceLimits, Session, Settings, Store } from './store.js';
+import { type Device, type DeviceLimits, type Session, type Settings, STORAGE_OPTIONS_MB, type Store } from './store.js';
 
 declare module 'fastify' {
   interface FastifyRequest { piuSession: Session | null }
@@ -316,7 +316,7 @@ export async function buildApp(o: AppOptions): Promise<FastifyInstance> {
     type: 'object', required: ['limits', 'policies'], additionalProperties: false,
     properties: {
       limits: { type: 'object', required: ['bw', 'sto', 'hours'], additionalProperties: false, properties: {
-        bw: { type: 'integer', enum: [20, 50, 100] }, sto: { type: 'integer', enum: [4, 8, 16] }, hours: { type: 'string', enum: ['always', 'night', 'day'] } } },
+        bw: { type: 'integer', enum: [20, 50, 100] }, sto: { type: 'integer', enum: [...STORAGE_OPTIONS_MB] }, hours: { type: 'string', enum: ['always', 'night', 'day'] } } },
       policies: { type: 'object', required: ['media', 'unknown', 'community'], additionalProperties: false, properties: {
         media: { type: 'boolean' }, unknown: { type: 'boolean' }, community: { type: 'boolean' } } },
     },
