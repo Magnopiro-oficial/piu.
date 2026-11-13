@@ -7,6 +7,7 @@ import { url } from '../lib/url';
 import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SHA256, groupHex } from '../lib/androidRelease';
 import { DESKTOP, DESKTOP_OSES, DESKTOP_SIG_URL, PROVIDER, RELEASE_KEY_FILE, RELEASE_KEY_FPR, fmtFpr, shortSha, type DesktopOs } from '../lib/desktopRelease';
 import { NODE_DEB, NODE_IPK, NODE_PUBLISHED, NODE_RELEASE_URL, NODE_SUMS_URL } from '../lib/nodeRelease';
+import { APT_ENABLED, APT_KEY_FPR, aptCommands, aptUrl } from '../lib/aptRepo';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
@@ -29,6 +30,9 @@ const pa = t.provider.app;
 const pn = t.provider.node;
 // Assinatura GPG só com chave criada E arquivo .asc publicado no release.
 const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
+// Repositório apt: só com APT_KEY_FPR no build (o workflow passa quando /apt/ vai junto no deploy).
+const ap = d.apt;
+const aptCmd = aptCommands(aptUrl(Astro.site));
 ---
 <Base t={t} alt={alt}>
   <header class="nav">
@@ -257,6 +261,7 @@ const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
           <div style="display:flex;gap:8px;flex-wrap:wrap">
             {NODE_PUBLISHED && <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href={NODE_RELEASE_URL} target="_blank" rel="noopener">{pn.release}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_outward</span></a>}
             <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href={url(`${t.ajuda.path}openwrt/`)}>{pn.guide}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_forward</span></a>
+            {APT_ENABLED && <a class="pill pill-line" style="height:40px;padding:0 16px;font-size:13.5px;gap:6px" href="#apt">{ap.nodeLink}<span class="ic" style="font-size:17px" aria-hidden="true">arrow_downward</span></a>}
           </div>
         </div>
         <div class="dl-files">
@@ -394,6 +399,31 @@ const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
             </div>
           )}
         </div>
+
+        <!-- Repositório apt (Debian/Ubuntu/Raspberry Pi OS): só quando /apt/ vai junto no deploy (src/lib/aptRepo.ts). -->
+        {APT_ENABLED && (
+          <div id="apt" class="col rv" style="gap:18px;scroll-margin-top:84px">
+            <div class="col" style="gap:8px;max-width:720px">
+              <div class="kicker" style="display:flex;align-items:center;gap:8px"><span class="ic" style="font-size:18px;color:var(--ink)" aria-hidden="true">terminal</span>{ap.kicker}</div>
+              <h3 style="margin:0;font-size:22px;font-weight:650;letter-spacing:-0.025em">{ap.title}</h3>
+              <div style="font-size:15px;line-height:1.55;color:var(--ink2);text-wrap:pretty">{ap.lead}</div>
+            </div>
+            <div class="verify-grid">
+              <div class="dl-open"><span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">key</span><div style="min-width:0"><b>1</b>{ap.steps[0]}<code class="mono cmd">{aptCmd.key}</code></div></div>
+              <div class="dl-open"><span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">dns</span><div style="min-width:0"><b>2</b>{ap.steps[1]}<code class="mono cmd">{aptCmd.source}</code></div></div>
+              <div class="dl-open"><span class="ic" style="font-size:22px;color:var(--ink)" aria-hidden="true">download</span><div style="min-width:0"><b>3</b>{ap.steps[2]}
+                <span style="display:block;margin-top:8px">{ap.apps.desktop}</span><code class="mono cmd">{aptCmd.desktop}</code>
+                <span style="display:block;margin-top:8px">{ap.apps.node}</span><code class="mono cmd">{aptCmd.node}</code>
+                <span style="display:block;margin-top:8px">{ap.apps.provider}</span><code class="mono cmd">{aptCmd.provider}</code>
+              </div></div>
+            </div>
+            <div class="sig-line">
+              <span class="ic" style="font-size:17px;color:var(--ink)" aria-hidden="true">verified</span>
+              <span>{ap.keyFpr} <span class="mono" style="user-select:all">{fmtFpr(APT_KEY_FPR)}</span></span>
+            </div>
+            <div style="font-size:13px;line-height:1.5;color:var(--ink2);text-wrap:pretty">{ap.note}</div>
+          </div>
+        )}
 
         <div class="mono" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:16px 20px;border-radius:18px;border:1px dashed var(--line2);font-size:13px;color:var(--ink2)">
           <span class="ic" style="font-size:18px;color:var(--ink)" aria-hidden="true">verified</span>

@@ -168,6 +168,16 @@ export const en: Dict = {
     keyLink: 'Public key',
     keyFpr: 'Piu release key:',
     verify: 'To check (on macOS, use shasum -a 256 instead of sha256sum):',
+    apt: {
+      kicker: 'LINUX · APT REPOSITORY',
+      title: 'Install and update with apt',
+      lead: 'On Debian, Ubuntu, Mint and Raspberry Pi OS, add the Piu repository once. New versions then arrive with your regular system updates.',
+      steps: ['Download the key that signs the repository:', 'Add the repository, pinned to that key (signed-by):', 'Install what you need:'],
+      apps: { desktop: 'Piu Desktop', node: 'Piu Node (router, Raspberry Pi, server)', provider: 'Piu Provider for computers' },
+      keyFpr: 'Repository key fingerprint:',
+      note: 'Piu Desktop and Piu Provider: x86_64 (amd64) computers. Piu Node: any architecture, with nodejs 20.19 or newer (Debian 13 or Node.js 22 from NodeSource).',
+      nodeLink: 'Install with apt',
+    },
     os: {
       mac: { tab: 'macOS', label: 'Download for macOS', sub: 'Apple Silicon · .dmg', req: 'macOS 12 or later · Apple Silicon and Intel',
         openTitle: 'How to open without an Apple signature', open: 'Drag Piu to Applications and open it once (macOS will block it). On macOS 15 or later, go to System Settings → Privacy & Security and click Open Anyway; right-click → Open is no longer enough. On macOS 14 or earlier, right-click the app and choose Open.' },
