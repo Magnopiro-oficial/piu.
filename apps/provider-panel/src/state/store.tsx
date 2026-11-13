@@ -3,6 +3,7 @@ import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
 import { t } from '../i18n';
 import { useLang } from '../i18n/react';
 import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiDeviceLimits, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
+import { LIMIT_DEFAULTS } from '../lib/limits';
 import { guideHidden as loadGuideHidden, setGuideHidden as saveGuideHidden } from '../lib/guide';
 import { type Live, liveDevice, liveTx } from '../lib/live';
 import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
@@ -62,6 +63,8 @@ interface Store {
   walletLoading: boolean;
   /** Com piu-node: esta sessão é do dono do equipamento (só os ajustes dele valem no motor). `null` até ler; demo: `true`. */
   settingsOwner: boolean | null;
+  /** Com piu-node: quando os ajustes desta sessão foram salvos no nó pela última vez (ms), ou null. */
+  settingsSavedAt: number | null;
   /** No piu-node: reinicia o nó que serve o painel (step-up: `reauth`). */
   restartDevice: (id: string) => Promise<'ok' | 'reauth' | 'error'>;
   /** No piu-node: `reauth` quando o servidor pede confirmação recente (step-up). */
@@ -125,7 +128,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [nodeWallet, setNodeWallet] = useState<{ balance: number; txs: WalletTx[] } | null>(null);
   /** Com piu-node: os ajustes desta sessão valem no motor (é o dono do equipamento)? `null` até ler. */
   const [settingsOwner, setSettingsOwner] = useState<boolean | null>(null);
-  const [limits, setLimitsState] = useState<Store['limits']>({ bw: 50, sto: 8, hours: 'always' });
+  const [settingsSavedAt, setSettingsSavedAt] = useState<number | null>(null);
+  const [limits, setLimitsState] = useState<Store['limits']>(LIMIT_DEFAULTS);
   const [policies, setPolicies] = useState<Policies>({ media: true, unknown: true, community: false });
   const [wizardOpen, setWizardOpen] = useState(false);
   const [guideHidden, setGuideHiddenState] = useState(loadGuideHidden);
@@ -186,6 +190,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (!api || !settingsLoaded.current) return;
     const timer = window.setTimeout(() => {
       node.guard(api.saveSettings({ limits, policies } as ApiSettings))
+        .then(() => setSettingsSavedAt(Date.now()))
         .catch(e => showToast({ icon: 'error', title: t('toast.settingsNotSaved'), body: e instanceof ApiError ? e.message : t('common.tryAgain') }));
     }, 400);
     return () => window.clearTimeout(timer);
@@ -271,6 +276,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       txs: api ? nodeWallet?.txs ?? [] : txs,
       walletLoading: !!api && !nodeWallet,
       settingsOwner: api ? settingsOwner : true,
+      settingsSavedAt: api ? settingsSavedAt : null,
       restartDevice: async id => {
         if (!api) return 'ok';
         try { await node.guard(api.restartDevice(id)); return 'ok'; } catch (e) {
@@ -333,7 +339,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       live,
       refreshLive: () => readLive.current?.() ?? Promise.resolve(),
     };
-  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, nodeWallet, settingsOwner, limits, policies, wizardOpen, guideHidden, setGuideHidden, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
+  }, [theme, setTheme, route, navigate, devices, devFilter, devQuery, balance, txs, nodeWallet, settingsOwner, settingsSavedAt, limits, policies, wizardOpen, guideHidden, setGuideHidden, toast, showToast, api, node, packages, sessions, phones, live, refreshWallet]);
 
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;
 }

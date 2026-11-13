@@ -6,6 +6,7 @@ import { LANGS, REGIONS, dateFormat, getRegion, setLang, setRegion, t, type Key,
 import { useLang, useT } from '../i18n/react';
 import { ApiError, NeedsReauth, type ApiOperatorKey } from '../lib/api';
 import { downloadText } from '../lib/io';
+import { LIMIT_DEFAULTS, bandNote, storageNote } from '../lib/limits';
 import { Icon, Segmented, Toggle } from '../components/ui';
 import { OPERATOR, pubRules, sessions as demoSessions } from '../data/seed';
 import { useStore } from '../state/store';
@@ -24,7 +25,8 @@ const pubRulesNode = () => [
 
 export function Settings() {
   const t = useT();
-  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api, settingsOwner } = useStore();
+  const { limits, setLimits, policies, togglePolicy, devices, showToast, sessions, revokeOtherSessions, stepUp, phones, refreshPhones, api, settingsOwner, settingsSavedAt, live } = useStore();
+  const relay = live?.relay;
   const [pairing, setPairing] = useState<{ id: string; qr: string } | null>(null);
   const [pairStepUp, setPairStepUp] = useState(false);
   const startPair = async () => {
@@ -85,16 +87,17 @@ export function Settings() {
         <CardHead title={api ? t('st.limitsNode') : t('st.limitsGlobal')} sub={api ? t('st.limitsNodeSub') : t('st.limitsGlobalSub')} />
         {ownerNote}
         <fieldset disabled={notOwner} style={{ border: 0, margin: 0, padding: 0, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 16, opacity: notOwner ? 0.5 : 1 }}>
-          <LimitRow title={api ? t('st.bandNode') : t('st.bandGlobal')} hint={api ? t('st.forThird') : t('st.summing')}>
+          <LimitRow title={api ? t('st.bandNode') : t('st.bandGlobal')} desc={t('st.bandDesc')} def={t('common.mbps', { n: LIMIT_DEFAULTS.bw })} note={bandNote(limits.bw, relay)}>
             <Segmented {...segProps} label={t('st.bandAria')} value={limits.bw} onChange={bw => setLimits({ bw })} options={[20, 50, 100].map(v => ({ value: v, label: t('common.mbps', { n: v }) }))} />
           </LimitRow>
-          <LimitRow title={t('st.storageTitle')} hint={t('st.storageHint')}>
+          <LimitRow title={t('st.storageTitle')} desc={t('st.storageDesc')} def={t('common.gb', { n: LIMIT_DEFAULTS.sto })} note={storageNote(limits.sto, relay)}>
             <Segmented {...segProps} label={t('dv.storage')} value={limits.sto} onChange={sto => setLimits({ sto })} options={[4, 8, 16].map(v => ({ value: v, label: t('common.gb', { n: v }) }))} />
           </LimitRow>
-          <LimitRow title={t('st.hoursTitle')} hint={api ? t('st.hoursNode') : t('st.hoursAll')}>
+          <LimitRow title={t('st.hoursTitle')} desc={t('st.hoursDesc')} def={t('hours.always')}>
             <Segmented<HoursPolicy> {...segProps} label={t('dv.hours')} value={limits.hours} onChange={hours => setLimits({ hours })} options={hoursOptions()} />
           </LimitRow>
         </fieldset>
+        {settingsSavedAt && <SavedNote at={settingsSavedAt} />}
       </section>
 
       <section className="card-soft col" style={{ borderRadius: 22, padding: '20px 20px 8px' }}>
@@ -280,13 +283,23 @@ function CardHead({ title, sub }: { title: string; sub: string }) {
   );
 }
 
-function LimitRow({ title, hint, children }: { title: string; hint: string; children: ReactNode }) {
+/** Um limite: nome e padrão, o que ele faz em uma frase, a escolha e, se houver, o que vale de verdade no nó. */
+function LimitRow({ title, desc, def, note, children }: { title: string; desc: string; def: string; note?: string | null; children: ReactNode }) {
+  const t = useT();
   return (
-    <div className="col" style={{ gap: 8 }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13.5 }}><span style={{ fontWeight: 550 }}>{title}</span><span style={{ color: 'var(--ink2)' }}>{hint}</span></div>
-      {children}
+    <div className="col" style={{ gap: 6 }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, fontSize: 13.5 }}><span style={{ fontWeight: 550 }}>{title}</span><span style={{ color: 'var(--ink2)', whiteSpace: 'nowrap' }}>{t('st.default', { v: def })}</span></div>
+      <div style={{ fontSize: 12, color: 'var(--ink2)', lineHeight: 1.45 }}>{desc}</div>
+      <div style={{ marginTop: 2 }}>{children}</div>
+      {note && <div role="note" className="row" style={{ gap: 6, alignItems: 'flex-start', fontSize: 12, lineHeight: 1.45 }}><Icon name="info" size={15} style={{ marginTop: 1 }} />{note}</div>}
     </div>
   );
+}
+
+/** "Salvo neste nó · agora" depois que o nó confirma (os ajustes são salvos sozinhos, sem botão). */
+function SavedNote({ at }: { at: number }) {
+  const t = useT();
+  return <div role="status" className="row" style={{ gap: 6, fontSize: 12, color: 'var(--ink2)' }}><Icon name="check_circle" size={15} />{t('st.saved')} · {when(at)}</div>;
 }
 
 const fmtDay = (ms: number) => dateFormat({ day: '2-digit', month: '2-digit', year: 'numeric' }).format(ms);
