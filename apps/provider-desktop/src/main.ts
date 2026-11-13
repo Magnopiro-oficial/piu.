@@ -19,6 +19,7 @@ import { type Config, loadLnnpConfig } from '../../piu-node/src/config';
 import { ABSOLUTE_MS, SESSION_COOKIE, sessionLabel } from '../../piu-node/src/security/session';
 import { startNode, type NodeServer } from '../../piu-node/src/server';
 import { externalUrl } from './external';
+import { lanIps, lanUrls, localName } from './lan';
 import { matchLang, translator } from './i18n';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import { checkForUpdates, releasePageUrl, shouldAutoCheck, UpdateCheckError } from './update';
@@ -57,12 +58,7 @@ function freePort(host: string): Promise<number> {
 /** Nomes pelos quais o painel responde (o piu-node recusa os outros: proteção contra DNS rebinding). */
 function hostsFor(port: number, lan: boolean): string[] {
   const names = ['localhost', '127.0.0.1'];
-  if (lan) {
-    names.push('piu-node.local', `${hostname().toLowerCase().replace(/\.local$/, '')}.local`);
-    for (const list of Object.values(networkInterfaces())) {
-      for (const i of list ?? []) if (i.family === 'IPv4' && !i.internal) names.push(i.address);
-    }
-  }
+  if (lan) names.push('piu-node.local', localName(hostname()), ...lanIps(networkInterfaces()));
   return [...new Set(names)].flatMap(h => [h, `${h}:${port}`]);
 }
 
@@ -227,7 +223,7 @@ async function toggleLan() {
     title: t('lan.title'),
     message: next ? t('lan.messageOn') : t('lan.messageOff'),
     detail: next
-      ? t('lan.detailOn', { port: PREFERRED_PORT })
+      ? t('lan.detailOn', { address: lanUrls(node?.port ?? PREFERRED_PORT, hostname(), networkInterfaces())[0]! })
       : t('lan.detailOff'),
   });
   if (response !== 0) return;
@@ -285,7 +281,7 @@ function buildMenu() {
     label: t('menu.node'),
     submenu: [
       { label: t('menu.showCode'), accelerator: 'CmdOrCtrl+K', click: () => void showCode() },
-      { label: t('menu.copyAddress'), click: () => clipboard.writeText(prefs.lan ? `https://piu-node.local:${node!.port}` : node!.url) },
+      { label: t('menu.copyAddress'), click: () => clipboard.writeText(prefs.lan ? lanUrls(node!.port, hostname(), networkInterfaces())[0]! : node!.url) },
       { label: t('menu.fingerprint'), click: () => void dialog.showMessageBox(win ?? undefined!, { type: 'info', title: t('cert.title'), message: 'SHA-256', detail: t('cert.detail', { fingerprint: node!.fingerprint }), buttons: [t('close')] }) },
       { type: 'separator' },
       { label: t('menu.lan'), type: 'checkbox', checked: prefs.lan, click: () => void toggleLan() },

@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 /** Preferências do app desktop (não do nó): ficam em <userData>/desktop.json, com permissão 0600. */
 export interface Prefs {
-  /** O nó responde também pela rede local (piu-node.local), não só neste computador. */
+  /** O nó responde também pela rede local (`<computador>.local` e IPs), não só neste computador. */
   lan: boolean;
   /** Já avisou que fechar a janela mantém o nó ligado na bandeja. */
   trayHintShown: boolean;

@@ -50,7 +50,7 @@ test('versão e atualização: chaves presentes e interpolação', () => {
 test('translator: interpola {var}, idioma desconhecido cai no pt-BR', () => {
   const en = translator('en');
   assert.equal(en('menu.node'), 'Node');
-  assert.match(en('lan.detailOn', { port: 8420 }), /piu-node\.local:8420/);
+  assert.match(en('lan.detailOn', { address: 'https://imac.local:8420' }), /https:\/\/imac\.local:8420/);
   const pt = translator(matchLang(['ko']) ?? 'pt-BR');
   assert.equal(pt('menu.node'), 'Nó');
   const all = LANGS.map((l: Lang) => translator(l)('tray.tooltipLan'));
