@@ -17,6 +17,18 @@ export async function requestTransportPermissions(): Promise<MediaGrants> {
 }
 
 /**
+ * Sem pedir nada: só o que já foi concedido. Para o núcleo ligar sem tela (core/index.ts), quando não
+ * há Activity para mostrar o pedido.
+ */
+export async function checkTransportPermissions(): Promise<MediaGrants> {
+  if (Platform.OS !== 'android') return { ble: true, nearby: true };
+  const v = typeof Platform.Version === 'number' ? Platform.Version : parseInt(String(Platform.Version), 10);
+  const list = transportPermissions(v) as Permission[];
+  const ok = await Promise.all(list.map(p => PermissionsAndroid.check(p).catch(() => false)));
+  return mediaGrants(v, p => ok[list.indexOf(p as Permission)] === true);
+}
+
+/**
  * Pedido de novo (aba Rede, linha sem permissão). Se o Android não mostra mais o pedido ("não perguntar
  * de novo"), abre os ajustes do app para a pessoa liberar lá.
  */

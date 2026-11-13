@@ -4,7 +4,7 @@
  * test/callDesktop.test.ts); o resto vem do núcleo comum em apps/mobile/src/calls.
  */
 import { fmtDuration, type CallState, type Effect, type Phase } from '../../../../mobile/src/calls/callMachine';
-import type { Contact, Tr } from '../../../../mobile/src/calls/callView';
+import { failNotice, speakLine, statusLine, type Contact, type Tr } from '../../../../mobile/src/calls/callView';
 import { DESKTOP_GEOMETRY, fitGeometry, type CallGeometry } from '../../../../mobile/src/calls/callVisual';
 
 export type CallAction = 'open' | 'answer' | 'decline' | 'mute' | 'hangup';
@@ -41,6 +41,16 @@ export function callKeyLabel(a: CallAction, mac: boolean): string {
 export const onStage = (p: Phase) => p === 'calling' || p === 'active' || p === 'ending';
 /** Em chamada (cronômetro no título, selo na lista). */
 export const inCall = (p: Phase) => p === 'calling' || p === 'active';
+
+/**
+ * Linhas embaixo do nome no palco. Numa tentativa minha que falhou, o título e o porquê (o mesmo aviso
+ * do celular, que deixa a tela de fim 3,5 s); senão, o estágio/fim e quem fala.
+ */
+export function callLines(t: Tr, s: CallState, c: Contact, now: number, who: 'me' | 'them' | null): { status: string; speak: string } {
+  const fail = failNotice(t, s, c);
+  if (fail) return { status: fail.title, speak: fail.sub };
+  return { status: statusLine(t, s, c, now, { desktop: true }), speak: speakLine(t, s, c, who) };
+}
 
 /** Cronômetro da pílula do título: mm:ss em chamada, "··:··" enquanto chama. */
 export function callTimer(s: CallState, now: number): string {

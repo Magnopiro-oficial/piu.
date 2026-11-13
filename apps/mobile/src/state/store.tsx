@@ -1,21 +1,16 @@
-import { router } from 'expo-router';
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import { AppState } from 'react-native';
 import type { Chat, FileXfer, IdentityKind, Msg, Status, ToastData } from '../data/types';
+import { getChatStore } from '../core';
+import type { Signals } from '../core/chatStore';
 import type { Preview } from '../data/settings';
 import type { AnonAvatar } from '../lib/avatar';
-import { cleanBlocked, cleanChats, cleanProfile, cleanVerified } from '../lib/demoCleanup';
-import { chirpInApp, notify } from '../lib/notifications';
-import { incomingAlert } from '../lib/piuChirp';
-import { isAppLocked, isViewingNow, onAppLockChange, readOnView } from '../lib/appLockGate';
+import { cleanBlocked, cleanProfile } from '../lib/demoCleanup';
+import { onAppLockChange } from '../lib/appLockGate';
 import { bannerFor } from '../lib/preview';
 import { forgetPersisted, readPersisted, usePersisted } from '../lib/persist';
-import { isStatusBack, tempSeconds } from '../lib/status';
-import { msgSummary } from '../lib/chatCore';
-import { stripPreviews } from '../lib/storageCore';
+import { tempSeconds } from '../lib/status';
 import { nowHM } from '../lib/text';
-import { t } from '../i18n/core';
-import { MESSAGE_TTL_SEC } from '../messaging/messenger';
 
 /** Operações de arquivo reais (MessagingProvider). */
 export interface FileOps {
@@ -86,8 +81,6 @@ interface Store {
   setMsgStatus: (chatId: string, msgId: string, status: Status) => void;
   /** Altera uma mensagem da conversa (ex.: etapa do cartão "Pedido de chamada"). */
   patchMsg: (chatId: string, msgId: string, p: Partial<Msg>) => void;
-  /** Filtro dos banners pelos ajustes de notificação (definido por NotifyBridge). */
-  setNotifyFilter: (fn: ((t: ToastData) => boolean) | null) => void;
   /** Pré-visualização escolhida em Notificações (MessagingProvider lê os ajustes e repassa aqui). */
   setPreviewMode: (p: Preview) => void;
   patchChat: (chatId: string, p: Partial<Chat>) => void;
@@ -101,35 +94,15 @@ interface Store {
 }
 
 type Outbound = (chatId: string, peer: string, msgId: string, text: string, expireSec?: number, loc?: { lat: number; lon: number }) => boolean;
-export interface Signals { read: (chatId: string, peer: string, msgIds: string[]) => void; typing: (chatId: string, peer: string) => void }
+export type { Signals };
 
 const Ctx = createContext<Store | null>(null);
-/** "digitando…" some se nada novo chegar neste tempo. */
-const TYPING_MS = 6000;
-/** Remoção das mensagens temporárias vencidas. */
-const SWEEP_MS = 30_000;
-const dropExpired = (msgs: Msg[] | undefined, now: number) => (msgs?.some(m => m.expiresAt && m.expiresAt <= now) ? msgs.filter(m => !m.expiresAt || m.expiresAt > now) : msgs);
-
-/**
- * Ao reabrir o app: só as conversas reais ficam (as de exemplo das versões antigas saem, ver
- * lib/demoCleanup.ts); mensagens que não chegaram à fila voltam para "na fila" e arquivos que não
- * terminaram ficam pausados e marcados como interrompidos (o conteúdo não é guardado).
- */
-function reviveChats(saved: Chat[]): Chat[] {
-  const now = Date.now();
-  // `via`, `viaIcon`, `route` e `priority` eram fixos nas versões antigas: a rota real fica à parte (lib/routeCore.ts).
-  return cleanChats(saved).map(({ via: _v, viaIcon: _vi, route: _r, priority: _p, ...c }: Chat & { via?: unknown; viaIcon?: unknown; route?: unknown; priority?: unknown }) => ({
-    ...c,
-    msgs: dropExpired(c.msgs, now)?.map(m => {
-      const { fresh: _fresh, ...rest } = m;
-      const status: Status | undefined = m.status === 'criada' ? 'aguardando' : m.status;
-      const file = m.file && m.file.state !== 'verified' ? { ...m.file, state: 'userPaused' as const, lost: true } : m.file;
-      return { ...rest, status, file };
-    }),
-  }));
-}
 const TOAST_MS = 4500;
 
+/**
+ * Conversas, verificações e "digitando…" vêm do núcleo (core/chatStore.ts): o mensageiro grava lá
+ * mesmo sem tela, e este provider só assina. Perfil, bloqueados, identidade e o banner ficam aqui.
+ */
 export function StoreProvider({ children }: { children: ReactNode }) {
   // Nada pré-preenchido: o nome é obrigatório para a identidade pública (onboarding).
   const [profile, setProfileState] = usePersisted<Profile>('profile', { idType: 'public', name: '' }, p => cleanProfile(p, readPersisted<boolean>('onboarded') === true));
@@ -137,97 +110,26 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [onboarded, setOnboarded] = usePersisted('onboarded', false);
   const [identity, setIdentity] = usePersisted<IdentityKind>('identity', 'public');
   // A lista começa vazia: só entram conversas reais (QR, pedido de conversa, grupos, canais e comunidades).
-  const [chats, setChats] = usePersisted<Chat[]>('chats', [], reviveChats);
-  const [verified, setVerifiedMap] = usePersisted<Record<string, boolean>>('verified', {}, v => cleanVerified(v, cleanChats(readPersisted('chats'))));
+  const cs = useMemo(() => getChatStore(), []);
+  const { chats, verified, typing } = useSyncExternalStore(cs.subscribe, cs.getSnapshot, cs.getSnapshot);
   const [toast, setToast] = useState<Store['toast']>(null);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const toastTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const toastSeq = useRef(0);
-  const viewing = useRef<string | null>(null);
   const retryRef = useRef<(cid: string, mid: string) => void>(() => {});
-  const notifyFilter = useRef<((t: ToastData) => boolean) | null>(null);
   const previewMode = useRef<Preview>('always');
   const fileOps = useRef<FileOps | null>(null);
   const outbound = useRef<Outbound | null>(null);
-  const signals = useRef<Signals | null>(null);
-  const [typing, setTypingMap] = useState<Record<string, boolean>>({});
-  const typingTimers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
-  const chatsRef = useRef(chats);
-  chatsRef.current = chats;
-  useEffect(() => () => {
-    timers.current.forEach(clearTimeout);
-    clearTimeout(toastTimer.current);
-    typingTimers.current.forEach(clearTimeout);
-  }, []);
-  // Mensagens temporárias: somem deste aparelho no prazo (o contato apaga as dele do mesmo jeito).
-  useEffect(() => {
-    const sweep = () => {
-      const now = Date.now();
-      if (!chatsRef.current.some(c => c.msgs?.some(m => m.expiresAt && m.expiresAt <= now))) return;
-      setChats(cs => cs.map(c => { const msgs = dropExpired(c.msgs, now); return msgs === c.msgs ? c : { ...c, msgs }; }));
-    };
-    sweep();
-    const t = setInterval(sweep, SWEEP_MS);
-    return () => clearInterval(t);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-  const stopTyping = useCallback((cid: string) => {
-    clearTimeout(typingTimers.current.get(cid));
-    typingTimers.current.delete(cid);
-    setTypingMap(t => { if (!t[cid]) return t; const { [cid]: _x, ...rest } = t; return rest; });
-  }, []);
-  const setTyping = useCallback((cid: string) => {
-    clearTimeout(typingTimers.current.get(cid));
-    typingTimers.current.set(cid, setTimeout(() => stopTyping(cid), TYPING_MS));
-    setTypingMap(t => (t[cid] ? t : { ...t, [cid]: true }));
-  }, [stopTyping]);
-  /** Confirma a leitura das mensagens recebidas de um contato (quem decide se sai é `signals`). */
-  const markRead = useCallback((cid: string, ids?: string[]) => {
-    const c = chatsRef.current.find(x => x.id === cid);
-    if (!c?.peer || !signals.current) return;
-    const list = ids ?? (c.msgs ?? []).filter(m => m.from === 'them' && m.id.startsWith('in-')).slice(-50).map(m => m.id);
-    const remote = list.map(id => id.replace(/^in-/, ''));
-    if (remote.length) signals.current.read(cid, c.peer, remote);
-  }, []);
+  useEffect(() => () => clearTimeout(toastTimer.current), []);
+  // Mensagens temporárias vencidas: o núcleo varre (core/chatStore.ts `sweepExpired`), com ou sem tela.
   // Voltou para a frente (ou destravou) com uma conversa aberta: o que chegou nesse meio-tempo é lido agora.
   useEffect(() => {
-    const back = () => {
-      const id = viewing.current;
-      if (!id) return;
-      const seen = isViewingNow(id, id, { active: AppState.currentState === 'active', locked: isAppLocked() });
-      const r = readOnView(chatsRef.current.find(c => c.id === id), seen, false);
-      if (!r) return;
-      setChats(cs => cs.map(c => (c.id === id && c.unread ? { ...c, unread: 0 } : c)));
-      if (r.ids?.length) markRead(id, r.ids);
-    };
-    const sub = AppState.addEventListener('change', s => { if (s === 'active') back(); });
-    const off = onAppLockChange(l => { if (!l) back(); });
+    const sub = AppState.addEventListener('change', s => { if (s === 'active') cs.back(); });
+    const off = onAppLockChange(l => { if (!l) cs.back(); });
     return () => { sub.remove(); off(); };
-  }, [markRead]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cs]);
   // Configurações do grupo de exemplo das versões antigas: os grupos reais guardam as suas no mensageiro.
   useEffect(() => { void forgetPersisted('group'); }, []);
 
-  const later = (ms: number, fn: () => void) => { timers.current.push(setTimeout(fn, ms)); };
-  const patchMsg = useCallback((cid: string, mid: string, p: (m: Msg) => Partial<Msg>) =>
-    setChats(cs => cs.map(c => (c.id !== cid ? c : { ...c, msgs: (c.msgs ?? []).map(m => (m.id === mid ? { ...m, ...p(m) } : m)) }))), []);
-  // Um estado não volta atrás (ex.: a confirmação de entrega atrasada não desfaz "lida").
-  const setStatus = useCallback((cid: string, mid: string, status: Status) => patchMsg(cid, mid, m => (isStatusBack(m.status, status) ? {} : { status })), [patchMsg]);
-  const patchFile = useCallback((cid: string, mid: string, p: Partial<FileXfer>) =>
-    patchMsg(cid, mid, m => (m.file ? { file: { ...m.file, ...p } } : {})), [patchMsg]);
-
-  /**
-   * Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). Banner com `kind` também
-   * vira notificação do sistema quando o app não está em primeiro plano (`notify` confere tipos
-   * ligados, silêncio e prévia, e não dispara com o app aberto).
-   */
-  const showToast = useCallback((t: ToastData) => {
-    if (t.kind && notifyFilter.current && !notifyFilter.current(t)) return;
-    if (t.kind) chirpInApp(t.kind);
-    if (t.kind) void notify({ kind: t.kind, title: t.title, body: t.body, go: t.go, ...(t.critical ? { critical: true } : {}), ...(t.href ? { data: { href: t.href } } : {}) });
-    clearTimeout(toastTimer.current);
-    toastSeq.current += 1;
-    setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });
-    toastTimer.current = setTimeout(() => leave(), TOAST_MS);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
   /** Sai em 300 ms (sobe e some), como no design. */
   const leave = () => {
     clearTimeout(toastTimer.current);
@@ -235,33 +137,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     toastTimer.current = setTimeout(() => setToast(null), 300);
   };
   const dismissToast = useCallback(leave, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const push = useCallback((cid: string, msg: Msg, opts?: { quiet?: boolean }) => {
-    // Conversa aberta só conta com o app em primeiro plano e destravado: em segundo plano ou sob o
-    // bloqueio do app a mensagem fica não lida, notifica e não sai "lida" para o contato.
-    const viewingIt = isViewingNow(viewing.current, cid, { active: AppState.currentState === 'active', locked: isAppLocked() });
-    if (msg.from === 'them') {
-      stopTyping(cid);
-      // Conversa aberta: a mensagem que chegou já foi lida.
-      if (viewingIt && msg.id.startsWith('in-')) setTimeout(() => markRead(cid, [msg.id]), 0);
-    }
-    const c = msg.from === 'them' ? chatsRef.current.find(x => x.id === cid) : undefined;
-    const alert = incomingAlert({ fromThem: msg.from === 'them', viewing: viewingIt, exists: !!c, quiet: opts?.quiet, muted: c?.muted });
-    if (c && (alert.banner || alert.chirp)) {
-      // Fora da conversa: banner e, com o app em segundo plano, notificação do sistema (showToast chama
-      // `notify`). Na conversa aberta: só o piu. Comunidade conta como Canais (o mesmo tipo nos dois).
-      const kind = c.kind === 'group' ? 'group' as const : c.kind === 'channel' || c.kind === 'community' ? 'channel' as const : 'msg' as const;
-      if (alert.chirp) chirpInApp(kind);
-      else showToast({ kind, av: c.initials, title: c.name, body: msgSummary(msg), href: `/chat/${cid}`,
-        hidden: { title: 'Piu', body: kind === 'channel' ? t('notify.hidden.channel') : t('notify.hidden.msg') }, go: () => router.push({ pathname: '/chat/[id]', params: { id: cid } }) });
-    }
-    setChats(cs => cs.map(c => (c.id !== cid ? c : {
-      // Recebida: guarda quando chegou (prévia da tela bloqueada, lib/lockFeed.ts).
-      // Toda mensagem guarda quando entrou (separador de data da conversa; prévia da tela bloqueada).
-      ...c, time: msg.time, msgs: [...(c.msgs ?? []), { ...msg, ...(!msg.at ? { at: Date.now() } : {}), fresh: true }],
-      unread: msg.from === 'me' || viewingIt ? c.unread : c.unread + 1,
-    })));
-  }, [showToast, stopTyping, markRead]);
+  // Banner dentro do app, já conforme a pré-visualização (lib/preview.ts). A notificação do sistema
+  // (banner com `kind`, app fora da frente) sai pelo núcleo, com ou sem esta tela.
+  useEffect(() => cs.onBanner(t => {
+    clearTimeout(toastTimer.current);
+    toastSeq.current += 1;
+    setToast({ ...bannerFor(t, previewMode.current), seq: toastSeq.current });
+    toastTimer.current = setTimeout(() => leave(), TOAST_MS);
+  }), [cs]);
+  // "Reenviar" do banner de mensagem expirada.
+  useEffect(() => { cs.setRetry((cid, mid) => retryRef.current(cid, mid)); return () => cs.setRetry(null); }, [cs]);
 
   const store = useMemo<Store>(() => ({
     profile,
@@ -276,16 +161,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     setIdentity,
     toggleIdentity: () => setIdentity(i => (i === 'public' ? 'anon' : 'public')),
     chats,
-    openChat: id => {
-      viewing.current = id;
-      // Aberta por baixo do bloqueio (ex.: toque na notificação) ou em segundo plano: ainda não foi
-      // vista. Fica não lida e sem recibo; ao destravar, o efeito de "voltou para a frente" confirma.
-      const seen = isViewingNow(id, id, { active: AppState.currentState === 'active', locked: isAppLocked() });
-      if (!readOnView(chatsRef.current.find(c => c.id === id), seen, true)) return;
-      setChats(cs => cs.map(c => (c.id === id ? { ...c, unread: 0 } : c)));
-      markRead(id);
-    },
-    leaveChat: () => { viewing.current = null; },
+    openChat: cs.open,
+    leaveChat: cs.leave,
     // Estados (seção 3.1): criada → aguardando (na fila) → encaminhada → entregue.
     // Cifrado na sessão (ou com a chave do grupo) e na fila do roteador; os estados seguintes vêm da rede.
     // Fora de alcance, fica na fila até surgir uma rota.
@@ -294,12 +171,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const id = 'n' + Date.now();
       // Temporária (só conversa com uma pessoa): o prazo vai junto e a mensagem some dos dois lados.
       const exp = chat?.peer ? tempSeconds(chat.temp) : undefined;
-      push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}), ...(loc ? { loc } : {}) });
+      cs.push(cid, { id, from: 'me', text, time: nowHM(), status: 'criada', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}), ...(loc ? { loc } : {}) });
       const to = chat?.peer ?? (chat?.group ? 'group:' + chat.group : null);
       const ok = !!to && (outbound.current?.(cid, to, id, text, exp, loc) ?? false);
       // Só passa para "na fila" se a rede ainda não avançou o estado (o vizinho pode já ter recebido).
-      later(ok ? 300 : 0, () => patchMsg(cid, id, m => (m.status === 'criada' ? { status: ok ? 'aguardando' : 'falha' } : {})));
-      if (chat?.request) setChats(cs => cs.map(c => (c.id === cid ? { ...c, request: false } : c)));
+      cs.settleSent(cid, id, ok);
+      if (chat?.request) cs.setChats(list => list.map(c => (c.id === cid ? { ...c, request: false } : c)));
     },
     retry: (cid, mid) => {
       const chat = chats.find(c => c.id === cid);
@@ -309,11 +186,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const left = m?.expiresAt ? Math.floor((m.expiresAt - Date.now()) / 1000) : undefined;
       if (left !== undefined && left < 60) return;
       const ok = !!to && !!m && (outbound.current?.(cid, to, mid, m.text, left, m.loc) ?? false);
-      setStatus(cid, mid, ok ? 'aguardando' : 'falha');
+      cs.setStatus(cid, mid, ok ? 'aguardando' : 'falha');
     },
     verified,
-    setVerified: (id, v) => setVerifiedMap(m => ({ ...m, [id]: v })),
-    addChat: ch => setChats(cs => (cs.some(x => x.id === ch.id) ? cs : [ch, ...cs])),
+    setVerified: cs.setVerified,
+    addChat: cs.addChat,
     sendRealFile: (cid, f) => {
       const chat = chats.find(c => c.id === cid);
       if (!chat?.peer) return;
@@ -322,69 +199,42 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const mb = Math.max(0.1, Math.round((f.data.length / 1048576) * 10) / 10);
       const exp = tempSeconds(chat.temp);
       // O balão entra antes do envio: o progresso pode começar a chegar na hora.
-      push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'aguardando', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}),
+      cs.push(cid, { id, from: 'me', text: '', time: nowHM(), status: 'aguardando', at: Date.now(), ...(exp ? { expiresAt: Date.now() + exp * 1000 } : {}),
         file: { name: f.name, mb, blocks: Math.max(1, Math.ceil(f.data.length / (12 * 1024))), icon, done: 0, state: 'sending', real: true, preview: f.preview } });
       const r = fileOps.current?.send(cid, chat.peer, id, f, exp) ?? null;
-      if (!r) setStatus(cid, id, 'falha');
+      if (!r) cs.setStatus(cid, id, 'falha');
     },
     setFileOps: ops => { fileOps.current = ops; },
-    patchFile,
+    patchFile: cs.patchFile,
     toggleFilePause: (cid, mid) => {
       const chat = chats.find(c => c.id === cid);
       const f = chat?.msgs?.find(m => m.id === mid)?.file;
       if (!f) return;
       if (f.incoming) {
-        if (f.held && chat?.peer && fileOps.current?.download(chat.peer, mid.replace(/^in-/, ''))) patchFile(cid, mid, { held: false });
+        if (f.held && chat?.peer && fileOps.current?.download(chat.peer, mid.replace(/^in-/, ''))) cs.patchFile(cid, mid, { held: false });
         return;
       }
       const pause = f.state !== 'userPaused';
-      if (fileOps.current?.setPaused(mid, pause)) patchFile(cid, mid, { state: pause ? 'userPaused' : 'resuming' });
-      else patchFile(cid, mid, { lost: true });
+      if (fileOps.current?.setPaused(mid, pause)) cs.patchFile(cid, mid, { state: pause ? 'userPaused' : 'resuming' });
+      else cs.patchFile(cid, mid, { lost: true });
     },
     setOutbound: fn => { outbound.current = fn; },
-    setSignals: s => { signals.current = s; },
+    setSignals: cs.setSignals,
     typing,
-    setTyping,
-    notifyTyping: cid => { const c = chatsRef.current.find(x => x.id === cid); if (c?.peer && !c.request) signals.current?.typing(cid, c.peer); },
-    markChatRead: cid => { setChats(cs => cs.map(c => (c.id === cid && c.unread ? { ...c, unread: 0 } : c))); markRead(cid); },
-    receive: (cid, msg, opts) => push(cid, msg, opts),
-    patchMsg: (cid, mid, p) => patchMsg(cid, mid, () => p),
-    setMsgStatus: (cid, mid, st) => {
-      setStatus(cid, mid, st);
-      const c = chatsRef.current.find(x => x.id === cid);
-      const m = c?.msgs?.find(x => x.id === mid);
-      if (!c || !m || m.from !== 'me' || c.muted || viewing.current === cid) return;
-      const open = () => router.push({ pathname: '/chat/[id]', params: { id: cid } });
-      const quote = m.text.length > 40 ? m.text.slice(0, 39) + '…' : m.text;
-      if (st === 'entregue' && m.at && Date.now() - m.at > 60_000) {
-        const min = Math.round((Date.now() - m.at) / 60_000);
-        const wait = min >= 120 ? `${Math.round(min / 60)} h` : `${min} min`;
-        showToast({ kind: 'msg', icon: 'done_all', title: t('toast.deliveredTo', { name: c.name }), body: t('toast.routeAfter', { wait }), hidden: { title: t('toast.delivered'), body: t('toast.routeAfter', { wait }) }, go: open });
-      }
-      if (st === 'expirada') {
-        showToast({ kind: 'msg', icon: 'timer_off', title: t('toast.expired'), body: t('toast.expired.body', { quote, hours: MESSAGE_TTL_SEC / 3600 }), action: t('chat.resend'),
-          hidden: { title: t('toast.expired'), body: t('toast.expired.hidden', { hours: MESSAGE_TTL_SEC / 3600 }) },
-          go: () => { open(); retryRef.current(cid, mid); } });
-      }
-    },
-    setNotifyFilter: fn => { notifyFilter.current = fn; },
+    setTyping: cs.setTyping,
+    notifyTyping: cs.notifyTyping,
+    markChatRead: cs.markChatRead,
+    receive: cs.push,
+    patchMsg: (cid, mid, p) => cs.patchMsg(cid, mid, () => p),
+    setMsgStatus: cs.setMsgStatus,
     setPreviewMode: p => { previewMode.current = p; },
-    patchChat: (cid, p) => setChats(cs => cs.map(c => (c.id === cid ? { ...c, ...p } : c))),
-    removeChat: cid => {
-      if (viewing.current === cid) viewing.current = null;
-      stopTyping(cid);
-      setChats(cs => cs.filter(c => c.id !== cid));
-      setVerifiedMap(m => { if (!(cid in m)) return m; const { [cid]: _x, ...rest } = m; return rest; });
-    },
-    purgeMediaPreviews: () => {
-      const r = stripPreviews(chatsRef.current);
-      if (r.freed) { chatsRef.current = r.chats; setChats(r.chats); }
-      return r.freed;
-    },
+    patchChat: cs.patchChat,
+    removeChat: cs.removeChat,
+    purgeMediaPreviews: cs.purgeMediaPreviews,
     toast,
-    showToast,
+    showToast: cs.showToast,
     dismissToast,
-  }), [profile, blocked, onboarded, identity, chats, verified, toast, push, setStatus, patchFile, showToast, dismissToast, typing, setTyping, markRead, stopTyping]);
+  }), [cs, profile, blocked, onboarded, identity, chats, verified, toast, dismissToast, typing]); // eslint-disable-line react-hooks/exhaustive-deps
 
   retryRef.current = store.retry;
   return <Ctx.Provider value={store}>{children}</Ctx.Provider>;

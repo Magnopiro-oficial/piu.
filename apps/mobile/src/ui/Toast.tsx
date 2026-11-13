@@ -1,3 +1,4 @@
+import { router, type Href } from 'expo-router';
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, Pressable, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +17,8 @@ import { Pop } from './motion';
 export function Toast() {
   const { toast, dismissToast } = useStore();
   if (!toast) return null;
-  return <ToastCard key={toast.seq} {...toast} onPress={() => { const go = toast.go; dismissToast(); go?.(); }} />;
+  // Banners do núcleo (sem tela, sem router) levam só a rota em `href`.
+  return <ToastCard key={toast.seq} {...toast} onPress={() => { const { go, href } = toast; dismissToast(); if (go) go(); else if (href?.startsWith('/')) router.push(href as Href); }} />;
 }
 
 function ToastCard({ icon, av, title, body, action, coin, leaving, onPress }: ToastData & { leaving?: boolean; onPress: () => void }) {

@@ -73,6 +73,17 @@ function derive(seedHex: string) {
 }
 
 const validSeed = (k: DailyKeys | null) => (k && /^[0-9a-f]{64}$/.test(k.seed) ? k : null);
+/** Chave do nó por dia a partir do cofre já lido (`preloadKeys`), para o núcleo sem tela (core/index.ts). */
+export function preloadedNodeKeyFor(): ((day: number) => KeyPair) | null {
+  const k = validSeed(preloaded);
+  return k ? derive(k.seed).nodeKeyFor : null;
+}
+
+/** Chaves já derivadas do cofre lido (`preloadKeys`), para o mensageiro sem tela (core/index.ts). */
+export function preloadedKeys() {
+  const k = validSeed(preloaded);
+  return k ? derive(k.seed) : null;
+}
 
 /**
  * Chaves reais do aparelho. Tudo deriva da frase de recuperação, mas o app só guarda na memória a

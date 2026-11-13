@@ -149,6 +149,7 @@ export class LnnpLanEngine {
   private stopped = true;
   private unsubApi: (() => void) | null = null;
   private beaconTimer: ReturnType<typeof setInterval> | null = null;
+  private lastTickAt = 0;
   private scanTimer: ReturnType<typeof setInterval> | null = null;
   private conns = new Map<number, Conn>();
   private links = new Map<string, Link>();
@@ -259,15 +260,26 @@ export class LnnpLanEngine {
     this.unsubApi = null;
   }
 
+  private beaconPeriod() { return this.lowPower ? (this.o.lowPowerBeaconMs ?? 30_000) : (this.o.beaconMs ?? 5000); }
+
   private restartBeacon() {
     if (this.beaconTimer) clearInterval(this.beaconTimer);
-    const ms = this.lowPower ? (this.o.lowPowerBeaconMs ?? 30_000) : (this.o.beaconMs ?? 5000);
-    this.beaconTimer = setInterval(() => this.tick(), ms);
+    this.beaconTimer = setInterval(() => this.tick(), this.beaconPeriod());
     this.tick();
+  }
+
+  /**
+   * Pulso nativo do PiuRelayService (a cada 5 s com a CPU acordada, wake lock curto): sem tela os timers JS
+   * podem atrasar. Anuncia (e confere manuais e varredura) só se o último anúncio já venceu.
+   */
+  heartbeat() {
+    if (this.stopped || this.state !== 'running') return;
+    if (this.now() - this.lastTickAt >= this.beaconPeriod()) this.tick();
   }
 
   private tick() {
     if (this.stopped) return;
+    this.lastTickAt = this.now();
     this.beacon();
     this.dialManual();
     this.maybeScan();

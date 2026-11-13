@@ -2,7 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, type ReactNode
 import { persistEpoch, persistedReadFailed, readPersisted, usePersisted } from '../lib/persist';
 import { applyLangPref, isLang, isRegion, type LangPref, type Region } from '../i18n';
 import type { BackupRecord } from '../lib/backupStatus';
-import { NOTIF_TYPES, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
+import { DEFAULT_NOTIFS, type NotifKey, type Preview, type RestoreMode } from '../data/settings';
 import { type HoursWindow, normHoursChoice } from '../messaging/hours';
 import { UPDATE_NOTIFY_DEFAULT } from '../lib/updateCore';
 import { SOUND_DEFAULTS } from '../lib/piuChirp';
@@ -53,8 +53,6 @@ interface Settings {
   /** "Avisar sobre novas versões": com internet, confere o GitHub no máximo 1 vez por dia (ui/UpdateWatch.tsx). Ligado de fábrica, como no Desktop. */
   updateNotify: boolean; setUpdateNotify: (v: boolean) => void;
 }
-
-const DEFAULT_NOTIFS = Object.fromEntries(NOTIF_TYPES.map(([k]) => [k, k !== 'network'])) as Record<NotifKey, boolean>;
 
 const NONE: Record<string, boolean> = Object.freeze({}) as Record<string, boolean>;
 

@@ -3,6 +3,9 @@ import { NativeModule, requireOptionalNativeModule } from 'expo-modules-core';
 /** Codec de um pedaço de 20 ms: Opus (MediaCodec, Android 10+) ou G.711 µ-law 8 kHz (160 bytes). */
 export type Codec = 'opus' | 'pcmu';
 
+/** Som de quem liga: "chamando" em loop, tom curto de ocupado (falha) ou nenhum. */
+export type VoiceTone = 'ringback' | 'fail' | 'none';
+
 type PiuVoiceEvents = {
   /** Pedaço de 20 ms da minha voz, codificado. Bytes como `Uint8Array` (sem base64). */
   onFrame: (e: { codec: Codec; data: Uint8Array }) => void;
@@ -17,6 +20,7 @@ declare class PiuVoiceNativeModule extends NativeModule<PiuVoiceEvents> {
   play(codec: Codec, payload: Uint8Array, seq: number): void;
   setMuted(muted: boolean): void;
   setSpeaker(on: boolean): void;
+  tone(kind: VoiceTone): void;
   levels(): { mine: number; theirs: number };
 }
 
@@ -58,6 +62,14 @@ export const PiuVoice = {
   /** Alto-falante; senão Bluetooth (se houver fone), fone com fio ou o fone do aparelho. */
   setSpeaker(on: boolean): void {
     native?.setSpeaker(on);
+  },
+  /**
+   * Tom sintetizado pelo aparelho (ToneGenerator, sem arquivo de som) na saída da chamada: fone, fone de
+   * ouvido/Bluetooth ou alto-falante, como a voz. `ringback` repete até outro pedido; `fail` dura ~2 s;
+   * `none` para na hora. Toca sem abrir o microfone.
+   */
+  tone(kind: VoiceTone): void {
+    native?.tone(kind);
   },
   /** Níveis 0..1 suavizados (ataque rápido, queda ~150 ms). Síncrono e barato: pode ler a 60 Hz. */
   levels(): { mine: number; theirs: number } {

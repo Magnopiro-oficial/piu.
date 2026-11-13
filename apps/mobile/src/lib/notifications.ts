@@ -5,7 +5,8 @@
  * - `notify()` respeita Ajustes → Notificações: tipos ligados, pré-visualização (Sempre /
  *   Desbloqueado / Nunca), modo noturno (22h–7h, só alertas Graves da comunidade tocam) e vibração discreta.
  * - Só dispara com o app fora do primeiro plano: em primeiro plano o app já mostra o banner in-app.
- * - `NotificationBridge` (montado uma vez, dentro dos provedores) liga os ajustes, abre a tela certa
+ * - Os ajustes vêm do salvo (core/toasts.ts, `persistedNotifyCfg`): valem com a tela desmontada e no
+ *   núcleo sem tela. `NotificationBridge` (montado uma vez, dentro dos provedores) abre a tela certa
  *   ao tocar na notificação e pede a permissão na hora certa. Os banners in-app com tipo chamam
  *   `notify` direto (state/store.tsx, `showToast`), com o conteúdo original e a rota (`href`).
  */
@@ -15,6 +16,7 @@ import { router, type Href } from 'expo-router';
 import { useEffect } from 'react';
 import { AppState, Platform } from 'react-native';
 import type { NotifKey, Preview } from '../data/settings';
+import { persistedNotifyCfg } from '../core/toasts';
 import { useSettings } from '../state/settings';
 import { useStore } from '../state/store';
 import { playPiu, preloadPiu } from './piuSound';
@@ -41,8 +43,6 @@ export interface NotifyInput {
   go?: () => void;
 }
 
-interface Cfg { preview: Preview; notifs: Record<NotifKey, boolean>; quiet: boolean; discreet: boolean; piu: boolean; onboarded: boolean }
-
 /** Texto genérico quando o conteúdo fica oculto (design: "Piu · Nova mensagem"), no idioma do app. */
 const HIDDEN_BODY: Record<NotifyKind, Key> = {
   msg: 'notify.hidden.msg', group: 'notify.hidden.msg', channel: 'notify.hidden.channel', nearby: 'notify.hidden.nearby',
@@ -60,7 +60,8 @@ const CHANNELS = (): Record<Mode, Notifications.NotificationChannelInput> => ({
 /** `critical-c`: canal novo (o antigo `piu-critical` era dos alertas oficiais, visível na tela bloqueada). */
 const channelId = (m: Mode) => (m === 'critical' ? 'piu-critical-c' : `piu-${m}`);
 
-let cfg: Cfg | null = null;
+/** Ajustes de Notificações de agora, do salvo (sem depender de tela montada). */
+const cfg = () => persistedNotifyCfg(readPersisted);
 let active = AppState.currentState === 'active';
 let channelsReady: Promise<void> | null = null;
 /** Ações de toque das notificações postadas nesta execução. */
@@ -96,7 +97,7 @@ let launchChirped = false;
  * lib/piuChirp.ts (modo noturno, "Som de piu", primeiro plano, silencioso do Android).
  */
 export function chirpInApp(kind?: NotifyKind) {
-  if (canChirp(cfg, { kind, active, ringer: PiuCallAlert.ringerMode() })) void playPiu();
+  if (canChirp(cfg(), { kind, active, ringer: PiuCallAlert.ringerMode() })) void playPiu();
 }
 
 function ensureChannels() {
@@ -190,8 +191,8 @@ export function cancelNotice(id: string) {
 
 /** Entrega (ou agenda, com `delaySec`) e devolve o id da notificação; `null` se não disparou. */
 async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Promise<string | null> {
-  const c = cfg;
-  if (!c || !c.onboarded || (active && !delaySec)) return null;
+  const c = cfg();
+  if (!c.onboarded || (active && !delaySec)) return null;
   const critical = !!n.critical;
   if (c.notifs[n.kind] === false) return null;
   const key = `${n.kind}|${n.title}|${n.body}`;
@@ -242,7 +243,7 @@ async function deliver(n: NotifyInput, delaySec: number, countBadge = true): Pro
 }
 
 function open(go: (() => void) | undefined, href: unknown) {
-  if (!cfg?.onboarded) return;
+  if (!cfg().onboarded) return;
   if (go) { go(); return; }
   if (typeof href === 'string' && href.startsWith('/')) router.push(href as Href);
 }
@@ -255,9 +256,8 @@ const OPENS = 'notif.opens';
  * (em `_layout.tsx`, junto do `<Toast />`).
  */
 export function NotificationBridge() {
-  const { preview, notifs, quiet, discreet, piuSound } = useSettings();
+  const { piuSound } = useSettings();
   const { onboarded } = useStore();
-  cfg = { preview, notifs, quiet, discreet, piu: piuSound, onboarded };
   // Carrega o piu de antemão: o primeiro aviso não espera o arquivo abrir.
   useEffect(() => { if (piuSound && Platform.OS !== 'web') preloadPiu(); }, [piuSound]);
 

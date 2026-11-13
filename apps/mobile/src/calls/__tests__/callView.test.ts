@@ -2,8 +2,8 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { tIn } from '../../i18n/core';
 import '../../i18n';
-import { IDLE, type CallState } from '../callMachine';
-import { contactOf, controls, encChip, meshNodes, recordCard, requestCard, routeChip, routeVia, ROUTE_ICON, speakLine, statusLine } from '../callView';
+import { IDLE, type CallState, type EndReason } from '../callMachine';
+import { contactOf, controls, encChip, failNotice, meshNodes, recordCard, requestCard, routeChip, routeVia, ROUTE_ICON, speakLine, statusLine } from '../callView';
 
 const t = (k: string, v?: Record<string, string | number>) => tIn('pt-BR', k as Parameters<typeof tIn>[1], v);
 const marina = contactOf('Marina Alves');
@@ -61,12 +61,25 @@ test('cartões de registro: feita, perdida, recusada, palavras diferentes, pedid
 
 test('contato sem chamada e oferta que não saiu: o fim diz o motivo (não "Sem resposta" à toa)', () => {
   const end = (reason: 'nocall' | 'unreachable') => statusLine(t, { ...IDLE, phase: 'ending', end: { reason } }, marina, 0);
-  assert.equal(end('nocall'), 'O contato pode não ter chamada (versão antiga ou iPhone)');
+  assert.equal(end('nocall'), 'O contato pode estar com o Piu fechado, numa versão antiga ou no iPhone');
   assert.equal(end('unreachable'), 'Sem conexão com o contato agora');
   const rec = (note?: string) => recordCard(t, { callId: 'c', peer: 'm', dir: 'out', outcome: 'noanswer', at: 0, route: 'direct', ...(note ? { note } : {}) }, marina);
-  assert.deepEqual([rec('nocall').title, rec('nocall').sub], ['Sem resposta', 'pode não ter chamada (versão antiga ou iPhone)']);
-  assert.equal(rec('unreachable').sub, 'sem conexão com o contato');
-  assert.equal(rec().sub, 'direto pelo Wi-Fi', 'sem resposta comum continua igual');
+  assert.deepEqual([rec('nocall').title, rec('nocall').sub], ['Não foi possível chamar', 'pode estar com o Piu fechado, versão antiga ou iPhone']);
+  assert.deepEqual([rec('unreachable').title, rec('unreachable').sub], ['Não foi possível chamar', 'sem conexão com o contato']);
+  assert.deepEqual([rec().title, rec().sub], ['Sem resposta', 'direto pelo Wi-Fi'], 'sem resposta comum continua igual');
+});
+
+test('aviso de falha na tela de fim: título claro e o porquê, só para a tentativa de quem ligou', () => {
+  const end = (reason: EndReason, dir: 'out' | 'in' = 'out') => failNotice(t, { ...active, dir, phase: 'ending', end: { reason } }, marina);
+  assert.deepEqual(end('unreachable'), { icon: 'call_end', title: 'Não foi possível chamar', sub: 'Sem conexão com o contato agora' });
+  assert.deepEqual(end('nocall'), { icon: 'call_end', title: 'Não foi possível chamar', sub: 'O contato pode estar com o Piu fechado, numa versão antiga ou no iPhone' });
+  assert.deepEqual(end('noanswer'), { icon: 'phone_missed', title: 'Sem resposta', sub: 'Marina não atendeu' });
+  assert.deepEqual(end('declined'), { icon: 'call_end', title: 'Recusada', sub: 'Marina recusou a chamada' });
+  assert.deepEqual(end('busy'), { icon: 'call_end', title: 'Em outra chamada', sub: 'Marina está em outra chamada' });
+  assert.equal(end('cancel'), null, 'eu cancelei');
+  assert.equal(end('hangup'), null);
+  assert.equal(end('declined', 'in'), null, 'eu recusei');
+  assert.equal(failNotice(t, active, marina), null);
 });
 
 test('Wi-Fi Direct (Nearby, `bt` no fio com a marca wifiDirect) aparece como Wi-Fi Direct, não como Bluetooth', () => {

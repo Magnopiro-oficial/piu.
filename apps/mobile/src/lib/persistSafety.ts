@@ -52,3 +52,62 @@ export function readSealedValue(stored: string, open: (stored: string) => unknow
   const value = open(stored);
   return value === undefined ? { ok: false } : { ok: true, value };
 }
+
+/**
+ * Uma execução por processo: a segunda chamada devolve a mesma promessa. Reabrir o app (Activity nova
+ * sobre o mesmo runtime JS) não relê o disco por cima do que já está em memória.
+ * `fn` que resolve `false` (leitura falhou) é tentada de novo na próxima chamada; a promessa diz se leu.
+ */
+export function oncePerProcess(fn: () => Promise<boolean | void>): () => Promise<boolean> {
+  let run: Promise<boolean> | null = null;
+  return () => (run ??= fn().then(ok => { if (ok === false) run = null; return ok !== false; }));
+}
+
+/**
+ * Saúde da leitura do armazenamento: falha geral ou campo ilegível impedem assumir ausência
+ * (ex.: a carteira não envia sem saber se havia uma transferência em andamento).
+ * `wiped`: o "Apagar dados locais" terminou; o vazio agora é de propósito, não falha de leitura.
+ */
+export function createReadHealth() {
+  let general = true;
+  const bad = new Set<string>();
+  return {
+    failed: (key: string) => general || bad.has(key),
+    begin() { general = true; bad.clear(); },
+    unreadable(key: string) { bad.add(key); },
+    succeeded() { general = false; },
+    wiped() { general = false; bad.clear(); },
+  };
+}
+
+/**
+ * Gravações com atraso (`usePersisted`, `schedulePersisted`): a memória muda na hora, o disco depois
+ * de `delay` (uma gravação só por campo). O núcleo lê a memória (`readPersisted`): mudar
+ * "Pré-visualização" para "Nunca" vale já para o próximo aviso, não só depois do atraso. Durante o
+ * "Apagar dados locais" nada entra na memória apagada; a gravação espera o apagamento terminar.
+ */
+export function createDelayedWrites(d: {
+  delay: number;
+  guard: { epoch(): number; resetting(): boolean };
+  mem: (key: string, value: unknown) => void;
+  write: (key: string, value: unknown) => void;
+}) {
+  const pending = new Map<string, ReturnType<typeof setTimeout>>();
+  function schedule(key: string, value: unknown) {
+    clearTimeout(pending.get(key));
+    if (!d.guard.resetting()) d.mem(key, value);
+    const at = d.guard.epoch();
+    pending.set(key, setTimeout(() => {
+      pending.delete(key);
+      if (at !== d.guard.epoch()) return; // apagado no meio do caminho
+      if (d.guard.resetting()) { schedule(key, value); return; } // estado novo: espera o apagamento terminar
+      d.mem(key, value);
+      d.write(key, value);
+    }, d.delay));
+  }
+  return {
+    schedule,
+    cancel: (key: string) => { clearTimeout(pending.get(key)); pending.delete(key); },
+    cancelAll: () => { pending.forEach(clearTimeout); pending.clear(); },
+  };
+}

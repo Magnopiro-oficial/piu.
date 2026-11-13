@@ -3,15 +3,14 @@ import * as ImagePicker from 'expo-image-picker';
 import { Directory, File, Paths } from 'expo-file-system';
 import { ImageManipulator, SaveFormat } from 'expo-image-manipulator';
 import { Platform } from 'react-native';
-import { fitSize, PHOTO_PLAN, type PhotoQuality } from './mediaCore';
+import { fitSize, PHOTO_PLAN, PREVIEW_MAX_BYTES, type PhotoQuality } from './mediaCore';
 import { isJpeg, photoName, stripJpegMetadata } from './photoMeta';
 import { isPickerTemp, PICKER_CACHE_DIRS } from './pickerTemp';
 import { fromBase64, toBase64 } from '../transport/base64';
 
 export interface PickedFile { name: string; mime: string; data: Uint8Array; /** Prévia (data URI) para fotos pequenas. */ preview?: string }
 
-/** Prévia guardada junto da conversa só até este tamanho (o armazenamento do app é limitado). */
-export const PREVIEW_MAX_BYTES = 1.5 * 1024 * 1024;
+export { PREVIEW_MAX_BYTES };
 
 async function readUri(uri: string): Promise<Uint8Array> {
   const r = await fetch(uri);

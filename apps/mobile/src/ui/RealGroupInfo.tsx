@@ -4,6 +4,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { fontFamily } from '../theme/fonts';
 import type { Chat } from '../data/types';
 import { useT, type Key } from '../i18n';
+import { GROUP_INVITE_QR_LEVEL } from '../lib/qrGrid';
 import { initialsOf } from '../lib/text';
 import { hidesSubscribers, isAdmin, memberCount } from '../messaging/groups';
 import { useMessaging } from '../state/messaging';
@@ -15,6 +16,7 @@ import { BackHeader, SectionLabel, Segmented, Toggle } from './Controls';
 import { Dialog } from './Dialog';
 import { Icon } from './Icon';
 import { QrCode } from './QrCode';
+import { QrZoom } from './QrZoom';
 import { Screen } from './Screen';
 import { T } from './T';
 
@@ -39,6 +41,7 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
   const [name, setName] = useState('');
   const [desc, setDesc] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [zoom, setZoom] = useState(false);
   const me = g ? myIdIn(g.via) : '';
   const admin = !!g && isAdmin(g, me);
   const link = useMemo(() => (g && admin && groupOps ? groupOps.inviteLink(g.id, linkSeq > 0) : ''), [g?.id, admin, linkSeq]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -129,13 +132,18 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           <>
             <SectionLabel>{t('groupInfo.invite')}</SectionLabel>
             <View style={{ marginHorizontal: 20, borderRadius: 22, backgroundColor: c.bg2, overflow: 'hidden' }}>
-              <View style={{ flexDirection: 'row', gap: 14, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16 }}>
-                {link ? <QrCode value={link} size={72} radius={12} label={t('groupInfo.inviteQr', { name: g.name })} /> : <View style={{ width: 72, height: 72 }} />}
+              {/* O convite tem ~500–800 caracteres (QR versão 15+): em 72 pt a câmera não lê, então o toque abre em tela cheia.
+                  A linha inteira (QR e texto) é um só alvo, com rótulo para o leitor de tela. */}
+              <Pressable disabled={!link} onPress={() => setZoom(true)} accessibilityRole="button" accessibilityLabel={t('groupInfo.inviteQr.zoom')}
+                style={{ flexDirection: 'row', gap: 14, alignItems: 'center', paddingVertical: 14, paddingHorizontal: 16 }}>
+                {link ? <QrCode value={link} size={72} radius={12} level={GROUP_INVITE_QR_LEVEL} label={t('groupInfo.inviteQr', { name: g.name })} />
+                  : <View style={{ width: 72, height: 72 }} />}
                 <View style={{ flex: 1, minWidth: 0, gap: 3 }}>
                   <T size={13} w={500} mono numberOfLines={1}>{link.slice(0, 22)}…</T>
                   <T size={12.5} color={c.ink2}>{t('groupInfo.inviteTerms')}</T>
+                  <T size={12.5} w={550}>{t('groupInfo.inviteQr.tap')}</T>
                 </View>
-              </View>
+              </Pressable>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 16, borderTopWidth: 1, borderTopColor: c.line }}>
                 <View style={{ flex: 1, gap: 2 }}>
                   <T size={15} w={550}>{t('groupInfo.approve')}</T>
@@ -258,6 +266,7 @@ export function RealGroupInfo({ chat }: { chat: Chat }) {
           body={t('groupInfo.leaveBody')}
           onPrimary={() => { setLeaving(false); run(() => groupOps.leave(g.id)); router.dismissTo('/(tabs)'); }} onClose={() => setLeaving(false)} />
       )}
+      {zoom && !!link && <QrZoom value={link} level={GROUP_INVITE_QR_LEVEL} label={t('groupInfo.inviteQr', { name: g.name })} hint={t('groupInfo.inviteQr.hint')} onClose={() => setZoom(false)} />}
       {delDialog}
     </Screen>
   );

@@ -13,6 +13,9 @@ import type { TransportClass } from '../protocol/router';
 export type PhotoQuality = 'eco' | 'normal' | 'orig';
 export type AutoDownload = 'wifi' | 'always' | 'never';
 
+/** Prévia guardada junto da conversa só até este tamanho (o armazenamento do app é limitado). */
+export const PREVIEW_MAX_BYTES = 1.5 * 1024 * 1024;
+
 /** Lado maior (px) e compressão JPEG de cada qualidade; `null` = original, sem regravar. */
 export const PHOTO_PLAN: Record<PhotoQuality, { maxSide: number; compress: number } | null> = {
   eco: { maxSide: 1280, compress: 0.6 },

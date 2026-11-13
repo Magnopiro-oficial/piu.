@@ -2,7 +2,7 @@ import { useMemo, useRef, useState } from 'react';
 import { Animated, Pressable, View, type LayoutChangeEvent } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { CallController } from '../../calls/callController';
-import { controls, encChip, routeChip, speakLine, statusLine, type CallScene, type Control } from '../../calls/callView';
+import { controls, encChip, failNotice, routeChip, speakLine, statusLine, type CallScene, type Control } from '../../calls/callView';
 import { PHONE_GEOMETRY, fitGeometry, voiceNow } from '../../calls/callVisual';
 import { useT } from '../../i18n';
 import { buildFrame, frameInputOf, gridOf } from '../../lib/callFrame';
@@ -81,6 +81,8 @@ export function CallScreen({ scene, controller, on, locked, now, onPerf }: {
   const enc = encChip(tr, s);
   const route = routeChip(tr, s, scene.latencyMs);
   const incoming = s.phase === 'ringing';
+  // Tentativa que falhou: título claro embaixo do avatar e o porquê no lugar do status.
+  const fail = failNotice(tr, s, c);
   const ctl = s.phase === 'calling' || s.phase === 'active' ? controls(tr, s) : [];
   const press = (k: Control) => {
     if (k.id === 'mute') controller.dispatch({ type: 'mute' });
@@ -113,7 +115,7 @@ export function CallScreen({ scene, controller, on, locked, now, onPerf }: {
           <View style={{ position: 'absolute', top: namesTop, left: 24, right: 24, alignItems: 'center', gap: 8 }}>
             {incoming && <T size={11.5} w={500} mono ls={0.08} color="rgba(255,255,255,0.6)">{t('call.incoming.label')}</T>}
             <T size={38} w={700} ls={-0.05} lh={1.1} color={W} align="center" numberOfLines={2} accessibilityRole="header">{c.name}</T>
-            <T size={14} w={500} mono color="rgba(255,255,255,0.7)" align="center" style={{ minHeight: 20 }} accessibilityLiveRegion="polite">{statusLine(tr, s, c, nowMs)}</T>
+            <T size={14} w={500} mono color="rgba(255,255,255,0.7)" align="center" style={{ minHeight: 20 }} accessibilityLiveRegion={fail ? 'none' : 'polite'} importantForAccessibility={fail ? 'no' : 'auto'} accessibilityElementsHidden={!!fail}>{fail ? fail.sub : statusLine(tr, s, c, nowMs)}</T>
           </View>
 
           <Animated.View accessible={false} style={{
@@ -123,9 +125,19 @@ export function CallScreen({ scene, controller, on, locked, now, onPerf }: {
             <T size={40} w={700} ls={-0.04} color={CALL_BG}>{c.initials}</T>
           </Animated.View>
 
-          <T size={14} color="rgba(255,255,255,0.75)" align="center" style={{ position: 'absolute', top: geo.cy + 118, left: 24, right: 24, minHeight: 20 }}>
-            {speakLine(tr, s, c, who, { locked })}
-          </T>
+          {fail ? (
+            // Título e porquê num anúncio só (a linha de status, com o porquê, sai do anúncio).
+            <View accessible accessibilityRole="alert" accessibilityLiveRegion="assertive" accessibilityLabel={`${fail.title}. ${fail.sub}`} style={{ position: 'absolute', top: geo.cy + 108, left: 24, right: 24, alignItems: 'center' }}>
+              <View style={{ minHeight: 40, paddingHorizontal: 16, borderRadius: 20, backgroundColor: 'rgba(255,255,255,0.14)', flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Icon name={fail.icon as IconName} size={20} color={W} />
+                <T size={16} w={650} color={W} numberOfLines={2}>{fail.title}</T>
+              </View>
+            </View>
+          ) : (
+            <T size={14} color="rgba(255,255,255,0.75)" align="center" style={{ position: 'absolute', top: geo.cy + 118, left: 24, right: 24, minHeight: 20 }}>
+              {speakLine(tr, s, c, who, { locked })}
+            </T>
+          )}
 
           {incoming && (
             <View style={{ position: 'absolute', left: 0, right: 0, bottom: Math.max(40, insets.bottom + 16), alignItems: 'center', gap: 26 }}>

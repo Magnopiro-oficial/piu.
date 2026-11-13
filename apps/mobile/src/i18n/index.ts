@@ -4,7 +4,7 @@
  * `set.region`), que chama `applyLangPref` ao montar e a cada troca.
  */
 import { useSyncExternalStore } from 'react';
-import { registerDict, getLang, getRegion, subscribe, t, setLang, setRegion, resolveLang, type Lang, type LangPref, type Region } from './core';
+import { registerDict, getLang, getRegion, isLang, isRegion, subscribe, t, setLang, setRegion, resolveLang, type Lang, type LangPref, type Region } from './core';
 import { dict as ptPT } from './pt-PT';
 import { dict as en } from './en';
 import { dict as es } from './es';
@@ -33,6 +33,16 @@ export * from './core';
 export function applyLangPref(pref: LangPref, region: Region) {
   setLang(resolveLang(pref));
   setRegion(region);
+}
+
+/**
+ * Preferência salva sem o SettingsProvider (núcleo sem tela, core/index.ts), com as mesmas regras de
+ * leitura de state/settings.tsx: valor estranho vale 'auto'.
+ */
+export function applySavedLangPref(read: (key: string) => unknown) {
+  const lang = read('set.lang');
+  const region = read('set.region');
+  applyLangPref(lang === 'auto' || isLang(lang) ? lang : 'auto', isRegion(region) ? region : 'auto');
 }
 
 /** Idioma em uso; o componente renderiza de novo quando muda. */

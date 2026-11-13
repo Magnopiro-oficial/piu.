@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { IDLE, type CallState } from '../../mobile/src/calls/callMachine';
 import { contactOf, type Tr } from '../../mobile/src/calls/callView';
 import { DESKTOP_GEOMETRY } from '../../mobile/src/calls/callVisual';
-import { callKeyLabel, callTimer, callToastText, callWindowTitle, declineDraft, deviceIcon, matchCallKey, stageLayout, type KeyLike } from '../src/renderer/call/callDesktop';
+import { callKeyLabel, callTimer, callLines, callToastText, callWindowTitle, declineDraft, deviceIcon, matchCallKey, stageLayout, type KeyLike } from '../src/renderer/call/callDesktop';
 import { callPtBR } from '../../mobile/src/i18n/call/pt-BR';
 import { tIn, type Key } from '../src/shared/i18n';
 
@@ -73,4 +73,14 @@ test('Recusar → Mensagem: o rascunho do celular fica pronto, sem apagar o que 
   assert.equal(declineDraft(tr, '   '), callPtBR['call.declineDraft']);
   assert.equal(declineDraft(tr, 'já te respondo'), 'já te respondo');
   assert.equal(declineDraft((k, v) => tIn('en', k as Key, v), ''), tIn('en', 'call.declineDraft'));
+});
+
+test('linhas do palco: tentativa minha que falhou mostra o título e o porquê, como no celular (3,5 s na tela)', () => {
+  const failed: CallState = { ...IDLE, phase: 'ending', callId: 'c', peer: 'm', dir: 'out', end: { reason: 'noanswer' } };
+  assert.deepEqual(callLines(tr, failed, marina, 0, null), { status: 'Sem resposta', speak: 'Marina não atendeu' });
+  // Quem recebeu, ou quem desligou: segue como antes (status do fim, sem aviso).
+  const mine: CallState = { ...failed, end: { reason: 'cancel' } };
+  assert.deepEqual(callLines(tr, mine, marina, 0, null), { status: 'Chamada cancelada', speak: '' });
+  const theirs: CallState = { ...failed, dir: 'in' };
+  assert.equal(callLines(tr, theirs, marina, 0, null).speak, '');
 });

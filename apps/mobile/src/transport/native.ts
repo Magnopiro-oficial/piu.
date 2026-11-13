@@ -45,8 +45,9 @@ export function createNativeTransport(): Transport | null {
     kind,
     media,
     start: (name, serviceId) => mod.start(name, serviceId),
-    // Com a rede local ainda ligada, o aviso fixo do Modo nó continua (é ele que mantém o LAN em segundo plano).
-    stop: async () => { if (lan.status().state !== 'running') await mod.setBackground?.(false, '', ''); await mod.stop(); },
+    // O serviço em primeiro plano não cai junto: quem decide é state/background.ts (pela tela). Parar aqui
+    // (virada do dia, outro nome) derrubaria a tarefa sem tela com o app fechado, e ninguém religaria.
+    stop: () => mod.stop(),
     sendVia: async (medium, id, data) => {
       if (data.length > MAX_ENVELOPE_BYTES) throw new Error('Envelope maior que 32 KB.');
       if (medium === 'sim') throw new Error('Meio simulado no transporte nativo.');
@@ -72,10 +73,18 @@ export function createNativeTransport(): Transport | null {
   transport.lan = lan;
   if (radio) transport.lora = radio;
   if (rnode) transport.piulora = rnode;
-  transport.setBackgroundRelay = async on => {
+  // `notice`: texto do aviso fixo no idioma da pessoa (sem ele, o do Modo nó). O nativo guarda o texto
+  // para religar sozinho (processo morto, reinício do aparelho).
+  // Só o Modo nó pede a permissão de notificação aqui. "Receber com o app fechado" vem ligado de fábrica
+  // e liga no fim do onboarding: o pedido fica com o NotificationBridge (lib/notifications.ts), que não
+  // pede na primeira abertura, e não disputa com o pedido de Bluetooth e Wi-Fi Direct.
+  transport.setBackgroundRelay = async (on, notice) => {
     if (!mod.setBackground) return;
-    if (on) await requestRelayNotificationPermission();
-    await mod.setBackground(on, RELAY_NOTIFICATION.title, RELAY_NOTIFICATION.text);
+    if (on && !notice) await requestRelayNotificationPermission();
+    const n = notice ?? RELAY_NOTIFICATION;
+    await mod.setBackground(on, n.title, n.text);
   };
+  // Pulso do PiuRelayService (só enquanto ele está ligado; binários antigos não emitem).
+  transport.onHeartbeat = fn => { const s = mod.addListener('onHeartbeat', fn); return () => s.remove(); };
   return transport;
 }

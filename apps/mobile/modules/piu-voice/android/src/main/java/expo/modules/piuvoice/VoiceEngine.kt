@@ -13,6 +13,7 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.AudioTrack
 import android.media.MediaRecorder
+import android.media.ToneGenerator
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.AutomaticGainControl
@@ -35,12 +36,19 @@ internal class AudioUnavailable(msg: String) : Exception(msg)
 private const val TAG = "PiuVoice"
 private const val RATE = 16000
 private const val FRAME = RATE / 50 // 320 amostras = 20 ms
+/** Volume dos tons de quem liga (0–100, relativo ao volume da chamada): discreto. */
+private const val TONE_VOLUME = 70
+/** Tom de falha: ~2 toques de ocupado. A tela de fim da falha dura mais (callMachine `failScreenMs`). */
+private const val FAIL_TONE_MS = 2000
 
 /**
  * Áudio da chamada de voz: microfone (VOICE_COMMUNICATION + AEC/NS/AGC) → pedaços de 20 ms codificados
  * (Opus pelo MediaCodec ou PCMU) → `onFrame`; pedaços que chegam → buffer anti-jitter → decodificação →
  * AudioTrack. Captura e reprodução em threads próprias. `start`/`stop`/rotas são chamados numa thread
  * só (a de controle do módulo); `play`, `setMuted` e os níveis, de qualquer thread.
+ *
+ * A "sessão" (modo de comunicação, foco e rota) abre com a voz ou antes, com o tom de quem liga
+ * (`tone`): o "chamando" sai pelo mesmo fone/alto-falante da chamada, sem abrir o microfone.
  */
 internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec, ByteArray) -> Unit) {
   val localCodec: Codec get() = encoderCodec ?: (if (hasOpusEncoder) Codec.OPUS else Codec.PCMU)
@@ -55,6 +63,8 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
   private var speaker = false
 
   private var started = false
+  private var sessionOpen = false
+  private var toneGen: ToneGenerator? = null
   private var record: AudioRecord? = null
   private var track: AudioTrack? = null
   private val effects = mutableListOf<AudioEffect>()
@@ -76,11 +86,8 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
     if (ContextCompat.checkSelfPermission(ctx, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) throw NoPermission()
     started = true
     try {
-      savedMode = am.mode
-      @Suppress("DEPRECATION")
-      savedSpeaker = am.isSpeakerphoneOn
-      requestFocus()
-      am.mode = AudioManager.MODE_IN_COMMUNICATION
+      stopTone() // atendeu: o "chamando" para antes da voz
+      openSession()
 
       val recMin = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
       val rec = AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, RATE, AudioFormat.CHANNEL_IN_MONO,
@@ -124,9 +131,14 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
     }
   }
 
-  /** Libera tudo; idempotente. */
+  /** Libera tudo (tom incluído); idempotente. */
   fun stop() {
-    if (!started) return
+    stopTone()
+    if (started) stopMedia()
+    closeSession()
+  }
+
+  private fun stopMedia() {
     started = false
     running = false
     listOf(captureThread, playThread).forEach { t ->
@@ -143,6 +155,23 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
     jitter.clear(); mine.reset(); theirs.reset()
     deviceCallback?.let { try { am.unregisterAudioDeviceCallback(it) } catch (_: Exception) {} }
     deviceCallback = null
+  }
+
+  /** Modo de comunicação, foco e rota: abre com o tom ou com a voz, o que vier primeiro. */
+  private fun openSession() {
+    if (sessionOpen) return
+    sessionOpen = true
+    savedMode = am.mode
+    @Suppress("DEPRECATION")
+    savedSpeaker = am.isSpeakerphoneOn
+    requestFocus()
+    am.mode = AudioManager.MODE_IN_COMMUNICATION
+    applyRoute()
+  }
+
+  private fun closeSession() {
+    if (!sessionOpen) return
+    sessionOpen = false
     try {
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) am.clearCommunicationDevice()
       else {
@@ -153,6 +182,7 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
       }
     } catch (e: Exception) { Log.w(TAG, "restaurar rota", e) }
     scoOn = false
+    speaker = false // a próxima sessão começa no fone (o JS manda a rota antes do tom/voz)
     try { am.mode = savedMode } catch (_: Exception) {}
     abandonFocus()
   }
@@ -166,7 +196,38 @@ internal class VoiceEngine(private val ctx: Context, private val onFrame: (Codec
 
   fun setSpeaker(on: Boolean) {
     speaker = on
-    if (started) applyRoute()
+    if (sessionOpen) applyRoute()
+  }
+
+  /**
+   * Tom de quem liga, sintetizado pelo aparelho (sem arquivo): "ringback" = chamando, em loop até o
+   * próximo pedido; "fail" = ocupado curto; outro = silêncio (e solta a sessão se a voz não abriu).
+   * Ao atender, o JS não manda silêncio: o `start` para o tom e segue na mesma sessão (sem estalo).
+   */
+  fun tone(kind: String) {
+    stopTone()
+    when (kind) {
+      "ringback" -> playTone(ToneGenerator.TONE_SUP_RINGTONE, 0)
+      "fail" -> playTone(ToneGenerator.TONE_SUP_BUSY, FAIL_TONE_MS)
+      else -> if (!started) closeSession()
+    }
+  }
+
+  private fun playTone(type: Int, ms: Int) {
+    if (started) return // voz aberta: nada de tom por cima
+    try {
+      openSession()
+      val g = ToneGenerator(AudioManager.STREAM_VOICE_CALL, TONE_VOLUME)
+      toneGen = g
+      if (ms > 0) g.startTone(type, ms) else g.startTone(type)
+    } catch (e: Exception) { Log.w(TAG, "tom da chamada", e) } // ToneGenerator lança se o áudio estiver ocupado
+  }
+
+  private fun stopTone() {
+    val g = toneGen ?: return
+    toneGen = null
+    try { g.stopTone() } catch (_: Exception) {}
+    g.release()
   }
 
   /** Alto-falante; senão Bluetooth (SCO/LE) se houver fone; senão fone com fio; senão o do aparelho. */

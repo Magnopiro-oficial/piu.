@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { CallService, type AudioEngine, type CallServicePorts } from '../callService';
-import type { CallRecord, RouteHint } from '../callMachine';
+import { CALL_TIMING, type CallRecord, type RouteHint } from '../callMachine';
+import type { CallTone } from '../callTone';
 import type { RequestStep } from '../callView';
 import type { Codec } from '../callMedia';
 import { newCallKeypair } from '../callCrypto';
@@ -16,10 +17,15 @@ const LOW_ORDER = 'A'.repeat(43);
  * Só o motor de áudio é de teste: grava o que tocou e manda um quadro quando o teste pede.
  */
 class TestAudio implements AudioEngine {
-  played: number[] = []; muted = false; on = false;
+  played: number[] = []; muted = false; on = false; speaker?: boolean;
+  tones: (CallTone | null)[] = [];
+  /** Ordem dos pedidos ao motor (no aparelho, todos entram em fila numa thread só). */
+  log: string[] = [];
   private emit?: (c: Codec, p: Uint8Array) => void;
-  async start(f: (c: Codec, p: Uint8Array) => void) { this.on = true; this.emit = f; }
-  stop() { this.on = false; this.emit = undefined; }
+  tone(k: CallTone | null) { this.tones.push(k); this.log.push('tone:' + (k ?? 'none')); }
+  setSpeaker(on: boolean) { this.speaker = on; this.log.push('speaker:' + on); }
+  async start(f: (c: Codec, p: Uint8Array) => void) { this.on = true; this.emit = f; this.log.push('start'); }
+  stop() { this.on = false; this.emit = undefined; this.log.push('stop'); }
   play(_c: Codec, p: Uint8Array) { this.played.push(p.length); }
   setMuted(m: boolean) { this.muted = m; }
   levels() { return { mine: 0, theirs: 0 }; }
@@ -212,8 +218,57 @@ test('oferta que não sai (sem sessão com o contato): termina na hora com "sem 
   assert.equal(w.a.state.phase, 'ending');
   assert.equal(w.a.state.end?.reason, 'unreachable');
   assert.equal(w.b.state.phase, 'idle');
-  assert.deepEqual(w.pending(), [1700], 'só a tela de fim');
+  assert.deepEqual(w.pending(), [CALL_TIMING.failScreenMs], 'só a tela de fim');
   assert.ok(!w.audio.a.on);
+});
+
+test('som de chamando: toca enquanto espera e para ao atender; quem recebe não toca chamando', () => {
+  const w = pair();
+  w.a.open('bob'); w.a.controller.dial();
+  assert.deepEqual(w.audio.a.tones, ['ringback']);
+  w.b.controller.answer();
+  // Sem "none" antes do start: no aparelho o start espera a permissão do microfone e um "none" na
+  // frente soltaria a sessão (modo, foco, Bluetooth) só para reabrir em seguida. O start para o tom.
+  assert.deepEqual(w.audio.a.log, ['speaker:false', 'tone:ringback', 'start', 'speaker:false'], 'o start para o tom ao atender');
+  assert.deepEqual(w.audio.b.tones, []);
+  w.a.controller.hangup();
+  assert.deepEqual(w.audio.a.log.slice(-1), ['stop'], 'desligar a conversa não pede tom');
+});
+
+test('som de chamando segue o alto-falante antes de atender; cancelar para na hora, sem som de falha', () => {
+  const w = pair();
+  w.a.open('bob'); w.a.controller.dial();
+  // A rota vem antes do tom: o "chamando" não começa no alto-falante da chamada anterior.
+  assert.deepEqual(w.audio.a.log, ['speaker:false', 'tone:ringback']);
+  w.a.controller.dispatch({ type: 'speaker' });
+  w.a.controller.hangup();
+  // Sem voz aberta, quem solta a sessão é o "none" (sem stop: nada de fechar duas vezes).
+  assert.deepEqual(w.audio.a.log, ['speaker:false', 'tone:ringback', 'speaker:true', 'tone:none']);
+});
+
+test('sair do serviço com o "chamando" tocando para o tom', () => {
+  const w = pair();
+  w.a.open('bob'); w.a.controller.dial();
+  w.a.dispose();
+  assert.deepEqual(w.audio.a.log.slice(-1), ['tone:none']);
+});
+
+test('tentativa que falhou: chamando → som de falha → silêncio ao voltar à conversa', () => {
+  const w = pair('direct', { bOld: true });
+  w.a.open('bob'); w.a.controller.dial();
+  w.fire(10_000);
+  assert.deepEqual(w.audio.a.tones, ['ringback', 'fail']);
+  // Sem stop no meio: a voz nunca abriu, e um stop fecharia a sessão (e o Bluetooth) entre o
+  // "chamando" e o ocupado, ou mataria o ocupado se chegasse depois dele.
+  assert.deepEqual(w.audio.a.log, ['speaker:false', 'tone:ringback', 'tone:fail']);
+  w.fire(CALL_TIMING.failScreenMs);
+  assert.equal(w.a.state.phase, 'idle');
+  assert.deepEqual(w.audio.a.tones, ['ringback', 'fail', null]);
+  assert.deepEqual(w.audio.a.log, ['speaker:false', 'tone:ringback', 'tone:fail', 'tone:none']);
+  // Recusada pelo outro: o mesmo som curto.
+  const r = pair();
+  r.a.open('bob'); r.a.controller.dial(); r.b.controller.decline();
+  assert.deepEqual(r.audio.a.tones, ['ringback', 'fail']);
 });
 
 test('recusar com "Em 10 min" pede o lembrete ao aparelho (quem ligou, 10 min)', () => {

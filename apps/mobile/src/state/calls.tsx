@@ -46,6 +46,7 @@ export function phoneAudio(onMicDenied: () => void): AudioEngine {
     play: (codec, payload, seq) => PiuVoice.play(codec, payload, seq),
     setMuted: m => PiuVoice.setMuted(m),
     setSpeaker: on => PiuVoice.setSpeaker(on),
+    tone: k => PiuVoice.tone(k ?? 'none'),
     levels: () => PiuVoice.levels(),
   };
 }
@@ -132,9 +133,9 @@ export function CallsProvider({ children, chats, onlyLora }: { children: ReactNo
   const ver = useSyncExternalStore(fn => (svc ? svc.subscribe(fn) : () => {}), () => (svc ? svc.state : null), () => null);
   useEffect(() => call?.onToast(text => setToast(x => ({ text, seq: (x?.seq ?? 0) + 1 }))), [call]);
   useReminderBanner(call?.onRemind, chats);
-  // Fora do app (Android): toque, notificação de chamada, tela bloqueada e serviço do microfone.
+  // Fora do app (Android): toque, notificação de chamada, tela bloqueada e serviço do microfone (núcleo).
   const { preview } = useSettings();
-  const alert = useCallAlerts(svc, peer => chats.find(c => c.peer === peer)?.name ?? '', preview === 'never');
+  const alert = useCallAlerts();
 
   const api = useMemo<CallApi | null>(() => {
     if (!svc) return null;
