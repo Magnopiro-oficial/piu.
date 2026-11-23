@@ -3,6 +3,8 @@ import { parseLunesEndpoints } from './lunes/reader.js';
 import { parseSerialSpec } from './relay/serial.js';
 import { piuRadio, type PiuRadio, REGIONS } from './rnode/regions.js';
 import { inboxUrlProblem } from './relay/inboxUrl.js';
+import { loadTncRadio } from './relay/tncConfig.js';
+import type { TncRadio } from './relay/tnc.js';
 
 /** Configuração por variáveis de ambiente (nada de segredo no código). */
 export interface Config {
@@ -50,7 +52,9 @@ export interface LnnpConfig {
   /** Intervalo para gravar as mensagens guardadas quando mudam (ms): `PIU_RELAY_PERSIST_MS`. */
   persistMs?: number;
   /** Portas seriais (rádio LoRa KISS, cabo USB, rádio Meshtastic ou RNode): `PIU_SERIAL`. */
-  serial?: { kind: 'lora' | 'usb' | 'meshtastic' | 'rnode'; path: string; baud: number }[];
+  serial?: { kind: 'lora' | 'usb' | 'meshtastic' | 'rnode' | 'tnc'; path: string; baud: number }[];
+  /** Modem KISS de banda estreita (`PIU_SERIAL=tnc:…`): só existe com a faixa declarada em `PIU_TNC_BAND`. */
+  tnc?: TncRadio;
   /**
    * Rádio próprio (RNode): canal da região `PIU_RNODE_REGION` (padrão `BR_902`), com `PIU_RNODE_FREQ_HZ`
    * e `PIU_RNODE_TX_DBM` para casos especiais, sempre dentro da faixa e da potência da região.
@@ -110,8 +114,9 @@ export function loadLnnpConfig(env = process.env): LnnpConfig {
     freqHz: num('PIU_RNODE_FREQ_HZ', base.freqHz, n => Number.isInteger(n) && n - half >= region.startMHz * 1e6 && n + half <= region.endMHz * 1e6),
     txDbm: num('PIU_RNODE_TX_DBM', base.txDbm, n => Number.isInteger(n) && n >= 0 && n <= region.maxDbm),
   };
+  const tnc = loadTncRadio(env, serial.some(s => s.kind === 'tnc'));
   return {
-    serial, lora, meshtasticPerMin, rnode,
+    serial, lora, meshtasticPerMin, rnode, ...(tnc ? { tnc } : {}),
     gateway: flag(env.PIU_GATEWAY, true), inboxUrl,
     enabled: flag(env.PIU_LNNP, true),
     relay: flag(env.PIU_LNNP_RELAY, true),

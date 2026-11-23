@@ -49,6 +49,14 @@ O que acontece quando o nó sobe:
   - Com `meshtastic` e `rnode` ligados juntos, o nó é ponte: cada envelope vai uma vez para cada malha, nunca de volta para a de onde veio.
   - `GET /api/relay` traz `rnode`, por rádio: região, frequência, estado (e o problema, se falhou), Super Nodes ouvidos, envelopes enviados e recebidos, envios adiados.
   - Ainda não testado com placa real.
+  - **Mais alcance sem mudar de faixa**: antena externa e altura valem mais que potência. `PIU_RNODE_TX_DBM` aceita até o limite da região, mas no Brasil a modulação digital em 902–907,5 / 915–928 MHz também tem teto de densidade (8 dBm a cada 3 kHz, Ato Anatel 14448/2017). Pela nossa conta, ainda sem medição de laboratório, isso dá perto de 24 dBm para o canal de 125 kHz: fique no padrão (17 dBm) ou em até 22 dBm.
+- **`tnc`**: um **modem KISS de banda estreita** para rádio VHF/UHF (Direwolf por TCP, NinoTNC por USB), a 1200 ou 9600 bps. **Desligado por padrão e experimental: nunca testado com rádio de verdade** (pendências em `docs/hardware/pendencias-radio-vhf-uhf.md`).
+  - Exemplos: `PIU_SERIAL=tnc:/dev/ttyACM0@57600` (NinoTNC) ou `PIU_SERIAL=tnc:tcp://127.0.0.1:8001` (porta KISS do Direwolf). Por TCP, se a conexão cai, o nó tenta de novo a cada 5 s.
+  - **Regra de rádio (leia antes de ligar):** o Piu só leva mensagens cifradas, e **faixa de radioamador (2 m, 70 cm) proíbe criptografia** (no Brasil, Ato Anatel 926/2024, item 6.11). Por isso o nó **recusa subir** com `tnc` no `PIU_SERIAL` sem `PIU_TNC_BAND`: `licensed` (canal privado com licença; no Brasil, Serviço Limitado Privado em 148–174 ou 400–470 MHz) ou `free` (faixa de uso livre que aceite dados, com equipamento homologado). `amateur` é recusado com o aviso. O nó não sabe a frequência do rádio: a responsabilidade de transmitir só onde pode é do operador.
+  - Entra no motor como a malha aberta `lora:tnc`, com os mesmos pedaços "P1" e o mesmo anúncio "PN" do `rnode`, cada um dentro de um quadro AX.25 UI para o destino `PIU` (`PIU_TNC_AX25=0` manda os pedaços crus, para modem transparente). Quadros de outros serviços no canal (APRS) são ignorados e contados.
+  - **O que vai**: só envelopes de até 904 bytes (texto curto e recibos). **O que nunca vai**: mídia, arquivos, chamadas e sinal ao vivo (classe `lora` do roteador), nem envelope acima de 904 bytes; ficam para outro meio.
+  - **Tempo no ar**: calculado pela taxa (`PIU_TNC_BPS`) e pelo `PIU_TNC_TXDELAY_MS`, limitado a `PIU_TNC_DUTY` % por hora. A 1200 bps, um texto curto (3 pedaços) leva ~5,5 s: com 10 %, o canal leva cerca de 50 textos por hora **somando o que este nó transmite**. 20 % do tempo fica reservado para envelopes de prioridade alta ou crítica (alerta não espera atrás de repasse).
+  - `GET /api/relay` traz `tnc`, por modem: faixa declarada, taxa, Super Nodes ouvidos, envelopes enviados e recebidos, envios adiados, quadros ignorados e tempo no ar usado na última hora.
 - **Sem dependência nativa**: a porta é configurada com `stty` (no OpenWrt, o do busybox) e lida pelo laço de eventos do Node. O usuário do serviço precisa de acesso ao dispositivo (grupo `dialout`).
 - **Porta ausente** (rádio desconectado) não derruba o nó: o LAN continua, e o log diz o que não abriu.
 - `GET /api/relay` passa a trazer `serial`, com, por porta:
@@ -227,6 +235,12 @@ Só instale com `OK:` e código de saída 0.
 | `PIU_RNODE_REGION` | `BR_902` | região do rádio próprio (`PIU_SERIAL=rnode:…`): `US`, `EU_868`, `EU_433`, `ANZ`, `IN`, `JP`, `CN`, `LORA_24` etc. |
 | `PIU_RNODE_FREQ_HZ` | meio da faixa | frequência do rádio próprio, em Hz; precisa caber na faixa da região |
 | `PIU_RNODE_TX_DBM` | `17` ou o máximo da região | potência do rádio próprio; nunca acima do limite da região |
+| `PIU_TNC_BAND` | — (modem desligado) | onde o rádio do modem KISS transmite: `licensed` (canal privado com licença) ou `free` (uso livre que aceita dados). Obrigatório com `PIU_SERIAL=tnc:…`. Faixa de radioamador é recusada: não aceita mensagem cifrada |
+| `PIU_TNC_BPS` | `1200` | taxa do modem no ar (300 a 1000000), igual à do TNC |
+| `PIU_TNC_TXDELAY_MS` | `300` | tempo para o rádio abrir a transmissão (0 a 2550 ms); o nó manda ao modem pelo KISS |
+| `PIU_TNC_DUTY` | `10` | ocupação máxima do canal, % por hora |
+| `PIU_TNC_CALL` | `PIU` | endereço AX.25 de origem (até 6 letras ou números, `-0` a `-15` opcional) |
+| `PIU_TNC_AX25` | `1` | `0` manda os pedaços sem cabeçalho AX.25 (modem transparente) |
 | `PIU_RELAY_SAMPLE_MS` | `300000` | intervalo das amostras do histórico de retransmissão (1 s a 1 h) |
 | `PIU_RELAY_PERSIST_MS` | `30000` | intervalo para gravar as mensagens guardadas, os ids vistos e os recibos quando mudam (1 s a 1 h) |
 | `PIU_GATEWAY` | `1` | gateway da carga pela malha (transações dos celulares para a Lunes); `0` desliga de vez, e o painel não liga |

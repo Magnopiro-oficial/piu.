@@ -12,6 +12,8 @@ import { loadSnapshot, saveSnapshot, storeKey } from './persist.js';
 import { createGateway, type GatewayHandle, type GatewayOptions } from './gateway.js';
 import { MeshtasticAdapter, type MeshtasticStats } from './meshtastic.js';
 import { RNodeAdapter, type RNodeStats } from './rnode.js';
+import { openTcpModem } from './tcpModem.js';
+import { TncAdapter, type TncStats } from './tnc.js';
 import { type Modem, openSerialModem, SerialAdapter, type SerialStats } from './serial.js';
 
 export { type DeviceLimits, inWindow, type LinkPort, RelayEngine, type RelayStats } from './engine.js';
@@ -33,6 +35,8 @@ export interface RelayHandle {
   meshtastic: MeshtasticAdapter[];
   /** Rádios próprios do Piu (`PIU_SERIAL=rnode:…`). */
   rnode: RNodeAdapter[];
+  /** Modems KISS de banda estreita (`PIU_SERIAL=tnc:…`). */
+  tnc: TncAdapter[];
   /** Porta TCP do enlace e UDP da descoberta (reais, úteis com porta 0). */
   port: number;
   discoveryPort: number | null;
@@ -60,7 +64,7 @@ export interface RelayHandle {
   waitPeer(address: string, ms: number, from?: number): Promise<PeerStatus | null>;
   /** O endereço veio de `PIU_LNNP_PEERS` (não sai pelo painel)? */
   isConfigPeer(address: string): boolean;
-  stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null; peers: PeerStatus[] }; serial: SerialStats[]; meshtastic: MeshtasticStats[]; rnode: RNodeStats[] };
+  stats(): ReturnType<RelayEngine['stats']> & { lan: { port: number; discoveryPort: number | null; peers: PeerStatus[] }; serial: SerialStats[]; meshtastic: MeshtasticStats[]; rnode: RNodeStats[]; tnc: TncStats[] };
   /** Gateway da carga pela malha (`null` com `PIU_GATEWAY=0`, ou configuração sem `gateway: true`). */
   gateway: GatewayHandle | null;
   close(): Promise<void>;
@@ -118,9 +122,21 @@ export async function startRelay(
   const serial: SerialAdapter[] = [];
   const meshtastic: MeshtasticAdapter[] = [];
   const rnode: RNodeAdapter[] = [];
+  const tnc: TncAdapter[] = [];
   for (const s of c.serial ?? []) {
     try {
-      const modem = await (extra.openModem ?? openSerialModem)(s.path, s.baud);
+      // Faixa de radioamador não aceita cifra: o modem só sobe com a faixa declarada (config.ts, `PIU_TNC_BAND`).
+      if (s.kind === 'tnc' && !c.tnc) throw new Error('falta declarar a faixa do rádio (PIU_TNC_BAND=licensed ou free)');
+      const modem = await (extra.openModem ?? (s.path.startsWith('tcp://') ? openTcpModem : openSerialModem))(s.path, s.baud);
+      if (s.kind === 'tnc') {
+        const t = new TncAdapter(engine, {
+          modem, node, radio: c.tnc!, tickMs: extra.tickMs, log: extra.log,
+          roles: () => ({ relay: engine.relaying, gateway: !!gateway?.roles().tx }),
+        });
+        t.start();
+        tnc.push(t);
+        continue;
+      }
       if (s.kind === 'meshtastic') {
         // Super Node no canal Meshtastic (docs/transporte/super-node-lora.md): uma malha aberta no motor.
         const m = new MeshtasticAdapter(engine, {
@@ -171,7 +187,7 @@ export async function startRelay(
   const persistTimer = setInterval(persist, extra.persistMs ?? c.persistMs ?? 30_000);
   persistTimer.unref();
   return {
-    engine, lan, serial, meshtastic, rnode, port, discoveryPort, gateway,
+    engine, lan, serial, meshtastic, rnode, tnc, port, discoveryPort, gateway,
     applySettings: (s, d) => engine.applySettings(s, d),
     setPaused: p => engine.setPaused(p),
     setOperator: t => { engine.setOperator(t); if (trustFile) { try { saveTrust(trustFile, engine.operatorState()); } catch { /* gravado na próxima mudança */ } } },
@@ -183,10 +199,10 @@ export async function startRelay(
     removePeer: a => lan.removePeer(a),
     waitPeer: (a, ms, from) => lan.waitPeer(a, ms, from),
     isConfigPeer: a => lan.isConfigPeer(a),
-    stats: () => ({ ...engine.stats(), lan: { port, discoveryPort, peers: lan.peerStatus() }, serial: serial.map(a => a.stats()), meshtastic: meshtastic.map(a => a.stats()), rnode: rnode.map(a => a.stats()) }),
+    stats: () => ({ ...engine.stats(), lan: { port, discoveryPort, peers: lan.peerStatus() }, serial: serial.map(a => a.stats()), meshtastic: meshtastic.map(a => a.stats()), rnode: rnode.map(a => a.stats()), tnc: tnc.map(a => a.stats()) }),
     // Última rodada ao desligar: o que aconteceu desde a anterior não se perde.
     // e o armazenamento é gravado de novo (o que chegou depois da última gravação também volta).
-    close: async () => { clearInterval(timer); clearInterval(persistTimer); gateway?.stop(); sample(); await Promise.all([...serial, ...meshtastic, ...rnode].map(a => a.stop())); await lan.stop(); persist(); },
+    close: async () => { clearInterval(timer); clearInterval(persistTimer); gateway?.stop(); sample(); await Promise.all([...serial, ...meshtastic, ...rnode, ...tnc].map(a => a.stop())); await lan.stop(); persist(); },
   };
 }
 
