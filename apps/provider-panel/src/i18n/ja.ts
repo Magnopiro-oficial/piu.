@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'このノードにデータなし',
   'dev.receipts': { other: 'レシート {count} 件' },
   'dev.stoOf': '{total} GB 中 {used}',
+  'dev.stoOfMb': '{total} MB 中 {used}',
   'dev.relayOff': '中継オフ',
   'dev.parentFallback': '親ノード',
   'live.registeredByWizard': 'ウィザードで登録',

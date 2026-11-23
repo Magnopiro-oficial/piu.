@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'aucune donnée sur ce nœud',
   'dev.receipts': { one: '{count} reçu', other: '{count} reçus' },
   'dev.stoOf': '{used} sur {total} Go',
+  'dev.stoOfMb': '{used} sur {total} Mo',
   'dev.relayOff': 'relais désactivé',
   'dev.parentFallback': 'nœud parent',
   'live.registeredByWizard': 'Enregistré par l’assistant',

@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': '此节点无数据',
   'dev.receipts': { other: '{count} 份回执' },
   'dev.stoOf': '{used}/{total} GB',
+  'dev.stoOfMb': '{used}/{total} MB',
   'dev.relayOff': '转发已关闭',
   'dev.parentFallback': '父节点',
   'live.registeredByWizard': '由向导登记',

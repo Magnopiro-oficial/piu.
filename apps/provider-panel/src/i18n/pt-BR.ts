@@ -282,6 +282,7 @@ export const ptBR = {
   'dev.noDataHere': 'sem dados neste nó',
   'dev.receipts': { one: '{count} recibo', other: '{count} recibos' },
   'dev.stoOf': '{used} de {total} GB',
+  'dev.stoOfMb': '{used} de {total} MB',
   'dev.relayOff': 'retransmissão desligada',
   'dev.parentFallback': 'nó pai',
   'live.registeredByWizard': 'Registrado pelo assistente',

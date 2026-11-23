@@ -272,6 +272,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'لا بيانات على هذه العقدة',
   'dev.receipts': { zero: 'لا إيصالات', one: 'إيصال واحد', two: 'إيصالان', few: '{count} إيصالات', many: '{count} إيصالًا', other: '{count} إيصال' },
   'dev.stoOf': '{used} من {total} غيغابايت',
+  'dev.stoOfMb': '{used} من {total} ميغابايت',
   'dev.relayOff': 'التمرير متوقف',
   'dev.parentFallback': 'العقدة الأم',
   'live.registeredByWizard': 'سُجِّل عبر المعالج',

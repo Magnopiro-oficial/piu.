@@ -1,7 +1,9 @@
 import { beforeAll, describe, expect, it } from 'vitest';
 import { LANGS, setLang, tIn } from '../i18n';
 import { ptBR } from '../i18n/pt-BR';
+import type { RelayNode } from '../types';
 import type { ApiRelay } from './api';
+import { deviceLabels } from './devices';
 import { LIMIT_DEFAULTS, STORAGE_OPTIONS_MB, bandNote, deviceStorageRuleNote, sameSettings, storageNote } from './limits';
 
 const MiB = 1024 ** 2;
@@ -133,5 +135,20 @@ describe.each(LANGS.map(l => l.code))('regras do equipamento: espaço (%s)', lan
 
   it('uma regra menor que o teto limitaria de verdade: sem aviso', () => {
     expect(deviceStorageRuleNote(0.25)).toBeNull();
+  });
+});
+
+describe.each(LANGS.map(l => l.code))('lista de equipamentos: espaço usado (%s)', lang => {
+  beforeAll(() => setLang(lang, { persist: false }));
+  const live = (storage: [number, number]) => deviceLabels({ telemetry: 'live', status: 'active', pph: 0, storage } as unknown as RelayNode).stoLabel;
+
+  it('menos de 1 GB aparece em MB (256 MB não vira "0,3 GB")', () => {
+    const label = live([0, 0.25]);
+    expect(label).toMatch(/256/);
+    expect(label).not.toMatch(/0[.,]3/);
+  });
+
+  it('a partir de 1 GB continua em GB', () => {
+    expect(live([1, 4])).toBe(tIn(lang, 'dev.stoOf', { used: '1', total: '4' }));
   });
 });

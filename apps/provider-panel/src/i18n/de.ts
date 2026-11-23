@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'keine Daten auf diesem Knoten',
   'dev.receipts': { one: '{count} Quittung', other: '{count} Quittungen' },
   'dev.stoOf': '{used} von {total} GB',
+  'dev.stoOfMb': '{used} von {total} MB',
   'dev.relayOff': 'Weiterleitung aus',
   'dev.parentFallback': 'Elternknoten',
   'live.registeredByWizard': 'Vom Assistenten registriert',

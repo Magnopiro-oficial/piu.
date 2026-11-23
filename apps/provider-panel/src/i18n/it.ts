@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'nessun dato su questo nodo',
   'dev.receipts': { one: '{count} ricevuta', other: '{count} ricevute' },
   'dev.stoOf': '{used} di {total} GB',
+  'dev.stoOfMb': '{used} di {total} MB',
   'dev.relayOff': 'inoltro disattivato',
   'dev.parentFallback': 'nodo padre',
   'live.registeredByWizard': 'Registrato dalla procedura guidata',

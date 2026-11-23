@@ -269,6 +269,7 @@ export const dict: Record<Key, string | Plural> = {
   'dev.noDataHere': 'इस नोड पर डेटा नहीं',
   'dev.receipts': { one: '{count} रसीद', other: '{count} रसीदें' },
   'dev.stoOf': '{total} GB में से {used}',
+  'dev.stoOfMb': '{total} MB में से {used}',
   'dev.relayOff': 'रिले बंद',
   'dev.parentFallback': 'पैरेंट नोड',
   'live.registeredByWizard': 'विज़ार्ड से पंजीकृत',
