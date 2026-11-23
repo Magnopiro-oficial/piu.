@@ -69,6 +69,18 @@ Nobody in the middle can read, filter or switch off a conversation, because ther
 - **Communities.** Groups, channels and communities, plus **community alerts** that any member can publish and the community itself classifies.
 - **Providers.** Anyone can run a **piu-node** on a router, Raspberry Pi or computer to relay traffic for the mesh, with signed delivery receipts as proof of work.
 
+## Download
+
+**Android** (7 or later, 64-bit phones, `arm64-v8a`):
+
+<a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium://app/%7B%22id%22%3A%22net.piu.app%22%2C%22url%22%3A%22https%3A%2F%2Fgithub.com%2FMagnopiro-oficial%2Fpiu.%22%2C%22author%22%3A%22Magnopiro-oficial%22%2C%22name%22%3A%22Piu%22%2C%22additionalSettings%22%3A%22%7B%5C%22includePrereleases%5C%22%3Afalse%2C%5C%22fallbackToOlderReleases%5C%22%3Atrue%2C%5C%22filterReleaseTitlesByRegEx%5C%22%3A%5C%22Android%5C%22%2C%5C%22sortMethodChoice%5C%22%3A%5C%22date%5C%22%2C%5C%22apkFilterRegEx%5C%22%3A%5C%22%5EPiu-%5B0-9%5D%2B%5C%5C%5C%5C.%5B0-9%5D%2B%5C%5C%5C%5C.%5B0-9%5D%2B%5C%5C%5C%5C.apk%24%5C%22%2C%5C%22allowedSigningCertHashes%5C%22%3A%5C%2259%3A5B%3ADC%3A6A%3A2D%3A57%3A4F%3AEC%3A59%3AF0%3AF7%3A81%3AEB%3A9D%3A8D%3A47%3A9A%3A84%3AF4%3A90%3A7D%3A70%3A40%3A5F%3A83%3AB4%3AB1%3AE5%3A78%3AB7%3AFF%3A31%5C%22%7D%22%7D"><img src="apps/site/public/badge-obtainium.png" alt="Get it on Obtainium" height="48"></a>
+
+- **APK:** `Piu-X.Y.Z.apk` from the [`android-v*` releases](https://github.com/Magnopiro-oficial/piu./releases?q=android&expanded=true). Each release lists the file's SHA-256.
+- **Obtainium:** the badge above adds Piu already set up: it only follows `android-v*` releases and the `Piu-X.Y.Z.apk` file (never the Desktop, Node or Provider packages that share this repository) and only installs an APK signed with the official certificate. Without Obtainium installed, the link shows where to get it.
+- **From a friend:** anyone who has Piu can send you the app over Bluetooth or Wi-Fi Direct, no internet needed.
+
+Signing certificate (SHA-256), the same on every channel: `59:5B:DC:6A:2D:57:4F:EC:59:F0:F7:81:EB:9D:8D:47:9A:84:F4:90:7D:70:40:5F:83:B4:B1:E5:78:B7:FF:31`. Check it with `apksigner verify --print-certs Piu-X.Y.Z.apk`.
+
 ## Repository
 
 Each folder is an independent project with its own `package.json`, README and CI.
