@@ -1,0 +1,69 @@
+=== 1. antes (main): segundo nó manda uma mensagem; ao fechar grava o arquivo único
+driver saiu com 0
+porta 8420 livre
+nenhum Electron da worktree
+disco antes de abrir:
+  (sem pasta) ENOENT
+url https://localhost:8420/
+ao abrir: store {"envelopes":0,"bytes":0,"maxBytes":268435456,"seen":0,"restored":{"envelopes":0,"seen":0,"receipts":0}}
+peer: enlaces 1 | peer: enviado cd95b15096e7 bytes 593
+[main] LNNP: vizinho 7fac… conectado (v1)
+LNNP: vizinho 7fac… desconectado
+depois do segundo nó: store {"envelopes":1,"bytes":593,"maxBytes":268435456,"seen":1,"restored":{"envelopes":0,"seen":0,"receipts":0}}
+app encerrou: 0
+disco depois de fechar:
+  node.seed 32 bytes 600
+  operator-trust.json 381 bytes 600
+  relay-history.json 364 bytes 600
+  relay-store.bin 1081 bytes 600
+=== 2. depois: converte para a pasta nova; 128/512/256 MB no motor
+driver saiu com 0
+porta 8420 livre
+nenhum Electron da worktree
+disco antes de abrir:
+  node.seed 32 bytes 600
+  operator-trust.json 381 bytes 600
+  relay-history.json 364 bytes 600
+  relay-store.bin 1081 bytes 600
+[main] LNNP: 1 mensagens guardadas e 0 recibos restaurados do armazenamento local
+url https://localhost:8420/
+ao abrir: store {"envelopes":1,"bytes":593,"maxBytes":268435456,"seen":1,"restored":{"envelopes":1,"seen":1,"receipts":0}}
+settings {"bw":50,"sto":256,"hours":"always"}
+ao abrir Configurações, sem mexer: aviso "Salvo neste nó" aparece 0 vez(es)
+128 MB → maxBytes 134217728 = 128 MiB; efetivo {"bwMbps":50,"stoMB":128,"hours":["always"]} ; "Salvo": 1 ; aviso na tela: []
+512 MB → maxBytes 536870912 = 512 MiB; efetivo {"bwMbps":50,"stoMB":512,"hours":["always"]} ; "Salvo": 1 ; aviso na tela: ["info\nNa prática, até 256 MB: as regras deste equipamento em Equipamentos pedem menos."]
+256 MB → maxBytes 268435456 = 256 MiB; efetivo {"bwMbps":50,"stoMB":256,"hours":["always"]} ; "Salvo": 1 ; aviso na tela: []
+app encerrou: 0
+disco depois de fechar:
+  node.seed 32 bytes 600
+  operator-trust.json 381 bytes 600
+  relay-history.json 551 bytes 600
+  relay-store/ 700
+    env/ 700
+      6bc8a55a4753fd7e39b00f2b202a169b68eb68b4e0c627872abddf713b245f0b.bin 629 bytes 600
+    state.bin 353 bytes 600
+=== 3. depois, de novo: a mensagem volta da pasta nova
+driver saiu com 0
+porta 8420 livre
+nenhum Electron da worktree
+disco antes de abrir:
+  node.seed 32 bytes 600
+  operator-trust.json 381 bytes 600
+  relay-history.json 551 bytes 600
+  relay-store/ 700
+    env/ 700
+      6bc8a55a4753fd7e39b00f2b202a169b68eb68b4e0c627872abddf713b245f0b.bin 629 bytes 600
+    state.bin 353 bytes 600
+[main] LNNP: 1 mensagens guardadas e 0 recibos restaurados do armazenamento local
+url https://localhost:8420/
+ao abrir: store {"envelopes":1,"bytes":593,"maxBytes":268435456,"seen":1,"restored":{"envelopes":1,"seen":1,"receipts":0}}
+app encerrou: 0
+disco depois de fechar:
+  node.seed 32 bytes 600
+  operator-trust.json 381 bytes 600
+  relay-history.json 738 bytes 600
+  relay-store/ 700
+    env/ 700
+      6bc8a55a4753fd7e39b00f2b202a169b68eb68b4e0c627872abddf713b245f0b.bin 629 bytes 600
+    state.bin 353 bytes 600
+=== FIM B
