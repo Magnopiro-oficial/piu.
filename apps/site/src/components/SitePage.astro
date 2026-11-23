@@ -7,6 +7,7 @@ import { url } from '../lib/url';
 import { ANDROID_CERT_SHA256, ANDROID_FILE, ANDROID_PUBLISHED, ANDROID_SHA256, groupHex } from '../lib/androidRelease';
 import { DESKTOP, DESKTOP_OSES, DESKTOP_SIG_URL, PROVIDER, RELEASE_KEY_FILE, RELEASE_KEY_FPR, fmtFpr, shortSha, type DesktopOs } from '../lib/desktopRelease';
 import { NODE_DEB, NODE_IPK, NODE_PUBLISHED, NODE_RELEASE_URL, NODE_SUMS_URL } from '../lib/nodeRelease';
+import { OBTAINIUM_BADGE, OBTAINIUM_URL } from '../lib/obtainium';
 
 interface Props { t: Dict; alt: Dict }
 const { t, alt } = Astro.props;
@@ -309,6 +310,14 @@ const signed = !!RELEASE_KEY_FPR && !!DESKTOP_SIG_URL;
               {o.href
                 ? <a href={o.href} data-note={o.note} rel="noopener" class:list={['pill', o.primary ? 'pill-ink' : 'pill-line']}>{o.cta}</a>
                 : <button type="button" data-note={o.note} class:list={['pill', o.primary ? 'pill-ink' : 'pill-line']}>{o.cta}</button>}
+              {o.id === 'apk' && ANDROID_PUBLISHED && (
+                <div class="col" style="gap:6px;align-items:center">
+                  <a href={OBTAINIUM_URL} rel="noopener" data-note={t.download.obtainium.note} style="display:inline-flex;border-radius:10px">
+                    <img src={url(OBTAINIUM_BADGE)} alt={t.download.obtainium.alt} width="161" height="48" loading="lazy" decoding="async" style="display:block;height:48px;width:auto">
+                  </a>
+                  <div style="font-size:12.5px;line-height:1.45;color:var(--ink2);text-align:center;text-wrap:pretty">{t.download.obtainium.desc}</div>
+                </div>
+              )}
             </div>
           ))}
         </div>

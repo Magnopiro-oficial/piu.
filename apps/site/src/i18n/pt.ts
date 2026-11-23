@@ -140,6 +140,12 @@ export const pt = {
           ? `Pacotes no release do GitHub: ${[NODE_IPK, NODE_DEB].filter(f => f.url).map(f => `${f.file} (${f.size})`).join(' e ')}, com o SHA256SUMS.txt para conferir.`
           : 'Os pacotes (.ipk para OpenWrt, .deb para Linux e Raspberry Pi) ainda não foram publicados. Quando saírem, cada um virá com o SHA-256 para conferir.' },
     ],
+    // Selo do Obtainium no cartão do Android (link em src/lib/obtainium.ts).
+    obtainium: {
+      alt: 'Baixar pelo Obtainium',
+      desc: 'Atualizações automáticas direto do GitHub, só com o certificado oficial.',
+      note: 'Abrindo o Obtainium com o Piu já configurado: só as versões do Android e só o APK assinado com o certificado oficial. Sem o Obtainium no celular, a página mostra onde baixá-lo.',
+    },
     source: { title: 'Código aberto', desc: 'Todo o Piu é software livre (AGPL-3.0): app, Piu Node, painel e protocolo. Confira, audite, faça um fork ou contribua.', cta: 'Ver no GitHub' },
     // Rótulos da faixa de assinatura; os hashes vêm de src/lib/androidRelease.ts.
     signature: ['Certificado do app (SHA-256)', 'SHA-256'],

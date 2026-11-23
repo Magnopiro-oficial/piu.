@@ -134,6 +134,11 @@ export const en: Dict = {
           ? `Packages on the GitHub release: ${[NODE_IPK, NODE_DEB].filter(f => f.url).map(f => `${f.file} (${f.size})`).join(' and ')}, with SHA256SUMS.txt to check.`
           : 'The packages (.ipk for OpenWrt, .deb for Linux and Raspberry Pi) are not published yet. Each one will ship with its SHA-256 to check.' },
     ],
+    obtainium: {
+      alt: 'Get it on Obtainium',
+      desc: 'Automatic updates straight from GitHub, official certificate only.',
+      note: 'Opening Obtainium with Piu already set up: Android releases only, and only the APK signed with the official certificate. Without Obtainium on your phone, the page shows where to get it.',
+    },
     source: { title: 'Open source', desc: 'All of Piu is free software (AGPL-3.0): app, Piu Node, panel and protocol. Check it, audit it, fork it or contribute.', cta: 'View on GitHub' },
     signature: ['App certificate (SHA-256)', 'SHA-256'],
     verify: {
