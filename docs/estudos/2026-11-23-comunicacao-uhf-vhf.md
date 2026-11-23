@@ -331,3 +331,35 @@ Consultadas em 2026-11-23.
 - `apps/piu-node/src/config.ts`, `src/rnode/regions.ts`, `src/meshtastic/{fragments,budget}.ts`
 - `apps/piu-node/src/protocol/{router,fragment,envelope}.ts`
 - `apps/piu-node/README.md`, `docs/hardware/placas-lora.md`, `docs/transporte/{piu-sobre-meshtastic,super-node-lora}.md`
+
+---
+
+## Retomada (onde parou em 2026-11-23)
+
+O dono pausou este assunto: **nada do estudo é para implementar agora**. Nada foi publicado (sem push).
+
+**O que existe**
+
+| O quê | Ramo | Commit | Pasta local |
+|---|---|---|---|
+| Este estudo | `docs/estudo-uhf-vhf` | `18498fd` (estudo) + o commit desta seção | `~/Documents/Projetos_DEV/piu-wt-estudo-uhf-vhf` |
+| Rascunho do adaptador de modem KISS (`tnc`), opção B | `feat/piu-node-tnc-kiss` | `c099705` | `~/Documents/Projetos_DEV/piu-wt-tnc-kiss` |
+
+O rascunho traz: `apps/piu-node/src/relay/{ax25,tcpModem,tnc,tncConfig}.ts`, `test/tnc.test.ts`, as variáveis `PIU_TNC_*` no README e a lista de bancada em `docs/hardware/pendencias-radio-vhf-uhf.md`. Vem desligado por padrão e recusa faixa de radioamador. Linhas tocadas em arquivos que outro ramo (`fix/provider-config-didatica`) também mexe: `src/config.ts` (import, campo `tnc` em `LnnpConfig`, duas linhas em `loadLnnpConfig`) e `src/relay/index.ts` (import, campo `tnc` em `RelayHandle` e em `stats()`, um bloco de 12 linhas no laço do `PIU_SERIAL`, e `close`).
+
+**O que foi validado**
+
+- Checagem de tipos do nó e os 12 testes novos, com modem KISS emulado em memória.
+
+**O que NÃO foi validado**
+
+- Nenhum modem nem rádio de verdade (hipóteses H1 a H6 da lista de bancada).
+- Na suíte inteira do nó, 154 de 157 passaram. As 3 falhas (cópia de `src/lunes` e dois testes que leem `apps/settlement`) não parecem ligadas ao adaptador, mas **não foram conferidas contra a `main` pura**.
+- Os fatos de regulamentação vieram de pesquisa na web em 2026-11-23 e não foram relidos um a um; os itens [NC] seguem em aberto.
+- A opção A (mais alcance no UHF livre) ficou só como texto no README; a conta do teto de ~24 dBm é hipótese.
+
+**Primeiro passo da volta**
+
+1. Perguntar ao dono qual opção ele quer (A, B ou C) antes de qualquer código.
+2. Se for a B: no ramo `feat/piu-node-tnc-kiss`, rodar a suíte do nó na `main` pura para saber se as 3 falhas já existiam; depois fazer o teste 1 da lista de bancada (dois Direwolf por cabo de áudio, sem transmitir no ar).
+3. Antes de juntar na `main`: revisão de código do adaptador e merge deste estudo, para os links do README não ficarem soltos.
