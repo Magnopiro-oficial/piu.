@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.28.0.schema.json
+
+PackageIdentifier: LunesNetwork.PiuProvider
+PackageVersion: 0.1.3
+PackageLocale: en-US
+Publisher: Lunes Network
+PublisherUrl: https://github.com/Magnopiro-oficial
+PublisherSupportUrl: https://github.com/Magnopiro-oficial/piu./issues
+PrivacyUrl: https://github.com/Magnopiro-oficial/piu./blob/main/PRIVACY.md
+Author: Lunes Network
+PackageName: Piu Provider
+PackageUrl: https://magnopiro-oficial.github.io/piu./
+License: AGPL-3.0-only
+LicenseUrl: https://github.com/Magnopiro-oficial/piu./blob/main/LICENSE
+Copyright: Lunes Network
+ShortDescription: Turns this computer into a Piu mesh relay node, with the provider dashboard built in.
+Description: |-
+  Piu Provider runs a piu-node inside the app, so this computer stores and forwards end-to-end encrypted envelopes for the Piu mesh over the local network, without the internet.
+  It opens the provider dashboard (relay limits, devices, signed delivery receipts and the LUNES wallet). Free and open source (AGPL-3.0).
+Moniker: piu-provider
+Tags:
+- lunes
+- mesh
+- node
+- offline
+- p2p
+- privacy
+- relay
+ReleaseNotesUrl: https://github.com/Magnopiro-oficial/piu./releases/tag/provider-v0.1.3
+ManifestType: defaultLocale
+ManifestVersion: 1.28.0

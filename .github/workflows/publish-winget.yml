@@ -1,0 +1,86 @@
+# Abre no microsoft/winget-pkgs o PR da versão nova do Piu Desktop (e, se ligado, do Piu Provider)
+# sempre que um release `desktop-v*` (ou `provider-v*`) é PUBLICADO. Ver docs/distribuicao/winget.md.
+#
+# Por que `release: published` e não um job no release-desktop.yml: aquele workflow cria o release em
+# RASCUNHO; o instalador só fica público (e o winget só aceita a URL) quando o dono publica o rascunho.
+# Publicar pela interface do GitHub dispara este workflow. (Um release publicado pelo GITHUB_TOKEN de
+# outro workflow NÃO dispararia; aí use Run workflow com a tag.)
+#
+# Pré-requisitos (uma vez, pelo dono):
+#   1. A primeira versão de cada pacote já aceita no winget-pkgs (PR manual com packaging/winget/manifests).
+#      O winget-releaser só atualiza pacotes que já existem lá.
+#   2. Fork de microsoft/winget-pkgs na conta/organização dona do token (padrão: dona deste repositório;
+#      outra conta → variável de repositório WINGET_FORK_USER com o nome dela).
+#   3. Secret WINGET_TOKEN: PAT *clássico* do dono com os escopos `public_repo` e `workflow`.
+#      Fine-grained não funciona com a action.
+# Sem o secret, o job termina verde, só com um aviso. Provider: só com a variável WINGET_PROVIDER=true.
+
+name: Publicar · winget
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag de um release já publicado (ex.: desktop-v0.1.5 ou provider-v0.1.4)"
+        required: true
+        type: string
+
+# O GITHUB_TOKEN só lê. Quem escreve (no fork e no PR do winget-pkgs) é o WINGET_TOKEN.
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-winget-${{ github.event.release.tag_name || inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  winget:
+    name: PR no winget-pkgs
+    runs-on: ubuntu-latest
+    env:
+      # secrets não pode ir direto num `if`; vira texto 'true'/'false' aqui.
+      HAS_TOKEN: ${{ secrets.WINGET_TOKEN != '' }}
+    steps:
+      - name: Qual pacote
+        id: p
+        env:
+          TAG: ${{ github.event.release.tag_name || inputs.tag }}
+          PRERELEASE: ${{ github.event.release.prerelease || false }}
+          PROVIDER_ON: ${{ vars.WINGET_PROVIDER == 'true' }}
+        run: |
+          set -euo pipefail
+          id=""; version=""
+          case "$TAG" in
+            desktop-v*)  id="LunesNetwork.Piu";         version="${TAG#desktop-v}" ;;
+            provider-v*)
+              if [[ "$PROVIDER_ON" == "true" ]]; then
+                id="LunesNetwork.PiuProvider"; version="${TAG#provider-v}"
+              else
+                echo "::notice::Provider fora do winget (variável WINGET_PROVIDER != true): nada a fazer."
+              fi ;;
+            *) echo "::notice::Tag $TAG não é do Desktop nem do Provider: nada a fazer." ;;
+          esac
+          if [[ "$PRERELEASE" == "true" ]]; then
+            echo "::notice::$TAG é pré-release: o winget só recebe versões finais."; id=""
+          fi
+          if [[ -n "$id" && "$HAS_TOKEN" != "true" ]]; then
+            echo "::warning::Secret WINGET_TOKEN não configurado: PR do winget para $TAG pulado (ver docs/distribuicao/winget.md)."; id=""
+          fi
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+
+      # Gera os manifestos da versão nova a partir da anterior (Komac) e abre o PR pelo fork.
+      - name: winget-releaser
+        if: steps.p.outputs.id != ''
+        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2 (2026-10-07)
+        with:
+          identifier: ${{ steps.p.outputs.id }}
+          version: ${{ steps.p.outputs.version }}
+          release-tag: ${{ steps.p.outputs.tag }}
+          installers-regex: '-win-x64\.exe$'
+          release-notes-url: ${{ github.server_url }}/${{ github.repository }}/releases/tag/${{ steps.p.outputs.tag }}
+          fork-user: ${{ vars.WINGET_FORK_USER || github.repository_owner }}
+          token: ${{ secrets.WINGET_TOKEN }}

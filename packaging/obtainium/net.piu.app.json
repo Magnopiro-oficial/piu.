@@ -1,0 +1,20 @@
+{
+    "configs": [
+        {
+            "id": "net.piu.app",
+            "url": "https://github.com/Magnopiro-oficial/piu.",
+            "author": "Magnopiro-oficial",
+            "name": "Piu",
+            "additionalSettings": "{\"includePrereleases\":false,\"fallbackToOlderReleases\":true,\"filterReleaseTitlesByRegEx\":\"Android\",\"sortMethodChoice\":\"date\",\"apkFilterRegEx\":\"^Piu-[0-9]+\\\\.[0-9]+\\\\.[0-9]+\\\\.apk$\",\"allowedSigningCertHashes\":\"59:5B:DC:6A:2D:57:4F:EC:59:F0:F7:81:EB:9D:8D:47:9A:84:F4:90:7D:70:40:5F:83:B4:B1:E5:78:B7:FF:31\"}"
+        }
+    ],
+    "icon": "https://raw.githubusercontent.com/Magnopiro-oficial/piu./main/apps/mobile/fastlane/metadata/android/en-US/images/icon.png",
+    "categories": [
+        "messaging",
+        "privacy_and_anonymity"
+    ],
+    "description": {
+        "en": "Encrypted messenger that works without internet, from phone to phone (Bluetooth LE and Wi-Fi Direct mesh).",
+        "pt": "Mensageiro cifrado que funciona sem internet, de celular em celular (malha por Bluetooth LE e Wi-Fi Direct)."
+    }
+}

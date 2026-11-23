@@ -3,10 +3,18 @@ name: Site · GitHub Pages
 # Publica o site (apps/site, com o painel embutido) no GitHub Pages a cada mudança na main.
 # Sem domínio próprio, o endereço é https://<dono>.github.io/<repositório>/ e o build usa esse caminho
 # como base. Com domínio próprio (Settings → Pages → Custom domain), o base vira "/" sozinho.
+#
+# Junto vai o repositório apt em <site>/apt/ (job "apt", scripts/apt-repo.mjs): os .deb mais recentes de
+# Desktop, Provider e Node, conferidos com o SHA256SUMS.txt e assinados com o secret APT_GPG_PRIVATE_KEY
+# (senha opcional: APT_GPG_PASSPHRASE). Sem o secret, o site sai igual e só o apt fica de fora, com aviso.
+# O agendamento diário pega releases novos sem precisar mexer no site (ou rode à mão: Run workflow).
+# Passo a passo: docs/distribuicao/linux-apt-appimagehub.md.
 on:
   push:
     branches: [main]
     paths: ['apps/site/**', 'apps/provider-panel/**', '.github/workflows/pages-site.yml']
+  schedule:
+    - cron: '23 9 * * *'
   workflow_dispatch:
 
 # Menor privilégio: o build só lê (código e dados do Pages); só o job de publicação escreve no Pages.
@@ -18,8 +26,50 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Job separado do build do site: a chave de assinatura nunca fica no mesmo job que roda npm ci
+  # (código de terceiros). Aqui só roda o nosso script, sem dependências.
+  apt:
+    name: Repositório apt
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      built: ${{ steps.repo.outputs.built }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: apps/site/scripts
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: 22
+          check-latest: true
+      - name: Montar e assinar o repositório apt
+        id: repo
+        env:
+          APT_GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          APT_GPG_PASSPHRASE: ${{ secrets.APT_GPG_PASSPHRASE }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ -z "$APT_GPG_PRIVATE_KEY" ]; then
+            echo "::warning title=Repositório apt pulado::O secret APT_GPG_PRIVATE_KEY não existe. O site é publicado sem /apt/ (docs/distribuicao/linux-apt-appimagehub.md)."
+            echo "built=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          command -v apt-ftparchive >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq apt-utils; }
+          node apps/site/scripts/apt-repo.mjs --out "$RUNNER_TEMP/apt"
+          echo "built=true" >> "$GITHUB_OUTPUT"
+      - if: steps.repo.outputs.built == 'true'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: apt-repo
+          path: ${{ runner.temp }}/apt
+          if-no-files-found: error
+          retention-days: 1
+
   build:
     name: Build do site
+    needs: apt
     runs-on: ubuntu-latest
     # O configure-pages consulta a API do Pages (só leitura). Permissão no job troca a do topo,
     # por isso o contents: read aparece de novo aqui.
@@ -45,11 +95,26 @@ jobs:
       - id: pages
         uses: actions/configure-pages@983d7736d9b0ae728b81ab479565c72886d7745b # v5
       - run: npm ci
+      - if: needs.apt.outputs.built == 'true'
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: apt-repo
+          path: ${{ runner.temp }}/apt
+      # A página de download só mostra as instruções do apt quando o repositório vai junto.
+      - name: Impressão digital da chave do apt
+        if: needs.apt.outputs.built == 'true'
+        run: |
+          fpr=$(tr -d '[:space:]' < "$RUNNER_TEMP/apt/FINGERPRINT")
+          [[ "$fpr" =~ ^[0-9A-F]{40}$ ]] || { echo "FINGERPRINT inválido"; exit 1; }
+          echo "APT_KEY_FPR=$fpr" >> "$GITHUB_ENV"
       - name: Build (painel embutido + site)
         run: npm run build
         env:
           SITE_URL: ${{ steps.pages.outputs.origin }}
           BASE_PATH: ${{ steps.pages.outputs.base_path }}/
+      - name: Repositório apt dentro do site
+        if: needs.apt.outputs.built == 'true'
+        run: cp -R "$RUNNER_TEMP/apt" dist/apt
       - uses: actions/upload-pages-artifact@56afc609e74202658d3ffba0e8f6dda462b719fa # v3
         with:
           path: apps/site/dist

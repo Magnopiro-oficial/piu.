@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.28.0.schema.json
+
+PackageIdentifier: LunesNetwork.PiuProvider
+PackageVersion: 0.1.3
+MinimumOSVersion: 10.0.0.0
+InstallerType: nullsoft
+Scope: user
+InstallModes:
+- interactive
+- silent
+- silentWithProgress
+InstallerSwitches:
+  Custom: /currentuser
+UpgradeBehavior: install
+ReleaseDate: 2026-11-07
+Installers:
+- Architecture: x64
+  InstallerUrl: https://github.com/Magnopiro-oficial/piu./releases/download/provider-v0.1.3/Piu-Provider-0.1.3-win-x64.exe
+  InstallerSha256: 3D241633D9BF95795CB7107793B10DC4A7E43BE006B0C3C4277712B689ED3F60
+ManifestType: installer
+ManifestVersion: 1.28.0

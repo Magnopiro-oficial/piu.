@@ -1,0 +1,31 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.locale.1.28.0.schema.json
+
+PackageIdentifier: LunesNetwork.PiuProvider
+PackageVersion: 0.1.3
+PackageLocale: pt-BR
+Publisher: Lunes Network
+PublisherUrl: https://github.com/Magnopiro-oficial
+PublisherSupportUrl: https://github.com/Magnopiro-oficial/piu./issues
+PrivacyUrl: https://github.com/Magnopiro-oficial/piu./blob/main/PRIVACIDADE.md
+Author: Lunes Network
+PackageName: Piu Provider
+PackageUrl: https://magnopiro-oficial.github.io/piu./
+License: AGPL-3.0-only
+LicenseUrl: https://github.com/Magnopiro-oficial/piu./blob/main/LICENSE
+Copyright: Lunes Network
+ShortDescription: Transforma este computador num nó de retransmissão da malha Piu, com o painel do provider embutido.
+Description: |-
+  O Piu Provider roda um piu-node dentro do app: este computador guarda e repassa envelopes cifrados de ponta a ponta da malha Piu pela rede local, sem internet.
+  Abre o painel do provider (limites de retransmissão, equipamentos, recibos de entrega assinados e a carteira LUNES). Gratuito e de código aberto (AGPL-3.0).
+Moniker: piu-provider
+Tags:
+- lunes
+- malha
+- no
+- offline
+- p2p
+- privacidade
+- retransmissao
+ReleaseNotesUrl: https://github.com/Magnopiro-oficial/piu./releases/tag/provider-v0.1.3
+ManifestType: locale
+ManifestVersion: 1.28.0
