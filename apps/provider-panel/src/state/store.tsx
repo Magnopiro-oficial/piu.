@@ -3,7 +3,7 @@ import { PENDING, START_BALANCE, seedDevices, seedTxs } from '../data/seed';
 import { t } from '../i18n';
 import { useLang } from '../i18n/react';
 import { ApiError, NeedsReauth, type NodeApi, type ApiDevice, type ApiDeviceLimits, type ApiPackage, type ApiPending, type ApiPhone, type ApiSession, type ApiSettings } from '../lib/api';
-import { LIMIT_DEFAULTS } from '../lib/limits';
+import { LIMIT_DEFAULTS, sameSettings } from '../lib/limits';
 import { guideHidden as loadGuideHidden, setGuideHidden as saveGuideHidden } from '../lib/guide';
 import { type Live, liveDevice, liveTx } from '../lib/live';
 import type { DeviceFilter, HoursPolicy, PageId, Policies, RelayNode, Theme, ToastData, WalletTx } from '../types';
@@ -139,6 +139,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [sessions, setSessions] = useState<ApiSession[] | null>(null);
   const [phones, setPhones] = useState<ApiPhone[] | null>(null);
   const settingsLoaded = useRef(false);
+  /** Ajustes que o nó tem agora (lidos ou gravados por último): o painel só grava o que difere disto. */
+  const savedSettings = useRef<ApiSettings | null>(null);
   const readLive = useRef<(() => Promise<void>) | null>(null);
   const toastTimer = useRef<number | undefined>(undefined);
   const toastSeq = useRef(0);
@@ -164,6 +166,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     node.guard(api.phones()).then(setPhones).catch(() => {});
     node.guard(api.settings()).then(s => {
       setLimitsState(s.limits); setPolicies(s.policies); setSettingsOwner(s.owner !== false);
+      savedSettings.current = { limits: s.limits, policies: s.policies };
       // Quem não é o dono não salva ajustes (o nó recusa): nada de salvar sozinho depois de ler.
       settingsLoaded.current = s.owner !== false;
     }).catch(() => {});
@@ -188,9 +191,12 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   // Ajustes salvos no nó (depois de carregados, para não sobrescrever com o padrão).
   useEffect(() => {
     if (!api || !settingsLoaded.current) return;
+    // Igual ao que o nó já tem (acabou de ser lido, ou a mudança foi desfeita): nada a gravar.
+    const next = { limits, policies } as ApiSettings;
+    if (sameSettings(savedSettings.current, next)) return;
     const timer = window.setTimeout(() => {
-      node.guard(api.saveSettings({ limits, policies } as ApiSettings))
-        .then(() => setSettingsSavedAt(Date.now()))
+      node.guard(api.saveSettings(next))
+        .then(() => { savedSettings.current = next; setSettingsSavedAt(Date.now()); })
         .catch(e => showToast({ icon: 'error', title: t('toast.settingsNotSaved'), body: e instanceof ApiError ? e.message : t('common.tryAgain') }));
     }, 400);
     return () => window.clearTimeout(timer);

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DeviceStatusCell } from '../components/DeviceBits';
+import { DeviceStatusCell, StorageRuleNote } from '../components/DeviceBits';
 import { Dialog } from '../components/Overlays';
 import { Bar, Icon, Segmented, Toggle, growX, pressable } from '../components/ui';
 import { hoursOptions } from './Settings';
@@ -354,6 +354,7 @@ function DeviceRules({ d, note, onSave }: { d: RelayNode; note: string | null; o
         <>
           <Segmented variant="bg2" label={t('dv.band')} value={v.bw} onChange={bw => set({ bw })} options={([5, 20, 50] as const).map(x => ({ value: x, label: t('common.mbps', { n: x }) }))} />
           <Segmented variant="bg2" label={t('dv.storage')} value={v.sto} onChange={sto => set({ sto })} options={([1, 4, 8] as const).map(x => ({ value: x, label: t('common.gb', { n: x }) }))} />
+          <StorageRuleNote gb={v.sto} />
           <Segmented<HoursPolicy> variant="bg2" label={t('dv.hours')} value={v.hours} onChange={hours => set({ hours })} options={hoursOptions()} />
         </>
       ) : null}

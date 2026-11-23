@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState, type CSSProperties, type FormEvent, type ReactNode } from 'react';
+import { StorageRuleNote } from '../components/DeviceBits';
 import { RouterHowTo, Why } from '../components/Guide';
 import { Icon, Segmented, useEscape } from '../components/ui';
 import type { TermId } from '../lib/help';
@@ -369,7 +370,7 @@ export function AddDeviceWizard() {
                   {!isAp && (
                     <>
                       <WizLimit title={t('wz.bandTitle')} term="bandwidth"><Segmented variant="bg2" label={t('dv.band')} value={w.bw} onChange={bw => patch({ bw })} options={([5, 20, 50] as const).map(v => ({ value: v, label: t('common.mbps', { n: v }) }))} /></WizLimit>
-                      <WizLimit title={t('wz.storageTitle')} term="storage"><Segmented variant="bg2" label={t('dv.storage')} value={w.sto} onChange={sto => patch({ sto })} options={([1, 4, 8] as const).map(v => ({ value: v, label: t('common.gb', { n: v }) }))} /></WizLimit>
+                      <WizLimit title={t('wz.storageTitle')} term="storage"><Segmented variant="bg2" label={t('dv.storage')} value={w.sto} onChange={sto => patch({ sto })} options={([1, 4, 8] as const).map(v => ({ value: v, label: t('common.gb', { n: v }) }))} /><StorageRuleNote gb={w.sto} /></WizLimit>
                       <WizLimit title={t('wz.hoursTitle')} term="hours"><Segmented<HoursPolicy> variant="bg2" label={t('dv.hours')} value={w.hours} onChange={hours => patch({ hours })} options={hoursOptions()} /></WizLimit>
                     </>
                   )}

@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': 'Règles propres à cet appareil',
   'dv.band': 'Bande passante',
   'dv.storage': 'Stockage',
+  'dv.storageRuleNote': 'Aujourd’hui, un nœud conserve au maximum {size} (l’espace choisi dans Réglages). Cette règle est enregistrée, mais elle ne limitera que lorsque les nœuds pourront conserver davantage.',
   'dv.hours': 'Horaires',
   'dv.rulesNone': 'Sans règles propres : seules les limites globales des Paramètres s’appliquent.',
   'dv.rulesLive': 'En vigueur sur ce nœud maintenant. Les limites globales des Paramètres restent valables : la plus stricte l’emporte.',

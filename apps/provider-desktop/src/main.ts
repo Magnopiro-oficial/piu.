@@ -21,6 +21,7 @@ import { startNode, type NodeServer } from '../../piu-node/src/server';
 import { externalUrl } from './external';
 import { lanIps, lanUrls, localName } from './lan';
 import { matchLang, translator } from './i18n';
+import { standardMenus } from './menu';
 import { loadPrefs, savePrefs, type Prefs } from './prefs';
 import { checkForUpdates, releasePageUrl, shouldAutoCheck, UpdateCheckError } from './update';
 
@@ -299,12 +300,14 @@ function buildMenu() {
       ...(isMac ? [] : [{ type: 'separator' as const }, { role: 'about' as const }]),
     ],
   };
+  // App, Editar, Exibir e Janela: funções nativas, com o texto no idioma do app (ver menu.ts).
+  const std = standardMenus(t, { mac: isMac, packaged: app.isPackaged, name: app.name });
   const template: MenuItemConstructorOptions[] = [
-    ...(isMac ? [{ role: 'appMenu' as const }] : [{ label: t('menu.file'), submenu: [{ label: t('menu.quit'), accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] }]),
-    { role: 'editMenu' },
+    std.app ?? { label: t('menu.file'), submenu: [{ label: t('menu.quit'), accelerator: 'CmdOrCtrl+Q', click: () => { quitting = true; app.quit(); } }] },
+    std.edit,
     nodeMenu,
-    { label: t('menu.view'), submenu: [{ role: 'reload' }, ...(app.isPackaged ? [] : [{ role: 'toggleDevTools' as const }]), { type: 'separator' }, { role: 'resetZoom' }, { role: 'zoomIn' }, { role: 'zoomOut' }, { type: 'separator' }, { role: 'togglefullscreen' }] },
-    { role: 'windowMenu' },
+    std.view,
+    std.window,
     helpMenu,
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

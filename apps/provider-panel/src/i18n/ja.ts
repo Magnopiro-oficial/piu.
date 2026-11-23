@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': 'この機器固有のルール',
   'dv.band': '帯域',
   'dv.storage': 'ストレージ',
+  'dv.storageRuleNote': '現在、ノードが保管できるのは最大 {size}(設定で選んだ容量)です。このルールは記録されますが、ノードがそれ以上保管できるようになるまで制限にはなりません。',
   'dv.hours': '時間帯',
   'dv.rulesNone': '固有のルールなし：設定の全体上限だけが適用されます。',
   'dv.rulesLive': '今このノードで有効です。設定の全体上限も引き続き有効で、厳しい方が適用されます。',

@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': 'Regole proprie di questo dispositivo',
   'dv.band': 'Banda',
   'dv.storage': 'Archiviazione',
+  'dv.storageRuleNote': 'Oggi un nodo conserva al massimo {size} (lo spazio scelto in Impostazioni). Questa regola resta registrata, ma limiterà solo quando i nodi potranno conservare di più.',
   'dv.hours': 'Orario',
   'dv.rulesNone': 'Senza regole proprie: valgono solo i limiti globali delle Impostazioni.',
   'dv.rulesLive': 'Valgono su questo nodo adesso. I limiti globali delle Impostazioni restano validi: vince il più restrittivo.',

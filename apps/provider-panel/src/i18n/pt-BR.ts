@@ -514,6 +514,7 @@ export const ptBR = {
   'dv.rulesToggle': 'Regras próprias deste equipamento',
   'dv.band': 'Banda',
   'dv.storage': 'Armazenamento',
+  'dv.storageRuleNote': 'Hoje um nó guarda no máximo {size} (o espaço escolhido em Configurações). Esta regra fica registrada, mas só passa a limitar quando os nós puderem guardar mais que isso.',
   'dv.hours': 'Horário',
   'dv.rulesNone': 'Sem regras próprias: valem só os limites globais de Configurações.',
   'dv.rulesLive': 'Valem neste nó agora. Os limites globais de Configurações continuam valendo: fica o mais restrito.',

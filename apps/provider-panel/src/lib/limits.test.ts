@@ -2,7 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import { LANGS, setLang, tIn } from '../i18n';
 import { ptBR } from '../i18n/pt-BR';
 import type { ApiRelay } from './api';
-import { LIMIT_DEFAULTS, STORAGE_OPTIONS_MB, bandNote, storageNote } from './limits';
+import { LIMIT_DEFAULTS, STORAGE_OPTIONS_MB, bandNote, deviceStorageRuleNote, sameSettings, storageNote } from './limits';
 
 const MiB = 1024 ** 2;
 
@@ -96,5 +96,32 @@ describe('troca da chave de operador', () => {
   it('em pt-BR, a tela fala em "trocar a chave", não em "rotacionar"', () => {
     const textos = Object.entries(ptBR).filter(([k]) => k.startsWith('ok.') || k === 'st.rotate').flatMap(([, v]) => (typeof v === 'string' ? [v] : Object.values(v)));
     expect(textos.filter(s => /rotacion|rotação|rotações/i.test(s))).toEqual([]);
+  });
+});
+
+describe('salvar ajustes: só quando o dono muda algo', () => {
+  const loaded = { limits: { bw: 50, sto: 256, hours: 'always' as const }, policies: { media: true, unknown: true, community: false } };
+
+  it('o que acabou de ser lido do nó é igual ao que está na tela: não regrava (nem mostra "Salvo")', () => {
+    expect(sameSettings(loaded, { limits: { ...loaded.limits }, policies: { ...loaded.policies } })).toBe(true);
+    expect(sameSettings(null, loaded)).toBe(false);
+  });
+
+  it('qualquer mudança de limite ou de política conta', () => {
+    expect(sameSettings(loaded, { ...loaded, limits: { ...loaded.limits, bw: 100 } })).toBe(false);
+    expect(sameSettings(loaded, { ...loaded, limits: { ...loaded.limits, sto: 512 } })).toBe(false);
+    expect(sameSettings(loaded, { ...loaded, policies: { ...loaded.policies, media: false } })).toBe(false);
+  });
+});
+
+describe.each(LANGS.map(l => l.code))('regras do equipamento: espaço (%s)', lang => {
+  beforeAll(() => setLang(lang, { persist: false }));
+
+  it('1, 4 e 8 GB passam do que um nó guarda hoje: a tela diz o teto real', () => {
+    for (const gb of [1, 4, 8]) expect(deviceStorageRuleNote(gb), `${gb} GB`).toMatch(/512/);
+  });
+
+  it('uma regra menor que o teto limitaria de verdade: sem aviso', () => {
+    expect(deviceStorageRuleNote(0.25)).toBeNull();
   });
 });

@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': 'Eigene Regeln für dieses Gerät',
   'dv.band': 'Bandbreite',
   'dv.storage': 'Speicher',
+  'dv.storageRuleNote': 'Heute speichert ein Knoten höchstens {size} (der in den Einstellungen gewählte Speicherplatz). Diese Regel wird gespeichert, begrenzt aber erst, wenn Knoten mehr als das speichern können.',
   'dv.hours': 'Zeiten',
   'dv.rulesNone': 'Keine eigenen Regeln: Es gelten nur die globalen Grenzen aus den Einstellungen.',
   'dv.rulesLive': 'Gelten jetzt auf diesem Knoten. Die globalen Grenzen aus den Einstellungen gelten weiter: Die strengere gewinnt.',

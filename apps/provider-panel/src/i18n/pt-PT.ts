@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': 'Regras próprias deste equipamento',
   'dv.band': 'Largura de banda',
   'dv.storage': 'Armazenamento',
+  'dv.storageRuleNote': 'Hoje um nó guarda no máximo {size} (o espaço escolhido em Definições). Esta regra fica registada, mas só passa a limitar quando os nós puderem guardar mais do que isso.',
   'dv.hours': 'Horário',
   'dv.rulesNone': 'Sem regras próprias: valem só os limites globais das Definições.',
   'dv.rulesLive': 'Valem neste nó agora. Os limites globais das Definições continuam a valer: fica o mais restrito.',

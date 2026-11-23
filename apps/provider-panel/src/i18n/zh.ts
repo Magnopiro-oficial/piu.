@@ -498,6 +498,7 @@ export const dict: Record<Key, string | Plural> = {
   'dv.rulesToggle': '此设备的专属规则',
   'dv.band': '带宽',
   'dv.storage': '存储',
+  'dv.storageRuleNote': '目前一个节点最多保存 {size}(在“设置”中选择的空间)。此规则会被记录,但只有当节点能保存更多时才会起限制作用。',
   'dv.hours': '时段',
   'dv.rulesNone': '无专属规则：仅应用“设置”中的全局限制。',
   'dv.rulesLive': '现已在此节点生效。“设置”中的全局限制仍然有效：以更严格者为准。',
