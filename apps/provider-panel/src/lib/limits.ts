@@ -24,6 +24,8 @@ const size = (bytes: number) => (bytes < GiB ? t('common.mb', { n: Math.round(by
  */
 export function storageNote(stoMB: number, relay: ApiRelay | null | undefined): string | null {
   if (!relay?.enabled) return null;
+  // Leitura de antes da mudança (o painel relê o nó logo depois de salvar): ainda não dá para dizer o teto.
+  if (relay.limits.stoMB !== stoMB) return null;
   const max = relay.store.maxBytes;
   if (max >= stoMB * MiB) return null;
   const rule = relay.limits.effective?.stoMB ?? stoMB;
@@ -32,7 +34,7 @@ export function storageNote(stoMB: number, relay: ApiRelay | null | undefined): 
 
 /** Banda que vale de verdade, quando as regras do equipamento pedem menos que a escolha; senão, null. */
 export function bandNote(bw: number, relay: ApiRelay | null | undefined): string | null {
-  if (!relay?.enabled) return null;
+  if (!relay?.enabled || relay.limits.bwMbps !== bw) return null; // leitura de antes da mudança: espera a nova
   const eff = relay.limits.effective?.bwMbps ?? bw;
   return eff < bw ? t('st.bandCapRule', { n: eff }) : null;
 }

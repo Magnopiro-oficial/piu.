@@ -196,7 +196,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     if (sameSettings(savedSettings.current, next)) return;
     const timer = window.setTimeout(() => {
       node.guard(api.saveSettings(next))
-        .then(() => { savedSettings.current = next; setSettingsSavedAt(Date.now()); })
+        .then(() => { savedSettings.current = next; setSettingsSavedAt(Date.now()); void readLive.current?.(); }) // relê o motor: os avisos de teto valem para a escolha nova
         .catch(e => showToast({ icon: 'error', title: t('toast.settingsNotSaved'), body: e instanceof ApiError ? e.message : t('common.tryAgain') }));
     }, 400);
     return () => window.clearTimeout(timer);

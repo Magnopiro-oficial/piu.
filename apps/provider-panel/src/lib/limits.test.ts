@@ -7,12 +7,12 @@ import { LIMIT_DEFAULTS, STORAGE_OPTIONS_MB, bandNote, deviceStorageRuleNote, sa
 const MiB = 1024 ** 2;
 
 /** `GET /api/relay` com só o que os avisos leem (armazenamento e limites em vigor). */
-function relay(maxBytes: number, effective: { bwMbps: number; stoMB: number }): ApiRelay {
+function relay(maxBytes: number, effective: { bwMbps: number; stoMB: number }, chosen = 512): ApiRelay {
   return {
     enabled: true, relayMode: true, relaying: true, lnnp: { version: 1, minVersion: 1 }, node: 'abcd', neighbors: [],
     store: { envelopes: 0, bytes: 0, maxBytes, seen: 0 },
     counters: { received: 0, forwarded: 0, duplicates: 0, rejected: 0, receipts: 0, delivered: 0, handshakesOk: 0, handshakesFailed: 0 },
-    limits: { bwMbps: 50, stoMB: 256, hours: 'always', media: true, effective: { ...effective, hours: ['always'] } },
+    limits: { bwMbps: 50, stoMB: chosen, hours: 'always', media: true, effective: { ...effective, hours: ['always'] } },
   } as unknown as ApiRelay;
 }
 
@@ -48,6 +48,11 @@ describe('aviso de armazenamento: o que vale de verdade no nó', () => {
     expect(note).toMatch(/Equipamentos/);
   });
 
+  it('a leitura do nó ainda é da escolha anterior (acabou de mudar): não avisa com dado velho', () => {
+    // O nó estava em 128 MB; a tela já mostra 512 MB, mas a leitura nova ainda não chegou.
+    expect(storageNote(512, relay(128 * MiB, { bwMbps: 50, stoMB: 128 }, 128))).toBeNull();
+  });
+
   it('o nó guarda tudo o que foi escolhido: sem aviso', () => {
     expect(storageNote(512, relay(512 * MiB, { bwMbps: 50, stoMB: 512 }))).toBeNull();
   });
@@ -60,6 +65,11 @@ describe('aviso de banda', () => {
     const note = bandNote(50, relay(256 * MiB, { bwMbps: 20, stoMB: 256 }));
     expect(note).toContain('20 Mbps');
     expect(note).toMatch(/Equipamentos/);
+  });
+
+  it('a leitura do nó ainda é da banda anterior: não avisa com dado velho', () => {
+    // A leitura diz 50 Mbps (escolha e efetivo antigos); a tela já mostra 100 Mbps.
+    expect(bandNote(100, relay(256 * MiB, { bwMbps: 50, stoMB: 256 }))).toBeNull();
   });
 
   it('sem regra mais baixa ou sem motor: sem aviso', () => {
