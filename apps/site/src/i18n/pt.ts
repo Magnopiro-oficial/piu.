@@ -184,6 +184,17 @@ export const pt = {
     keyLink: 'Chave pública',
     keyFpr: 'Chave de release do Piu:',
     verify: 'Para conferir (no macOS, troque sha256sum por shasum -a 256):',
+    // Bloco #apt (só aparece quando o repositório apt vai junto no deploy; src/lib/aptRepo.ts).
+    apt: {
+      kicker: 'LINUX · REPOSITÓRIO APT',
+      title: 'Instale e atualize pelo apt',
+      lead: 'No Debian, Ubuntu, Mint e Raspberry Pi OS, adicione o repositório do Piu uma vez. Depois, as versões novas chegam junto com as atualizações do sistema.',
+      steps: ['Baixe a chave que assina o repositório:', 'Adicione o repositório, preso a essa chave (signed-by):', 'Instale o que você quer:'],
+      apps: { desktop: 'Piu Desktop', node: 'Piu Node (roteador, Raspberry Pi, servidor)', provider: 'Piu Provider para computador' },
+      keyFpr: 'Impressão digital da chave do repositório:',
+      note: 'Piu Desktop e Piu Provider: computadores x86_64 (amd64). Piu Node: qualquer arquitetura, com nodejs 20.19 ou mais novo (Debian 13 ou Node.js 22 da NodeSource).',
+      nodeLink: 'Instalar pelo apt',
+    },
     os: {
       mac: { tab: 'macOS', label: 'Baixar para macOS', sub: 'Apple Silicon · .dmg', req: 'macOS 12 ou superior · Apple Silicon e Intel',
         openTitle: 'Como abrir sem assinatura da Apple', open: 'Arraste o Piu para Aplicativos e abra uma vez (o macOS vai bloquear). No macOS 15 ou mais novo, vá em Ajustes do Sistema → Privacidade e Segurança e clique em Abrir mesmo assim; o clique direito → Abrir não basta mais. No macOS 14 ou anterior, clique com o botão direito no app e escolha Abrir.' },
